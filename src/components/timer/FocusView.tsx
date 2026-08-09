@@ -34,6 +34,7 @@ interface FocusViewProps {
   totalSeconds: number;
   progress: number;
   timeDisplay: string;
+  studyTimeDisplay: string;
   modeLabel: string;
   timerActionLabel: string;
   canStartFocus: boolean;
@@ -80,6 +81,7 @@ export function FocusView({
   totalSeconds,
   progress,
   timeDisplay,
+  studyTimeDisplay,
   modeLabel,
   timerActionLabel,
   canStartFocus,
@@ -244,13 +246,17 @@ export function FocusView({
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-4 text-xs text-muted-foreground">
                   <span>
-                    {isFreeStudy ? "Open-ended session" : `${progressPercent}% complete`}
+                    {isFreeStudy
+                      ? running
+                        ? "Open-ended session"
+                        : `Study time ${studyTimeDisplay}`
+                      : `${progressPercent}% complete`}
                   </span>
                   <span className="text-right">
                     {isFreeStudy
                       ? running
                         ? "No time limit"
-                        : "Study paused"
+                        : "Break in progress"
                       : isStudyOvertime
                         ? "Open-ended focus"
                       : running
@@ -405,7 +411,7 @@ export function FocusView({
       </main>
 
       <span className="sr-only" aria-live="polite">
-        {status}. {timeDisplay} remaining.
+        {status}. {timeDisplay} {isFreeStudy ? "elapsed" : "remaining"}.
       </span>
     </div>
   );

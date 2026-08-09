@@ -336,11 +336,11 @@ const StudyTimerInner = memo(function StudyTimerInner({
 
   useEffect(() => {
     clearTimer();
-    if (!state.running) return;
+    if (!state.running && !(state.freeStudy && state.studyOvertime)) return;
     lastTickAtRef.current = Date.now();
     intervalRef.current = setInterval(onTick, 250);
     return clearTimer;
-  }, [clearTimer, onTick, state.running]);
+  }, [clearTimer, onTick, state.freeStudy, state.running, state.studyOvertime]);
 
   const {
     running,
@@ -350,6 +350,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     studyOvertime,
     overtimeSeconds,
     freeStudy,
+    breakSeconds,
   } = state;
   const isStudyOvertime = studyOvertime && mode !== "work";
   const isFreeStudy = freeStudy && isStudyOvertime;
@@ -361,9 +362,12 @@ const StudyTimerInner = memo(function StudyTimerInner({
       ? 1
     : Math.min(1, Math.max(0, 1 - secondsLeft / totalSeconds));
   const progressPercent = Math.round(progress * 100);
-  const timeDisplay = isStudyOvertime
-    ? `+${formatTimer(overtimeSeconds)}`
+  const studyTimeDisplay = isStudyOvertime
+    ? `${isFreeStudy ? "" : "+"}${formatTimer(overtimeSeconds)}`
     : formatTimer(secondsLeft);
+  const timeDisplay = isFreeStudy && !running
+    ? formatTimer(breakSeconds)
+    : studyTimeDisplay;
   const modeLabel = isFreeStudy
     ? running
       ? "Free study"
@@ -622,6 +626,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           totalSeconds={totalSeconds}
           progress={progress}
           timeDisplay={timeDisplay}
+          studyTimeDisplay={studyTimeDisplay}
           modeLabel={modeLabel}
           timerActionLabel={timerActionLabel}
           canStartFocus={canStartFocus}
@@ -852,7 +857,12 @@ const StudyTimerInner = memo(function StudyTimerInner({
                 {timeDisplay}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {modeLabel}{isFocus ? ` · ${subjectLabel}` : " · breaks stay off your calendar"}
+                {modeLabel}
+                {isFreeStudy && !running
+                  ? ` · Study time ${studyTimeDisplay}`
+                  : isFocus
+                    ? ` · ${subjectLabel}`
+                    : " · breaks stay off your calendar"}
               </p>
               <div
                 role="progressbar"

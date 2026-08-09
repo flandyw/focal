@@ -27,6 +27,7 @@ export interface TimerState {
   studyOvertime: boolean;
   overtimeSeconds: number;
   freeStudy: boolean;
+  breakSeconds: number;
 }
 
 export type TimerAction =
@@ -52,6 +53,7 @@ export interface StoredTimerState {
   studyOvertime?: boolean;
   overtimeSeconds?: number;
   freeStudy?: boolean;
+  breakSeconds?: number;
   activeSessionId?: string | null;
   updatedAt: number;
 }
@@ -115,6 +117,10 @@ export function advanceTimer(
   let remaining = Math.max(0, Math.floor(elapsedSeconds));
 
   if (next.studyOvertime) {
+    if (next.freeStudy && !next.running) {
+      return { ...next, breakSeconds: next.breakSeconds + remaining };
+    }
+    if (!next.running) return next;
     return { ...next, overtimeSeconds: next.overtimeSeconds + remaining };
   }
 
@@ -135,6 +141,7 @@ export function advanceTimer(
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       };
     } else {
       return {
@@ -145,6 +152,7 @@ export function advanceTimer(
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       };
     }
   }
@@ -179,6 +187,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
     studyOvertime: false,
     overtimeSeconds: 0,
     freeStudy: false,
+    breakSeconds: 0,
   };
 
   try {
@@ -190,16 +199,17 @@ export function getInitialState(settings: TimerSettings): TimerState {
     const duration = getDurationSeconds(mode, settings);
     const updatedAt =
       typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now();
-    const elapsedSeconds = parsed.running
-      ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
-      : 0;
     const cycles = Math.max(0, Math.round(parsed.cycles ?? 0));
     const studyOvertime = parsed.studyOvertime === true && mode !== "work";
     const freeStudy = studyOvertime && parsed.freeStudy === true;
+    const elapsedSeconds = parsed.running || (freeStudy && parsed.running === false)
+      ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
+      : 0;
     const overtimeSeconds = Math.max(
       0,
       Math.round(parsed.overtimeSeconds ?? 0),
     );
+    const breakSeconds = Math.max(0, Math.round(parsed.breakSeconds ?? 0));
 
     if (studyOvertime) {
       return {
@@ -215,6 +225,9 @@ export function getInitialState(settings: TimerSettings): TimerState {
           ? overtimeSeconds + elapsedSeconds
           : overtimeSeconds,
         freeStudy,
+        breakSeconds: freeStudy && parsed.running === false
+          ? breakSeconds + elapsedSeconds
+          : breakSeconds,
       };
     }
 
@@ -230,6 +243,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       }, settings, elapsedSeconds);
     }
 
@@ -244,6 +258,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
       studyOvertime: false,
       overtimeSeconds: 0,
       freeStudy: false,
+      breakSeconds: 0,
     };
   } catch {
     return fallback;
@@ -255,7 +270,11 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
     case "TICK":
       return advanceTimer(state, action.settings, action.seconds);
     case "TOGGLE":
-      return { ...state, running: !state.running };
+      return {
+        ...state,
+        running: !state.running,
+        breakSeconds: state.freeStudy ? 0 : state.breakSeconds,
+      };
     case "RESET":
       return {
         running: false,
@@ -265,6 +284,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       };
     case "SKIP_BREAK":
       if (state.mode === "work" || state.studyOvertime) return state;
@@ -276,6 +296,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       };
     case "ADD_BREAK_TIME":
       if (state.mode === "work" || state.studyOvertime) return state;
@@ -290,6 +311,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: true,
         overtimeSeconds: elapsedBreakSeconds,
         freeStudy: false,
+        breakSeconds: 0,
       };
     }
     case "START_FREE_STUDY":
@@ -302,6 +324,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: true,
         overtimeSeconds: 0,
         freeStudy: true,
+        breakSeconds: 0,
       };
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state;
@@ -311,6 +334,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
+        breakSeconds: 0,
       };
     case "SYNC_SETTINGS": {
       const oldDuration = getDurationSeconds(

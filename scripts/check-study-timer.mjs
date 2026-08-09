@@ -19,6 +19,7 @@ const runningWork = {
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
+  breakSeconds: 0,
 };
 
 function check(actual, expected) {
@@ -39,6 +40,7 @@ check(advanceTimer(runningWork, settings, 10), {
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
+  breakSeconds: 0,
 });
 check(advanceTimer(runningWork, settings, 311), {
   running: false,
@@ -48,6 +50,7 @@ check(advanceTimer(runningWork, settings, 311), {
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
+  breakSeconds: 0,
 });
 const breakWithTimeUsed = {
   running: true,
@@ -57,6 +60,7 @@ const breakWithTimeUsed = {
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
+  breakSeconds: 0,
 };
 const studyOvertime = timerReducer(breakWithTimeUsed, {
   type: "START_STUDY_OVERTIME",
@@ -76,6 +80,7 @@ const freeStudy = timerReducer({
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
+  breakSeconds: 0,
 }, { type: "START_FREE_STUDY", settings });
 check(freeStudy, {
   running: true,
@@ -85,14 +90,24 @@ check(freeStudy, {
   studyOvertime: true,
   overtimeSeconds: 0,
   freeStudy: true,
+  breakSeconds: 0,
 });
 check(advanceTimer(freeStudy, settings, 90), {
   ...freeStudy,
   overtimeSeconds: 90,
 });
-check(timerReducer(freeStudy, { type: "TOGGLE" }), {
+const pausedFreeStudy = timerReducer(freeStudy, { type: "TOGGLE" });
+check(pausedFreeStudy, {
   ...freeStudy,
   running: false,
+});
+check(advanceTimer(pausedFreeStudy, settings, 45), {
+  ...pausedFreeStudy,
+  breakSeconds: 45,
+});
+check(timerReducer({ ...pausedFreeStudy, breakSeconds: 45 }, { type: "TOGGLE" }), {
+  ...freeStudy,
+  breakSeconds: 0,
 });
 check(closeRunningInterval([
   { start: "2026-07-12T10:00:00.000Z", end: "2026-07-12T10:05:00.000Z", source: "pomodoro" },

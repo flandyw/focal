@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Coffee,
   ExternalLink,
+  Flame,
   Maximize2,
   Pause,
   Play,
@@ -28,6 +29,7 @@ import { RecoveryDialog } from "@/components/timer/RecoveryDialog";
 import { SubjectPicker } from "@/components/timer/SubjectPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   VCE_SUBJECTS,
   type Project,
@@ -42,20 +44,27 @@ import {
   getExamTrackTimerUrl,
 } from "@/lib/examtrack";
 import {
+  clampDailyGoal,
   clampMinutes,
   closeRunningInterval,
+  countCompletedBlocksToday,
   EXTRA_BREAK_MINUTES,
+  formatFocusTime,
   formatTimer,
   getActiveSessionSubjectIds,
   getDurationSeconds,
+  getFocusSecondsToday,
   getInitialSettings,
   getInitialState,
+  MAX_DAILY_GOAL,
+  TIMER_PRESETS,
   timerReducer,
   TIMER_SETTINGS_KEY,
   TIMER_STATE_KEY,
   type StoredTimerState,
   type TimerSettings,
 } from "@/features/timer/model";
+import { notifyTimerBlock, playTimerChime } from "@/lib/timerAlerts";
 
 interface StudyTimerProps {
   isCollapsed?: boolean;
@@ -141,6 +150,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     [sessions],
   );
   const [externalNow, setExternalNow] = useState(() => new Date());
+  const [todayNow, setTodayNow] = useState(() => new Date());
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -164,6 +174,14 @@ const StudyTimerInner = memo(function StudyTimerInner({
       : base;
   }, [availableSubjects, customSubjects, selectedProject?.subjectId]);
 
+  const todayStats = useMemo(
+    () => ({
+      blocks: countCompletedBlocksToday(sessions, todayNow),
+      seconds: getFocusSecondsToday(sessions, todayNow),
+    }),
+    [sessions, todayNow],
+  );
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -173,6 +191,11 @@ const StudyTimerInner = memo(function StudyTimerInner({
     const timer = window.setInterval(() => setExternalNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, [externalSession]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTodayNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -311,6 +334,21 @@ const StudyTimerInner = memo(function StudyTimerInner({
     intervalRef.current = null;
   }, []);
 
+  // Populated on every render so onTick can start a logged session when an
+  // auto-started focus block rolls in from a natural break end.
+  const startSessionRef = useRef<(durationSeconds?: number) => Promise<boolean>>(
+    () => Promise.resolve(false),
+  );
+
+  const announceBlockEnd = useCallback((kind: "focus" | "break") => {
+    if (!settingsRef.current.alertsEnabled) return;
+    playTimerChime(kind);
+    void notifyTimerBlock(
+      kind === "focus" ? "Focus block complete" : "Break finished",
+      kind === "focus" ? "Time for a break." : "Ready for the next focus block?",
+    );
+  }, []);
+
   const onTick = useCallback(() => {
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - lastTickAtRef.current) / 1000);
@@ -318,13 +356,29 @@ const StudyTimerInner = memo(function StudyTimerInner({
     const current = stateRef.current;
     if (
       current.running &&
-      current.mode === "work" &&
       !current.studyOvertime &&
       elapsedSeconds >= current.secondsLeft
     ) {
-      void completeActiveSession(
-        new Date(lastTickAtRef.current + current.secondsLeft * 1000),
-      );
+      if (current.mode === "work") {
+        void completeActiveSession(
+          new Date(lastTickAtRef.current + current.secondsLeft * 1000),
+        );
+        announceBlockEnd("focus");
+      } else {
+        announceBlockEnd("break");
+        // Natural break end with auto-start focus: begin a logged session so
+        // the next block counts toward the calendar and daily goal. Skipping a
+        // break never reaches this branch — it only ever starts a countdown.
+        if (
+          settingsRef.current.autoStartFocus &&
+          !savingRef.current &&
+          !activeSessionIdRef.current &&
+          selectedSubjectIds.length > 0 &&
+          !externalSession
+        ) {
+          void startSessionRef.current();
+        }
+      }
     }
     lastTickAtRef.current += elapsedSeconds * 1000;
     dispatch({
@@ -332,7 +386,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
       settings: settingsRef.current,
       seconds: elapsedSeconds,
     });
-  }, [completeActiveSession]);
+  }, [announceBlockEnd, completeActiveSession, externalSession, selectedSubjectIds]);
 
   useEffect(() => {
     clearTimer();
@@ -404,6 +458,28 @@ const StudyTimerInner = memo(function StudyTimerInner({
     });
   };
 
+  const updatePreference = (patch: Partial<TimerSettings>) => {
+    setSettings((current) => ({ ...current, ...patch }));
+  };
+
+  const applyPreset = (preset: (typeof TIMER_PRESETS)[number]) => {
+    setSettings((current) => {
+      const next = {
+        ...current,
+        workMinutes: preset.workMinutes,
+        breakMinutes: preset.breakMinutes,
+        longBreakMinutes: preset.longBreakMinutes,
+      };
+      dispatch({ type: "SYNC_SETTINGS", settings: next, previousSettings: current });
+      return next;
+    });
+  };
+
+  const isActivePreset = (preset: (typeof TIMER_PRESETS)[number]) =>
+    settings.workMinutes === preset.workMinutes &&
+    settings.breakMinutes === preset.breakMinutes &&
+    settings.longBreakMinutes === preset.longBreakMinutes;
+
   const handleSubjectClick = (subjectId: string) => {
     const next = [subjectId];
     setSelectedSubjectIds(next);
@@ -439,6 +515,10 @@ const StudyTimerInner = memo(function StudyTimerInner({
     setActiveSessionId(session.id);
     return true;
   };
+
+  useEffect(() => {
+    startSessionRef.current = startSession;
+  });
 
   const handleToggle = async () => {
     if (savingRef.current) return;
@@ -633,6 +713,9 @@ const StudyTimerInner = memo(function StudyTimerInner({
           saving={saving}
           cycles={cycles}
           activeSessionId={activeSessionId}
+          todayBlocks={todayStats.blocks}
+          todaySeconds={todayStats.seconds}
+          dailyGoal={settings.dailyGoal}
           subjectLabel={subjectLabel}
           projectLabel={focusProjectLabel}
           intent={focusIntent}
@@ -814,6 +897,39 @@ const StudyTimerInner = memo(function StudyTimerInner({
               </span>
             </div>
 
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <Flame className="h-3.5 w-3.5" />
+                Today
+              </span>
+              <span className="tabular-nums">
+                {todayStats.blocks} {todayStats.blocks === 1 ? "block" : "blocks"}
+                {todayStats.seconds >= 60 && (
+                  <span className="ml-1">· {formatFocusTime(todayStats.seconds)}</span>
+                )}
+              </span>
+            </div>
+            {settings.dailyGoal > 0 && (
+              <div
+                role="progressbar"
+                aria-label="Daily goal progress"
+                aria-valuemin={0}
+                aria-valuemax={settings.dailyGoal}
+                aria-valuenow={Math.min(todayStats.blocks, settings.dailyGoal)}
+                className="h-1 overflow-hidden rounded-full bg-muted"
+              >
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none",
+                    todayStats.blocks >= settings.dailyGoal ? "bg-success" : "bg-primary",
+                  )}
+                  style={{
+                    width: `${Math.min(100, (todayStats.blocks / settings.dailyGoal) * 100)}%`,
+                  }}
+                />
+              </div>
+            )}
+
             {mode === "work" && !activeSessionId && (
               <>
                 <SubjectPicker
@@ -933,7 +1049,20 @@ const StudyTimerInner = memo(function StudyTimerInner({
                   <summary className="cursor-pointer list-none text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
                     Custom durations
                   </summary>
-                  <div className="pt-2">
+                  <div className="space-y-2 pt-2">
+                    <div className="grid grid-cols-3 gap-1">
+                      {TIMER_PRESETS.map((preset) => (
+                        <Button
+                          key={preset.id}
+                          size="xs"
+                          variant={isActivePreset(preset) ? "secondary" : "outline"}
+                          onClick={() => applyPreset(preset)}
+                          title={preset.description}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
                     <DurationInputs
                       variant="sidebar"
                       settings={settings}
@@ -954,6 +1083,90 @@ const StudyTimerInner = memo(function StudyTimerInner({
                 Reset
               </Button>
             </div>
+
+            <details className="group">
+              <summary className="cursor-pointer list-none text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+                Timer preferences
+              </summary>
+              <div className="space-y-2 pt-2">
+                <label
+                  htmlFor="timer-alerts"
+                  className="flex cursor-pointer items-center gap-2 text-xs"
+                >
+                  <Checkbox
+                    id="timer-alerts"
+                    checked={settings.alertsEnabled}
+                    onCheckedChange={(checked) =>
+                      updatePreference({ alertsEnabled: checked === true })
+                    }
+                  />
+                  Alert when a block ends
+                </label>
+                <label
+                  htmlFor="timer-auto-break"
+                  className="flex cursor-pointer items-center gap-2 text-xs"
+                >
+                  <Checkbox
+                    id="timer-auto-break"
+                    checked={settings.autoStartBreak}
+                    onCheckedChange={(checked) =>
+                      updatePreference({ autoStartBreak: checked === true })
+                    }
+                  />
+                  Auto-start breaks
+                </label>
+                <label
+                  htmlFor="timer-auto-focus"
+                  className="flex cursor-pointer items-center gap-2 text-xs"
+                >
+                  <Checkbox
+                    id="timer-auto-focus"
+                    checked={settings.autoStartFocus}
+                    onCheckedChange={(checked) =>
+                      updatePreference({ autoStartFocus: checked === true })
+                    }
+                  />
+                  Auto-start next focus
+                </label>
+                <div className="flex items-center justify-between gap-2 border-t pt-2">
+                  <span className="text-xs font-medium">Daily goal</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() =>
+                        updatePreference({
+                          dailyGoal: clampDailyGoal(settings.dailyGoal - 1),
+                        })
+                      }
+                      disabled={settings.dailyGoal <= 0}
+                      aria-label="Decrease daily goal"
+                    >
+                      −
+                    </Button>
+                    <span className="w-8 text-center text-sm font-medium tabular-nums">
+                      {settings.dailyGoal}
+                    </span>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() =>
+                        updatePreference({
+                          dailyGoal: clampDailyGoal(settings.dailyGoal + 1),
+                        })
+                      }
+                      disabled={settings.dailyGoal >= MAX_DAILY_GOAL}
+                      aria-label="Increase daily goal"
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-micro text-muted-foreground">
+                  0 = no goal. Blocks count closed focus blocks today.
+                </p>
+              </div>
+            </details>
           </div>
         )}
       </section>

@@ -3,6 +3,7 @@ import {
   BookOpen,
   Check,
   Coffee,
+  Flame,
   Minimize2,
   Pause,
   Play,
@@ -11,6 +12,7 @@ import {
   SkipForward,
   Timer,
 } from "lucide-react";
+import { formatFocusTime } from "@/features/timer/model";
 import { TitleBar } from "@/components/shell/TitleBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,9 @@ interface FocusViewProps {
   saving: boolean;
   cycles: number;
   activeSessionId: string | null;
+  todayBlocks: number;
+  todaySeconds: number;
+  dailyGoal: number;
   subjectLabel: string;
   projectLabel?: string;
   intent: string;
@@ -88,6 +93,9 @@ export function FocusView({
   saving,
   cycles,
   activeSessionId,
+  todayBlocks,
+  todaySeconds,
+  dailyGoal,
   subjectLabel,
   projectLabel,
   intent,
@@ -162,6 +170,8 @@ export function FocusView({
     : isFocus
       ? "Ready to start"
       : "Break — not logged";
+  const goalProgress = dailyGoal > 0 ? Math.min(1, todayBlocks / dailyGoal) : 0;
+  const goalReached = dailyGoal > 0 && todayBlocks >= dailyGoal;
 
   return (
     <div
@@ -264,6 +274,48 @@ export function FocusView({
                         : `${Math.ceil(totalSeconds / 60)} min block`}
                   </span>
                 </div>
+              </div>
+
+              <div className="mt-6 w-full max-w-xl rounded-xl border bg-muted/40 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Flame className="h-3.5 w-3.5" />
+                    Today
+                  </span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {dailyGoal > 0
+                      ? `${Math.min(todayBlocks, dailyGoal)} / ${dailyGoal} blocks`
+                      : `${todayBlocks} ${todayBlocks === 1 ? "block" : "blocks"}`}
+                    {todaySeconds >= 60 && (
+                      <span className="ml-1.5">· {formatFocusTime(todaySeconds)} focused</span>
+                    )}
+                  </span>
+                </div>
+                {dailyGoal > 0 && (
+                  <>
+                    <div
+                      role="progressbar"
+                      aria-label="Daily goal progress"
+                      aria-valuemin={0}
+                      aria-valuemax={dailyGoal}
+                      aria-valuenow={Math.min(todayBlocks, dailyGoal)}
+                      className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none",
+                          goalReached ? "bg-success" : "bg-primary",
+                        )}
+                        style={{ width: `${Math.round(goalProgress * 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs font-medium text-muted-foreground">
+                      {goalReached
+                        ? "Daily goal reached — well done!"
+                        : `${dailyGoal - todayBlocks} ${dailyGoal - todayBlocks === 1 ? "block" : "blocks"} to go`}
+                    </p>
+                  </>
+                )}
               </div>
             </CardContent>
 

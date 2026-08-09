@@ -6,10 +6,47 @@ export const DEFAULT_SETTINGS = {
   workMinutes: 25,
   breakMinutes: 5,
   longBreakMinutes: 15,
+  alertsEnabled: true,
+  autoStartBreak: true,
+  autoStartFocus: false,
+  dailyGoal: 0,
 };
 export const MIN_DURATION_MINUTES = 1;
 export const MAX_DURATION_MINUTES = 180;
 export const EXTRA_BREAK_MINUTES = 5;
+export const MAX_DAILY_GOAL = 30;
+
+export const TIMER_PRESETS = [
+  {
+    id: "standard",
+    label: "Standard",
+    description: "25 / 5 / 15",
+    workMinutes: 25,
+    breakMinutes: 5,
+    longBreakMinutes: 15,
+  },
+  {
+    id: "deep",
+    label: "Deep work",
+    description: "50 / 10 / 20",
+    workMinutes: 50,
+    breakMinutes: 10,
+    longBreakMinutes: 20,
+  },
+  {
+    id: "lightning",
+    label: "Lightning",
+    description: "15 / 3 / 10",
+    workMinutes: 15,
+    breakMinutes: 3,
+    longBreakMinutes: 10,
+  },
+] as const;
+
+export function clampDailyGoal(value: number | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.min(MAX_DAILY_GOAL, Math.max(0, Math.round(value)));
+}
 
 export type TimerMode = "work" | "break" | "long-break";
 
@@ -17,6 +54,10 @@ export interface TimerSettings {
   workMinutes: number;
   breakMinutes: number;
   longBreakMinutes: number;
+  alertsEnabled: boolean;
+  autoStartBreak: boolean;
+  autoStartFocus: boolean;
+  dailyGoal: number;
 }
 
 export interface TimerState {
@@ -93,6 +134,19 @@ export function parseSettings(value: string | null): TimerSettings {
       longBreakMinutes: clampMinutes(
         parsed.longBreakMinutes ?? DEFAULT_SETTINGS.longBreakMinutes,
       ),
+      alertsEnabled:
+        typeof parsed.alertsEnabled === "boolean"
+          ? parsed.alertsEnabled
+          : DEFAULT_SETTINGS.alertsEnabled,
+      autoStartBreak:
+        typeof parsed.autoStartBreak === "boolean"
+          ? parsed.autoStartBreak
+          : DEFAULT_SETTINGS.autoStartBreak,
+      autoStartFocus:
+        typeof parsed.autoStartFocus === "boolean"
+          ? parsed.autoStartFocus
+          : DEFAULT_SETTINGS.autoStartFocus,
+      dailyGoal: clampDailyGoal(parsed.dailyGoal),
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -134,7 +188,7 @@ export function advanceTimer(
       const cycles = next.cycles + 1;
       const mode = cycles % 4 === 0 ? "long-break" : "break";
       next = {
-        running: true,
+        running: settings.autoStartBreak,
         mode,
         secondsLeft: getDurationSeconds(mode, settings),
         cycles,
@@ -144,8 +198,8 @@ export function advanceTimer(
         breakSeconds: 0,
       };
     } else {
-      return {
-        running: false,
+      next = {
+        running: settings.autoStartFocus,
         mode: "work",
         secondsLeft: getDurationSeconds("work", settings),
         cycles: next.cycles,
@@ -289,7 +343,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
     case "SKIP_BREAK":
       if (state.mode === "work" || state.studyOvertime) return state;
       return {
-        running: false,
+        running: action.settings.autoStartFocus,
         mode: "work",
         secondsLeft: getDurationSeconds("work", action.settings),
         cycles: state.cycles,
@@ -351,4 +405,61 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
     default:
       return state;
   }
+}
+
+function isSameLocalDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- exported for the runnable timer self-check
+export function countCompletedBlocksToday(
+  sessions: StudySession[],
+  now = new Date(),
+) {
+  const seen = new Set<string>();
+  for (const session of sessions) {
+    for (const interval of session.execution.intervals) {
+      if (interval.source !== "pomodoro" || !interval.end) continue;
+      const end = new Date(interval.end);
+      if (!Number.isNaN(end.getTime()) && isSameLocalDay(end, now)) {
+        seen.add(`${session.id}:${interval.cycleNumber ?? 0}`);
+      }
+    }
+  }
+  return seen.size;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- exported for the runnable timer self-check
+export function getFocusSecondsToday(
+  sessions: StudySession[],
+  now = new Date(),
+) {
+  let total = 0;
+  for (const session of sessions) {
+    for (const interval of session.execution.intervals) {
+      if (interval.source !== "pomodoro" || !interval.end) continue;
+      const start = new Date(interval.start);
+      const end = new Date(interval.end);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        continue;
+      }
+      if (!isSameLocalDay(end, now)) continue;
+      total += Math.max(0, (end.getTime() - start.getTime()) / 1000);
+    }
+  }
+  return total;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- exported for the runnable timer self-check
+export function formatFocusTime(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 }

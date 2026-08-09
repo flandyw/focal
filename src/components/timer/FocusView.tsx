@@ -117,6 +117,13 @@ export function FocusView({
     const focusTimeout = window.setTimeout(() => primaryButtonRef.current?.focus(), 50);
     document.body.style.overflow = "hidden";
 
+    return () => {
+      window.clearTimeout(focusTimeout);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -130,11 +137,9 @@ export function FocusView({
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.clearTimeout(focusTimeout);
       window.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
     };
-  }, [onClose, onToggle, resolvedCloseRef, saving]);
+  }, [onClose, onToggle, saving]);
 
   useEffect(() => {
     const previousTitle = document.title;

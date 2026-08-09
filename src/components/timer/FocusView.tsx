@@ -29,6 +29,7 @@ interface FocusViewProps {
   running: boolean;
   mode: "work" | "break" | "long-break";
   isStudyOvertime: boolean;
+  isFreeStudy: boolean;
   secondsLeft: number;
   totalSeconds: number;
   progress: number;
@@ -51,6 +52,7 @@ interface FocusViewProps {
   onReturnToBreak: () => void;
   onSkipBreak: () => void;
   onStartStudyOvertime: () => void;
+  onStartFreeStudy: () => void;
   onMoreBreakTime: () => void;
   onClose: () => void;
   closeButtonRef?: RefObject<HTMLButtonElement | null>;
@@ -73,6 +75,7 @@ export function FocusView({
   running,
   mode,
   isStudyOvertime,
+  isFreeStudy,
   secondsLeft,
   totalSeconds,
   progress,
@@ -95,6 +98,7 @@ export function FocusView({
   onReturnToBreak,
   onSkipBreak,
   onStartStudyOvertime,
+  onStartFreeStudy,
   onMoreBreakTime,
   onClose,
   closeButtonRef,
@@ -102,7 +106,7 @@ export function FocusView({
   const fallbackCloseRef = useRef<HTMLButtonElement | null>(null);
   const resolvedCloseRef = closeButtonRef ?? fallbackCloseRef;
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
-  const isFocus = mode === "work" || isStudyOvertime;
+  const isFocus = mode === "work" || (isStudyOvertime && (!isFreeStudy || running));
   const safeProgress = Number.isFinite(progress)
     ? Math.min(1, Math.max(0, progress))
     : 0;
@@ -239,10 +243,16 @@ export function FocusView({
                   />
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-4 text-xs text-muted-foreground">
-                  <span>{progressPercent}% complete</span>
+                  <span>
+                    {isFreeStudy ? "Open-ended session" : `${progressPercent}% complete`}
+                  </span>
                   <span className="text-right">
-                    {isStudyOvertime
-                      ? "Open-ended focus"
+                    {isFreeStudy
+                      ? running
+                        ? "No time limit"
+                        : "Study paused"
+                      : isStudyOvertime
+                        ? "Open-ended focus"
                       : running
                         ? `Finishes ${projectedFinish}`
                         : `${Math.ceil(totalSeconds / 60)} min block`}
@@ -256,8 +266,10 @@ export function FocusView({
                 <div
                   className={cn(
                     "grid w-full grid-cols-1 gap-2",
+                    !activeSessionId && "sm:grid-cols-2",
                     activeSessionId && !isStudyOvertime && "sm:grid-cols-2",
-                    activeSessionId && isStudyOvertime && "sm:grid-cols-3",
+                    activeSessionId && isStudyOvertime && !isFreeStudy && "sm:grid-cols-3",
+                    activeSessionId && isFreeStudy && "sm:grid-cols-2",
                   )}
                 >
                   <Button
@@ -269,6 +281,17 @@ export function FocusView({
                     {running ? <Pause /> : <Play />}
                     {timerActionLabel}
                   </Button>
+                  {!activeSessionId && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={onStartFreeStudy}
+                      disabled={saving || !canStartFocus}
+                    >
+                      <Timer />
+                      Free study
+                    </Button>
+                  )}
                   {activeSessionId && (
                     <Button
                       size="lg"
@@ -280,7 +303,7 @@ export function FocusView({
                       Finish &amp; save
                     </Button>
                   )}
-                  {isStudyOvertime && (
+                  {isStudyOvertime && !isFreeStudy && (
                     <Button
                       size="lg"
                       variant="outline"
@@ -291,6 +314,27 @@ export function FocusView({
                       Return to break
                     </Button>
                   )}
+                </div>
+              ) : isFreeStudy ? (
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Button
+                    ref={primaryButtonRef}
+                    size="lg"
+                    onClick={onToggle}
+                    disabled={saving}
+                  >
+                    <Play />
+                    Continue studying
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={onFinish}
+                    disabled={saving}
+                  >
+                    <Check />
+                    Finish &amp; save
+                  </Button>
                 </div>
               ) : (
                 <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
@@ -346,7 +390,9 @@ export function FocusView({
                   {running
                     ? "pause"
                     : activeSessionId
-                      ? "resume"
+                      ? isFreeStudy
+                        ? "continue studying"
+                        : "resume"
                       : isFocus
                         ? "start"
                         : "resume break"}{" "}

@@ -26,6 +26,7 @@ export interface TimerState {
   cycles: number;
   studyOvertime: boolean;
   overtimeSeconds: number;
+  freeStudy: boolean;
 }
 
 export type TimerAction =
@@ -35,6 +36,7 @@ export type TimerAction =
   | { type: "SKIP_BREAK"; settings: TimerSettings }
   | { type: "ADD_BREAK_TIME"; minutes: number }
   | { type: "START_STUDY_OVERTIME"; settings: TimerSettings }
+  | { type: "START_FREE_STUDY"; settings: TimerSettings }
   | { type: "RETURN_TO_BREAK" }
   | {
       type: "SYNC_SETTINGS";
@@ -49,6 +51,7 @@ export interface StoredTimerState {
   cycles: number;
   studyOvertime?: boolean;
   overtimeSeconds?: number;
+  freeStudy?: boolean;
   activeSessionId?: string | null;
   updatedAt: number;
 }
@@ -131,6 +134,7 @@ export function advanceTimer(
         cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       };
     } else {
       return {
@@ -140,6 +144,7 @@ export function advanceTimer(
         cycles: next.cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       };
     }
   }
@@ -173,6 +178,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
     cycles: 0,
     studyOvertime: false,
     overtimeSeconds: 0,
+    freeStudy: false,
   };
 
   try {
@@ -189,6 +195,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
       : 0;
     const cycles = Math.max(0, Math.round(parsed.cycles ?? 0));
     const studyOvertime = parsed.studyOvertime === true && mode !== "work";
+    const freeStudy = studyOvertime && parsed.freeStudy === true;
     const overtimeSeconds = Math.max(
       0,
       Math.round(parsed.overtimeSeconds ?? 0),
@@ -207,6 +214,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
         overtimeSeconds: parsed.running
           ? overtimeSeconds + elapsedSeconds
           : overtimeSeconds,
+        freeStudy,
       };
     }
 
@@ -221,6 +229,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
         cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       }, settings, elapsedSeconds);
     }
 
@@ -234,6 +243,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
       cycles,
       studyOvertime: false,
       overtimeSeconds: 0,
+      freeStudy: false,
     };
   } catch {
     return fallback;
@@ -254,6 +264,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         cycles: 0,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       };
     case "SKIP_BREAK":
       if (state.mode === "work" || state.studyOvertime) return state;
@@ -264,6 +275,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         cycles: state.cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       };
     case "ADD_BREAK_TIME":
       if (state.mode === "work" || state.studyOvertime) return state;
@@ -277,8 +289,20 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         running: true,
         studyOvertime: true,
         overtimeSeconds: elapsedBreakSeconds,
+        freeStudy: false,
       };
     }
+    case "START_FREE_STUDY":
+      if (state.mode !== "work" || state.studyOvertime) return state;
+      return {
+        ...state,
+        running: true,
+        mode: "break",
+        secondsLeft: getDurationSeconds("break", action.settings),
+        studyOvertime: true,
+        overtimeSeconds: 0,
+        freeStudy: true,
+      };
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state;
       return {
@@ -286,6 +310,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         running: true,
         studyOvertime: false,
         overtimeSeconds: 0,
+        freeStudy: false,
       };
     case "SYNC_SETTINGS": {
       const oldDuration = getDurationSeconds(

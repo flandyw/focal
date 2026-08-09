@@ -342,24 +342,39 @@ const StudyTimerInner = memo(function StudyTimerInner({
     return clearTimer;
   }, [clearTimer, onTick, state.running]);
 
-  const { running, mode, secondsLeft, cycles, studyOvertime, overtimeSeconds } = state;
+  const {
+    running,
+    mode,
+    secondsLeft,
+    cycles,
+    studyOvertime,
+    overtimeSeconds,
+    freeStudy,
+  } = state;
   const isStudyOvertime = studyOvertime && mode !== "work";
-  const isFocus = mode === "work" || isStudyOvertime;
+  const isFreeStudy = freeStudy && isStudyOvertime;
+  const isFocus = mode === "work" || (isStudyOvertime && (!isFreeStudy || running));
   const totalSeconds = getDurationSeconds(mode, settings);
-  const progress = isStudyOvertime
-    ? 1
+  const progress = isFreeStudy
+    ? 0
+    : isStudyOvertime
+      ? 1
     : Math.min(1, Math.max(0, 1 - secondsLeft / totalSeconds));
   const progressPercent = Math.round(progress * 100);
   const timeDisplay = isStudyOvertime
     ? `+${formatTimer(overtimeSeconds)}`
     : formatTimer(secondsLeft);
-  const modeLabel = isStudyOvertime
-    ? "Extra focus"
-    : mode === "work"
-      ? "Focus"
-      : mode === "long-break"
-        ? "Long break"
-        : "Break";
+  const modeLabel = isFreeStudy
+    ? running
+      ? "Free study"
+      : "Break"
+    : isStudyOvertime
+      ? "Extra focus"
+      : mode === "work"
+        ? "Focus"
+        : mode === "long-break"
+          ? "Long break"
+          : "Break";
   const selectedSubjects = subjects.filter((subject) =>
     selectedSubjectIds.includes(subject.id),
   );
@@ -371,7 +386,9 @@ const StudyTimerInner = memo(function StudyTimerInner({
     : running
       ? "Pause"
       : activeSessionId
-        ? "Resume"
+        ? isFreeStudy
+          ? "Continue studying"
+          : "Resume"
         : "Start focus";
 
   const updateDuration = (key: keyof TimerSettings, value: string) => {
@@ -441,7 +458,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     }
 
     const session = activeSessionRef.current;
-    if (session && isFocus) {
+    if (session && (isFocus || isFreeStudy)) {
       savingRef.current = true;
       setSaving(true);
       try {
@@ -459,7 +476,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
             ];
         const blocks = [
           ...closedBlocks(intervals),
-          ...(!running
+          ...(!running && !isFreeStudy
             ? [{
                 start: nowIso,
                 end: new Date(now.getTime() + secondsLeft * 1000).toISOString(),
@@ -533,6 +550,28 @@ const StudyTimerInner = memo(function StudyTimerInner({
     }
   };
 
+  const handleStartFreeStudy = async () => {
+    if (
+      mode !== "work" ||
+      activeSessionIdRef.current ||
+      !canStartFocus ||
+      savingRef.current
+    ) return;
+
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (await startSession(settings.workMinutes * 60)) {
+        dispatch({ type: "START_FREE_STUDY", settings });
+      }
+    } catch (error) {
+      console.error("Failed to start free study:", error);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const handleReturnToBreak = async () => {
     if (!isStudyOvertime || savingRef.current) return;
     savingRef.current = true;
@@ -578,6 +617,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           running={running}
           mode={mode}
           isStudyOvertime={isStudyOvertime}
+          isFreeStudy={isFreeStudy}
           secondsLeft={secondsLeft}
           totalSeconds={totalSeconds}
           progress={progress}
@@ -600,6 +640,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           onReturnToBreak={handleReturnToBreak}
           onSkipBreak={handleSkipBreak}
           onStartStudyOvertime={handleStartStudyOvertime}
+          onStartFreeStudy={handleStartFreeStudy}
           onMoreBreakTime={handleMoreBreakTime}
           onClose={() => setFocusView(false)}
           closeButtonRef={focusCloseButtonRef}
@@ -792,6 +833,16 @@ const StudyTimerInner = memo(function StudyTimerInner({
                       </Button>
                     ))}
                   </div>
+                  <Button
+                    className="mt-1 w-full"
+                    size="xs"
+                    variant="outline"
+                    onClick={() => void handleStartFreeStudy()}
+                    disabled={!canStartFocus}
+                  >
+                    <Timer />
+                    Free study · no time limit
+                  </Button>
                 </div>
               </>
             )}
@@ -837,6 +888,17 @@ const StudyTimerInner = memo(function StudyTimerInner({
                     Finish
                   </Button>
                 )}
+              </div>
+            ) : isFreeStudy ? (
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button onClick={() => void handleToggle()} disabled={saving}>
+                  <Play />
+                  Continue studying
+                </Button>
+                <Button variant="outline" onClick={() => void handleFinish()} disabled={saving}>
+                  <Check />
+                  Finish
+                </Button>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-1.5">

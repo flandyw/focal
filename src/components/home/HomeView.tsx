@@ -11,8 +11,6 @@ import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
 import {
   Clock,
-  AlertCircle,
-  CalendarPlus,
   MapPin,
   Trash2,
   X,
@@ -24,7 +22,6 @@ import {
   ArrowDown,
   ArrowUp,
   Pin,
-  Play,
   Settings2,
   Sparkles,
 } from "lucide-react";
@@ -51,10 +48,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  formatDeadline,
   getSubjectById,
-  getEventTypeInfo,
-  getSessionSubjectIds,
   getSessionEffectiveMinutes,
   cn,
   getLocalDateValue,
@@ -79,7 +73,6 @@ import { CalendarGrid } from "@/components/home/CalendarGrid";
 import { DayDetail } from "@/components/home/DayDetail";
 import { QuickLinks } from "@/components/home/QuickLinks";
 import { StudyPriorities } from "@/components/home/StudyPriorities";
-import { RecentActivity } from "@/components/home/RecentActivity";
 
 interface HomeViewProps {
   projects: Project[];
@@ -117,7 +110,6 @@ interface HomeViewProps {
 }
 
 export const HomeView = memo(function HomeView({
-  // ponytail: Keep the month calendar as the primary surface; decisions orbit it.
   projects,
   sessions,
   events,
@@ -145,9 +137,7 @@ export const HomeView = memo(function HomeView({
     getLocalDateValue(new Date()),
   );
   const [calendarView, setCalendarView] = useState<"month" | "week">("month");
-  const [prioritiesOpen, setPrioritiesOpen] = useState(true);
   const [calendarSelectionMode, setCalendarSelectionMode] = useState(false);
-  const [recentActivityOpen, setRecentActivityOpen] = useState(true);
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [eventBatchSaving, setEventBatchSaving] = useState(false);
@@ -181,12 +171,7 @@ export const HomeView = memo(function HomeView({
     activeProjects,
     overdueProjects,
     dueThisWeek,
-    completedSessions,
-    totalStudyHours,
     planningSubjects,
-    recentActivity,
-    topSubjects,
-    upcomingSessions,
     upcomingEvents,
     deadlinesByDate,
     sessionsByDate,
@@ -230,10 +215,6 @@ export const HomeView = memo(function HomeView({
     }),
     [effectiveSubjectOrder, events, focusPriorities.pinnedEventIds, now, projects, sessions],
   );
-  const nextFocus = priorityItems[0];
-  const nextFocusSubject = nextFocus?.subjectIds[0]
-    ? getSubjectById(nextFocus.subjectIds[0])
-    : undefined;
   const pinnableEvents = useMemo(() => {
     const cutoff = now.getTime() + 30 * 24 * 60 * 60 * 1000;
     return events
@@ -599,49 +580,27 @@ export const HomeView = memo(function HomeView({
             </DropdownMenu>
           </div>
 
-          <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/50 px-2.5 py-1.5">
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">
-              Next focus
-            </span>
-            {nextFocus ? (
-              <>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto max-w-[min(100%,18rem)] truncate p-0 text-sm font-medium"
-                  onClick={() => handlePrioritySelect(nextFocus)}
+          <section aria-labelledby="study-next-heading" className="mb-7">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                  Study
+                </p>
+                <h2
+                  id="study-next-heading"
+                  className="mt-1 text-lg font-semibold tracking-tight"
                 >
-                  {nextFocus.title}
-                </Button>
-                {nextFocusSubject && (
-                  <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium tabular-nums"
-                    style={{
-                      backgroundColor: `${nextFocusSubject.color}18`,
-                      color: nextFocusSubject.color,
-                    }}
-                  >
-                    {nextFocusSubject.shortCode}
-                  </span>
-                )}
-                <span className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground md:inline">
-                  {nextFocus.reason}
-                </span>
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                Add a due date or plan a session to build your queue.
-              </span>
-            )}
-            <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                  Study next
+                </h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Start the highest-impact work now; tune the queue when priorities change.
+                </p>
+              </div>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Focus priorities"
-                  >
+                  <Button variant="outline" size="sm">
                     <Settings2 />
+                    Tune queue
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-[min(26rem,calc(100vw-2rem))] p-3">
@@ -729,46 +688,36 @@ export const HomeView = memo(function HomeView({
                   </div>
                 </PopoverContent>
               </Popover>
-              <Button
-                size="xs"
-                disabled={!nextFocus || nextFocus.subjectIds.length === 0}
-                onClick={() => nextFocus && onStartFocus(nextFocus)}
+            </div>
+            <StudyPriorities
+              items={priorityItems}
+              onSelectItem={handlePrioritySelect}
+              onStartItem={onStartFocus}
+              onPlanSession={() => onNewSession(selectedCalendarDate)}
+            />
+          </section>
+
+          <section
+            aria-labelledby="planning-heading"
+            className="border-t border-border/70 pt-5"
+          >
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Planning
+              </p>
+              <h2
+                id="planning-heading"
+                className="mt-1 text-lg font-semibold tracking-tight"
               >
-                <Play />
-                Start
-              </Button>
+                Calendar and day plan
+              </h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Make time for the queue, then coordinate everything around it.
+              </p>
             </div>
-          </div>
 
-          {overdueProjects.length > 0 && (
-            <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2">
-              <div className="mb-1.5 flex items-center gap-2">
-                <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                <span className="text-xs font-semibold text-destructive">
-                  {overdueProjects.length} overdue assessment
-                  {overdueProjects.length > 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {overdueProjects.map((p) => (
-                  <Button
-                    key={p.id}
-                    onClick={() => onSelectProject(p.id)}
-                    variant="destructive"
-                    size="sm"
-                  >
-                    {p.name}
-                    <span className="font-normal opacity-75 tabular-nums">
-                      {formatDeadline(p.deadline!)}
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-x-7 gap-y-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]">
-            <section className="min-w-0 border-t border-border/70 pt-4">
+            <div className="grid grid-cols-1 gap-x-7 gap-y-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]">
+              <div className="min-w-0">
                 <div className="flex h-full flex-col gap-4">
                 <CalendarGrid
                   currentMonth={currentMonth}
@@ -794,7 +743,7 @@ export const HomeView = memo(function HomeView({
                 />
 
                 </div>
-            </section>
+              </div>
 
             <div className="space-y-6">
               <QuickLinks />
@@ -965,258 +914,9 @@ export const HomeView = memo(function HomeView({
                   );
                 })()}
 
-              {/* ponytail: Today stays calendar-first; deeper activity and analytics live in Review. */}
-              <div hidden aria-hidden="true">
-              <StudyPriorities
-                items={priorityItems}
-                isOpen={prioritiesOpen}
-                onToggle={() => setPrioritiesOpen((current) => !current)}
-                onSelectItem={handlePrioritySelect}
-              />
-
-              {dueThisWeek.length > 0 && (
-                <div className="rounded-lg bg-background p-3 ring-1 ring-border">
-                  <h3 className="mb-2.5 text-sm font-semibold">
-                    Due This Week
-                  </h3>
-                  <div className="-mx-1.5 space-y-0.5">
-                    {dueThisWeek.map((p) => {
-                      const subject = getSubjectById(p.subjectId);
-                      return (
-                        <Button
-                          key={p.id}
-                          onClick={() => onSelectProject(p.id)}
-                          variant="ghost"
-                          className="group h-auto w-full justify-start px-1.5 py-1.5 text-left whitespace-normal"
-                        >
-                          <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium truncate">
-                                {p.name}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {formatDeadline(p.deadline!)}
-                              </p>
-                            </div>
-                            {subject && (
-                              <div
-                                className="text-micro px-1.5 py-0.5 rounded whitespace-nowrap font-medium shrink-0"
-                                style={{
-                                  backgroundColor: subject.color + "14",
-                                  color: subject.color,
-                                }}
-                              >
-                                {subject.shortCode}
-                              </div>
-                            )}
-                          </div>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {upcomingSessions.length > 0 && (
-                <div className="rounded-lg bg-background p-3 ring-1 ring-border">
-                  <h3 className="mb-2.5 flex items-center gap-2 text-sm font-semibold">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    Upcoming Sessions
-                  </h3>
-                  <div className="-mx-1.5 space-y-0.5">
-                    {upcomingSessions.slice(0, 5).map((session) => {
-                      const project = projects.find(
-                        (p) => p.id === session.projectId,
-                      );
-                      const subjects = getSessionSubjectIds(session, project)
-                        .map(
-                          (subjectId) =>
-                            getSubjectById(subjectId)?.shortCode ?? subjectId,
-                        )
-                        .join(", ");
-                      return (
-                        <Button
-                          key={session.id}
-                          onClick={() => onSelectSession(session)}
-                          variant="ghost"
-                          className="h-auto w-full flex-col items-start gap-0.5 px-1.5 py-1.5 text-left whitespace-normal"
-                        >
-                          <p className="text-xs font-medium truncate">
-                            {session.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {project?.name ?? subjects}
-                            <span className="text-muted-foreground/40">
-                              {" · "}
-                            </span>
-                            <span className="tabular-nums">
-                              {format(
-                                parseISO(session.startTime),
-                                "MMM d, h:mm a",
-                              )}
-                            </span>
-                          </p>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {upcomingEvents.length > 0 && (
-                <div className="rounded-lg bg-background p-3 ring-1 ring-border">
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                    <CalendarPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                    Events
-                  </h3>
-                  <div className="-mx-2 divide-y divide-border/60">
-                    {upcomingEvents.slice(0, 5).map((event) => {
-                      const subject = getSubjectById(event.subjectId);
-                      const eventInfo = getEventTypeInfo(event.eventType);
-                      const startTime = parseISO(event.startTime);
-                      return (
-                        <Button
-                          key={event.id}
-                          onClick={() => onSelectEvent(event)}
-                          variant="ghost"
-                          className="group h-auto w-full items-stretch justify-start rounded-md px-2 py-2.5 text-left whitespace-normal"
-                        >
-                          <div className="flex min-w-0 items-start gap-3">
-                            <time
-                              dateTime={event.startTime}
-                              className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md bg-muted/70 leading-none transition-colors group-hover:bg-background"
-                            >
-                              <span className="text-micro font-medium text-muted-foreground">
-                                {format(startTime, "MMM")}
-                              </span>
-                              <span className="mt-1 text-sm font-semibold tabular-nums">
-                                {format(startTime, "d")}
-                              </span>
-                            </time>
-                            <div className="min-w-0 flex-1 pt-0.5">
-                              <p className="truncate text-sm font-medium leading-tight">
-                                {event.title}
-                              </p>
-                              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
-                                <Clock className="h-3 w-3 shrink-0" />
-                                <span className="shrink-0">
-                                  {format(startTime, "EEE, h:mm a")}
-                                </span>
-                                {event.location && (
-                                  <>
-                                    <span aria-hidden="true">·</span>
-                                    <MapPin className="h-3 w-3 shrink-0" />
-                                    <span className="truncate">
-                                      {event.location}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-micro font-medium text-muted-foreground">
-                                <span className="flex items-center gap-1.5">
-                                  <span
-                                    className="h-1.5 w-1.5 rounded-full"
-                                    style={{ backgroundColor: eventInfo.color }}
-                                  />
-                                  {eventInfo.label}
-                                </span>
-                                {subject && (
-                                  <span className="flex items-center gap-1.5">
-                                    <span
-                                      className="h-1.5 w-1.5 rounded-full"
-                                      style={{ backgroundColor: subject.color }}
-                                    />
-                                    {subject.shortCode}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {dueThisWeek.length === 0 &&
-                upcomingSessions.length === 0 &&
-                upcomingEvents.length === 0 &&
-                overdueProjects.length === 0 && (
-                  <div className="rounded-lg border border-dashed p-3">
-                    <p className="text-xs text-muted-foreground">
-                      Nothing due this week. Use the buttons above to add an
-                      assessment, event, or session.
-                    </p>
-                  </div>
-                )}
-
-              <RecentActivity
-                items={recentActivity}
-                isOpen={recentActivityOpen}
-                onToggle={() => setRecentActivityOpen((current) => !current)}
-                onSelectSession={onSelectSession}
-                onSelectEvent={onSelectEvent}
-              />
-
-              <div className="rounded-lg bg-background p-3 ring-1 ring-border">
-                <h3 className="mb-2.5 text-sm font-semibold">Summary</h3>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="text-lg font-semibold tabular-nums leading-none">
-                      {activeProjects.length}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      assessments
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold tabular-nums leading-none">
-                      {completedSessions}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      completed
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold tabular-nums leading-none">
-                      {totalStudyHours}
-                      <span className="text-xs font-normal">h</span>
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      studied
-                    </p>
-                  </div>
-                </div>
-
-                {topSubjects.length > 0 && (
-                  <div className="mt-3 pt-3 border-t">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {topSubjects.map(([subjectId, info]) => {
-                        const subject = getSubjectById(subjectId);
-                        return (
-                          <span
-                            key={subjectId}
-                            className="text-xs px-1.5 py-0.5 rounded font-medium tabular-nums"
-                            style={{
-                              backgroundColor: subject?.color + "14",
-                              color: subject?.color,
-                            }}
-                          >
-                            {info.icon} {info.shortCode}{" "}
-                            <span className="font-normal tabular-nums">
-                              {Math.round((info.minutes / 60) * 10) / 10}h
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
               </div>
             </div>
-          </div>
+          </section>
         </div>
       </ScrollArea>
 

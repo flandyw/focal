@@ -60,6 +60,7 @@ import {
 import {
   mergedStudySessionTitle,
   mergeStudySessionTimelines,
+  startPlannedStudySession,
 } from "@/lib/studySessions";
 import {
   forcePushAndMerge,
@@ -531,12 +532,17 @@ function App() {
     setAiAssistantOpen(true);
   }, []);
 
+  const handleOpenFocus = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("focal-focus-request", { detail: {} }));
+  }, []);
+
   useKeyboardShortcuts({
     onSearch: () => setSearchOpen((open) => !open),
     onNewAssessment: () => setDialogOpen(true),
     onNewEvent: () => handleOpenNewEvent(),
     onNewSession: () => handleOpenNewSession(),
     onGoHome: handleSelectHome,
+    onOpenFocus: handleOpenFocus,
     onGoTimetable: handleSelectTimetable,
     onGoAnalytics: handleSelectAnalytics,
     onGoSettings: handleSelectSettings,
@@ -793,6 +799,7 @@ function App() {
       subjectIds: string[];
       durationSeconds: number;
       projectId?: string;
+      sessionId?: string;
       cycleNumber: number;
       intent?: string;
     }) => {
@@ -808,6 +815,32 @@ function App() {
         focusIntent ??= getPomodoroTitle(data.subjectIds, projectName);
         const blockStart = start.toISOString();
         const blockEnd = end.toISOString();
+        const plannedSession = data.sessionId
+          ? sessions.find(
+              (session) =>
+                session.id === data.sessionId &&
+                session.execution.state === "planned",
+            )
+          : undefined;
+
+        if (plannedSession) {
+          const startedSession = startPlannedStudySession(plannedSession, {
+            startedAt: blockStart,
+            cycleNumber: data.cycleNumber,
+            subjectIds: data.subjectIds,
+            projectId: data.projectId,
+            intent: focusIntent,
+          });
+          await updateSession(plannedSession.id, {
+            projectId: startedSession.projectId,
+            subjectIds: startedSession.subjectIds,
+            title: startedSession.title,
+            execution: startedSession.execution,
+          });
+          void pushSessionChange(startedSession);
+          return startedSession;
+        }
+
         const session = await addSession({
           projectId: data.projectId,
           subjectIds: data.subjectIds,
@@ -833,7 +866,7 @@ function App() {
         throw e;
       }
     },
-    [projects, addSession, pushSessionChange],
+    [projects, sessions, addSession, updateSession, pushSessionChange],
   );
 
   const handleUpdatePomodoroSession = useCallback(
@@ -1905,6 +1938,7 @@ function App() {
     window.dispatchEvent(new CustomEvent("focal-focus-request", {
       detail: {
         subjectIds: item.subjectIds,
+        sessionId: item.sessionId,
         projectId: item.projectId,
         projectLabel,
         intent: item.title,
@@ -1978,6 +2012,7 @@ function App() {
                   onToggleCollapse={handleToggleCollapse}
                   onSelect={handleSelectProject}
                   onSelectHome={handleSelectHome}
+                  onOpenFocus={handleOpenFocus}
                   onSelectAnalytics={handleSelectAnalytics}
                   onSelectExamTrack={handleSelectExamTrack}
                   onDelete={handleDeleteProject}

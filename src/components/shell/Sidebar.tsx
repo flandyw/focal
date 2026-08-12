@@ -23,6 +23,7 @@ import {
   Library,
   PanelLeftClose,
   PanelLeftOpen,
+  Play,
   Plus,
   Star,
   type LucideIcon,
@@ -147,6 +148,7 @@ interface SidebarProps {
   onSelectAnalytics: () => void;
   onSelectExamTrack: () => void;
   onDelete: (id: string) => void;
+  onOpenFocus: () => void;
   onNewProject: () => void;
   onToggleFavorite?: (id: string) => void;
   onToggleArchive?: (id: string) => void;
@@ -199,6 +201,7 @@ export const Sidebar = memo(function Sidebar({
   onSelectAnalytics,
   onSelectExamTrack,
   onDelete,
+  onOpenFocus,
   onNewProject,
   onToggleFavorite,
   onToggleArchive,
@@ -482,18 +485,17 @@ export const Sidebar = memo(function Sidebar({
         <div className="mt-3 flex justify-center">
           <Button
             variant="default"
-            onClick={onNewProject}
+            onClick={onOpenFocus}
             className={cn(
+              "font-semibold shadow-sm",
               isCollapsed ? "size-8 rounded-lg" : "w-full justify-center",
             )}
             size={isCollapsed ? "icon" : "sm"}
-            title={isCollapsed ? "New Assessment" : undefined}
-            aria-label={isCollapsed ? "New assessment" : undefined}
+            title={isCollapsed ? "Start focus" : undefined}
+            aria-label={isCollapsed ? "Start focus" : undefined}
           >
-            <Plus />
-            <CollapsibleInline show={!isCollapsed}>
-              New Assessment
-            </CollapsibleInline>
+            <Play className="fill-current" />
+            <CollapsibleInline show={!isCollapsed}>Start focus</CollapsibleInline>
           </Button>
         </div>
       </div>
@@ -506,7 +508,7 @@ export const Sidebar = memo(function Sidebar({
       >
         <CollapsibleBlock show={!isCollapsed} className="px-2 pb-1">
           <p className="text-[11px] font-medium text-muted-foreground">
-            Workspace
+            Study
           </p>
         </CollapsibleBlock>
         <Button
@@ -543,13 +545,13 @@ export const Sidebar = memo(function Sidebar({
             timetableSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
           )}
           size={isCollapsed ? "icon" : "default"}
-          title={isCollapsed ? "Plan (T)" : undefined}
-          aria-label={isCollapsed ? "Plan" : undefined}
+          title={isCollapsed ? "Schedule (T)" : undefined}
+          aria-label={isCollapsed ? "Schedule" : undefined}
           aria-current={timetableSelected ? "page" : undefined}
         >
           <CalendarIcon />
           <CollapsibleInline show={!isCollapsed} className="font-medium">
-            Plan
+            Schedule
           </CollapsibleInline>
         </Button>
 
@@ -565,13 +567,13 @@ export const Sidebar = memo(function Sidebar({
             analyticsSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
           )}
           size={isCollapsed ? "icon" : "default"}
-          title={isCollapsed ? "Review (A)" : undefined}
-          aria-label={isCollapsed ? "Review" : undefined}
+          title={isCollapsed ? "Progress (A)" : undefined}
+          aria-label={isCollapsed ? "Progress" : undefined}
           aria-current={analyticsSelected ? "page" : undefined}
         >
           <BarChart3 />
           <CollapsibleInline show={!isCollapsed} className="font-medium">
-            Review
+            Progress
           </CollapsibleInline>
         </Button>
 
@@ -587,13 +589,13 @@ export const Sidebar = memo(function Sidebar({
             examTrackSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
           )}
           size={isCollapsed ? "icon" : "default"}
-          title={isCollapsed ? "ExamTrack" : undefined}
-          aria-label={isCollapsed ? "ExamTrack" : undefined}
+          title={isCollapsed ? "Exam practice" : undefined}
+          aria-label={isCollapsed ? "Exam practice" : undefined}
           aria-current={examTrackSelected ? "page" : undefined}
         >
           <GraduationCap />
           <CollapsibleInline show={!isCollapsed} className="font-medium">
-            ExamTrack
+            Exam practice
           </CollapsibleInline>
         </Button>
 
@@ -603,43 +605,59 @@ export const Sidebar = memo(function Sidebar({
             libraryOpen && "bg-background/35",
           )}
         >
-          <Button
-            variant={librarySelected ? "secondary" : "ghost"}
-            onClick={() => setLibraryOpen((current) => !current)}
+          <div
             className={cn(
-              "w-full text-muted-foreground",
-              !isCollapsed && "justify-start",
-              libraryOpen && "rounded-b-none",
-              librarySelected &&
-                "bg-sidebar-accent text-sidebar-accent-foreground",
+              "items-center gap-0.5",
+              isCollapsed ? "flex flex-col py-0.5" : "flex p-0.5",
             )}
-            size={isCollapsed ? "icon" : "default"}
-            title={isCollapsed ? "Library" : undefined}
-            aria-label={isCollapsed ? "Library" : undefined}
-            aria-expanded={libraryOpen}
           >
-            <Library />
-            <CollapsibleInline show={!isCollapsed} className="font-medium">
-              Library
-            </CollapsibleInline>
-            <CollapsibleInline
-              show={!isCollapsed}
-              className="ml-auto items-center gap-0.5"
+            <Button
+              variant={librarySelected ? "secondary" : "ghost"}
+              onClick={() => setLibraryOpen((current) => !current)}
+              className={cn(
+                "min-w-0 text-muted-foreground",
+                isCollapsed ? "shrink-0" : "flex-1 justify-start",
+                librarySelected &&
+                  "bg-sidebar-accent text-sidebar-accent-foreground",
+              )}
+              size={isCollapsed ? "icon" : "default"}
+              title={isCollapsed ? "Assessments" : undefined}
+              aria-label={isCollapsed ? "Assessments" : undefined}
+              aria-expanded={libraryOpen}
             >
-              <span className="flex size-5 items-center justify-center rounded-full bg-muted/70 text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
-                {activeCount}
-              </span>
-              <span className="flex size-5 items-center justify-center">
-                <ChevronDown
-                  className={cn(
-                    "size-3.5 shrink-0 transition-transform",
-                    !libraryOpen && "-rotate-90",
-                  )}
-                  aria-hidden="true"
-                />
-              </span>
-            </CollapsibleInline>
-          </Button>
+              <Library />
+              <CollapsibleInline show={!isCollapsed} className="font-medium">
+                Assessments
+              </CollapsibleInline>
+              <CollapsibleInline
+                show={!isCollapsed}
+                className="ml-auto items-center gap-0.5"
+              >
+                <span className="flex size-5 items-center justify-center rounded-full bg-muted/70 text-[11px] font-medium leading-none tabular-nums text-muted-foreground">
+                  {activeCount}
+                </span>
+                <span className="flex size-5 items-center justify-center">
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 shrink-0 transition-transform",
+                      !libraryOpen && "-rotate-90",
+                    )}
+                    aria-hidden="true"
+                  />
+                </span>
+              </CollapsibleInline>
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={onNewProject}
+              size={isCollapsed ? "icon-xs" : "icon-sm"}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              title="New assessment"
+              aria-label="New assessment"
+            >
+              <Plus />
+            </Button>
+          </div>
 
           {libraryOpen && (
             <div
@@ -687,12 +705,9 @@ export const Sidebar = memo(function Sidebar({
       {libraryOpen ? <>
         {!isCollapsed && (
           <div className="mt-3 flex items-center border-t border-sidebar-border/70 px-4 pb-1.5 pt-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold">Assessments</p>
-              <p className="text-[11px] text-muted-foreground">
-                {filtered.length} {filtered.length === 1 ? "item" : "items"}
-              </p>
-            </div>
+            <p className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
+              {filtered.length} {filtered.length === 1 ? "item" : "items"}
+            </p>
             {onSortChange && (
               <DropdownMenu open={showSortMenu} onOpenChange={setShowSortMenu}>
                 <DropdownMenuTrigger asChild>

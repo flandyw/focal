@@ -3,6 +3,7 @@ import {
   mergedStudySessionTitle,
   mergeStudySessionTimelines,
   normalizeStudySession,
+  startPlannedStudySession,
   updateStudySession,
 } from "../src/lib/studySessions.ts"
 
@@ -28,6 +29,17 @@ check(planned.schemaVersion === 2, "legacy session was not migrated to V2")
 check(planned.schedule.blocks.length === 2, "legacy planned blocks were not preserved")
 check(planned.execution.state === "planned" && planned.execution.intervals.length === 0, "planned session gained execution intervals")
 check(planned.startTime === "2026-06-24T08:00:00.000Z", "legacy schedule compatibility view is wrong")
+
+const startedPlanned = startPlannedStudySession(planned, {
+  startedAt: "2026-06-24T08:05:00.000Z",
+  cycleNumber: 1,
+  intent: "Finish calculus review",
+})
+check(startedPlanned.id === planned.id, "starting planned work created a different session")
+check(startedPlanned.execution.state === "in-progress", "planned work did not start")
+check(startedPlanned.execution.intervals[0]?.start === "2026-06-24T08:05:00.000Z", "actual start time was not recorded")
+check(startedPlanned.schedule.blocks.length === 2, "starting planned work replaced its schedule")
+check(startedPlanned.title === "Finish calculus review", "focus intent did not update the planned title")
 
 const stored = JSON.parse(JSON.stringify(planned)) as Record<string, unknown>
 check(stored.schemaVersion === 2, "stored session lost its schema version")

@@ -79,6 +79,7 @@ interface StudyTimerProps {
     subjectIds: string[];
     durationSeconds: number;
     projectId?: string;
+    sessionId?: string;
     cycleNumber: number;
     intent?: string;
   }) => Promise<StudySession>;
@@ -131,6 +132,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
   const [focusProjectId, setFocusProjectId] = useState<string | undefined>(selectedProject?.id);
   const [focusProjectLabel, setFocusProjectLabel] = useState<string | undefined>(selectedProject?.name);
   const [focusIntent, setFocusIntent] = useState("");
+  const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
     readStoredSessionId,
   );
@@ -254,6 +256,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
 
   const setFocusView = useCallback((open: boolean) => {
     setFocusViewOpen(open);
+    if (!open) setFocusSessionId(undefined);
     window.dispatchEvent(
       new CustomEvent("focal-focus-mode-changed", { detail: { active: open } }),
     );
@@ -266,11 +269,13 @@ const StudyTimerInner = memo(function StudyTimerInner({
         projectId?: string;
         projectLabel?: string;
         intent?: string;
+        sessionId?: string;
       }>).detail;
       if (detail.subjectIds?.length) setSelectedSubjectIds(detail.subjectIds);
       setFocusProjectId(detail.projectId);
       setFocusProjectLabel(detail.projectLabel);
       setFocusIntent(detail.intent ?? "");
+      setFocusSessionId(detail.sessionId);
       setFocusView(true);
     };
     window.addEventListener("focal-focus-request", handleFocusRequest);
@@ -376,7 +381,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           selectedSubjectIds.length > 0 &&
           !externalSession
         ) {
-          void startSessionRef.current();
+          void startSessionRef.current(settingsRef.current.workMinutes * 60);
         }
       }
     }
@@ -507,12 +512,14 @@ const StudyTimerInner = memo(function StudyTimerInner({
       subjectIds: selectedSubjectIds,
       durationSeconds,
       projectId: activeProjectId,
+      sessionId: focusSessionId,
       cycleNumber: cycles + 1,
       intent: focusIntent,
     });
     activeSessionIdRef.current = session.id;
     activeSessionRef.current = session;
     setActiveSessionId(session.id);
+    setFocusSessionId(undefined);
     return true;
   };
 
@@ -716,9 +723,12 @@ const StudyTimerInner = memo(function StudyTimerInner({
           todayBlocks={todayStats.blocks}
           todaySeconds={todayStats.seconds}
           dailyGoal={settings.dailyGoal}
+          subjects={subjects}
+          selectedSubjectIds={selectedSubjectIds}
           subjectLabel={subjectLabel}
           projectLabel={focusProjectLabel}
           intent={focusIntent}
+          onSubjectClick={handleSubjectClick}
           onIntentChange={setFocusIntent}
           onSearch={onSearch}
           onSettings={onSettings}

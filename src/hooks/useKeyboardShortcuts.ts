@@ -8,6 +8,7 @@ interface ShortcutHandlers {
   onGoHome?: () => void
   onGoTimetable?: () => void
   onGoAnalytics?: () => void
+  onOpenFocus?: () => void
   onGoSettings?: () => void
   onOpenAiAssistant?: () => void
   onShowShortcuts?: () => void
@@ -111,6 +112,12 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       // H: Go home
       if (key === "h" && !meta && !e.altKey && !e.shiftKey) {
         handlersRef.current.onGoHome?.()
+        return
+      }
+
+      // F: Open focus setup
+      if (key === "f" && !meta && !e.altKey && !e.shiftKey) {
+        handlersRef.current.onOpenFocus?.()
         return
       }
 

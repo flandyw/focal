@@ -26,6 +26,14 @@ export interface CreateStudySessionInput {
   integrations?: StudySession["integrations"]
 }
 
+export interface StartPlannedStudySessionInput {
+  startedAt: string
+  cycleNumber: number
+  subjectIds?: string[]
+  projectId?: string
+  intent?: string
+}
+
 type LegacyStudySessionPatch = Partial<Omit<StudySession, "id" | "created_at">> & {
   startTime?: string
   endTime?: string
@@ -437,6 +445,30 @@ export function updateStudySession(session: StudySession, patch: LegacyStudySess
     integrations: patch.integrations ?? (patch.source ? { notion: patch.source } : session.integrations),
     updated_at: now,
   })
+}
+
+export function startPlannedStudySession(
+  session: StudySession,
+  input: StartPlannedStudySessionInput,
+): StudySession {
+  if (session.execution.state !== "planned") {
+    throw new Error("Only planned study sessions can be started")
+  }
+
+  const intent = input.intent?.trim();
+  return updateStudySession(session, {
+    projectId: input.projectId ?? session.projectId,
+    subjectIds: input.subjectIds?.length ? input.subjectIds : session.subjectIds,
+    title: intent && intent.length > 0 ? intent : session.title,
+    execution: {
+      state: "in-progress",
+      intervals: [{
+        start: input.startedAt,
+        source: "pomodoro",
+        cycleNumber: input.cycleNumber,
+      }],
+    },
+  }, input.startedAt)
 }
 
 export function studySessionPayload(session: StudySession): Record<string, unknown> {

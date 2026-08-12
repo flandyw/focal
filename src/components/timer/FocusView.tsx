@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { formatFocusTime } from "@/features/timer/model";
 import { TitleBar } from "@/components/shell/TitleBar";
+import { SubjectPicker } from "@/components/timer/SubjectPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { Subject } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FocusViewProps {
@@ -46,9 +48,12 @@ interface FocusViewProps {
   todayBlocks: number;
   todaySeconds: number;
   dailyGoal: number;
+  subjects: Subject[];
+  selectedSubjectIds: string[];
   subjectLabel: string;
   projectLabel?: string;
   intent: string;
+  onSubjectClick: (subjectId: string) => void;
   onIntentChange: (value: string) => void;
   onSearch?: () => void;
   onSettings?: () => void;
@@ -96,9 +101,12 @@ export function FocusView({
   todayBlocks,
   todaySeconds,
   dailyGoal,
+  subjects,
+  selectedSubjectIds,
   subjectLabel,
   projectLabel,
   intent,
+  onSubjectClick,
   onIntentChange,
   onSearch,
   onSettings,
@@ -121,6 +129,11 @@ export function FocusView({
     ? Math.min(1, Math.max(0, progress))
     : 0;
   const progressPercent = Math.round(safeProgress * 100);
+  const activeFocus = !!activeSessionId && isFocus;
+  const headerTitle = activeFocus ? intent.trim() || "Focus session" : subjectLabel;
+  const headerDescription = activeFocus
+    ? [subjectLabel, projectLabel].filter(Boolean).join(" · ")
+    : projectLabel ?? `${modeLabel} session`;
   const projectedFinish = useMemo(
     () => finishTime(isStudyOvertime ? 0 : secondsLeft),
     [isStudyOvertime, secondsLeft],
@@ -200,10 +213,10 @@ export function FocusView({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-left">
                   <CardTitle className="truncate font-heading">
-                    {subjectLabel}
+                    {headerTitle}
                   </CardTitle>
                   <CardDescription className="truncate">
-                    {projectLabel ?? `${modeLabel} session`}
+                    {headerDescription}
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -218,16 +231,25 @@ export function FocusView({
 
             <CardContent className="flex flex-col items-center px-5 py-10 text-center sm:px-10 sm:py-14 lg:py-16">
               {!activeSessionId && isFocus && (
-                <div className="mb-7 w-full max-w-xl text-left">
-                  <label htmlFor="focus-intent" className="mb-2 block text-sm font-medium">
-                    Focus outcome
-                  </label>
-                  <Input
-                    id="focus-intent"
-                    value={intent}
-                    onChange={(event) => onIntentChange(event.target.value)}
-                    placeholder="What will be different when this block ends?"
+                <div className="mb-7 w-full max-w-xl space-y-5 text-left">
+                  <SubjectPicker
+                    variant="focus"
+                    subjects={subjects}
+                    selectedSubjectIds={selectedSubjectIds}
+                    activeSessionId={null}
+                    onSubjectClick={onSubjectClick}
                   />
+                  <div>
+                    <label htmlFor="focus-intent" className="mb-2 block text-sm font-medium">
+                      Focus outcome
+                    </label>
+                    <Input
+                      id="focus-intent"
+                      value={intent}
+                      onChange={(event) => onIntentChange(event.target.value)}
+                      placeholder="What will be different when this block ends?"
+                    />
+                  </div>
                 </div>
               )}
               <p className="text-sm font-medium text-muted-foreground">

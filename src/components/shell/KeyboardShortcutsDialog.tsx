@@ -31,6 +31,7 @@ export function KeyboardShortcutsDialog({
     {
       label: "Navigate",
       shortcuts: [
+        { keys: ["F"], action: "Start focus" },
         { keys: ["H"], action: "Go to Today" },
         { keys: ["T"], action: "Go to Plan" },
         { keys: ["A"], action: "Go to Review" },

@@ -51,10 +51,18 @@ assert(titleBarSource.includes("onNewAssessment={onNewAssessment}"), "the title 
 assert(titleBarSource.includes("onNewEvent={onNewEvent}"), "the title bar must expose new events")
 assert(titleBarSource.includes("onNewSession={onNewSession}"), "the title bar must expose study sessions")
 
+const sidebarSource = await fetch(
+  new URL("../src/components/shell/Sidebar.tsx", import.meta.url),
+).then((response) => response.text())
+assert(sidebarSource.includes("onOpenFocus: () => void"), "the sidebar must expose the focus flow")
+assert(sidebarSource.includes("Start focus"), "the sidebar must prioritize starting focus")
+assert(sidebarSource.includes("Assessments"), "the sidebar must label the assessment library clearly")
+
 const appSource = await fetch(new URL("../src/App.tsx", import.meta.url)).then(
   (response) => response.text(),
 )
 assert(appSource.includes("onNewAssessment={handleNewProject}"), "the global New menu must create assessments")
 assert(appSource.includes("onNewEvent={() => handleOpenNewEvent()}"), "the global New menu must create events")
 assert(appSource.includes("onNewSession={() => handleOpenNewSession()}"), "the global New menu must create study sessions")
+assert(appSource.includes("onOpenFocus={handleOpenFocus}"), "the app must connect the sidebar to focus")
 assert(appSource.includes('label: "Add files"'), "new assessments must offer the next core action")

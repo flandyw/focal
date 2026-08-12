@@ -1,4 +1,3 @@
-import { format, parseISO } from "date-fns"
 import { repeatCalendarEvent, repeatStudySession } from "../src/lib/repeatPlanningItem.ts"
 import { normalizeStudySession } from "../src/lib/studySessions.ts"
 import type { CalendarEvent } from "../src/lib/types.ts"
@@ -21,8 +20,9 @@ const event: CalendarEvent = {
 }
 
 const repeatedEvent = repeatCalendarEvent(event)
-check(format(parseISO(repeatedEvent.startTime), "yyyy-MM-dd HH:mm") === "2026-06-08 09:30", "event start time was not shifted")
-check(format(parseISO(repeatedEvent.endTime!), "yyyy-MM-dd HH:mm") === "2026-06-08 11:00", "event end time was not shifted")
+const week = 7 * 24 * 60 * 60 * 1000
+check(new Date(repeatedEvent.startTime).getTime() - new Date(event.startTime).getTime() === week, "event start time was not shifted")
+check(new Date(repeatedEvent.endTime!).getTime() - new Date(event.endTime!).getTime() === week, "event end time was not shifted")
 check(repeatedEvent.isFinished === false, "repeated event stayed complete")
 check(repeatedEvent.source === undefined, "repeated event kept its integration identity")
 check(repeatedEvent.finishedAt === undefined, "repeated event kept its completion time")
@@ -60,7 +60,7 @@ check(repeatedSession.title === "Redo the hard questions", "next action was not 
 check(repeatedSession.execution?.state === "planned", "repeated session was not reset to planned")
 check(repeatedSession.schedule.blocks.length === 2, "repeated session lost study blocks")
 check(
-  format(parseISO(repeatedSession.schedule.blocks[0].start), "yyyy-MM-dd HH:mm") === "2026-06-08 09:30",
+  new Date(repeatedSession.schedule.blocks[0].start).getTime() - new Date(session.schedule.blocks[0].start).getTime() === week,
   "session start time was not shifted",
 )
 check(repeatedSession.reflection === undefined, "repeated session kept its reflection")

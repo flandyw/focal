@@ -1,5 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Component, useState, type ErrorInfo, type ReactNode } from "react";
+import { AlertTriangle, Check, Copy, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
@@ -52,23 +52,49 @@ function ErrorScreen({
   onReset: () => void;
   onReload: () => void;
 }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyDetails = async () => {
+    if (!error?.message) return;
+    try {
+      await navigator.clipboard.writeText(error.stack ?? error.message);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
-    <div className="flex h-screen w-full flex-col items-center justify-center bg-background px-6 text-center">
+    <div className="flex h-screen w-full flex-col items-center justify-center bg-background px-6 text-center" role="alert" aria-live="assertive">
       <div className="w-full max-w-md rounded-lg border bg-card p-8 shadow-sm">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-          <AlertTriangle className="h-6 w-6" />
+          <AlertTriangle className="h-6 w-6" aria-hidden="true" />
         </div>
         <h1 className="text-xl font-semibold tracking-tight">Something went wrong</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           The app hit an unexpected error. You can try again, or reload if it persists.
         </p>
         {error?.message && (
-          <ScrollArea className="mt-4 max-h-40 rounded-md border bg-muted">
-            <pre className="p-3 text-left font-mono text-xs text-muted-foreground">
-              {error.message}
-            </pre>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+          <div className="mt-4">
+            <Button variant="ghost" size="sm" onClick={() => setShowDetails((current) => !current)} aria-expanded={showDetails}>
+              {showDetails ? "Hide technical details" : "Show technical details"}
+            </Button>
+            {showDetails && (
+              <>
+                <ScrollArea className="mt-2 max-h-40 rounded-md border bg-muted">
+                  <pre className="p-3 text-left font-mono text-xs text-muted-foreground">
+                    {error.message}
+                  </pre>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+                <Button variant="ghost" size="sm" className="mt-2" onClick={() => void copyDetails()}>
+                  {copied ? <Check /> : <Copy />}
+                  {copied ? "Copied" : "Copy details"}
+                </Button>
+              </>
+            )}
+          </div>
         )}
         <div className="mt-6 flex items-center justify-center gap-2">
           <Button variant="outline" size="sm" onClick={onReset}>

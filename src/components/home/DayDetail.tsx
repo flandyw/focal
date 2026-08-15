@@ -1,6 +1,6 @@
 import { useMemo, type ComponentType, type ReactNode } from "react"
 import { format, parseISO, differenceInDays } from "date-fns"
-import { X, Check, ChevronRight, CheckCircle2, Trash2, Pencil, CalendarClock, BookOpen, CalendarDays } from "lucide-react"
+import { X, Check, ChevronRight, CheckCircle2, Trash2, Pencil, CalendarClock, BookOpen, CalendarDays, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   ContextMenu,
@@ -69,11 +69,14 @@ interface DayDetailProps {
   onToggleSelectionMode: () => void
   onClearSelection: () => void
   onSelectAll: () => void
+  allSelected: boolean
   onToggleEventSelection: (eventId: string) => void
   onToggleSessionSelection: (sessionId: string) => void
   onSelectProject: (projectId: string) => void
   onSelectSession: (session: StudySession) => void
   onSelectEvent: (event: CalendarEvent) => void
+  onNewEvent: () => void
+  onNewSession: () => void
   onDeleteCalendarItems?: (itemIds: { eventIds: string[]; sessionIds: string[] }) => void
   onSetCalendarItemsCompleted?: (itemIds: { eventIds: string[]; sessionIds: string[] }, isCompleted: boolean) => void
 }
@@ -232,11 +235,14 @@ export function DayDetail({
   onToggleSelectionMode,
   onClearSelection,
   onSelectAll,
+  allSelected,
   onToggleEventSelection,
   onToggleSessionSelection,
   onSelectProject,
   onSelectSession,
   onSelectEvent,
+  onNewEvent,
+  onNewSession,
   onDeleteCalendarItems,
   onSetCalendarItemsCompleted,
 }: DayDetailProps) {
@@ -416,7 +422,19 @@ export function DayDetail({
             {format(parseISO(selectedDate), "MMMM d, yyyy")}
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          {hasItems && (
+            <>
+              <Button variant="outline" size="sm" onClick={onNewSession}>
+                <Plus />
+                Session
+              </Button>
+              <Button size="sm" onClick={onNewEvent}>
+                <Plus />
+                Event
+              </Button>
+            </>
+          )}
           {(dayEvents.length > 0 || sessions.length > 0) && (
             <Button
               variant={calendarSelectionMode ? "secondary" : "ghost"}
@@ -479,7 +497,7 @@ export function DayDetail({
             Pick items below, or select the whole day.
           </p>
           <Button variant="ghost" size="xs" onClick={onSelectAll}>
-            Select all
+            {allSelected ? "Clear all" : "Select all"}
           </Button>
         </div>
       )}
@@ -541,6 +559,10 @@ export function DayDetail({
           <CalendarDays className="mx-auto mb-2 h-5 w-5 text-muted-foreground/50" aria-hidden="true" />
           <p className="text-xs font-medium text-foreground/80">Nothing scheduled</p>
           <p className="mt-0.5 text-micro text-muted-foreground">Sessions and events for this day will show up here.</p>
+          <div className="mt-3 flex justify-center gap-2">
+            <Button variant="outline" size="sm" onClick={onNewSession}>Plan session</Button>
+            <Button size="sm" onClick={onNewEvent}>Add event</Button>
+          </div>
         </div>
       )}
     </section>

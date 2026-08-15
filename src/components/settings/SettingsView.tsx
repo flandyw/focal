@@ -155,6 +155,18 @@ const SECTION_ITEMS: {
  },
 ];
 
+const SETTINGS_SECTION_KEY = "focal-settings-section";
+
+function readSettingsSection(): SettingsSection {
+ try {
+ const saved = localStorage.getItem(SETTINGS_SECTION_KEY);
+ const match = SECTION_ITEMS.find((item) => item.id === saved);
+ return match?.id ??"account";
+ } catch {
+ return"account";
+ }
+}
+
 export function SettingsView({
  onBack,
  mode,
@@ -197,7 +209,7 @@ export function SettingsView({
  onLinkFolderAsProject,
 }: SettingsViewProps) {
  const [activeSection, setActiveSection] =
- useState<SettingsSection>("account");
+ useState<SettingsSection>(readSettingsSection);
  const [checkingUpdate, setCheckingUpdate] = useState(false);
  const [installingUpdate, setInstallingUpdate] = useState(false);
  const reduceMotion = useReducedMotion();
@@ -258,6 +270,11 @@ export function SettingsView({
 
  const goToSection = useCallback((next: SettingsSection) => {
  setActiveSection(next);
+ try {
+ localStorage.setItem(SETTINGS_SECTION_KEY, next);
+ } catch {
+ // ponytail: storage is optional; in-memory navigation still works.
+ }
  }, []);
 
  // Keyboard navigation: 1-7 for direct jump, ArrowUp/ArrowDown or j/k to step
@@ -359,12 +376,14 @@ export function SettingsView({
  size="sm"
  onClick={() => void handleCheckForUpdates()}
  disabled={checkingUpdate || installingUpdate}
+ aria-busy={checkingUpdate || installingUpdate}
+ aria-label={installingUpdate ? "Installing update" : checkingUpdate ? "Checking for updates" : "Check for updates"}
  className="gap-1.5"
  >
  {checkingUpdate || installingUpdate ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
  ) : (
- <RefreshCw className="h-3.5 w-3.5" />
+ <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
  )}
  <span className="max-[520px]:hidden">
  {installingUpdate ?"Installing" : checkingUpdate ?"Checking" :"Update"}
@@ -372,9 +391,9 @@ export function SettingsView({
  </Button>
  </div>
 
- <div className="flex min-h-0 flex-1">
- <nav className="flex w-56 shrink-0 flex-col border-r border-border/70 py-3 min-[1200px]:w-60">
- <div className="flex-1 space-y-0.5 px-2">
+ <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+ <nav aria-label="Settings sections" className="flex w-full shrink-0 flex-col border-b border-border/70 py-2 sm:w-56 sm:border-b-0 sm:border-r sm:py-3 min-[1200px]:w-60">
+ <div className="flex gap-1 overflow-x-auto px-2 sm:flex-1 sm:flex-col sm:space-y-0.5 sm:overflow-visible">
  {SECTION_ITEMS.map((item) => {
  const Icon = item.icon;
  const isActive = activeSection === item.id;
@@ -383,7 +402,8 @@ export function SettingsView({
  key={item.id}
  onClick={() => goToSection(item.id)}
  variant={isActive ? "secondary" : "ghost"}
- className="group/nav w-full min-w-0 justify-start gap-2.5"
+ className="group/nav min-w-max shrink-0 justify-start gap-2.5 sm:w-full sm:min-w-0"
+ aria-current={isActive ? "page" : undefined}
  >
  <Icon />
  <span className="min-w-0 flex-1 truncate text-left">
@@ -407,7 +427,7 @@ export function SettingsView({
  </nav>
 
  <ScrollArea className="min-h-0 flex-1 overflow-hidden">
- <div className="mx-auto w-full max-w-4xl px-6 py-7 min-[1200px]:px-8">
+ <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 sm:py-7 min-[1200px]:px-8">
  <AnimatePresence mode="wait">
  <motion.div
  key={activeSection}

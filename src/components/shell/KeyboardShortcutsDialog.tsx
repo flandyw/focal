@@ -40,6 +40,13 @@ export function KeyboardShortcutsDialog({
       ],
     },
     {
+      label: "Calendar",
+      shortcuts: [
+        { keys: ["← ↑ ↓ →"], action: "Move between dates" },
+        { keys: ["Shift ↵"], action: "Create event on date" },
+      ],
+    },
+    {
       label: "Workspace",
       shortcuts: [
         { keys: ["["], action: "Toggle sidebar" },

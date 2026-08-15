@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert"
 import { dedupeCalendarEvents } from "../src/lib/calendarEvents.ts"
+import { moveCalendarEventToDate, shiftCalendarPeriod } from "../src/lib/calendarNavigation.ts"
 
 const base = {
   id: "old",
@@ -26,4 +27,24 @@ const result = dedupeCalendarEvents([
 
 assert.deepEqual(result.events.map((event) => event.id), ["new"])
 assert.deepEqual(result.duplicateIds, ["old"])
-console.log("calendar event deduplication check passed")
+
+const previousWeek = shiftCalendarPeriod(new Date(2026, 7, 15), "week", -1)
+assert.equal(previousWeek.getFullYear(), 2026)
+assert.equal(previousWeek.getMonth(), 7)
+assert.equal(previousWeek.getDate(), 8)
+
+const nextMonth = shiftCalendarPeriod(new Date(2026, 11, 15), "month", 1)
+assert.equal(nextMonth.getFullYear(), 2027)
+assert.equal(nextMonth.getMonth(), 0)
+assert.equal(nextMonth.getDate(), 1)
+
+const moved = moveCalendarEventToDate(
+  "2026-08-10T09:30:00+10:00",
+  "2026-08-12T11:00:00+10:00",
+  new Date(2026, 7, 20),
+)
+assert.equal(new Date(moved.startTime).getDate(), 20)
+assert.equal(new Date(moved.startTime).getHours(), 9)
+assert.equal(new Date(moved.endTime).getDate(), 22)
+assert.equal(new Date(moved.endTime).getHours(), 11)
+console.log("calendar event checks passed")

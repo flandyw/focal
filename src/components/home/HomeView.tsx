@@ -56,6 +56,7 @@ import {
 } from "@/lib/utils";
 import { TextEventPlanner } from "@/components/planning/TextEventPlanner";
 import { buildTodayOverview } from "@/features/home/todayOverview";
+import { shiftCalendarPeriod } from "@/lib/calendarNavigation";
 import {
   FOCUS_PRIORITIES_KEY,
   getPriorityItems,
@@ -294,7 +295,13 @@ export const HomeView = memo(function HomeView({
 
   const handleSelectCalendarDate = (dateKey: string) => {
     setSelectedDate(dateKey);
+    setCurrentMonth(parseISO(dateKey));
     clearEventSelection();
+  };
+
+  const handleSetCalendarView = (view: "month" | "week") => {
+    if (selectedDate) setCurrentMonth(parseISO(selectedDate));
+    setCalendarView(view);
   };
 
   const handleToggleEventSelection = (eventId: string) => {
@@ -314,6 +321,11 @@ export const HomeView = memo(function HomeView({
   };
 
   const handleSelectAllCalendarItems = () => {
+    if (selectedBatchCount === selectedDayEvents.length + selectedDaySessions.length) {
+      setSelectedEventIds([]);
+      setSelectedSessionIds([]);
+      return;
+    }
     setSelectedEventIds(selectedDayEvents.map((event) => event.id));
     setSelectedSessionIds(selectedDaySessions.map((session) => session.id));
   };
@@ -362,14 +374,10 @@ export const HomeView = memo(function HomeView({
     }
   };
 
-  const handlePrevMonth = () =>
-    setCurrentMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1),
-    );
-  const handleNextMonth = () =>
-    setCurrentMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1),
-    );
+  const handlePrevPeriod = () =>
+    setCurrentMonth((prev) => shiftCalendarPeriod(prev, calendarView, -1));
+  const handleNextPeriod = () =>
+    setCurrentMonth((prev) => shiftCalendarPeriod(prev, calendarView, 1));
   const handleToday = () => {
     const today = new Date();
     setCurrentMonth(today);
@@ -411,7 +419,7 @@ export const HomeView = memo(function HomeView({
   };
 
   const eventBatchToolbar =
-    selectedBatchCount > 0 && !eventBatchSaving
+    selectedBatchCount > 0
       ? createPortal(
           <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 min-[900px]:px-4">
             <div className="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 rounded-t-lg border border-b-0 bg-popover px-3 py-2 text-popover-foreground shadow-md">
@@ -423,15 +431,21 @@ export const HomeView = memo(function HomeView({
                   <p className="truncate text-xs font-semibold">
                     Calendar selection
                   </p>
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    {selectedBatchCount} selected from{" "}
-                    {selectedDate
-                      ? format(parseISO(selectedDate), "MMM d")
-                      : "calendar"}
-                    {selectedBatchSessions.length > 0 &&
-                    selectedBatchEvents.length > 0
-                      ? ` (${selectedBatchEvents.length} events, ${selectedBatchSessions.length} sessions)`
-                      : ""}
+                  <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
+                    {eventBatchSaving ? (
+                      "Saving changes…"
+                    ) : (
+                      <>
+                        {selectedBatchCount} selected from{" "}
+                        {selectedDate
+                          ? format(parseISO(selectedDate), "MMM d")
+                          : "calendar"}
+                        {selectedBatchSessions.length > 0 &&
+                        selectedBatchEvents.length > 0
+                          ? ` (${selectedBatchEvents.length} events, ${selectedBatchSessions.length} sessions)`
+                          : ""}
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -452,6 +466,7 @@ export const HomeView = memo(function HomeView({
                     size="sm"
                     className="h-8 gap-1.5 rounded-md px-2.5 text-xs"
                     onClick={handleMergeSelectedEvents}
+                    disabled={eventBatchSaving}
                   >
                     <Combine className="h-3.5 w-3.5" />
                     Merge
@@ -729,9 +744,9 @@ export const HomeView = memo(function HomeView({
                   events={events}
                   projects={projects}
                   onMoveEvent={onMoveEvent}
-                  onSetCalendarView={setCalendarView}
-                  onPrevMonth={handlePrevMonth}
-                  onNextMonth={handleNextMonth}
+                  onSetCalendarView={handleSetCalendarView}
+                  onPrevPeriod={handlePrevPeriod}
+                  onNextPeriod={handleNextPeriod}
                   onToday={handleToday}
                   onSelectDate={handleSelectCalendarDate}
                   onSelectProject={onSelectProject}
@@ -765,11 +780,18 @@ export const HomeView = memo(function HomeView({
                   onToggleSelectionMode={() => setCalendarSelectionMode(true)}
                   onClearSelection={clearEventSelection}
                   onSelectAll={handleSelectAllCalendarItems}
+                  allSelected={
+                    selectedBatchCount > 0 &&
+                    selectedBatchCount ===
+                      selectedDayEvents.length + selectedDaySessions.length
+                  }
                   onToggleEventSelection={handleToggleEventSelection}
                   onToggleSessionSelection={handleToggleSessionSelection}
                   onSelectProject={onSelectProject}
                   onSelectSession={onSelectSession}
                   onSelectEvent={onSelectEvent}
+                  onNewEvent={() => onNewEvent(selectedCalendarDate)}
+                  onNewSession={() => onNewSession(selectedCalendarDate)}
                   onDeleteCalendarItems={onDeleteCalendarItems}
                   onSetCalendarItemsCompleted={onSetCalendarItemsCompleted}
                 />

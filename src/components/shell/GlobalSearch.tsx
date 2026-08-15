@@ -25,7 +25,7 @@ import {
  Settings,
 } from"lucide-react";
 import { Button } from"@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from"@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from"@/components/ui/dialog";
 import { Input } from"@/components/ui/input";
 import { ScrollArea } from"@/components/ui/scroll-area";
 import { isMacOS } from"@/lib/platform";
@@ -43,6 +43,7 @@ import type {
  SearchResult,
 } from"@/lib/types";
 import { cn } from"@/lib/utils";
+import { getSearchNavigationIndex } from"@/lib/searchNavigation";
 
 interface GlobalSearchProps {
  projects: Project[];
@@ -432,16 +433,10 @@ export function GlobalSearch({
 "inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-border/80 bg-muted/70 px-1.5 font-mono text-caption leading-none text-muted-foreground"
 
  const handleKeyDown = (e: React.KeyboardEvent) => {
- if (e.key ==="ArrowDown") {
+ const nextIndex = getSearchNavigationIndex(e.key, selectedIndex, totalItems);
+ if (nextIndex !== null) {
  e.preventDefault();
- if (totalItems === 0) return;
- setSelectedIndex((i) => (i < 0 ? 0 : (i + 1) % totalItems));
- } else if (e.key ==="ArrowUp") {
- e.preventDefault();
- if (totalItems === 0) return;
- setSelectedIndex((i) =>
- i < 0 ? totalItems - 1 : (i - 1 + totalItems) % totalItems,
- );
+ setSelectedIndex(nextIndex);
  } else if (
  e.key ==="Enter" &&
  selectedIndex >= 0 &&
@@ -449,6 +444,11 @@ export function GlobalSearch({
  ) {
  e.preventDefault();
  handleSelect(allItems[selectedIndex]);
+ } else if (e.key ==="Escape" && query) {
+ e.preventDefault();
+ e.stopPropagation();
+ setQuery("");
+ setSelectedIndex(quickActions.length > 0 ? 0 : -1);
  }
  };
 
@@ -474,6 +474,9 @@ export function GlobalSearch({
  <DialogTitle id={titleId} className="sr-only">
  Search
  </DialogTitle>
+ <DialogDescription className="sr-only">
+ Search your workspace or run a quick action. Use arrow keys to move through results.
+ </DialogDescription>
  <div id={statusId} className="sr-only" aria-live="polite">
  {loading
  ?"Searching"
@@ -498,6 +501,7 @@ export function GlobalSearch({
  );
  }}
  placeholder="Search assessments, sessions, events, files"
+ aria-label="Search assessments, sessions, events, files"
  role="combobox"
  aria-expanded={totalItems > 0}
  aria-controls={resultListId}
@@ -521,6 +525,15 @@ export function GlobalSearch({
  <span className="sr-only">Clear search</span>
  </Button>
  )}
+ <Button
+ variant="ghost"
+ size="icon-sm"
+ className="shrink-0"
+ onClick={() => onOpenChange(false)}
+ aria-label="Close search"
+ >
+ <X className="h-3.5 w-3.5" />
+ </Button>
  </div>
 
  {hasVisibleResults && (
@@ -529,12 +542,13 @@ export function GlobalSearch({
  id={resultListId}
  role="listbox"
  aria-label="Search results"
+ aria-busy={loading}
  className="py-2"
  >
  {visibleQuickActions.length > 0 && (
  <div role="group" aria-label="Quick actions">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Actions
+ Actions · {visibleQuickActions.length}
  </div>
  {visibleQuickActions.map((action, index) => {
  const Icon = action.icon;
@@ -584,7 +598,7 @@ export function GlobalSearch({
  {results.projects.length > 0 && (
  <div role="group" aria-label="Assessments">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Assessments
+ Assessments · {results.projects.length}
  </div>
  {results.projects.map((project, idx) => {
  const subject = getSubjectById(project.subjectId);
@@ -642,7 +656,7 @@ export function GlobalSearch({
  {results.sessions.length > 0 && (
  <div role="group" aria-label="Study Sessions">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Study Sessions
+ Study Sessions · {results.sessions.length}
  </div>
  {results.sessions.map((session, idx) => {
  const project = projects.find(
@@ -681,6 +695,7 @@ export function GlobalSearch({
  </p>
  <p className="truncate text-xs text-muted-foreground">
  {[(project?.name ?? subjectLabel) ||"Study session", sessionDate]
+ .concat(session.status === "completed" ? ["Completed"] : [])
  .filter(Boolean)
  .join(" · ")}
  </p>
@@ -695,7 +710,7 @@ export function GlobalSearch({
  {results.events.length > 0 && (
  <div role="group" aria-label="Events">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Events
+ Events · {results.events.length}
  </div>
  {results.events.map((event, idx) => {
  const subject = getSubjectById(event.subjectId);
@@ -752,6 +767,9 @@ export function GlobalSearch({
  {eventDate}
  </span>
  )}
+ {event.isFinished && (
+ <span className="text-xs font-medium text-success">Completed</span>
+ )}
  </div>
  </div>
  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 group-aria-selected:opacity-100" />
@@ -764,7 +782,7 @@ export function GlobalSearch({
  {results.files.length > 0 && (
  <div role="group" aria-label="Files">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Files
+ Files · {results.files.length}
  </div>
  {results.files.map((result, idx) => {
  const globalIdx =
@@ -841,6 +859,11 @@ export function GlobalSearch({
 "{query.trim()}"
  </span>
  </p>
+ <div className="mt-2 flex flex-wrap justify-center gap-2">
+ {onNewProject && <Button size="sm" variant="outline" onClick={() => { onNewProject(); onOpenChange(false); }}>New assessment</Button>}
+ {onNewSession && <Button size="sm" variant="outline" onClick={() => { onNewSession(); onOpenChange(false); }}>Plan session</Button>}
+ {onNewEvent && <Button size="sm" onClick={() => { onNewEvent(); onOpenChange(false); }}>New event</Button>}
+ </div>
  </div>
  )}
 
@@ -865,7 +888,14 @@ export function GlobalSearch({
  {loading && hasVisibleResults ? (
 "Searching files"
  ) : fileSearchFailed ? (
-"File search unavailable"
+ <Button
+ variant="link"
+ size="xs"
+ className="h-auto p-0 text-destructive"
+ onClick={() => void search(query, projects, sessions, events)}
+ >
+ Retry file search
+ </Button>
  ) : (
  <>
  <kbd className={kbdClass}>Esc</kbd>

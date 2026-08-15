@@ -12,6 +12,7 @@ import {
   format,
   isSameMonth,
   isToday,
+  isWithinInterval,
   parseISO,
   differenceInDays,
 } from "date-fns";
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/context-menu";
 import { getSubjectById, getEventTypeInfo, cn } from "@/lib/utils";
 import { getCalendarSessionIndicators } from "@/lib/groupSessions";
+import { moveCalendarEventToDate } from "@/lib/calendarNavigation";
 import type { CalendarEvent, Project, StudySession } from "@/lib/types";
 
 const CALENDAR_FALLBACK_COLOR = "var(--muted-foreground)";
@@ -73,8 +75,8 @@ interface CalendarGridProps {
   events: CalendarEvent[];
   projects: Project[];
   onSetCalendarView: (view: "month" | "week") => void;
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
+  onPrevPeriod: () => void;
+  onNextPeriod: () => void;
   onToday: () => void;
   onSelectDate: (dateKey: string) => void;
   onSelectProject: (projectId: string) => void;
@@ -113,8 +115,8 @@ export function CalendarGrid({
   events,
   projects,
   onSetCalendarView,
-  onPrevMonth,
-  onNextMonth,
+  onPrevPeriod,
+  onNextPeriod,
   onToday,
   onSelectDate,
   onSelectProject,
@@ -179,6 +181,14 @@ export function CalendarGrid({
   const calendarPad = useMemo(() => {
     return Array.from({ length: monthStart.getDay() }, (_, i) => i);
   }, [monthStart]);
+
+  const calendarTrailingPad = useMemo(() => {
+    const occupiedCells = calendarPad.length + daysInMonth.length;
+    return Array.from(
+      { length: (7 - (occupiedCells % 7)) % 7 },
+      (_, i) => i,
+    );
+  }, [calendarPad.length, daysInMonth.length]);
 
   const weekStart = useMemo(() => {
     const date = new Date(currentMonth);
@@ -268,14 +278,13 @@ export function CalendarGrid({
         title,
         color,
       };
+      dragStateRef.current = null;
       // Suppress text selection from the very first pointerdown — browsers begin
       // a selection immediately on press, so we can't wait for the drag threshold.
       document.body.style.userSelect = "none";
       document.body.style.webkitUserSelect = "none";
-      // Show ghost immediately at the press point — no threshold wait, no fade-in
       ghostX.set(e.clientX);
       ghostY.set(e.clientY);
-      setDragState({ eventId, sourceDateKey, title, color });
       setIsTrackingPointer(true);
     },
     [ghostX, ghostY],
@@ -300,6 +309,14 @@ export function CalendarGrid({
             Math.abs(dy) >= DRAG_THRESHOLD
           ) {
             isDragActiveRef.current = true;
+            const nextDragState = {
+              eventId: start.eventId,
+              sourceDateKey: start.sourceDateKey,
+              title: start.title,
+              color: start.color,
+            };
+            dragStateRef.current = nextDragState;
+            setDragState(nextDragState);
             document.body.style.cursor = "grabbing";
             document.body.style.userSelect = "none";
           }
@@ -327,26 +344,22 @@ export function CalendarGrid({
 
         const targetKey = hoveredDateKeyRef.current;
         if (targetKey && targetKey !== start.sourceDateKey) {
-          const sourceDate = parseDateKey(start.sourceDateKey);
           const targetDate = parseDateKey(targetKey);
-          if (sourceDate && targetDate) {
+          if (targetDate) {
             const event = eventsRef.current.find(
               (ev) => ev.id === start.eventId,
             );
             if (event) {
-              const dayDelta = differenceInDays(targetDate, sourceDate);
-              const newStart = moveDateByDayDelta(
-                parseISO(event.startTime),
-                dayDelta,
+              const moved = moveCalendarEventToDate(
+                event.startTime,
+                event.endTime,
+                targetDate,
               );
-              const newEnd = event.endTime
-                ? moveDateByDayDelta(parseISO(event.endTime), dayDelta)
-                : undefined;
               // Commit immediately — no snap animation, no delay
               onMoveEventRef.current(
                 start.eventId,
-                newStart.toISOString(),
-                newEnd?.toISOString(),
+                moved.startTime,
+                moved.endTime,
               );
             }
           }
@@ -355,7 +368,13 @@ export function CalendarGrid({
 
       // Tear down synchronously so the ghost disappears the instant the
       // pointer is released.
-      dragStateRef.current = null;
+      if (wasActive) {
+        window.setTimeout(() => {
+          dragStateRef.current = null;
+        }, 0);
+      } else {
+        dragStateRef.current = null;
+      }
       pointerStartRef.current = null;
       hoveredDateKeyRef.current = null;
       setIsTrackingPointer(false);
@@ -398,19 +417,47 @@ export function CalendarGrid({
 
   // ---- Keyboard handler for month cells ----
   const handleMonthCellKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>, dateKey: string) => {
+    (e: KeyboardEvent<HTMLElement>, dateKey: string) => {
+      const dayDelta =
+        e.key === "ArrowLeft"
+          ? -1
+          : e.key === "ArrowRight"
+            ? 1
+            : e.key === "ArrowUp"
+              ? -7
+              : e.key === "ArrowDown"
+                ? 7
+                : 0;
+      if (dayDelta !== 0) {
+        e.preventDefault();
+        const date = parseDateKey(dateKey);
+        if (date)
+          onSelectDate(
+            format(moveDateByDayDelta(date, dayDelta), "yyyy-MM-dd"),
+          );
+        return;
+      }
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
-      onSelectDate(dateKey);
+      const date = parseDateKey(dateKey);
+      if (e.shiftKey && date) onNewEvent(date);
+      else onSelectDate(dateKey);
     },
-    [onSelectDate],
+    [onNewEvent, onSelectDate],
   );
 
+  const today = new Date();
+  const isViewingToday =
+    calendarView === "month"
+      ? isSameMonth(currentMonth, today)
+      : isWithinInterval(today, { start: weekStart, end: weekDays[6] });
+  const periodLabel =
+    calendarView === "month"
+      ? format(currentMonth, "MMMM yyyy")
+      : `${format(weekStart, "MMM d")} – ${format(weekDays[6], "MMM d, yyyy")}`;
+
   // ---- Drag ghost (portal) ----
-  // Mirrors the actual on-calendar event chip: same height, same 3px color bar,
-  // same caption text and corner radius — with a subtle shadow + tiny scale to
-  // convey "lifted off the grid". Appears at the press point instantly, unmounts
-  // synchronously on release (no enter/exit animations).
+  // Mirrors the actual event chip after the pointer crosses the drag threshold.
   const dragGhost = dragState ? (
     <motion.div
       key="drag-ghost"
@@ -446,14 +493,31 @@ export function CalendarGrid({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold">Calendar</h2>
+          <h2 className="text-base font-semibold">{periodLabel}</h2>
+          <p className="text-xs text-muted-foreground">
+            Arrow keys move dates; Shift + Enter creates an event.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            size="sm"
+            onClick={() =>
+              onNewEvent(parseDateKey(selectedDate ?? "") ?? today)
+            }
+          >
+            <Plus />
+            New event
+          </Button>
+          <div
+            className="flex gap-0.5 rounded-lg bg-muted p-0.5"
+            role="group"
+            aria-label="Calendar view"
+          >
             <Button
               variant={calendarView === "month" ? "secondary" : "ghost"}
               size="xs"
               onClick={() => onSetCalendarView("month")}
+              aria-pressed={calendarView === "month"}
             >
               Month
             </Button>
@@ -461,6 +525,7 @@ export function CalendarGrid({
               variant={calendarView === "week" ? "secondary" : "ghost"}
               size="xs"
               onClick={() => onSetCalendarView("week")}
+              aria-pressed={calendarView === "week"}
             >
               Week
             </Button>
@@ -468,12 +533,13 @@ export function CalendarGrid({
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={onPrevMonth}
+            onClick={onPrevPeriod}
+            aria-label={`Previous ${calendarView}`}
           >
             <ChevronLeft />
           </Button>
           <Button
-            variant={isSameMonth(currentMonth, new Date()) ? "secondary" : "ghost"}
+            variant={isViewingToday ? "secondary" : "ghost"}
             size="sm"
             onClick={onToday}
           >
@@ -482,7 +548,8 @@ export function CalendarGrid({
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={onNextMonth}
+            onClick={onNextPeriod}
+            aria-label={`Next ${calendarView}`}
           >
             <ChevronRight />
           </Button>
@@ -545,10 +612,12 @@ export function CalendarGrid({
               ...dayEvents.map((e) => ({
                 type: "event" as const,
                 name: e.title,
+                meta: format(parseISO(e.startTime), "h:mm a"),
                 color: getEventTypeInfo(e.eventType).color,
                 kind: "event" as const,
                 id: e.id,
                 event: e,
+                status: e.isFinished ? ("completed" as const) : ("planned" as const),
               })),
             ];
             const regularItems = allItems.filter(
@@ -565,7 +634,9 @@ export function CalendarGrid({
                 tabIndex={0}
                 data-date-key={dateKey}
                 onClick={() => onSelectDate(dateKey)}
+                onDoubleClick={() => onNewEvent(date)}
                 onKeyDown={(e) => handleMonthCellKeyDown(e, dateKey)}
+                aria-label={`${format(date, "EEEE, MMMM d")}; ${dayEvents.length} events, ${daySessions.length} sessions, ${dayDeadlines.length} deadlines`}
                 className={cn(
                   "relative flex h-28 w-full cursor-pointer flex-col items-start justify-start border-b border-border/15 p-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   selectedDate === dateKey
@@ -700,9 +771,10 @@ export function CalendarGrid({
                     const sharedClasses =
                       "flex h-5 w-full items-center gap-1 overflow-hidden rounded-[3px]";
                     const isSession = item.type === "session";
+                    const hasStatus = "status" in item;
                     const content = (
                       <>
-                        {isSession ? (
+                        {hasStatus ? (
                           item.status === "completed" ? (
                             <CheckCircle2
                               className="ml-1 h-2.5 w-2.5 shrink-0"
@@ -728,10 +800,11 @@ export function CalendarGrid({
                         <span className={cn(
                           "truncate text-caption font-medium leading-5",
                           isSession ? "text-foreground/85" : "text-foreground/75",
+                          hasStatus && item.status === "completed" && "line-through opacity-70",
                         )}>
                           {item.name}
                         </span>
-                        {isSession && (
+                        {hasStatus && (
                           <span className="ml-auto mr-1 shrink-0 text-micro font-medium tabular-nums text-muted-foreground/70">
                             {item.meta}
                           </span>
@@ -851,14 +924,20 @@ export function CalendarGrid({
                     );
                   })}
                   {overflow > 0 && (
-                    <div
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectDate(dateKey);
+                      }}
                       className={cn(
-                        "text-micro leading-tight text-muted-foreground/50 font-medium",
+                        "text-micro font-medium leading-tight text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                         selectedDate === dateKey ? "px-0" : "px-1.5",
                       )}
+                      aria-label={`Show ${overflow} more items on ${format(date, "MMMM d")}`}
                     >
                       +{overflow} item{overflow !== 1 ? "s" : ""}
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -872,17 +951,18 @@ export function CalendarGrid({
               </ContextMenu>
             );
           })}
+          {calendarTrailingPad.map((i) => (
+            <div
+              key={`trailing-pad-${i}`}
+              className="h-28 border-b border-border/15"
+              aria-hidden="true"
+            />
+          ))}
         </div>
       )}
 
       {calendarView === "week" && (
         <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-medium text-sm text-foreground/90">
-              Week of {format(weekStart, "MMM d")} -{" "}
-              {format(weekDays[6], "MMM d, yyyy")}
-            </h3>
-          </div>
           <div className="grid grid-cols-7 gap-1">
             {weekDays.map((date) => {
               const dateKey = format(date, "yyyy-MM-dd");
@@ -929,8 +1009,10 @@ export function CalendarGrid({
                 ...regularDayEvents.map((e) => ({
                   type: "event" as const,
                   name: e.title,
+                  meta: format(parseISO(e.startTime), "h:mm a"),
                   color: getEventTypeInfo(e.eventType).color,
                   event: e,
+                  status: e.isFinished ? ("completed" as const) : ("planned" as const),
                 })),
               ];
 
@@ -954,6 +1036,8 @@ export function CalendarGrid({
                   <button
                     type="button"
                     onClick={() => onSelectDate(dateKey)}
+                    onKeyDown={(e) => handleMonthCellKeyDown(e, dateKey)}
+                    aria-label={format(date, "EEEE, MMMM d")}
                     className={cn(
                       "mb-2 flex h-7 w-7 items-center justify-center rounded-xl text-xs font-semibold transition-colors",
                       isTodayDate
@@ -1094,12 +1178,17 @@ export function CalendarGrid({
                             style={{ backgroundColor: item.color }}
                           />
                         )}
-                        <span className="min-w-0 truncate text-xs font-medium leading-tight text-foreground/80">
+                        <span
+                          className={cn(
+                            "min-w-0 truncate text-xs font-medium leading-tight text-foreground/80",
+                            item.type === "event" && item.status === "completed" && "line-through opacity-70",
+                          )}
+                        >
                           {item.name}
                         </span>
-                        {item.type === "session" && (
+                        {(item.type === "session" || item.type === "event") && (
                           <span className="ml-auto shrink-0 text-micro font-medium tabular-nums text-muted-foreground">
-                            {item.status === "in-progress" ? "Active · " : ""}{item.meta}
+                            {item.type === "session" && item.status === "in-progress" ? "Active · " : ""}{item.meta}
                           </span>
                         )}
                       </button>

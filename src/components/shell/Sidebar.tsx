@@ -375,7 +375,7 @@ export const Sidebar = memo(function Sidebar({
       icon: LucideIcon;
       count?: number;
     }[] = [
-      { mode: "active", label: "Current", icon: CircleDot },
+      { mode: "active", label: "Current", icon: CircleDot, count: activeCount },
       { mode: "favorites", label: "Starred", icon: Star, count: favoriteCount },
       {
         mode: "archived",
@@ -679,7 +679,11 @@ export const Sidebar = memo(function Sidebar({
                     filterMode === mode && "font-medium",
                   )}
                   title={isCollapsed ? label : undefined}
-                  aria-label={isCollapsed ? label : undefined}
+                  aria-label={
+                    isCollapsed
+                      ? `${label}${count != null ? `, ${count}` : ""}`
+                      : undefined
+                  }
                   aria-pressed={filterMode === mode}
                 >
                   <Icon />
@@ -784,7 +788,7 @@ export const Sidebar = memo(function Sidebar({
                               : undefined
                           }
                         />
-                        <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground">
+                        <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-muted-foreground" role="heading" aria-level={2}>
                           {item.group.label}
                         </p>
                         <span className="text-[10px] tabular-nums text-muted-foreground/80">
@@ -842,6 +846,16 @@ export const Sidebar = memo(function Sidebar({
                     New assessment
                   </Button>
                 )}
+                {filterMode !== "active" && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="mt-3"
+                    onClick={() => setFilterMode("active")}
+                  >
+                    Show current
+                  </Button>
+                )}
               </CollapsibleBlock>
             </div>
           )}
@@ -853,11 +867,24 @@ export const Sidebar = memo(function Sidebar({
         (onBulkArchive ?? onBulkUnarchive) &&
         onBulkFinish &&
         onBulkDelete && (
-          <div className="mx-2 mb-2 flex items-center gap-1.5 border-y bg-background/40 p-1.5">
-            <span className="px-2 text-xs font-medium tabular-nums">
+          <div
+            className="mx-2 mb-2 flex items-center gap-1.5 border-y bg-background/40 p-1.5"
+            role="region"
+            aria-label="Selected assessment actions"
+          >
+            <span className="px-2 text-xs font-medium tabular-nums" aria-live="polite">
               {selectedCount} selected
             </span>
             <div className="ml-auto flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() =>
+                  selectedIdsArray.forEach((id) => onToggleProjectSelection?.(id))
+                }
+              >
+                Clear
+              </Button>
               {filterMode === "archived"
                 ? onBulkUnarchive && (
                     <Button

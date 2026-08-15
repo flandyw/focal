@@ -7,6 +7,7 @@ const checks = [
   "scripts/check-diagnostics.ts",
   "scripts/check-storage-records.mjs",
   "scripts/check-app-navigation.ts",
+  "scripts/check-ui-navigation.ts",
   "scripts/check-examtrack-integration.ts",
   "scripts/check-text-event-planner.mjs",
   "scripts/check-study-session-v2.ts",

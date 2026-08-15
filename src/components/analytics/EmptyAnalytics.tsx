@@ -29,6 +29,9 @@ export function EmptyAnalytics({ onNewSession }: EmptyAnalyticsProps) {
           <BarChart3 className="h-10 w-10 text-muted-foreground/25" aria-hidden="true" />
         </motion.div>
       </motion.div>
+      <motion.h2 variants={staggerItem} className="mb-2 text-base font-semibold">
+        No study analytics yet
+      </motion.h2>
       <motion.p
         variants={staggerItem}
         className="mb-2 max-w-64 text-sm leading-relaxed text-muted-foreground"
@@ -43,7 +46,7 @@ export function EmptyAnalytics({ onNewSession }: EmptyAnalyticsProps) {
           {...pressable(reduceMotion)}
         >
           <Plus className="h-4 w-4" />
-          New Study Session
+          Plan study session
         </Button>
       </motion.div>
     </motion.div>

@@ -59,10 +59,11 @@ function TrafficLight({ onClick, color, ringColor, label, icon: Icon }: TrafficL
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="group flex h-3 w-3 items-center justify-center rounded-full opacity-90 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2"
-      style={{ background: color, color: ringColor }}
+      className="group flex h-6 w-6 items-center justify-center rounded-md opacity-90 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2"
     >
-      <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block" />
+      <span className="flex h-3 w-3 items-center justify-center rounded-full" style={{ background: color, color: ringColor }}>
+        <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block group-focus-visible:block" />
+      </span>
     </button>
   )
 }

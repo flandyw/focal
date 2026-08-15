@@ -3,6 +3,8 @@ import { Moon, Sun, Monitor, Minus, Plus } from "lucide-react";
 import type { ThemeMode } from "@/lib/themes";
 import { isMacOS } from "@/lib/platform";
 import { Button } from "@/components/ui/button";
+import { ColorPicker } from "@/components/ui/color-picker";
+import { DEFAULT_SEED_COLOR } from "@/lib/materialTheme";
 
 interface ModeOption {
   value: ThemeMode;
@@ -19,6 +21,8 @@ const MODE_OPTIONS: ModeOption[] = [
 interface AppearanceSectionProps {
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
+  seedColor: string;
+  setSeedColor: (color: string) => void;
   zoom: number;
   onZoomChange: (zoom: number) => void;
 }
@@ -51,6 +55,8 @@ function ModeButton({
 export function AppearanceSection({
   mode,
   setMode,
+  seedColor,
+  setSeedColor,
   zoom,
   onZoomChange,
 }: AppearanceSectionProps) {
@@ -87,6 +93,29 @@ export function AppearanceSection({
               label={label}
             />
           ))}
+        </div>
+      </section>
+
+      <section className="border-t border-border/70 pt-5">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-4">
+          <div>
+            <h2 className="text-sm font-medium">Theme color</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Build a complete Material 3 theme from a seed color.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setSeedColor(DEFAULT_SEED_COLOR)}
+            disabled={seedColor === DEFAULT_SEED_COLOR}
+          >
+            Reset
+          </Button>
+        </div>
+        <div className="mt-4 max-w-xs">
+          <ColorPicker value={seedColor} onValueChange={setSeedColor} aria-label="Theme seed color" />
         </div>
       </section>
 

@@ -46,6 +46,8 @@ interface SettingsViewProps {
  onBack: () => void;
  mode:"light" |"dark" |"system";
  setMode: (mode:"light" |"dark" |"system") => void;
+ seedColor: string;
+ setSeedColor: (color: string) => void;
  zoom: number;
  onZoomChange: (zoom: number) => void;
  subjects: Subject[];
@@ -171,6 +173,8 @@ export function SettingsView({
  onBack,
  mode,
  setMode,
+ seedColor,
+ setSeedColor,
  zoom,
  onZoomChange,
  subjects,
@@ -440,6 +444,8 @@ export function SettingsView({
  <AppearanceSection
  mode={mode}
  setMode={setMode}
+ seedColor={seedColor}
+ setSeedColor={setSeedColor}
  zoom={zoom}
  onZoomChange={onZoomChange}
  />

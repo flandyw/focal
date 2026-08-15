@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 
 const checks = [
   "scripts/check-version.mjs",
+  "scripts/check-material-theme.ts",
   "scripts/check-chatgpt.ts",
   "scripts/check-chatgpt-local.mjs",
   "scripts/check-diagnostics.ts",

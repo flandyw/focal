@@ -325,7 +325,7 @@ function App() {
     toggleSubjectVisibility: handleToggleSubjectVisibility,
     showAllSubjects: handleShowAllSubjects,
   } = useSyncedPreferences();
-  const { mode, resolvedDark, setMode } = useTheme();
+  const { mode, resolvedDark, seedColor, setMode, setSeedColor } = useTheme();
   const supabaseAuth = useSupabaseAuth();
   const supabaseSync = useSupabaseSync(supabaseAuth.session);
   const supabaseInitialSyncSettled = !supabaseAuth.loading && (
@@ -2063,6 +2063,8 @@ function App() {
                           onBack={navigation.closeSettings}
                           mode={mode}
                           setMode={setMode}
+                          seedColor={seedColor}
+                          setSeedColor={setSeedColor}
                           zoom={zoom}
                           onZoomChange={(v) => setZoom(v)}
                           subjects={allSubjects}

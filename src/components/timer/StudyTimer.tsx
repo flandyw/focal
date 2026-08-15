@@ -450,7 +450,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
       ? "Pause"
       : activeSessionId
         ? isFreeStudy
-          ? "Continue studying"
+          ? "Continue"
           : "Resume"
         : "Start focus";
 
@@ -1029,7 +1029,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
               <div className="grid grid-cols-2 gap-1.5">
                 <Button onClick={() => void handleToggle()} disabled={saving}>
                   <Play />
-                  Continue studying
+                  Continue
                 </Button>
                 <Button variant="outline" onClick={() => void handleFinish()} disabled={saving}>
                   <Check />

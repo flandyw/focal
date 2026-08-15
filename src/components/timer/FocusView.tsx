@@ -404,7 +404,7 @@ export function FocusView({
                     disabled={saving}
                   >
                     <Play />
-                    Continue studying
+                    Continue
                   </Button>
                   <Button
                     size="lg"
@@ -471,7 +471,7 @@ export function FocusView({
                     ? "pause"
                     : activeSessionId
                       ? isFreeStudy
-                        ? "continue studying"
+                        ? "continue"
                         : "resume"
                       : isFocus
                         ? "start"

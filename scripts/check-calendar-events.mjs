@@ -39,8 +39,8 @@ assert.equal(nextMonth.getMonth(), 0)
 assert.equal(nextMonth.getDate(), 1)
 
 const moved = moveCalendarEventToDate(
-  "2026-08-10T09:30:00+10:00",
-  "2026-08-12T11:00:00+10:00",
+  new Date(2026, 7, 10, 9, 30).toISOString(),
+  new Date(2026, 7, 12, 11).toISOString(),
   new Date(2026, 7, 20),
 )
 assert.equal(new Date(moved.startTime).getDate(), 20)

@@ -342,7 +342,7 @@ export function SettingsView({
  : { duration: 0.18, ease: [0.16, 1, 0.3, 1] }
  }
  >
- <div className="flex items-center gap-3 border-b border-border/70 px-4 py-3 min-[1200px]:px-6">
+          <div className="flex items-center gap-3.5 border-b border-border/80 bg-card/55 px-4 py-3.5 min-[1200px]:px-6">
  <Button
  variant="ghost"
  size="icon-sm"
@@ -352,7 +352,7 @@ export function SettingsView({
  <ArrowLeft className="h-4 w-4" />
  </Button>
  <div className="min-w-0 flex-1">
- <h1 className="text-lg font-semibold leading-none">
+              <h1 className="text-lg font-semibold leading-tight tracking-[-0.015em]">
  Settings
  </h1>
  <p className="mt-1 truncate text-caption text-muted-foreground">
@@ -396,7 +396,7 @@ export function SettingsView({
  </div>
 
  <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
- <nav aria-label="Settings sections" className="flex w-full shrink-0 flex-col border-b border-border/70 py-2 sm:w-56 sm:border-b-0 sm:border-r sm:py-3 min-[1200px]:w-60">
+        <nav aria-label="Settings sections" className="flex w-full shrink-0 flex-col border-b border-border/70 bg-muted/20 py-2 sm:w-60 sm:border-b-0 sm:border-r sm:py-4 min-[1200px]:w-64">
  <div className="flex gap-1 overflow-x-auto px-2 sm:flex-1 sm:flex-col sm:space-y-0.5 sm:overflow-visible">
  {SECTION_ITEMS.map((item) => {
  const Icon = item.icon;
@@ -431,7 +431,7 @@ export function SettingsView({
  </nav>
 
  <ScrollArea className="min-h-0 flex-1 overflow-hidden">
- <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 sm:py-7 min-[1200px]:px-8">
+            <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-7 sm:py-8 min-[1200px]:px-10">
  <AnimatePresence mode="wait">
  <motion.div
  key={activeSection}

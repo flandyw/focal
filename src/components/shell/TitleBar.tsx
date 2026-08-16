@@ -59,7 +59,7 @@ function TrafficLight({ onClick, color, ringColor, label, icon: Icon }: TrafficL
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="group flex h-6 w-6 items-center justify-center rounded-md opacity-90 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2"
+      className="group flex size-7 items-center justify-center rounded-md opacity-90 transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
     >
       <span className="flex h-3 w-3 items-center justify-center rounded-full" style={{ background: color, color: ringColor }}>
         <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block group-focus-visible:block" />
@@ -139,7 +139,7 @@ function AppActions({
           <Button
             type="button"
             size="sm"
-            className="h-7 gap-1 px-2"
+            className="gap-1.5 px-2.5"
             aria-label="Create new item"
           >
             <Plus />
@@ -170,10 +170,10 @@ function AppActions({
           <button
             type="button"
             onClick={onHelp}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Keyboard shortcuts"
           >
-            <CircleHelp className="h-3.5 w-3.5" />
+            <CircleHelp className="size-4" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Keyboard shortcuts · ?</TooltipContent>
@@ -183,10 +183,10 @@ function AppActions({
           <button
             type="button"
             onClick={onSearch}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Search"
           >
-            <Search className="h-3.5 w-3.5" />
+            <Search className="size-4" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Search · {SEARCH_SHORTCUT}</TooltipContent>
@@ -196,10 +196,10 @@ function AppActions({
           <button
             type="button"
             onClick={onSettings}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Settings"
           >
-            <Settings className="h-3.5 w-3.5" />
+            <Settings className="size-4" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Settings · {SETTINGS_SHORTCUT}</TooltipContent>
@@ -233,7 +233,7 @@ export function TitleBar({
   return (
     <div
       data-tauri-drag-region
-      className="relative z-10 flex h-10 shrink-0 items-center border-b bg-background select-none"
+      className="relative z-10 flex h-11 shrink-0 items-center border-b border-border/80 bg-card/90 shadow-xs backdrop-blur-md select-none"
     >
       {IS_MACOS ? (
         <div className="w-[84px] shrink-0" aria-hidden="true" />
@@ -245,7 +245,7 @@ export function TitleBar({
           onSearch={onSearch}
           onSettings={onSettings}
           onHelp={onHelp}
-          className="flex items-center gap-1.5 px-4"
+          className="flex items-center gap-2 px-4"
         >
           {children}
         </AppActions>
@@ -255,7 +255,7 @@ export function TitleBar({
         data-tauri-drag-region
         className="pointer-events-none absolute inset-0 flex items-center justify-center px-4"
       >
-        <span data-tauri-drag-region className="text-sm font-medium text-muted-foreground">Focal</span>
+        <span data-tauri-drag-region className="font-display text-sm font-semibold tracking-[-0.015em] text-foreground/85">Focal</span>
       </div>
 
       {IS_MACOS ? (
@@ -266,7 +266,7 @@ export function TitleBar({
           onSearch={onSearch}
           onSettings={onSettings}
           onHelp={onHelp}
-          className="ml-auto flex items-center gap-1.5 px-4"
+          className="ml-auto flex items-center gap-2 px-4"
         >
           {children}
         </AppActions>
@@ -276,7 +276,7 @@ export function TitleBar({
           onMinimize={handleMinimize}
           onMaximize={handleToggleMaximize}
           inverted
-          className="ml-auto flex items-center gap-2 px-4"
+          className="ml-auto flex items-center gap-1.5 px-3"
         />
       )}
     </div>

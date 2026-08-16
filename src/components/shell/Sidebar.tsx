@@ -425,7 +425,7 @@ export const Sidebar = memo(function Sidebar({
     <aside
       aria-label="Assessment navigation"
       className={cn(
-        "relative flex h-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[background-color,border-color]",
+        "relative flex h-full flex-col overflow-hidden border-r border-sidebar-border/90 bg-sidebar text-sidebar-foreground shadow-[1px_0_0_color-mix(in_oklch,var(--border),transparent_45%)] transition-[background-color,border-color]",
         isDragOver && "border-primary/40 ring-2 ring-ring/50 ring-inset",
       )}
       onDragEnter={handleDragEnter}
@@ -447,7 +447,7 @@ export const Sidebar = memo(function Sidebar({
       )}
       <div
         className={cn(
-          "border-b border-sidebar-border/80 bg-background/20 pb-3 pt-3 min-[1200px]:pb-3.5 min-[1200px]:pt-3.5",
+          "border-b border-sidebar-border/80 bg-background/25 pb-3.5 pt-3.5 min-[1200px]:pb-4 min-[1200px]:pt-4",
           isCollapsed ? "px-1.5 min-[1200px]:px-2" : "px-3 min-[1200px]:px-4",
         )}
       >
@@ -457,12 +457,12 @@ export const Sidebar = memo(function Sidebar({
             isCollapsed && "justify-center gap-1.5",
           )}
         >
-          <span className="flex size-7 shrink-0 items-center justify-center text-foreground">
-            <CircleDot className="size-3.5" aria-hidden="true" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
+            <CircleDot className="size-4" aria-hidden="true" />
           </span>
           <CollapsibleBlock show={!isCollapsed}>
-            <h1 className="text-sm font-semibold leading-4">Focal</h1>
-            <p className="mt-0.5 text-[11px] leading-3 text-muted-foreground max-[900px]:hidden">
+            <h1 className="font-display text-sm font-semibold leading-4 tracking-[-0.015em]">Focal</h1>
+            <p className="mt-1 text-[11px] leading-3 text-muted-foreground max-[900px]:hidden">
               Your study workspace
             </p>
           </CollapsibleBlock>
@@ -482,12 +482,12 @@ export const Sidebar = memo(function Sidebar({
           </Button>
         </div>
 
-        <div className="mt-3 flex justify-center">
+        <div className="mt-3.5 flex justify-center">
           <Button
             variant="default"
             onClick={onOpenFocus}
             className={cn(
-              "font-semibold shadow-sm",
+              "font-semibold shadow-sm hover:shadow",
               isCollapsed ? "size-8 rounded-lg" : "w-full justify-center",
             )}
             size={isCollapsed ? "icon" : "sm"}
@@ -502,12 +502,12 @@ export const Sidebar = memo(function Sidebar({
 
       <div
         className={cn(
-          "space-y-1 pt-3",
+          "space-y-1.5 pt-3.5",
           isCollapsed ? "px-1.5 min-[1200px]:px-2" : "px-2.5 min-[1200px]:px-3",
         )}
       >
         <CollapsibleBlock show={!isCollapsed} className="px-2 pb-1">
-          <p className="text-[11px] font-medium text-muted-foreground">
+          <p className="text-micro font-semibold uppercase tracking-wider text-muted-foreground/85">
             Study
           </p>
         </CollapsibleBlock>
@@ -601,7 +601,7 @@ export const Sidebar = memo(function Sidebar({
 
         <div
           className={cn(
-            "overflow-hidden rounded-md transition-colors",
+            "overflow-hidden rounded-lg transition-colors",
             libraryOpen && "bg-background/35",
           )}
         >
@@ -823,7 +823,7 @@ export const Sidebar = memo(function Sidebar({
           ) : (
             <div
               className={cn(
-                "mx-1 mt-2 flex flex-col items-center justify-center border-y border-dashed border-sidebar-border text-center",
+                "mx-1 mt-2 flex flex-col items-center justify-center rounded-lg border border-dashed border-sidebar-border bg-background/20 text-center",
                 isCollapsed ? "px-1 py-4" : "px-4 py-6",
               )}
             >
@@ -868,7 +868,7 @@ export const Sidebar = memo(function Sidebar({
         onBulkFinish &&
         onBulkDelete && (
           <div
-            className="mx-2 mb-2 flex items-center gap-1.5 border-y bg-background/40 p-1.5"
+            className="mx-2 mb-2 flex items-center gap-1.5 rounded-lg border bg-background/65 p-1.5 shadow-sm"
             role="region"
             aria-label="Selected assessment actions"
           >

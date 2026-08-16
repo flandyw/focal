@@ -1994,8 +1994,8 @@ function App() {
                 className="min-h-0 h-full shrink-0"
                 style={{
                   width: sidebarCollapsed
-                    ? "4.5rem"
-                    : "clamp(12rem, 24vw, 17rem)",
+                    ? "4.25rem"
+                    : "clamp(13rem, 23vw, 18rem)",
                 }}
                 transition={layoutTransition}
               >
@@ -2046,7 +2046,7 @@ function App() {
               <motion.main
                 layout
                 transition={layoutTransition}
-                className="min-w-0 flex-1 overflow-hidden bg-background"
+                className="min-w-0 flex-1 overflow-hidden bg-background selection:bg-primary/20"
               >
                 <AnimatePresence mode="popLayout" initial={false}>
                   <motion.div

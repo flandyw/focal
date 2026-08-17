@@ -11,6 +11,7 @@ import {
   Plus,
   Search,
   Settings,
+  Square,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -47,71 +48,45 @@ interface TitleBarProps {
   children?: React.ReactNode
 }
 
-interface TrafficLightProps {
+interface WindowControlProps {
   onClick: () => void
-  color: string
-  ringColor: string
   label: string
   icon: typeof X
+  close?: boolean
 }
 
-function TrafficLight({ onClick, color, ringColor, label, icon: Icon }: TrafficLightProps) {
+function WindowControl({ onClick, label, icon: Icon, close = false }: WindowControlProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="group flex size-7 items-center justify-center rounded-md opacity-90 transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:translate-y-px"
+      className={close
+        ? "flex h-full w-11 items-center justify-center text-foreground/80 transition-colors hover:bg-[#c42b1c] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        : "flex h-full w-11 items-center justify-center text-foreground/80 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"}
     >
-      <span className="flex h-3 w-3 items-center justify-center rounded-full" style={{ background: color, color: ringColor }}>
-        <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block group-focus-visible:block" aria-hidden="true" />
-      </span>
+      <Icon className="size-3.5 stroke-[1.5]" aria-hidden="true" />
     </button>
   )
 }
 
-// ponytail: macOS goes close→minimize→maximize (left-to-right); Windows/Linux
-// conventionally go minimize→maximize→close. Flip the row when inverted.
-const LIGHT_CONFIG = {
-  close: { color: "#ff5f57", ringColor: "#4d0000", label: "Close window", icon: X },
-  minimize: { color: "#febc2e", ringColor: "#995700", label: "Minimize window", icon: Minus },
-  maximize: { color: "#28c840", ringColor: "#006500", label: "Toggle maximize", icon: Plus },
-} as const
-
-const LIGHT_ORDER_MACOS = ["close", "minimize", "maximize"] as const
-const LIGHT_ORDER_OTHER = ["minimize", "maximize", "close"] as const
-
-function TrafficLights({
+function WindowControls({
   onClose,
   onMinimize,
   onMaximize,
   className,
-  inverted = false,
 }: {
   onClose: () => void
   onMinimize: () => void
   onMaximize: () => void
   className?: string
-  inverted?: boolean
 }) {
-  const order = inverted ? LIGHT_ORDER_OTHER : LIGHT_ORDER_MACOS
-  const handlers = { close: onClose, minimize: onMinimize, maximize: onMaximize }
   return (
     <div className={className} role="group" aria-label="Window controls">
-      {order.map((key) => {
-        const { color, ringColor, label, icon: Icon } = LIGHT_CONFIG[key]
-        return (
-          <TrafficLight
-            key={key}
-            onClick={handlers[key]}
-            color={color}
-            ringColor={ringColor}
-            label={label}
-            icon={Icon}
-          />
-        )
-      })}
+      <WindowControl onClick={onMinimize} label="Minimize window" icon={Minus} />
+      <WindowControl onClick={onMaximize} label="Toggle maximize" icon={Square} />
+      <WindowControl onClick={onClose} label="Close window" icon={X} close />
     </div>
   )
 }
@@ -278,12 +253,11 @@ export function TitleBar({
           {children}
         </AppActions>
       ) : (
-        <TrafficLights
+        <WindowControls
           onClose={handleClose}
           onMinimize={handleMinimize}
           onMaximize={handleToggleMaximize}
-          inverted
-          className="ml-auto flex items-center gap-1 px-2 min-[900px]:gap-1.5 min-[900px]:px-3"
+          className="ml-auto flex h-full items-stretch"
         />
       )}
     </div>

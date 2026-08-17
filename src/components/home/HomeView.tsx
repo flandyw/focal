@@ -21,6 +21,7 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Pin,
   Settings2,
   Sparkles,
@@ -110,6 +111,16 @@ interface HomeViewProps {
   onStartFocus: (item: PriorityItem) => void;
 }
 
+const STUDY_NEXT_EXPANDED_KEY = "focal-study-next-expanded";
+
+function readStudyNextExpanded() {
+  try {
+    return localStorage.getItem(STUDY_NEXT_EXPANDED_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
 export const HomeView = memo(function HomeView({
   projects,
   sessions,
@@ -149,6 +160,7 @@ export const HomeView = memo(function HomeView({
   );
   const [textPlannerInitialText, setTextPlannerInitialText] = useState("");
   const [focusPriorities, setFocusPriorities] = useState(readFocusPriorities);
+  const [studyNextExpanded, setStudyNextExpanded] = useState(readStudyNextExpanded);
 
   useEffect(() => {
     const refreshNow = () => setClockNow(new Date());
@@ -163,6 +175,14 @@ export const HomeView = memo(function HomeView({
   useEffect(() => {
     localStorage.setItem(FOCUS_PRIORITIES_KEY, JSON.stringify(focusPriorities));
   }, [focusPriorities]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STUDY_NEXT_EXPANDED_KEY, String(studyNextExpanded));
+    } catch {
+      // The section still works when browser storage is unavailable.
+    }
+  }, [studyNextExpanded]);
 
   const selectedCalendarDate = selectedDate
     ? parseISO(selectedDate)
@@ -595,23 +615,39 @@ export const HomeView = memo(function HomeView({
             </DropdownMenu>
           </div>
 
-          <section aria-labelledby="study-next-heading" className="mb-7">
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <section aria-labelledby="study-next-heading" className={studyNextExpanded ? "mb-7" : "mb-5"}>
+            <div className={cn("flex flex-wrap items-end justify-between gap-3", studyNextExpanded && "mb-3")}>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                   Study
                 </p>
-                <h2
-                  id="study-next-heading"
-                  className="mt-1 text-lg font-semibold tracking-tight"
-                >
-                  Study next
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  Start the highest-impact work now; tune the queue when priorities change.
-                </p>
+                <div className="mt-1 flex items-center gap-1">
+                  <h2
+                    id="study-next-heading"
+                    className="text-lg font-semibold tracking-tight"
+                  >
+                    Study next
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    onClick={() => setStudyNextExpanded((expanded) => !expanded)}
+                    aria-label={`${studyNextExpanded ? "Collapse" : "Expand"} Study next`}
+                    aria-controls="study-next-content"
+                    aria-expanded={studyNextExpanded}
+                    title={`${studyNextExpanded ? "Collapse" : "Expand"} Study next`}
+                  >
+                    <ChevronDown className={cn("transition-transform motion-reduce:transition-none", !studyNextExpanded && "-rotate-90")} />
+                  </Button>
+                </div>
+                {studyNextExpanded && (
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Start the highest-impact work now; tune the queue when priorities change.
+                  </p>
+                )}
               </div>
-              <Popover>
+              {studyNextExpanded && <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" size="sm">
                     <Settings2 />
@@ -702,14 +738,16 @@ export const HomeView = memo(function HomeView({
                     </section>
                   </div>
                 </PopoverContent>
-              </Popover>
+              </Popover>}
             </div>
-            <StudyPriorities
-              items={priorityItems}
-              onSelectItem={handlePrioritySelect}
-              onStartItem={onStartFocus}
-              onPlanSession={() => onNewSession(selectedCalendarDate)}
-            />
+            <div id="study-next-content" hidden={!studyNextExpanded}>
+              <StudyPriorities
+                items={priorityItems}
+                onSelectItem={handlePrioritySelect}
+                onStartItem={onStartFocus}
+                onPlanSession={() => onNewSession(selectedCalendarDate)}
+              />
+            </div>
           </section>
 
           <section

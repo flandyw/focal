@@ -52,7 +52,7 @@ export function KeyboardShortcutsDialog({
         { keys: ["["], action: "Toggle sidebar" },
         { keys: [`${mod} +`, `${mod} −`], action: "Zoom in or out" },
         { keys: [`${mod} 0`], action: "Reset zoom" },
-        { keys: ["Esc"], action: "Close the active overlay" },
+        { keys: ["Esc"], action: "Clear search or close overlay" },
         { keys: ["?"], action: "Show this shortcut guide" },
       ],
     },

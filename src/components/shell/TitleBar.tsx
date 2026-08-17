@@ -32,6 +32,8 @@ const IS_MACOS = (() => {
 })()
 const SEARCH_SHORTCUT = IS_MACOS ? "⌘K" : "Ctrl K"
 const SETTINGS_SHORTCUT = IS_MACOS ? "⌘," : "Ctrl ,"
+const SEARCH_ARIA_SHORTCUT = IS_MACOS ? "Meta+K" : "Control+K"
+const SETTINGS_ARIA_SHORTCUT = IS_MACOS ? "Meta+," : "Control+,"
 
 const noop = () => { /* no-op */ }
 
@@ -59,10 +61,11 @@ function TrafficLight({ onClick, color, ringColor, label, icon: Icon }: TrafficL
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="group flex size-7 items-center justify-center rounded-md opacity-90 transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      title={label}
+      className="group flex size-7 items-center justify-center rounded-md opacity-90 transition-[background-color,opacity] hover:bg-accent hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:translate-y-px"
     >
       <span className="flex h-3 w-3 items-center justify-center rounded-full" style={{ background: color, color: ringColor }}>
-        <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block group-focus-visible:block" />
+        <Icon className="hidden h-2.5 w-2.5 stroke-[2.5] group-hover:block group-focus-visible:block" aria-hidden="true" />
       </span>
     </button>
   )
@@ -95,7 +98,7 @@ function TrafficLights({
   const order = inverted ? LIGHT_ORDER_OTHER : LIGHT_ORDER_MACOS
   const handlers = { close: onClose, minimize: onMinimize, maximize: onMaximize }
   return (
-    <div className={className}>
+    <div className={className} role="group" aria-label="Window controls">
       {order.map((key) => {
         const { color, ringColor, label, icon: Icon } = LIGHT_CONFIG[key]
         return (
@@ -133,7 +136,7 @@ function AppActions({
   className?: string
 }) {
   return (
-    <div className={className}>
+    <div className={className} data-tauri-drag-region="false">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -141,9 +144,10 @@ function AppActions({
             size="sm"
             className="gap-1.5 px-2.5"
             aria-label="Create new item"
+            title="Create new item"
           >
             <Plus />
-            <span>New</span>
+            <span className="max-[620px]:hidden">New</span>
             <ChevronDown className="size-3 opacity-70" />
           </Button>
         </DropdownMenuTrigger>
@@ -167,40 +171,43 @@ function AppActions({
       </DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onHelp}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Keyboard shortcuts"
+            aria-keyshortcuts="?"
           >
-            <CircleHelp className="size-4" />
-          </button>
+            <CircleHelp />
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Keyboard shortcuts · ?</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onSearch}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Search"
+            aria-keyshortcuts={SEARCH_ARIA_SHORTCUT}
           >
-            <Search className="size-4" />
-          </button>
+            <Search />
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Search · {SEARCH_SHORTCUT}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={onSettings}
-            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             aria-label="Settings"
+            aria-keyshortcuts={SETTINGS_ARIA_SHORTCUT}
           >
-            <Settings className="size-4" />
-          </button>
+            <Settings />
+          </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Settings · {SETTINGS_SHORTCUT}</TooltipContent>
       </Tooltip>
@@ -245,7 +252,7 @@ export function TitleBar({
           onSearch={onSearch}
           onSettings={onSettings}
           onHelp={onHelp}
-          className="flex items-center gap-2 px-4"
+          className="flex items-center gap-1.5 px-3 min-[900px]:gap-2 min-[900px]:px-4"
         >
           {children}
         </AppActions>
@@ -253,7 +260,7 @@ export function TitleBar({
 
       <div
         data-tauri-drag-region
-        className="pointer-events-none absolute inset-0 flex items-center justify-center px-4"
+        className="pointer-events-none absolute inset-0 hidden items-center justify-center px-4 min-[720px]:flex"
       >
         <span data-tauri-drag-region className="font-display text-sm font-semibold tracking-[-0.015em] text-foreground/85">Focal</span>
       </div>
@@ -266,7 +273,7 @@ export function TitleBar({
           onSearch={onSearch}
           onSettings={onSettings}
           onHelp={onHelp}
-          className="ml-auto flex items-center gap-2 px-4"
+          className="ml-auto flex items-center gap-1.5 px-3 min-[900px]:gap-2 min-[900px]:px-4"
         >
           {children}
         </AppActions>
@@ -276,7 +283,7 @@ export function TitleBar({
           onMinimize={handleMinimize}
           onMaximize={handleToggleMaximize}
           inverted
-          className="ml-auto flex items-center gap-1.5 px-3"
+          className="ml-auto flex items-center gap-1 px-2 min-[900px]:gap-1.5 min-[900px]:px-3"
         />
       )}
     </div>

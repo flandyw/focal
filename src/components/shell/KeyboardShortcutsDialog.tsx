@@ -33,8 +33,8 @@ export function KeyboardShortcutsDialog({
       shortcuts: [
         { keys: ["F"], action: "Start focus" },
         { keys: ["H"], action: "Go to Today" },
-        { keys: ["T"], action: "Go to Plan" },
-        { keys: ["A"], action: "Go to Review" },
+        { keys: ["T"], action: "Go to Schedule" },
+        { keys: ["A"], action: "Go to Progress" },
         { keys: ["I"], action: "Open AI Assistant" },
         { keys: [`${mod} ,`], action: "Open settings" },
       ],
@@ -52,6 +52,7 @@ export function KeyboardShortcutsDialog({
         { keys: ["["], action: "Toggle sidebar" },
         { keys: [`${mod} +`, `${mod} −`], action: "Zoom in or out" },
         { keys: [`${mod} 0`], action: "Reset zoom" },
+        { keys: ["Esc"], action: "Clear search or close overlay" },
         { keys: ["?"], action: "Show this shortcut guide" },
       ],
     },
@@ -62,14 +63,14 @@ export function KeyboardShortcutsDialog({
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl">
         <DialogHeader className="border-b px-5 pb-4 pt-5">
           <DialogTitle className="flex items-center gap-2">
-            <Keyboard className="size-4 text-muted-foreground" aria-hidden />
+            <Keyboard className="size-4 text-muted-foreground" aria-hidden="true" />
             Keyboard shortcuts
           </DialogTitle>
           <DialogDescription>
             Move through Focal without leaving the keyboard.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-5 overflow-y-auto px-5 py-5 sm:grid-cols-2">
+        <div className="grid min-h-0 gap-5 overflow-y-auto overscroll-contain px-5 py-5 sm:grid-cols-2">
           {groups.map((group) => (
             <section key={group.label} className="grid content-start gap-2">
               <h3 className="text-xs font-semibold uppercase text-muted-foreground">
@@ -98,7 +99,7 @@ export function KeyboardShortcutsDialog({
             </section>
           ))}
         </div>
-        <p className="border-t px-5 py-3 text-xs text-muted-foreground">
+        <p className="border-t bg-popover px-5 py-3 text-xs text-muted-foreground">
           Single-key shortcuts pause while you are typing in a field.
         </p>
       </DialogContent>

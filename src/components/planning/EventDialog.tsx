@@ -441,6 +441,7 @@ function EventForm({
                 value={startTime}
                 onChange={(event) => setStartTime(event.target.value)}
                 className="h-10 bg-background/65 text-sm"
+                aria-label="Start time"
               />
             </FormField>
 
@@ -471,6 +472,7 @@ function EventForm({
                   value={explicitEndTime}
                   onChange={(e) => handleEndTimeChange(e.target.value)}
                   className="h-10 bg-background/65 text-sm"
+                  aria-label="End time"
                 />
               ) : isMultiDay ? (
                 <TimePicker
@@ -480,6 +482,7 @@ function EventForm({
                     setEndTimeMode("end")
                   }}
                   className="h-10 bg-background/65 text-sm"
+                  aria-label="End time"
                 />
               ) : (
  <div className="flex items-center gap-1.5">

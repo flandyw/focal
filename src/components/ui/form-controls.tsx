@@ -12,12 +12,13 @@ interface FormFieldProps extends ComponentProps<"div"> {
   label: string
   controlId?: string
   hint?: string
+  hintId?: string
   labelAccessory?: ReactNode
   labelClassName?: string
   children: ReactNode
 }
 
-function FormField({ label, controlId, hint, labelAccessory, labelClassName, className, children, ...props }: FormFieldProps) {
+function FormField({ label, controlId, hint, hintId, labelAccessory, labelClassName, className, children, ...props }: FormFieldProps) {
   const labelElement = <label htmlFor={controlId} className={cn("text-control font-medium text-muted-foreground", labelClassName)}>{label}</label>
 
   return (
@@ -29,7 +30,7 @@ function FormField({ label, controlId, hint, labelAccessory, labelClassName, cla
         </div>
       ) : labelElement}
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {hint && <p id={hintId} className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
     </div>
   )
 }
@@ -46,10 +47,14 @@ interface SelectFieldProps {
 }
 
 function SelectField({ label, hint, labelClassName, className, placeholder, value, onValueChange, options }: SelectFieldProps) {
+  const generatedId = useId()
+  const controlId = `${generatedId}-select`
+  const hintId = hint ? `${generatedId}-hint` : undefined
+
   return (
-    <FormField label={label} hint={hint} labelClassName={labelClassName}>
+    <FormField label={label} controlId={controlId} hint={hint} hintId={hintId} labelClassName={labelClassName}>
       <Select value={value} onValueChange={onValueChange}>
-        <SelectTrigger className={className}>
+        <SelectTrigger id={controlId} aria-describedby={hintId} className={className}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -102,6 +107,7 @@ function DatePickerField({
             id={controlId}
             type="button"
             variant="outline"
+            aria-haspopup="dialog"
             aria-invalid={invalid}
             className={cn(
               "w-full justify-start bg-background/65 text-left font-normal",
@@ -109,7 +115,7 @@ function DatePickerField({
               buttonClassName
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
             {date ? format(date, formatPattern) : placeholder}
           </Button>
         </PopoverTrigger>
@@ -130,6 +136,7 @@ function DatePickerField({
           size="sm"
           className="h-7 justify-self-start px-2 text-xs text-muted-foreground"
           onClick={() => onDateChange(undefined)}
+          aria-label={`${clearLabel}: ${label}`}
         >
           {clearLabel}
         </Button>
@@ -180,7 +187,7 @@ interface EmojiPickerProps<T extends string> {
 function EmojiPicker<T extends string>({ label, options, value, onChange }: EmojiPickerProps<T>) {
   return (
     <FormField label={label}>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
         {options.map((option) => (
           <Button
             key={option}
@@ -189,6 +196,7 @@ function EmojiPicker<T extends string>({ label, options, value, onChange }: Emoj
             variant={value === option ? "default" : "ghost"}
             size="icon-lg"
             className="text-base"
+            aria-label={`Select ${option}`}
             aria-pressed={value === option}
           >
             {option}
@@ -229,9 +237,11 @@ interface FormSectionProps extends ComponentProps<"section"> {
 }
 
 function FormSection({ title, icon, className, children, ...props }: FormSectionProps) {
+  const headingId = useId()
+
   return (
-    <section className={cn("grid gap-3", className)} {...props}>
-      <h3 className="flex items-center gap-2 text-sm font-semibold">
+    <section aria-labelledby={headingId} className={cn("grid gap-3", className)} {...props}>
+      <h3 id={headingId} className="flex items-center gap-2 text-sm font-semibold">
         {icon}
         {title}
       </h3>

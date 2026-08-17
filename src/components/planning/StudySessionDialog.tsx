@@ -397,6 +397,7 @@ export function StudySessionDialog({
                   value={computedSegmentStart ?? "14:00"}
                   onChange={(e) => handleStartTimeChange(e.target.value)}
                   className="h-10 bg-background/65 text-sm tabular-nums"
+                  aria-label="Start time"
                 />
               </FormField>
  <FormField label="Active" labelClassName={fieldLabelClass}>
@@ -603,12 +604,14 @@ export function StudySessionDialog({
                           value={seg.start}
                           onChange={(e) => updateSegment(idx, "start", e.target.value)}
                           className="h-7 w-22 rounded-md bg-background/65 px-2 text-xs tabular-nums"
+                          aria-label={`Block ${idx + 1} start time`}
                         />
  <span className="text-micro text-muted-foreground/60">to</span>                        <TimePicker
                           showIcon={false}
                           value={seg.end}
                           onChange={(e) => updateSegment(idx, "end", e.target.value)}
                           className="h-7 w-22 rounded-md bg-background/65 px-2 text-xs tabular-nums"
+                          aria-label={`Block ${idx + 1} end time`}
                         />
  </div>
  <span className="ml-auto text-xs tabular-nums font-medium text-foreground/80">

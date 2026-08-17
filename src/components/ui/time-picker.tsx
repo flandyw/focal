@@ -8,6 +8,7 @@ export interface TimePickerProps extends Omit<React.ComponentProps<"input">, "ty
   label?: string
   showIcon?: boolean
   wrapperClassName?: string
+  "aria-label"?: string
 }
 
 function TimePicker({
@@ -17,6 +18,7 @@ function TimePicker({
   className,
   id,
   step = 60,
+  "aria-label": ariaLabel,
   ...props
 }: TimePickerProps) {
   const generatedId = useId()
@@ -28,6 +30,7 @@ function TimePicker({
         type="time"
         id={inputId}
         step={step}
+        aria-label={!label ? ariaLabel : undefined}
         className={cn(
           "peer bg-background appearance-none",
           showIcon && "pl-9",

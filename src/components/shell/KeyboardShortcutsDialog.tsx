@@ -99,7 +99,7 @@ export function KeyboardShortcutsDialog({
             </section>
           ))}
         </div>
-        <p className="border-t bg-popover/95 px-5 py-3 text-xs text-muted-foreground">
+        <p className="border-t bg-popover px-5 py-3 text-xs text-muted-foreground">
           Single-key shortcuts pause while you are typing in a field.
         </p>
       </DialogContent>

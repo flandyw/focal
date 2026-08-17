@@ -69,6 +69,7 @@
 }
 
 :root {
+    color-scheme: light;
     --radius: 0.625rem;
     --background: oklch(0.982 0.005 250);
     --foreground: oklch(0.18 0.015 250);
@@ -111,6 +112,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.145 0.012 250);
     --foreground: oklch(0.965 0.006 250);
     --card: oklch(0.215 0.016 250);
@@ -160,6 +162,7 @@
     html {
         @apply h-full overflow-hidden;
         text-size-adjust: 100%;
+        scrollbar-gutter: stable;
     }
     body {
         @apply h-full overflow-hidden bg-background text-foreground antialiased;
@@ -171,6 +174,7 @@
         font-optical-sizing: auto;
         line-height: 1.5;
         text-rendering: optimizeLegibility;
+        accent-color: var(--primary);
     }
     /* Dark mode compensates for perceived weight drop on light-on-dark text. */
     .dark body {
@@ -198,12 +202,29 @@
         font: inherit;
     }
 
+    input, textarea {
+        caret-color: var(--primary);
+    }
+
     button:not(:disabled), [role="button"]:not([aria-disabled="true"]) {
         cursor: pointer;
     }
 
     :focus-visible {
         scroll-margin: 0.75rem;
+    }
+
+    :where(a, button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+        outline: 2px solid color-mix(in oklch, var(--ring) 70%, transparent);
+        outline-offset: 2px;
+    }
+
+    [data-slot="scroll-area-viewport"] {
+        scrollbar-gutter: stable;
+    }
+
+    kbd {
+        user-select: none;
     }
 
     ::selection {
@@ -215,6 +236,16 @@
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
         scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (forced-colors: active) {
+    :focus-visible {
+        outline: 2px solid CanvasText !important;
+        outline-offset: 2px;
     }
 }
 

@@ -136,7 +136,7 @@ function AppActions({
   className?: string
 }) {
   return (
-    <div className={className} data-tauri-drag-region="false">
+    <div className={className}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

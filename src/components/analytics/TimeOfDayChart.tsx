@@ -77,7 +77,9 @@ export function TimeOfDayChart({ data }: TimeOfDayChartProps) {
                 color: "var(--popover-foreground)",
               }}
               formatter={(value: unknown) => [formatMinutes(Number(value)), "Study time"]}
-              labelFormatter={(label) => `Hour: ${label}`}
+              labelFormatter={(label) =>
+                typeof label === "string" ? `Hour: ${label}` : "Hour"
+              }
             />
             <Bar
               dataKey="minutes"

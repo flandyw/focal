@@ -17,10 +17,16 @@ import { findSubjectIdFromValues } from "../src/lib/notion/subjectMatch.ts"
 import { calendarEventFingerprint } from "../src/lib/calendarEvents.ts"
 import { parseQuickLinks } from "../src/lib/quickLinks.ts"
 import {
+  createEventNotification,
+  createProjectNotification,
+  getLeadWindow,
+  getNotificationOccurrenceKey,
+} from "../src/hooks/useDeadlineNotifications.ts"
+import {
   createStudySession,
   updateStudySession,
 } from "../src/lib/studySessions.ts"
-import type { Project, StudySession, Subject } from "../src/lib/types.ts"
+import type { CalendarEvent, Project, StudySession, Subject } from "../src/lib/types.ts"
 import { VCE_SUBJECTS } from "../src/lib/types.ts"
 
 function check(condition: unknown, message: string): asserts condition {
@@ -288,6 +294,46 @@ check(
 check(
   mmGroup?.totalMinutes === 60,
   "groupSessionsBySubject must sum minutes for sessions adopted from a project",
+)
+
+// ── deadline notifications ───────────────────────────────────────────────────────
+
+const notificationNow = new Date("2026-08-23T10:00:00.000Z")
+check(getLeadWindow(-0.5) === "due-now", "a recently missed alert must be caught after wake")
+check(getLeadWindow(-1.01) === null, "catch-up alerts must expire after one hour")
+check(getLeadWindow(3) === "due-now" && getLeadWindow(3.01) === "today", "the three-hour boundary must be stable")
+
+const recentlyStartedEvent = createEventNotification({
+  id: "event-started",
+  title: "Methods revision",
+  startTime: "2026-08-23T09:30:00.000Z",
+  eventType: "event",
+  created_at: "2026-08-01T00:00:00.000Z",
+} satisfies CalendarEvent, notificationNow)
+check(
+  recentlyStartedEvent?.title === "Methods revision has started",
+  "a catch-up event alert must not claim the event is still upcoming",
+)
+
+const projectNotification = createProjectNotification({
+  id: "project-rescheduled",
+  name: "Chemistry SAC",
+  folder_path: "Chemistry SAC",
+  deadline: "2026-08-23T12:00:00.000Z",
+  created_at: "2026-08-01T00:00:00.000Z",
+}, notificationNow)
+const rescheduledNotification = createProjectNotification({
+  id: "project-rescheduled",
+  name: "Chemistry SAC",
+  folder_path: "Chemistry SAC",
+  deadline: "2026-08-23T14:00:00.000Z",
+  created_at: "2026-08-01T00:00:00.000Z",
+}, notificationNow)
+check(
+  projectNotification !== null
+    && rescheduledNotification !== null
+    && getNotificationOccurrenceKey(projectNotification) !== getNotificationOccurrenceKey(rescheduledNotification),
+  "rescheduling an item must create a fresh notification occurrence",
 )
 
 console.warn("lib helpers check passed")

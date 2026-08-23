@@ -1,8 +1,4 @@
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification"
+import { sendNativeNotification } from "@/lib/nativeNotifications"
 
 let audioContext: AudioContext | null = null
 
@@ -68,18 +64,7 @@ export function playTimerChime(kind: "focus" | "break") {
   }
 }
 
-let permissionPrompted = false
-
 /** Native desktop notification when a block ends. Silent in the browser build. */
 export async function notifyTimerBlock(title: string, body: string) {
-  try {
-    let granted = await isPermissionGranted()
-    if (!granted && !permissionPrompted) {
-      permissionPrompted = true
-      granted = (await requestPermission()) === "granted"
-    }
-    if (granted) sendNotification({ title, body })
-  } catch {
-    // Native notifications unavailable (e.g. browser dev build).
-  }
+  await sendNativeNotification({ title, body })
 }

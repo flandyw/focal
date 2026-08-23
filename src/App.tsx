@@ -485,7 +485,7 @@ function App() {
     [refreshFileCountForProject],
   );
 
-  // Check for timely study notifications on app load and when planning data changes
+  // Keep study reminders current while the app remains open.
   useDeadlineNotifications(projects, events, sessions);
 
   useEffect(() => {

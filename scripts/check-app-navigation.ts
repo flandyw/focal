@@ -26,6 +26,10 @@ const timetable = navigateTo(restored, { kind: "timetable" })
 assert(timetable.destination.kind === "timetable", "primary navigation must be mutually exclusive")
 const examTrack = navigateTo(timetable, { kind: "examtrack" })
 assert(examTrack.destination.kind === "examtrack", "ExamTrack must be a first-class destination")
+const planner = navigateTo(examTrack, { kind: "planner" })
+assert(planner.destination.kind === "planner", "adaptive planner must be a first-class destination")
+const inbox = navigateTo(planner, { kind: "inbox" })
+assert(inbox.destination.kind === "inbox", "academic inbox must be a first-class destination")
 
 const inputTarget = { tagName: "INPUT" } as unknown as EventTarget
 const dialogTarget = {
@@ -57,6 +61,8 @@ const sidebarSource = await fetch(
 assert(sidebarSource.includes("onOpenFocus: () => void"), "the sidebar must expose the focus flow")
 assert(sidebarSource.includes("Start focus"), "the sidebar must prioritize starting focus")
 assert(sidebarSource.includes("Assessments"), "the sidebar must label the assessment library clearly")
+assert(sidebarSource.includes("Adaptive planner"), "the sidebar must expose the adaptive planner")
+assert(sidebarSource.includes("Academic inbox"), "the sidebar must expose the academic inbox")
 
 const appSource = await fetch(new URL("../src/App.tsx", import.meta.url)).then(
   (response) => response.text(),

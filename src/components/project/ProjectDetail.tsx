@@ -19,6 +19,7 @@ import { SessionList } from "@/components/project/SessionList"
 import { ProjectChecklistPanel } from "@/components/project/ProjectChecklistPanel"
 import { ProjectDependenciesPanel } from "@/components/project/ProjectDependenciesPanel"
 import { AutoRenameButton } from "@/components/project/AutoRenameButton"
+import { ProjectLearningPanel } from "@/components/project/ProjectLearningPanel"
 import { notifyProjectActionError } from "@/components/project/shared"
 import { getErrorMessage } from "@/lib/utils"
 
@@ -42,6 +43,7 @@ interface ProjectDetailProps {
   onExport?: () => void
   onSaveAsTemplate?: () => void
   onStartFocus?: () => void
+  onUpdateProject?: (updates: Partial<Project>) => Promise<void> | void
 }
 
 export const ProjectDetail = memo(function ProjectDetail({
@@ -52,6 +54,7 @@ export const ProjectDetail = memo(function ProjectDetail({
   onAddDependency, onRemoveDependency, onOpenProject, availableProjects,
   onExport, onSaveAsTemplate,
   onStartFocus,
+  onUpdateProject,
 }: ProjectDetailProps) {
   const {
     files, loading, error, loadFiles, addFiles, renameFile, moveFileToFolder, deleteFiles,
@@ -66,7 +69,7 @@ export const ProjectDetail = memo(function ProjectDetail({
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTags, setSelectedTags] = useState<FileTag[]>([])
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<"files" | "sessions">("files")
+  const [viewMode, setViewMode] = useState<"files" | "sessions" | "learning">("files")
   const [showBulkTagMenu, setShowBulkTagMenu] = useState(false)
   const [showBulkMoveMenu, setShowBulkMoveMenu] = useState(false)
   const activeDropKeysRef = useRef(new Set<string>())
@@ -660,7 +663,7 @@ export const ProjectDetail = memo(function ProjectDetail({
       />
 
       {/* Notes, Checklist & Dependencies — shared bordered container */}
-      {(hasChecklist ?? hasDependencies) && (
+      {viewMode !== "learning" && (hasChecklist ?? hasDependencies) && (
         <div className="border-b border-border/60">
           {hasChecklist && (
             <ProjectChecklistPanel
@@ -700,7 +703,13 @@ export const ProjectDetail = memo(function ProjectDetail({
             </Button>
           </div>
         )}
-        {viewMode === "sessions" ? (
+        {viewMode === "learning" && onUpdateProject ? (
+          <ProjectLearningPanel
+            project={project}
+            files={files}
+            onUpdateProject={onUpdateProject}
+          />
+        ) : viewMode === "sessions" ? (
           <SessionList
             sessions={sessions}
             project={project}

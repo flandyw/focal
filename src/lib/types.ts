@@ -171,6 +171,38 @@ export interface ProjectChecklistItem {
   completed: boolean
 }
 
+export interface ProjectPlanningSettings {
+  /** Total effort expected for this assessment, including completed study. */
+  estimatedMinutes: number
+  /** Preferred size of each generated focus block. */
+  sessionMinutes: number
+}
+
+export interface AssessmentResult {
+  id: string
+  title: string
+  score: number
+  maxScore: number
+  completedAt: string
+  topics: string[]
+  feedback?: string
+}
+
+export interface StudyCard {
+  id: string
+  question: string
+  answer: string
+  topics: string[]
+  sourcePath: string
+  sourceName: string
+  createdAt: string
+  reviewCount: number
+  correctCount: number
+  intervalDays: number
+  dueAt: string
+  lastReviewedAt?: string
+}
+
 export interface ProjectTemplate {
   id: string
   name: string
@@ -205,6 +237,9 @@ export interface Project {
   checklist?: ProjectChecklistItem[]
   dependsOn?: string[]
   templateId?: string
+  planning?: ProjectPlanningSettings
+  results?: AssessmentResult[]
+  studyCards?: StudyCard[]
   updated_at?: string;
   deleted_at?: string | null;
   last_modified_device_id?: string | null;

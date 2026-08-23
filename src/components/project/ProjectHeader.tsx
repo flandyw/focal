@@ -14,6 +14,7 @@ import {
   CalendarPlus,
   ListChecks,
   Play,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,8 +39,8 @@ import { getProjectIcon } from "./shared";
 interface ProjectHeaderProps {
   project: Project;
   sessions: StudySession[];
-  viewMode: "files" | "sessions";
-  onViewModeChange: (mode: "files" | "sessions") => void;
+  viewMode: "files" | "sessions" | "learning";
+  onViewModeChange: (mode: "files" | "sessions" | "learning") => void;
   onOpenSettings: () => void;
   onToggleFinished?: (id: string) => void;
   onOpenFolder: () => void;
@@ -167,6 +168,18 @@ export function ProjectHeader({
               Sessions
               {sessions.length > 0 && (
                 <span className="tabular-nums">{sessions.length}</span>
+              )}
+            </Button>
+            <Button
+              variant={viewMode === "learning" ? "secondary" : "ghost"}
+              size="xs"
+              onClick={() => onViewModeChange("learning")}
+              aria-pressed={viewMode === "learning"}
+            >
+              <Brain />
+              Learn
+              {(project.studyCards?.length ?? 0) > 0 && (
+                <span className="tabular-nums">{project.studyCards?.length}</span>
               )}
             </Button>
           </div>

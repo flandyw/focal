@@ -6,6 +6,7 @@ import type {
   StudySession,
 } from "@/lib/types"
 import { getDeadlineTypeInfo, getEventTypeInfo, getSessionSubjectIds } from "@/lib/utils"
+import { getProjectTopicMastery } from "@/lib/mastery"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const ASSESSMENT_TYPES = new Set(["sac", "exam", "assignment"])
@@ -220,6 +221,25 @@ export function getPriorityItems({
       projectId: session.projectId,
       sessionId: session.id,
       action: "Review notes",
+    })
+  })
+
+  const projectsWithWeakSession = new Set(
+    items.filter((item) => item.kind === "weak-topic").flatMap((item) => item.projectId ? [item.projectId] : []),
+  )
+  activeProjects.forEach((project) => {
+    if (projectsWithWeakSession.has(project.id)) return
+    const weakest = getProjectTopicMastery(project)[0]
+    if (!weakest || weakest.score >= 70) return
+    items.push({
+      id: `mastery-${project.id}-${weakest.topic}`,
+      kind: "weak-topic",
+      title: `Revise ${weakest.topic}`,
+      reason: `${weakest.score}% mastery from ${weakest.evidenceCount} result${weakest.evidenceCount === 1 ? "" : "s"}`,
+      urgency: weakest.score < 50 ? "high" : "medium",
+      subjectIds: getProjectSubjectIds(project),
+      projectId: project.id,
+      action: "Open assessment",
     })
   })
 

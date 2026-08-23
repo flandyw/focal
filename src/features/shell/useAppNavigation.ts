@@ -4,6 +4,8 @@ export type AppDestination =
   | { kind: "home" }
   | { kind: "project"; projectId: string }
   | { kind: "timetable" }
+  | { kind: "planner" }
+  | { kind: "inbox" }
   | { kind: "analytics" }
   | { kind: "examtrack" }
   | { kind: "settings" }
@@ -49,6 +51,8 @@ export function useAppNavigation() {
   }, [navigate])
   const selectHome = useCallback(() => navigate(HOME), [navigate])
   const selectTimetable = useCallback(() => navigate({ kind: "timetable" }), [navigate])
+  const selectPlanner = useCallback(() => navigate({ kind: "planner" }), [navigate])
+  const selectInbox = useCallback(() => navigate({ kind: "inbox" }), [navigate])
   const selectAnalytics = useCallback(() => navigate({ kind: "analytics" }), [navigate])
   const selectExamTrack = useCallback(() => navigate({ kind: "examtrack" }), [navigate])
   const openSettings = useCallback(() => navigate({ kind: "settings" }), [navigate])
@@ -59,6 +63,8 @@ export function useAppNavigation() {
   const selectedId = destination.kind === "project" ? destination.projectId : null
   const homeSelected = destination.kind === "home"
   const timetableView = destination.kind === "timetable"
+  const plannerView = destination.kind === "planner"
+  const inboxView = destination.kind === "inbox"
   const analyticsView = destination.kind === "analytics"
   const examTrackView = destination.kind === "examtrack"
   const settingsView = destination.kind === "settings"
@@ -68,12 +74,16 @@ export function useAppNavigation() {
     selectedId,
     homeSelected,
     timetableView,
+    plannerView,
+    inboxView,
     analyticsView,
     examTrackView,
     settingsView,
     selectProject,
     selectHome,
     selectTimetable,
+    selectPlanner,
+    selectInbox,
     selectAnalytics,
     selectExamTrack,
     openSettings,
@@ -91,7 +101,11 @@ export function useAppNavigation() {
     selectProject,
     selectedId,
     selectTimetable,
+    selectPlanner,
+    selectInbox,
     settingsView,
     timetableView,
+    plannerView,
+    inboxView,
   ])
 }

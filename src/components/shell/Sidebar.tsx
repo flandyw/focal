@@ -14,11 +14,13 @@ import {
   ArrowUpDown,
   BarChart3,
   Calendar as CalendarIcon,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   CircleDot,
   FolderOpen,
   Home,
+  Inbox as InboxIcon,
   GraduationCap,
   Library,
   PanelLeftClose,
@@ -138,6 +140,8 @@ interface SidebarProps {
   selectedId: string | null;
   homeSelected: boolean;
   timetableSelected: boolean;
+  plannerSelected: boolean;
+  inboxSelected: boolean;
   analyticsSelected: boolean;
   examTrackSelected: boolean;
   isCollapsed: boolean;
@@ -145,6 +149,8 @@ interface SidebarProps {
   onSelect: (id: string) => void;
   onSelectHome: () => void;
   onSelectTimetable: () => void;
+  onSelectPlanner: () => void;
+  onSelectInbox: () => void;
   onSelectAnalytics: () => void;
   onSelectExamTrack: () => void;
   onDelete: (id: string) => void;
@@ -191,6 +197,8 @@ export const Sidebar = memo(function Sidebar({
   selectedId,
   homeSelected,
   timetableSelected,
+  plannerSelected,
+  inboxSelected,
   analyticsSelected,
   examTrackSelected,
   isCollapsed,
@@ -198,6 +206,8 @@ export const Sidebar = memo(function Sidebar({
   onSelect,
   onSelectHome,
   onSelectTimetable,
+  onSelectPlanner,
+  onSelectInbox,
   onSelectAnalytics,
   onSelectExamTrack,
   onDelete,
@@ -531,6 +541,32 @@ export const Sidebar = memo(function Sidebar({
           <CollapsibleInline show={!isCollapsed} className="font-medium">
             Today
           </CollapsibleInline>
+        </Button>
+
+        <Button
+          variant={plannerSelected ? "secondary" : "ghost"}
+          onClick={() => { setLibraryOpen(false); onSelectPlanner(); }}
+          className={cn("w-full text-muted-foreground", !isCollapsed && "justify-start", plannerSelected && "bg-sidebar-accent text-sidebar-accent-foreground")}
+          size={isCollapsed ? "icon" : "default"}
+          title={isCollapsed ? "Adaptive planner" : undefined}
+          aria-label={isCollapsed ? "Adaptive planner" : undefined}
+          aria-current={plannerSelected ? "page" : undefined}
+        >
+          <CalendarClock />
+          <CollapsibleInline show={!isCollapsed} className="font-medium">Planner</CollapsibleInline>
+        </Button>
+
+        <Button
+          variant={inboxSelected ? "secondary" : "ghost"}
+          onClick={() => { setLibraryOpen(false); onSelectInbox(); }}
+          className={cn("w-full text-muted-foreground", !isCollapsed && "justify-start", inboxSelected && "bg-sidebar-accent text-sidebar-accent-foreground")}
+          size={isCollapsed ? "icon" : "default"}
+          title={isCollapsed ? "Academic inbox" : undefined}
+          aria-label={isCollapsed ? "Academic inbox" : undefined}
+          aria-current={inboxSelected ? "page" : undefined}
+        >
+          <InboxIcon />
+          <CollapsibleInline show={!isCollapsed} className="font-medium">Inbox</CollapsibleInline>
         </Button>
 
         <Button

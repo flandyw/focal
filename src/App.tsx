@@ -119,6 +119,8 @@ const AIAssistantPanel = lazy(() =>
     default: m.AIAssistantPanel,
   })),
 );
+const AdaptivePlannerView = lazy(() => import("@/components/planning/AdaptivePlannerView").then((m) => ({ default: m.AdaptivePlannerView })));
+const AcademicInboxView = lazy(() => import("@/components/inbox/AcademicInboxView").then((m) => ({ default: m.AcademicInboxView })));
 const ProjectDetail = lazy(() => import("@/components/project/ProjectDetail").then((m) => ({ default: m.ProjectDetail })));
 const HomeView = lazy(() => import("@/components/home/HomeView").then((m) => ({ default: m.HomeView })));
 const ProjectDialog = lazy(() => import("@/components/project/ProjectDialog").then((m) => ({ default: m.ProjectDialog })));
@@ -244,6 +246,8 @@ function App() {
     analyticsView,
     examTrackView,
     timetableView,
+    plannerView,
+    inboxView,
   } = navigation;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
@@ -499,6 +503,14 @@ function App() {
 
   const handleSelectTimetable = useCallback(() => {
     navigation.selectTimetable();
+  }, [navigation]);
+
+  const handleSelectPlanner = useCallback(() => {
+    navigation.selectPlanner();
+  }, [navigation]);
+
+  const handleSelectInbox = useCallback(() => {
+    navigation.selectInbox();
   }, [navigation]);
 
   const handleSelectAnalytics = useCallback(() => {
@@ -1950,6 +1962,10 @@ function App() {
     ? "settings"
     : examTrackView
       ? "examtrack"
+    : plannerView
+      ? "planner"
+    : inboxView
+      ? "inbox"
     : analyticsView
       ? "analytics"
       : timetableView
@@ -2006,12 +2022,16 @@ function App() {
                   availableSubjects={availableSubjects}
                   selectedId={selectedId}
                   homeSelected={homeSelected}
+                  plannerSelected={plannerView}
+                  inboxSelected={inboxView}
                   analyticsSelected={analyticsView}
                   examTrackSelected={examTrackView}
                   isCollapsed={sidebarCollapsed}
                   onToggleCollapse={handleToggleCollapse}
                   onSelect={handleSelectProject}
                   onSelectHome={handleSelectHome}
+                  onSelectPlanner={handleSelectPlanner}
+                  onSelectInbox={handleSelectInbox}
                   onOpenFocus={handleOpenFocus}
                   onSelectAnalytics={handleSelectAnalytics}
                   onSelectExamTrack={handleSelectExamTrack}
@@ -2133,6 +2153,26 @@ function App() {
                           onCreateStudySessions={handleCreateStudySessions}
                         />
                       </Suspense>
+                    ) : plannerView ? (
+                      <Suspense fallback={<ViewFallback label="adaptive planner" />}>
+                        <AdaptivePlannerView
+                          projects={projects}
+                          sessions={sessions}
+                          events={events}
+                          timetable={timetableConfig}
+                          onUpdateProject={(id, updates) => updateProject(id, updates)}
+                          onCreateStudySessions={handleCreateStudySessions}
+                        />
+                      </Suspense>
+                    ) : inboxView ? (
+                      <Suspense fallback={<ViewFallback label="academic inbox" />}>
+                        <AcademicInboxView
+                          projects={projects}
+                          subjects={allSubjects}
+                          onUpdateProject={(id, updates) => updateProject(id, updates)}
+                          onFilesChanged={refreshFileCountForProject}
+                        />
+                      </Suspense>
                     ) : timetableView ? (
                       <Suspense fallback={<ViewFallback label="timetable" />}>
                         <TimetableView
@@ -2220,6 +2260,7 @@ function App() {
                           projectId: selectedProject.id,
                           action: "Start focus",
                         })}
+                        onUpdateProject={(updates) => updateProject(selectedProject.id, updates)}
                         />
                       </Suspense>
                     ) : (

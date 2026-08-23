@@ -48,11 +48,15 @@ Manage coursework files, plan sessions around a configurable timetable, and trac
 - **Repeat next week** — duplicate an event or plan a study session one week later while preserving its local time and clearing completion state.
 - **Deadline notifications** — in-app toasts plus optional native OS notifications at *due now*, *today*, *tomorrow*, and *soon* (≤72 hours).
 - **Text to Events** — paste a teacher notice or rough plan; the AI extracts draft calendar events you can review and approve.
+- **Adaptive planner** — estimate assessment effort, preview a conflict-free seven-day plan around classes and existing calendar items, then approve the generated study blocks. Capacity gaps remain visible instead of being overbooked.
+- **Academic inbox** — collect downloaded files and teacher notes, review suggested assessment destinations, then copy or attach them without losing the originals.
 
 ### Focus & Review
 
 - **Customisable Pomodoro** — work / break / long-break durations, full-screen Focus view, recovery dialog on reopen, overtime study mode, post-session reflection (confidence 1–5, blockers, next-action).
 - **VCE prep packs** — add type-specific SAC, exam, or assignment preparation steps to an assessment, with checklist progress, completed study time, deadline countdown, and latest confidence in one place.
+- **Results and topic mastery** — record marks, feedback, and topic evidence so weak areas can influence the next adaptive plan.
+- **Study from files** — generate source-bound active-recall cards from readable project files and review them on a lightweight spaced schedule.
 - **AI Auto Rename** proposes consistent, descriptive filenames for dumped files (optionally using file-content snippets as context).
 - **Analytics** — total time, daily average, streak, study-time trend, subject breakdown, completion rate, efficiency, time-of-day, and consistency heatmap across 7d / 30d / 3mo / 1yr / All.
 - **Global search** (⌘K / Ctrl K) and a dense keyboard-shortcut layer everywhere.

@@ -262,7 +262,7 @@ function toCsv(data: {
 
  sections.push("# Assessments")
  sections.push(
-"id,name,description,subject,unit,deadline,deadlineType,folder_path,created_at"
+"id,name,description,subject,unit,deadline,deadlineType,estimatedMinutes,sessionMinutes,resultCount,studyCardCount,folder_path,created_at"
  )
  for (const p of data.projects) {
  sections.push(
@@ -274,10 +274,53 @@ function toCsv(data: {
  csvEscape(p.unit ??""),
  csvEscape(p.deadline ??""),
  csvEscape(p.deadlineType ??""),
+ csvEscape(p.planning ? String(p.planning.estimatedMinutes) : ""),
+ csvEscape(p.planning ? String(p.planning.sessionMinutes) : ""),
+ csvEscape(String(p.results?.length ?? 0)),
+ csvEscape(String(p.studyCards?.length ?? 0)),
  csvEscape(p.folder_path),
  csvEscape(p.created_at),
  ].join(",")
  )
+ }
+
+ sections.push("")
+ sections.push("# Assessment Results")
+ sections.push("projectId,resultId,title,score,maxScore,percentage,completedAt,topics,feedback")
+ for (const p of data.projects) {
+ for (const result of p.results ?? []) {
+ sections.push([
+ csvEscape(p.id),
+ csvEscape(result.id),
+ csvEscape(result.title),
+ csvEscape(String(result.score)),
+ csvEscape(String(result.maxScore)),
+ csvEscape(String(Math.round(result.score / result.maxScore * 100))),
+ csvEscape(result.completedAt),
+ csvEscape(result.topics.join(";")),
+ csvEscape(result.feedback ?? ""),
+ ].join(","))
+ }
+ }
+
+ sections.push("")
+ sections.push("# Study Cards")
+ sections.push("projectId,cardId,question,answer,topics,sourceName,reviewCount,correctCount,dueAt,lastReviewedAt")
+ for (const p of data.projects) {
+ for (const card of p.studyCards ?? []) {
+ sections.push([
+ csvEscape(p.id),
+ csvEscape(card.id),
+ csvEscape(card.question),
+ csvEscape(card.answer),
+ csvEscape(card.topics.join(";")),
+ csvEscape(card.sourceName),
+ csvEscape(String(card.reviewCount)),
+ csvEscape(String(card.correctCount)),
+ csvEscape(card.dueAt),
+ csvEscape(card.lastReviewedAt ?? ""),
+ ].join(","))
+ }
  }
 
  sections.push("")

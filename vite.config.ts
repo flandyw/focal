@@ -26,7 +26,37 @@ export default defineConfig(() => ({
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
+    },
+  },
+
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "framework",
+              test: /node_modules[\\/](react|react-dom|scheduler|framer-motion)[\\/]/,
+              priority: 3,
+            },
+            {
+              name: "ui",
+              test: /node_modules[\\/](@radix-ui|radix-ui|lucide-react|sonner|class-variance-authority)[\\/]/,
+              priority: 2,
+            },
+            {
+              name: "tauri",
+              test: /node_modules[\\/]@tauri-apps[\\/]/,
+              priority: 1,
+            },
+            {
+              name: "sync",
+              test: /node_modules[\\/]@supabase[\\/]/,
+            },
+          ],
+        },
+      },
     },
   },
 

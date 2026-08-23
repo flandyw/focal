@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import { join } from "@tauri-apps/api/path"
 import { toast } from "sonner"
-import type { Project, ProjectChecklistItem, ProjectTemplate, DeadlineType, Unit } from "@/lib/types"
+import type { AssessmentResult, Project, ProjectChecklistItem, ProjectPlanningSettings, ProjectTemplate, StudyCard, DeadlineType, Unit } from "@/lib/types"
 import { sanitiseFolderName, generateId, sortProjectsByDeadline, isRecord, safeString, safeStringOpt, safeBool, safeBoolOpt, safeDateMeta, safeStringArray } from "@/lib/utils"
 import { DEFAULT_SUBFOLDERS } from "@/lib/types"
 import { usePersistedData } from "@/lib/hooks/usePersistedData"
@@ -55,6 +55,62 @@ function saveTemplates(templates: ProjectTemplate[]) {
 const VALID_UNITS: readonly string[] = ["1", "2", "3", "4"]
 const VALID_DEADLINE_TYPES: readonly string[] = ["sac", "exam", "assignment"]
 
+function normalisePlanning(value: unknown): ProjectPlanningSettings | undefined {
+  if (!isRecord(value)) return undefined
+  const estimatedMinutes = Number(value.estimatedMinutes)
+  const sessionMinutes = Number(value.sessionMinutes)
+  if (!Number.isFinite(estimatedMinutes) || estimatedMinutes <= 0) return undefined
+  return {
+    estimatedMinutes: Math.min(1_000_000, Math.round(estimatedMinutes)),
+    sessionMinutes: Number.isFinite(sessionMinutes) && sessionMinutes >= 15
+      ? Math.min(180, Math.round(sessionMinutes))
+      : 45,
+  }
+}
+
+function normaliseResults(value: unknown): AssessmentResult[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const results = value.flatMap((item): AssessmentResult[] => {
+    if (!isRecord(item)) return []
+    const score = Number(item.score)
+    const maxScore = Number(item.maxScore)
+    if (!safeStringOpt(item, "id") || !Number.isFinite(score) || !Number.isFinite(maxScore) || maxScore <= 0) return []
+    return [{
+      id: safeString(item, "id", ""),
+      title: safeString(item, "title", "Result"),
+      score: Math.min(maxScore, Math.max(0, score)),
+      maxScore,
+      completedAt: safeString(item, "completedAt", new Date().toISOString()),
+      topics: safeStringArray(item, "topics") ?? [],
+      feedback: safeStringOpt(item, "feedback"),
+    }]
+  })
+  return results.length > 0 ? results : undefined
+}
+
+function normaliseStudyCards(value: unknown): StudyCard[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const cards = value.flatMap((item): StudyCard[] => {
+    if (!isRecord(item) || !safeStringOpt(item, "id") || !safeStringOpt(item, "question") || !safeStringOpt(item, "answer")) return []
+    const reviewCount = Math.max(0, Math.round(Number(item.reviewCount) || 0))
+    return [{
+      id: safeString(item, "id", ""),
+      question: safeString(item, "question", ""),
+      answer: safeString(item, "answer", ""),
+      topics: safeStringArray(item, "topics") ?? [],
+      sourcePath: safeString(item, "sourcePath", ""),
+      sourceName: safeString(item, "sourceName", "Study material"),
+      createdAt: safeString(item, "createdAt", new Date().toISOString()),
+      reviewCount,
+      correctCount: Math.min(reviewCount, Math.max(0, Math.round(Number(item.correctCount) || 0))),
+      intervalDays: Math.min(60, Math.max(0, Math.round(Number(item.intervalDays) || 0))),
+      dueAt: safeString(item, "dueAt", new Date().toISOString()),
+      lastReviewedAt: safeStringOpt(item, "lastReviewedAt"),
+    }]
+  })
+  return cards.length > 0 ? cards : undefined
+}
+
 function normaliseProject(raw: unknown): Project {
   const obj = isRecord(raw) ? raw : {}
   const meta = safeDateMeta(obj)
@@ -77,6 +133,9 @@ function normaliseProject(raw: unknown): Project {
     notes: safeStringOpt(obj, "notes"),
     dependsOn: safeStringArray(obj, "dependsOn"),
     templateId: safeStringOpt(obj, "templateId"),
+    planning: normalisePlanning(obj.planning),
+    results: normaliseResults(obj.results),
+    studyCards: normaliseStudyCards(obj.studyCards),
     checklist: Array.isArray(obj.checklist)
       ? (obj.checklist as unknown[]).filter((item): item is Record<string, unknown> =>
           typeof item === "object" && item !== null && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).text === "string"
@@ -365,6 +424,7 @@ export function useProjects() {
       checklist: source.checklist ? source.checklist.map((item) => ({ ...item, id: generateId(), completed: false })) : undefined,
       notes: source.notes,
       dependsOn: source.dependsOn ? [...source.dependsOn] : undefined,
+      planning: source.planning ? { ...source.planning } : undefined,
     }
     const updated = [...projectsRef.current, project]
     await saveProjects(updated)

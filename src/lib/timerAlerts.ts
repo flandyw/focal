@@ -13,7 +13,6 @@ function getAudioContext(): AudioContext | null {
       if (!AudioCtor) return null
       audioContext = new AudioCtor()
     }
-    if (audioContext.state === "suspended") void audioContext.resume()
     return audioContext
   } catch {
     return null
@@ -48,7 +47,7 @@ function playTone(
 export function playTimerChime(kind: "focus" | "break") {
   const context = getAudioContext()
   if (!context) return
-  try {
+  const play = () => {
     if (kind === "focus") {
       // Ascending C-E-G: time to rest.
       playTone(context, 523.25, 0, 0.4, 0.18)
@@ -59,12 +58,19 @@ export function playTimerChime(kind: "focus" | "break") {
       playTone(context, 783.99, 0, 0.35, 0.14)
       playTone(context, 659.25, 0.15, 0.5, 0.14)
     }
+  }
+  try {
+    if (context.state === "suspended") {
+      void context.resume().then(play).catch(() => undefined)
+    } else {
+      play()
+    }
   } catch {
     // Sound is best-effort; never break the timer over audio.
   }
 }
 
-/** Native desktop notification when a block ends. Silent in the browser build. */
+/** Desktop notification when a block ends, including supported browser builds. */
 export async function notifyTimerBlock(title: string, body: string) {
   await sendNativeNotification({ title, body })
 }

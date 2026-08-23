@@ -1,9 +1,10 @@
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-
-const MIN_DURATION_MINUTES = 1
-const MAX_DURATION_MINUTES = 180
+import {
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+} from "@/features/timer/model"
 
 interface DurationInputsProps {
   variant: "focus" | "sidebar"
@@ -39,6 +40,8 @@ function Stepper({
           max={MAX_DURATION_MINUTES}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onFocus={(event) => event.currentTarget.select()}
+          onWheel={(event) => event.currentTarget.blur()}
           className="h-7 px-2 text-center text-xs tabular-nums shadow-none"
           aria-label={`${label} minutes`}
         />
@@ -67,6 +70,8 @@ function Stepper({
           max={MAX_DURATION_MINUTES}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onFocus={(event) => event.currentTarget.select()}
+          onWheel={(event) => event.currentTarget.blur()}
           className="min-w-0 flex-1 appearance-none border-0 px-0 text-center tabular-nums shadow-none focus-visible:ring-0"
           aria-label={`${label} minutes`}
         />

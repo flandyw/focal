@@ -8,7 +8,9 @@ interface SubjectPickerProps {
   subjects: Subject[]
   selectedSubjectIds: string[]
   activeSessionId: string | null
+  disabled?: boolean
   onSubjectClick: (subjectId: string) => void
+  onManageSubjects?: () => void
 }
 
 export function SubjectPicker({
@@ -16,9 +18,24 @@ export function SubjectPicker({
   subjects,
   selectedSubjectIds,
   activeSessionId,
+  disabled = false,
   onSubjectClick,
+  onManageSubjects,
 }: SubjectPickerProps) {
   const sidebarViewportRef = useRef<HTMLDivElement>(null)
+
+  if (subjects.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-3 text-center">
+        <p className="text-xs text-muted-foreground">Add a subject before starting focus.</p>
+        {onManageSubjects && (
+          <Button className="mt-2" variant="outline" size="xs" onClick={onManageSubjects}>
+            Manage subjects
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   if (variant === "sidebar") {
     return (
@@ -47,7 +64,9 @@ export function SubjectPicker({
                   variant={selected ? "secondary" : "ghost"}
                   size="xs"
                   aria-pressed={selected}
+                  aria-label={`${selected ? "Selected" : "Select"} ${subject.name}`}
                   onClick={() => onSubjectClick(subject.id)}
+                  disabled={disabled}
                   style={selected ? {
                     backgroundColor: `${subject.color}18`,
                   } : undefined}
@@ -83,7 +102,9 @@ export function SubjectPicker({
               variant={selected ? "secondary" : "outline"}
               size="sm"
               aria-pressed={selected}
+              aria-label={`${selected ? "Selected" : "Select"} ${subject.name}`}
               onClick={() => onSubjectClick(subject.id)}
+              disabled={disabled}
               style={selected ? {
                 backgroundColor: `${subject.color}18`,
                 borderColor: `${subject.color}40`,

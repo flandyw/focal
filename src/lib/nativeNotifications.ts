@@ -33,14 +33,31 @@ async function getPermission() {
   }
 }
 
-/** Best-effort native delivery. Returns false in browser builds or after denial. */
-export async function sendNativeNotification(options: Options) {
-  if (!await getPermission()) return false
-
+async function sendBrowserNotification(options: Options) {
+  if (typeof window === "undefined" || !("Notification" in window)) return false
   try {
-    sendNotification(options)
+    let permission = Notification.permission
+    if (permission === "default" && localStorage.getItem(PERMISSION_PROMPTED_KEY) !== "true") {
+      localStorage.setItem(PERMISSION_PROMPTED_KEY, "true")
+      permission = await Notification.requestPermission()
+    }
+    if (permission !== "granted") return false
+    new Notification(options.title, { body: options.body })
     return true
   } catch {
     return false
   }
+}
+
+/** Best-effort notification delivery through Tauri, with a browser fallback. */
+export async function sendNativeNotification(options: Options) {
+  if (await getPermission()) {
+    try {
+      sendNotification(options)
+      return true
+    } catch {
+      // Fall through when the Tauri API is unavailable in the browser build.
+    }
+  }
+  return sendBrowserNotification(options)
 }

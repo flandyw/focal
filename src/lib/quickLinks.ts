@@ -12,6 +12,20 @@ function isHttpUrl(value: unknown): value is string {
   }
 }
 
+export function normaliseQuickLinkUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https?:/i.test(raw)) return null
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname
+      ? url.toString()
+      : null
+  } catch {
+    return null
+  }
+}
+
 export function parseQuickLinks(value: unknown): QuickLink[] {
   if (!Array.isArray(value)) return []
   return value.filter((link): link is QuickLink => {

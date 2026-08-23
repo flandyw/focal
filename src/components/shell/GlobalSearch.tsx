@@ -19,7 +19,11 @@ import {
  BarChart3,
  Home,
  CalendarDays,
+ CalendarClock,
  CircleHelp,
+ GraduationCap,
+ History,
+ Inbox,
  Plus,
  Sparkles,
  Settings,
@@ -43,7 +47,11 @@ import type {
  SearchResult,
 } from"@/lib/types";
 import { cn } from"@/lib/utils";
-import { getSearchNavigationIndex } from"@/lib/searchNavigation";
+import {
+ addRecentSearch,
+ getSearchNavigationIndex,
+ normaliseRecentSearches,
+} from"@/lib/searchNavigation";
 
 interface GlobalSearchProps {
  projects: Project[];
@@ -57,7 +65,10 @@ interface GlobalSearchProps {
  onNewEvent?: () => void;
  onGoHome?: () => void;
  onGoTimetable?: () => void;
+ onGoPlanner?: () => void;
+ onGoInbox?: () => void;
  onGoAnalytics?: () => void;
+ onGoExamTrack?: () => void;
  onGoSettings?: () => void;
  onOpenAiAssistant?: () => void;
  onShowShortcuts?: () => void;
@@ -83,7 +94,8 @@ type SearchItem =
  | { type:"project"; data: Project }
  | { type:"session"; data: StudySession }
  | { type:"event"; data: CalendarEvent }
- | { type:"file"; data: SearchResult };
+ | { type:"file"; data: SearchResult }
+ | { type:"recent"; query: string };
 
 interface QuickAction {
  type:"action";
@@ -119,6 +131,16 @@ function formatSearchDate(value: string | undefined, pattern = "MMM d, h:mm a") 
  return Number.isNaN(date.getTime()) ? undefined : format(date, pattern);
 }
 
+const RECENT_SEARCHES_KEY = "focal-recent-searches";
+
+function readRecentSearches(): string[] {
+ try {
+ return normaliseRecentSearches(JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) ?? "[]"));
+ } catch {
+ return [];
+ }
+}
+
 export function GlobalSearch({
  projects,
  sessions,
@@ -131,7 +153,10 @@ export function GlobalSearch({
  onNewEvent,
  onGoHome,
  onGoTimetable,
+ onGoPlanner,
+ onGoInbox,
  onGoAnalytics,
+ onGoExamTrack,
  onGoSettings,
  onOpenAiAssistant,
  onShowShortcuts,
@@ -142,6 +167,8 @@ export function GlobalSearch({
  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
  const [loading, setLoading] = useState(false);
  const [fileSearchFailed, setFileSearchFailed] = useState(false);
+ const [fileResultTotal, setFileResultTotal] = useState(0);
+ const [recentSearches, setRecentSearches] = useState(readRecentSearches);
  const [selectedIndex, setSelectedIndex] = useState(-1);
  const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
  const searchRequestRef = useRef(0);
@@ -205,6 +232,26 @@ export function GlobalSearch({
  icon: CalendarDays,
  run: onGoTimetable,
  },
+ onGoPlanner && {
+ type:"action" as const,
+ id:"go-planner",
+ label:"Open planner",
+ hint:"Build a balanced seven-day study plan",
+ aliases: ["adaptive","plan","workload","schedule","capacity"],
+ shortcut:"P",
+ icon: CalendarClock,
+ run: onGoPlanner,
+ },
+ onGoInbox && {
+ type:"action" as const,
+ id:"go-inbox",
+ label:"Open academic inbox",
+ hint:"Sort recent downloads and teacher notes",
+ aliases: ["inbox","downloads","teacher","notes","files"],
+ shortcut:"B",
+ icon: Inbox,
+ run: onGoInbox,
+ },
  onGoAnalytics && {
  type:"action" as const,
  id:"go-analytics",
@@ -214,6 +261,16 @@ export function GlobalSearch({
  shortcut:"A",
  icon: BarChart3,
  run: onGoAnalytics,
+ },
+ onGoExamTrack && {
+ type:"action" as const,
+ id:"go-examtrack",
+ label:"Open exam practice",
+ hint:"Review practice attempts and due mistakes",
+ aliases: ["exam","practice","mistakes","examtrack","revision"],
+ shortcut:"E",
+ icon: GraduationCap,
+ run: onGoExamTrack,
  },
  onGoSettings && {
  type:"action" as const,
@@ -251,7 +308,10 @@ export function GlobalSearch({
  [
  modKeyLabel,
  onGoAnalytics,
+ onGoExamTrack,
  onGoHome,
+ onGoInbox,
+ onGoPlanner,
  onGoSettings,
  onGoTimetable,
  onNewEvent,
@@ -269,6 +329,7 @@ export function GlobalSearch({
  setResults(EMPTY_RESULTS);
  setLoading(false);
  setFileSearchFailed(false);
+ setFileResultTotal(0);
  setSelectedIndex(quickActions.length > 0 ? 0 : -1);
  }
  }, [open, quickActions.length]);
@@ -288,6 +349,7 @@ export function GlobalSearch({
  setResults(EMPTY_RESULTS);
  setLoading(false);
  setFileSearchFailed(false);
+ setFileResultTotal(0);
  setSelectedIndex(quickActions.length > 0 ? 0 : -1);
  return;
  }
@@ -300,6 +362,7 @@ export function GlobalSearch({
  const matchedProjects = projs.filter(
  (p) =>
  p.name.toLowerCase().includes(lower) ||
+ p.folder_path.toLowerCase().includes(lower) ||
  (p.description?.toLowerCase().includes(lower) ?? false) ||
  (getSubjectById(p.subjectId)?.name.toLowerCase().includes(lower) ??
  false),
@@ -350,6 +413,7 @@ export function GlobalSearch({
  );
  setLoading(true);
  setFileSearchFailed(false);
+ setFileResultTotal(0);
 
  try {
  const fileResults = await invoke<SearchResult[]>(
@@ -364,6 +428,7 @@ export function GlobalSearch({
  events: matchedEvents,
  files: fileResults.slice(0, 20),
  };
+ setFileResultTotal(fileResults.length);
  setResults(nextResults);
  setSelectedIndex(
  matchedQuickActionCount + getTotalResults(nextResults) > 0 ? 0 : -1,
@@ -373,6 +438,7 @@ export function GlobalSearch({
 
  setResults(immediateResults);
  setFileSearchFailed(true);
+ setFileResultTotal(0);
  } finally {
  if (searchRequestRef.current === requestId) {
  setLoading(false);
@@ -396,18 +462,44 @@ export function GlobalSearch({
  const visibleQuickActions = hasQuery
  ? quickActions.filter((action) => quickActionMatches(action, lowerQuery))
  : quickActions;
- const actionOffset = visibleQuickActions.length;
+ const visibleRecentSearches = hasQuery ? [] : recentSearches;
+ const recentOffset = visibleQuickActions.length;
+ const actionOffset = recentOffset + visibleRecentSearches.length;
  const resultItems: SearchItem[] = [
  ...results.projects.map((p) => ({ type:"project" as const, data: p })),
  ...results.sessions.map((s) => ({ type:"session" as const, data: s })),
  ...results.events.map((event) => ({ type:"event" as const, data: event })),
  ...results.files.map((f) => ({ type:"file" as const, data: f })),
  ];
- const allItems = [...visibleQuickActions, ...resultItems];
+ const recentItems: SearchItem[] = visibleRecentSearches.map((recentQuery) => ({
+ type:"recent" as const,
+ query: recentQuery,
+ }));
+ const allItems = [...visibleQuickActions, ...recentItems, ...resultItems];
  const totalItems = allItems.length;
  const hasVisibleResults = totalItems > 0;
  const activeResultId =
  selectedIndex >= 0 ? getResultId(selectedIndex) : undefined;
+
+ const rememberSearch = (value: string) => {
+ const next = addRecentSearch(recentSearches, value);
+ setRecentSearches(next);
+ try {
+ localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+ } catch {
+ // Search history remains available for this session.
+ }
+ };
+
+ const clearRecentSearches = () => {
+ setRecentSearches([]);
+ try {
+ localStorage.removeItem(RECENT_SEARCHES_KEY);
+ } catch {
+ // Search history is already cleared for this session.
+ }
+ setSelectedIndex(quickActions.length > 0 ? 0 : -1);
+ };
 
  const handleSelect = (item: SearchItem | QuickAction) => {
  if (item.type ==="action") {
@@ -415,6 +507,15 @@ export function GlobalSearch({
  onOpenChange(false);
  return;
  }
+ if (item.type ==="recent") {
+ setQuery(item.query);
+ const matchingActions = quickActions.filter((action) =>
+ quickActionMatches(action, item.query.toLocaleLowerCase()),
+ ).length;
+ setSelectedIndex(matchingActions > 0 ? 0 : -1);
+ return;
+ }
+ rememberSearch(trimmedQuery);
  if (item.type ==="project") {
  onSelectProject(item.data.id);
  } else if (item.type ==="session") {
@@ -481,8 +582,8 @@ export function GlobalSearch({
  {loading
  ?"Searching"
  : hasQuery
- ? `${totalItems} results`
- : `${visibleQuickActions.length} quick actions`}
+ ? `${totalItems} ${totalItems === 1 ? "result" : "results"}`
+ : `${visibleQuickActions.length} quick actions and ${visibleRecentSearches.length} recent searches`}
  </div>
 
  <div className="flex min-h-14 items-center gap-3 border-b px-4">
@@ -507,7 +608,10 @@ export function GlobalSearch({
  aria-controls={resultListId}
  aria-activedescendant={activeResultId}
  aria-describedby={statusId}
+ aria-keyshortcuts={`${isMacOS ? "Meta" : "Control"}+K /`}
  autoComplete="off"
+ autoFocus
+ enterKeyHint="search"
  spellCheck={false}
  className="h-13 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-transparent"
  />
@@ -589,6 +693,46 @@ export function GlobalSearch({
  ) : (
  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover:opacity-100 group-aria-selected:opacity-100" />
  )}
+ </Button>
+ );
+ })}
+ </div>
+ )}
+
+ {visibleRecentSearches.length > 0 && (
+ <div role="group" aria-label="Recent searches">
+ <div className="flex items-center px-4 pb-1 pt-2">
+ <span className="text-micro font-semibold uppercase text-muted-foreground">
+ Recent · {visibleRecentSearches.length}
+ </span>
+ <Button
+ variant="ghost"
+ size="xs"
+ className="ml-auto h-6 text-muted-foreground"
+ onClick={clearRecentSearches}
+ >
+ Clear history
+ </Button>
+ </div>
+ {visibleRecentSearches.map((recentQuery, idx) => {
+ const globalIdx = recentOffset + idx;
+ return (
+ <Button
+ ref={(element) => { resultRefs.current[globalIdx] = element; }}
+ key={recentQuery.toLocaleLowerCase()}
+ id={getResultId(globalIdx)}
+ role="option"
+ aria-selected={selectedIndex === globalIdx}
+ variant="ghost"
+ className={cn("group h-auto min-h-11 w-full justify-start rounded-none px-4 py-2 text-left", selectedIndex === globalIdx && "bg-accent")}
+ onMouseEnter={() => setSelectedIndex(globalIdx)}
+ onClick={() => handleSelect({ type:"recent", query: recentQuery })}
+ >
+ <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+ <History className="size-4" />
+ </span>
+ <span className="min-w-0 flex-1 truncate text-sm font-medium">{recentQuery}</span>
+ <ArrowRight className="size-3.5 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100" />
  </Button>
  );
  })}
@@ -782,7 +926,7 @@ export function GlobalSearch({
  {results.files.length > 0 && (
  <div role="group" aria-label="Files">
  <div className="px-4 pb-1 pt-2 text-micro font-semibold uppercase text-muted-foreground">
- Files · {results.files.length}
+ Files · {results.files.length}{fileResultTotal > results.files.length ? "+" : ""}
  </div>
  {results.files.map((result, idx) => {
  const globalIdx =
@@ -828,6 +972,11 @@ export function GlobalSearch({
  );
  })}
  </div>
+ )}
+ {fileResultTotal > results.files.length && (
+ <p className="px-4 py-2 text-xs text-muted-foreground" role="status">
+ Showing the first {results.files.length} of {fileResultTotal} file matches. Refine the search to narrow them down.
+ </p>
  )}
  </div>
  </ScrollArea>

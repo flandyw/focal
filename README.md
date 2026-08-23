@@ -108,13 +108,17 @@ Local SQLite migrations are immutable after release. Do not edit `src-tauri/migr
 | Shortcut | Action |
 | --- | --- |
 | ⌘K / Ctrl K | Global search |
+| `/` | Global search (outside input fields) |
 | ⌘N / Ctrl N | New assessment |
 | ⌘⇧N | New calendar event |
 | ⌘⇧S | New study session |
 | ⌘+ / ⌘− / ⌘0 | Zoom in / out / reset |
 | H | Go to Home (Today) |
-| T | Go to Plan |
+| T | Go to Schedule |
+| P | Go to adaptive Planner |
+| B | Go to academic Inbox |
 | A | Go to Review |
+| E | Go to Exam practice |
 | `[` | Toggle sidebar (outside input fields) |
 | `?` | Show keyboard shortcuts |
 | 1–7 | Jump to Settings sections |

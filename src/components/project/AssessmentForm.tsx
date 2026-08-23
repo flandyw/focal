@@ -1,4 +1,4 @@
-import { type FormEvent } from"react"
+import { type FormEvent, useId } from"react"
 import { Archive, CalendarDays, CheckCircle2, Star } from"lucide-react"
 import { DialogBody, DialogFooter } from"@/components/ui/dialog"
 import { Button } from"@/components/ui/button"
@@ -41,6 +41,7 @@ export function AssessmentForm({
  onSubmit,
  showStatusControls = false,
 }: AssessmentFormProps) {
+ const formId = useId()
  const {
  name, setName,
  description, setDescription,
@@ -84,19 +85,33 @@ export function AssessmentForm({
  <ScrollArea className="min-h-0 flex-1">
  <div className="grid gap-5 py-1 pr-1">
  <div className="grid gap-4 sm:grid-cols-2">
- <FormField label="Name">
+ <FormField
+ label="Name"
+ controlId={`${formId}-name`}
+ labelAccessory={<span className="text-micro font-normal tabular-nums text-muted-foreground">{name.length}/120</span>}
+ >
  <Input
+ id={`${formId}-name`}
  placeholder="e.g. Methods SAC 2"
  value={name}
  onChange={(event) => setName(event.target.value)}
+ maxLength={120}
+ autoComplete="off"
+ aria-required="true"
  autoFocus
  />
  </FormField>
- <FormField label="Description">
+ <FormField
+ label="Description"
+ controlId={`${formId}-description`}
+ labelAccessory={<span className="text-micro font-normal tabular-nums text-muted-foreground">{description.length}/500</span>}
+ >
  <Input
+ id={`${formId}-description`}
  placeholder="Optional — brief description"
  value={description}
  onChange={(event) => setDescription(event.target.value)}
+ maxLength={500}
  />
  </FormField>
  </div>

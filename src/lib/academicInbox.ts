@@ -24,6 +24,16 @@ export function selectRecentDownloads<T extends RecentDownloadCandidate>(files: 
     .slice(0, Math.max(0, limit))
 }
 
+export function filterRecentDownloads<T extends RecentDownloadCandidate>(
+  files: T[],
+  query: string,
+): T[] {
+  const normalized = query.trim().toLocaleLowerCase()
+  return normalized
+    ? files.filter((file) => file.name.toLocaleLowerCase().includes(normalized))
+    : files
+}
+
 function tokens(value: string): string[] {
   return value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 2)
 }

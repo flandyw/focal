@@ -112,12 +112,21 @@ interface HomeViewProps {
 }
 
 const STUDY_NEXT_EXPANDED_KEY = "focal-study-next-expanded";
+const CALENDAR_VIEW_KEY = "focal-calendar-view";
 
 function readStudyNextExpanded() {
   try {
     return localStorage.getItem(STUDY_NEXT_EXPANDED_KEY) !== "false";
   } catch {
     return true;
+  }
+}
+
+function readCalendarView(): "month" | "week" {
+  try {
+    return localStorage.getItem(CALENDAR_VIEW_KEY) === "week" ? "week" : "month";
+  } catch {
+    return "month";
   }
 }
 
@@ -148,7 +157,7 @@ export const HomeView = memo(function HomeView({
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     getLocalDateValue(new Date()),
   );
-  const [calendarView, setCalendarView] = useState<"month" | "week">("month");
+  const [calendarView, setCalendarView] = useState<"month" | "week">(readCalendarView);
   const [calendarSelectionMode, setCalendarSelectionMode] = useState(false);
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
@@ -183,6 +192,26 @@ export const HomeView = memo(function HomeView({
       // The section still works when browser storage is unavailable.
     }
   }, [studyNextExpanded]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CALENDAR_VIEW_KEY, calendarView);
+    } catch {
+      // The chosen view remains available for this session.
+    }
+  }, [calendarView]);
+
+  useEffect(() => {
+    if (!calendarSelectionMode) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setCalendarSelectionMode(false);
+      setSelectedEventIds([]);
+      setSelectedSessionIds([]);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [calendarSelectionMode]);
 
   const selectedCalendarDate = selectedDate
     ? parseISO(selectedDate)

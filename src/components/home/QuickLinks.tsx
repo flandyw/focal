@@ -5,12 +5,13 @@ import { toast } from"sonner"
 import { Plus, Pencil, Trash2, Link, BookOpen, GraduationCap, FileText, Globe, Video, Calculator, Palette, FlaskConical, Music, Dumbbell, ExternalLink } from"lucide-react"
 import { Button } from"@/components/ui/button"
 import { Input } from"@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from"@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from"@/components/ui/dialog"
 import { cn } from"@/lib/utils"
 import { staggerContainer, staggerItem, hoverLift } from"@/lib/motion"
 import { notifyUserSettingsChanged } from"@/lib/sync/engine"
-import { getStoredQuickLinks, QUICK_LINKS_STORAGE_KEY } from"@/lib/quickLinks"
+import { getStoredQuickLinks, normaliseQuickLinkUrl, QUICK_LINKS_STORAGE_KEY } from"@/lib/quickLinks"
 import { setCachedPreference } from"@/lib/storage/preferences"
+import { showUndoToast } from"@/lib/undoToast"
 import type { QuickLink } from"@/lib/types"
 
 const ICON_OPTIONS = [
@@ -42,6 +43,8 @@ const COLOR_OPTIONS = [
 ]
 
 const DEFAULT_QUICK_LINK_COLOR ="#71717a"
+const QUICK_LINK_LABEL_LIMIT = 60
+const QUICK_LINK_URL_LIMIT = 2_048
 
 function getIconComponent(name: string) {
  return ICON_OPTIONS.find((o) => o.name === name)?.component ?? Link
@@ -65,6 +68,16 @@ export function QuickLinks() {
  const [linkColor, setLinkColor] = useState(DEFAULT_QUICK_LINK_COLOR)
  const reduceMotion = useReducedMotion() === true
  const fieldId = useId()
+ const normalizedUrl = normaliseQuickLinkUrl(linkUrl)
+ const duplicateUrl = normalizedUrl
+ ? quickLinks.some((link) => link.id !== editingLink?.id && normaliseQuickLinkUrl(link.url) === normalizedUrl)
+ : false
+ const urlError = linkUrl.trim() && !normalizedUrl
+ ? "Enter a valid web address. Only HTTP and HTTPS links are supported."
+ : duplicateUrl
+ ? "That destination is already in Quick Links."
+ : undefined
+ const canSave = Boolean(linkLabel.trim() && normalizedUrl && !duplicateUrl)
 
  useEffect(() => {
  const handleSyncedSettings = (event: Event) => {
@@ -83,15 +96,13 @@ export function QuickLinks() {
  }
 
  const handleSaveLink = () => {
- if (!linkLabel.trim() || !linkUrl.trim()) return
- const rawUrl = linkUrl.trim()
- const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
+ if (!canSave || !normalizedUrl) return
  if (editingLink) {
  saveQuickLinks(quickLinks.map((l) =>
- l.id === editingLink.id ? { ...l, label: linkLabel.trim(), url, icon: linkIcon, color: linkColor } : l
+ l.id === editingLink.id ? { ...l, label: linkLabel.trim(), url: normalizedUrl, icon: linkIcon, color: linkColor } : l
  ))
  } else {
- saveQuickLinks([...quickLinks, { id: crypto.randomUUID(), label: linkLabel.trim(), url, icon: linkIcon, color: linkColor }])
+ saveQuickLinks([...quickLinks, { id: crypto.randomUUID(), label: linkLabel.trim(), url: normalizedUrl, icon: linkIcon, color: linkColor }])
  }
  setLinkDialogOpen(false)
  setEditingLink(null)
@@ -102,7 +113,33 @@ export function QuickLinks() {
  }
 
  const handleDeleteLink = (id: string) => {
- saveQuickLinks(quickLinks.filter((l) => l.id !== id))
+ const index = quickLinks.findIndex((link) => link.id === id)
+ const removed = quickLinks[index]
+ if (!removed) return
+ saveQuickLinks(quickLinks.filter((link) => link.id !== id))
+ showUndoToast({
+ message: `“${removed.label}” removed`,
+ onUndo: () => {
+ const current = getStoredQuickLinks()
+ if (current.some((link) => link.id === removed.id)) return
+ const restored = [...current]
+ restored.splice(Math.min(Math.max(index, 0), restored.length), 0, removed)
+ saveQuickLinks(restored)
+ },
+ })
+ }
+
+ const resetLinkForm = () => {
+ setEditingLink(null)
+ setLinkLabel("")
+ setLinkUrl("")
+ setLinkIcon("Link")
+ setLinkColor(DEFAULT_QUICK_LINK_COLOR)
+ }
+
+ const handleDialogOpenChange = (nextOpen: boolean) => {
+ setLinkDialogOpen(nextOpen)
+ if (!nextOpen) resetLinkForm()
  }
 
  const handleEditLink = (link: QuickLink) => {
@@ -128,11 +165,7 @@ export function QuickLinks() {
  size="sm"
  className="h-6 px-2 text-xs"
  onClick={() => {
- setEditingLink(null)
- setLinkLabel("")
- setLinkUrl("")
- setLinkIcon("Link")
- setLinkColor(DEFAULT_QUICK_LINK_COLOR)
+ resetLinkForm()
  setLinkDialogOpen(true)
  }}
  >
@@ -198,10 +231,13 @@ export function QuickLinks() {
  )}
  </section>
 
- <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+ <Dialog open={linkDialogOpen} onOpenChange={handleDialogOpenChange}>
  <DialogContent className="sm:max-w-lg">
  <DialogHeader>
  <DialogTitle>{editingLink ?"Edit Link" :"Add Quick Link"}</DialogTitle>
+ <DialogDescription>
+ Save a shortcut to a study resource you open often.
+ </DialogDescription>
  </DialogHeader>
  <form
  onSubmit={(event) => {
@@ -252,26 +288,40 @@ export function QuickLinks() {
  </div>
  </div>
  <div className="grid gap-2">
- <label htmlFor={`${fieldId}-label`} className="text-control font-medium text-muted-foreground">Label</label>
+ <label htmlFor={`${fieldId}-label`} className="flex items-center justify-between gap-2 text-control font-medium text-muted-foreground">
+ <span>Label</span>
+ <span className="text-micro font-normal tabular-nums">{linkLabel.length}/{QUICK_LINK_LABEL_LIMIT}</span>
+ </label>
  <Input
  id={`${fieldId}-label`}
  required
  placeholder="e.g. VCAA English"
  value={linkLabel}
  onChange={(e) => setLinkLabel(e.target.value)}
+ maxLength={QUICK_LINK_LABEL_LIMIT}
+ autoFocus
  />
  </div>
  <div className="grid gap-2">
  <label htmlFor={`${fieldId}-url`} className="text-control font-medium text-muted-foreground">URL</label>
  <Input
  id={`${fieldId}-url`}
- type="url"
- pattern="https?://.+"
+ type="text"
+ inputMode="url"
  required
- placeholder="https://..."
+ placeholder="example.com/resource"
  value={linkUrl}
  onChange={(e) => setLinkUrl(e.target.value)}
+ maxLength={QUICK_LINK_URL_LIMIT}
+ autoCapitalize="none"
+ autoCorrect="off"
+ spellCheck={false}
+ aria-invalid={Boolean(urlError)}
+ aria-describedby={`${fieldId}-url-help`}
  />
+ <p id={`${fieldId}-url-help`} className={cn("text-xs", urlError ? "text-destructive" : "text-muted-foreground")}>
+ {urlError ?? (normalizedUrl ? `Opens ${getQuickLinkDestination(normalizedUrl)}` : "You can omit https:// — Focal adds it for you.")}
+ </p>
  </div>
  </div>
  <DialogFooter>
@@ -291,10 +341,10 @@ export function QuickLinks() {
  Remove
  </Button>
  )}
- <Button type="button" variant="ghost" size="sm" onClick={() => setLinkDialogOpen(false)}>
+ <Button type="button" variant="ghost" size="sm" onClick={() => handleDialogOpenChange(false)}>
  Cancel
  </Button>
- <Button type="submit" size="sm" disabled={!linkLabel.trim() || !linkUrl.trim()}>
+ <Button type="submit" size="sm" disabled={!canSave}>
  {editingLink ?"Save" :"Add"}
  </Button>
  </DialogFooter>

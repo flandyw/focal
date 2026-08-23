@@ -273,9 +273,25 @@ function App() {
   const [subjectsOpen, setSubjectsOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [aiAssistantLoaded, setAiAssistantLoaded] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("focal-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [sidebarSortKey, setSidebarSortKey] =
-    useState<ProjectSortKey>("deadline");
+    useState<ProjectSortKey>(() => {
+      try {
+        const stored = localStorage.getItem("focal-sidebar-sort");
+        return stored === "name" || stored === "created-newest" ||
+          stored === "created-oldest" || stored === "fileCount"
+          ? stored
+          : "deadline";
+      } catch {
+        return "deadline";
+      }
+    });
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(
     new Set(),
   );
@@ -286,6 +302,7 @@ function App() {
   const [templates, setTemplates] = useState<ProjectTemplate[]>(() =>
     getTemplates(),
   );
+  const mainContentRef = useRef<HTMLElement>(null);
   const [zoom, setZoom] = useState(() => {
     try {
       const stored = localStorage.getItem("focal-app-scale");
@@ -305,6 +322,14 @@ function App() {
       // Tauri not available (dev/browser mode)
     });
   }, [zoom]);
+
+  useEffect(() => {
+    setCachedPreference("focal-sidebar-collapsed", String(sidebarCollapsed), false);
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    setCachedPreference("focal-sidebar-sort", sidebarSortKey, false);
+  }, [sidebarSortKey]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((prev) => Math.min(prev + 0.1, 1.5));
@@ -556,7 +581,10 @@ function App() {
     onGoHome: handleSelectHome,
     onOpenFocus: handleOpenFocus,
     onGoTimetable: handleSelectTimetable,
+    onGoPlanner: handleSelectPlanner,
+    onGoInbox: handleSelectInbox,
     onGoAnalytics: handleSelectAnalytics,
+    onGoExamTrack: handleSelectExamTrack,
     onGoSettings: handleSelectSettings,
     onOpenAiAssistant: handleOpenAiAssistant,
     onShowShortcuts: () => setShortcutsOpen(true),
@@ -1975,6 +2003,35 @@ function App() {
           : selectedProject
             ? `project-${selectedProject.id}`
             : "empty";
+  const viewLabel = settingsView
+    ? "Settings"
+    : examTrackView
+      ? "Exam practice"
+      : plannerView
+        ? "Planner"
+        : inboxView
+          ? "Academic inbox"
+          : analyticsView
+            ? "Progress"
+            : timetableView
+              ? "Schedule"
+              : homeSelected
+                ? "Today"
+                : selectedProject?.name ?? "Workspace";
+  const previousContentKeyRef = useRef(contentKey);
+
+  useEffect(() => {
+    document.title = viewLabel === "Workspace" ? "Focal" : `${viewLabel} · Focal`;
+    if (previousContentKeyRef.current !== contentKey) {
+      const frame = window.requestAnimationFrame(() => {
+        mainContentRef.current?.focus({ preventScroll: true });
+      });
+      previousContentKeyRef.current = contentKey;
+      return () => window.cancelAnimationFrame(frame);
+    }
+    previousContentKeyRef.current = contentKey;
+  }, [contentKey, viewLabel]);
+
   const layoutTransition = reduceMotion
     ? { duration: 0 }
     : SHELL_LAYOUT_TRANSITION;
@@ -1985,6 +2042,15 @@ function App() {
       <MotionConfig reducedMotion="user">
         <ErrorBoundary>
           <div className="relative flex h-full flex-col overflow-hidden text-foreground">
+            <a
+              href="#main-content"
+              className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-lg focus:not-sr-only"
+            >
+              Skip to main content
+            </a>
+            <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+              {viewLabel} view
+            </p>
             <TitleBar
               onNewAssessment={handleNewProject}
               onNewEvent={() => handleOpenNewEvent()}
@@ -2064,6 +2130,10 @@ function App() {
                 />
               </motion.div>}
               <motion.main
+                ref={mainContentRef}
+                id="main-content"
+                tabIndex={-1}
+                aria-label={viewLabel}
                 layout
                 transition={layoutTransition}
                 className="min-w-0 flex-1 overflow-hidden bg-background selection:bg-primary/20"
@@ -2168,6 +2238,7 @@ function App() {
                       <Suspense fallback={<ViewFallback label="academic inbox" />}>
                         <AcademicInboxView
                           projects={projects}
+                          subjects={allSubjects}
                           onUpdateProject={(id, updates) => updateProject(id, updates)}
                           onFilesChanged={refreshFileCountForProject}
                         />
@@ -2410,7 +2481,10 @@ function App() {
               onNewEvent={() => handleOpenNewEvent()}
               onGoHome={handleSelectHome}
               onGoTimetable={handleSelectTimetable}
+              onGoPlanner={handleSelectPlanner}
+              onGoInbox={handleSelectInbox}
               onGoAnalytics={handleSelectAnalytics}
+              onGoExamTrack={handleSelectExamTrack}
               onGoSettings={handleSelectSettings}
               onOpenAiAssistant={handleOpenAiAssistant}
               onShowShortcuts={() => setShortcutsOpen(true)}

@@ -23,6 +23,7 @@ export function KeyboardShortcutsDialog({
       label: "Create & find",
       shortcuts: [
         { keys: [`${mod} K`], action: "Search and quick actions" },
+        { keys: ["/"], action: "Search and quick actions" },
         { keys: [`${mod} N`], action: "New assessment" },
         { keys: [`${mod} ⇧ N`], action: "New event" },
         { keys: [`${mod} ⇧ S`], action: "Plan study session" },
@@ -34,7 +35,10 @@ export function KeyboardShortcutsDialog({
         { keys: ["F"], action: "Start focus" },
         { keys: ["H"], action: "Go to Today" },
         { keys: ["T"], action: "Go to Schedule" },
+        { keys: ["P"], action: "Go to Planner" },
+        { keys: ["B"], action: "Go to Inbox" },
         { keys: ["A"], action: "Go to Progress" },
+        { keys: ["E"], action: "Go to Exam practice" },
         { keys: ["I"], action: "Open AI Assistant" },
         { keys: [`${mod} ,`], action: "Open settings" },
       ],

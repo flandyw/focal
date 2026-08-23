@@ -15,7 +15,7 @@ import {
 } from "../src/lib/groupSessions.ts"
 import { findSubjectIdFromValues } from "../src/lib/notion/subjectMatch.ts"
 import { calendarEventFingerprint } from "../src/lib/calendarEvents.ts"
-import { parseQuickLinks } from "../src/lib/quickLinks.ts"
+import { normaliseQuickLinkUrl, parseQuickLinks } from "../src/lib/quickLinks.ts"
 import {
   createEventNotification,
   createProjectNotification,
@@ -218,6 +218,8 @@ check(
   "parseQuickLinks must keep only valid records with all required string fields",
 )
 check(parseQuickLinks({ not: "an array" }).length === 0, "non-array input must yield an empty list")
+check(normaliseQuickLinkUrl("example.com/path") === "https://example.com/path", "scheme-less quick links should default to HTTPS")
+check(normaliseQuickLinkUrl("javascript:alert(1)") === null, "quick links must reject unsupported protocols")
 check(parseQuickLinks(null).length === 0, "null input must yield an empty list")
 check(
   parseQuickLinks([{ id: "bad", label: "Script", url: "javascript:alert(1)", icon: "book", color: "#fff" }]).length === 0,

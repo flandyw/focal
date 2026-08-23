@@ -4,6 +4,7 @@ import {
   useCallback,
   useRef,
   useMemo,
+  useEffect,
   lazy,
   Suspense,
   type ReactNode,
@@ -27,16 +28,21 @@ import {
   PanelLeftOpen,
   Play,
   Plus,
+  Search,
   Star,
+  ListChecks,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AssessmentRow } from "@/components/project/AssessmentRow";
 import { cn, getSubjectById } from "@/lib/utils";
@@ -47,6 +53,28 @@ import type { Project, StudySession, Subject } from "@/lib/types";
 const StudyTimer = lazy(() => import("@/components/timer/StudyTimer").then((module) => ({ default: module.StudyTimer })));
 
 type FilterMode = "active" | "favorites" | "archived" | "finished";
+
+const SIDEBAR_FILTER_KEY = "focal-sidebar-filter";
+const SIDEBAR_LIBRARY_KEY = "focal-sidebar-library-open";
+
+function readSidebarFilter(): FilterMode {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_FILTER_KEY);
+    return stored === "favorites" || stored === "archived" || stored === "finished"
+      ? stored
+      : "active";
+  } catch {
+    return "active";
+  }
+}
+
+function readLibraryOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_LIBRARY_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
 
 interface AssessmentSubjectGroup {
   subjectId: string;
@@ -236,12 +264,29 @@ export const Sidebar = memo(function Sidebar({
   onBulkFinish,
   onBulkDelete,
 }: SidebarProps) {
-  const [filterMode, setFilterMode] = useState<FilterMode>("active");
+  const [filterMode, setFilterMode] = useState<FilterMode>(readSidebarFilter);
+  const [projectQuery, setProjectQuery] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(readLibraryOpen);
 
   const dragCounter = useRef(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_FILTER_KEY, filterMode);
+    } catch {
+      // Sidebar state remains available for this session.
+    }
+  }, [filterMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_LIBRARY_KEY, String(libraryOpen));
+    } catch {
+      // Sidebar state remains available for this session.
+    }
+  }, [libraryOpen]);
 
   const handleDragEnter = useCallback(
     (e: React.DragEvent) => {
@@ -307,7 +352,7 @@ export const Sidebar = memo(function Sidebar({
     [projects, effectiveSortKey, fileCounts],
   );
 
-  const filtered = useMemo(
+  const modeFiltered = useMemo(
     () =>
       sorted.filter((p) => {
         if (filterMode === "favorites")
@@ -318,6 +363,21 @@ export const Sidebar = memo(function Sidebar({
       }),
     [sorted, filterMode],
   );
+
+  const filtered = useMemo(() => {
+    const query = projectQuery.trim().toLocaleLowerCase();
+    if (!query) return modeFiltered;
+    return modeFiltered.filter((project) => {
+      const subject = getSubjectById(project.subjectId);
+      return [
+        project.name,
+        project.description,
+        project.folder_path,
+        subject?.name,
+        subject?.shortCode,
+      ].some((value) => value?.toLocaleLowerCase().includes(query));
+    });
+  }, [modeFiltered, projectQuery]);
 
   const subjectGroups = useMemo(
     () => getAssessmentSubjectGroups(filtered),
@@ -403,16 +463,45 @@ export const Sidebar = memo(function Sidebar({
     return { activeCount, filterItems: items };
   }, [sorted]);
 
-  const selectedCount = selectedProjectIds?.size ?? 0;
   const selectedIdsArray = selectedProjectIds
-    ? Array.from(selectedProjectIds)
+    ? filtered.filter((project) => selectedProjectIds.has(project.id)).map((project) => project.id)
     : [];
+  const selectedCount = selectedIdsArray.length;
+  const allFilteredSelected = filtered.length > 0 && selectedCount === filtered.length;
   const bulkBarVisible = selectedCount > 0 && !isCollapsed;
+
+  const clearVisibleSelection = () => {
+    selectedIdsArray.forEach((id) => onToggleProjectSelection?.(id));
+  };
+
+  const clearAllSelection = () => {
+    selectedProjectIds?.forEach((id) => onToggleProjectSelection?.(id));
+  };
+
+  const handleFilterChange = (mode: FilterMode) => {
+    clearAllSelection();
+    setProjectQuery("");
+    setFilterMode(mode);
+  };
+
+  const handleToggleSelectAll = () => {
+    if (!onToggleProjectSelection) return;
+    if (allFilteredSelected) {
+      clearVisibleSelection();
+      return;
+    }
+    filtered.forEach((project) => {
+      if (!selectedProjectIds?.has(project.id)) onToggleProjectSelection(project.id);
+    });
+  };
 
   const sortLabel =
     SORT_OPTIONS.find((o) => o.key === sortKey)?.label ?? "Sort";
   const librarySelected = Boolean(selectedId);
-  const emptyState = {
+  const emptyState = projectQuery.trim() ? {
+    title: "No matching assessments",
+    description: `Nothing in ${filterMode === "active" ? "Current" : filterItems.find((item) => item.mode === filterMode)?.label ?? "this view"} matches “${projectQuery.trim()}”.`,
+  } : ({
     active: {
       title: "No current assessments",
       description: "Create an assessment to start organising your study.",
@@ -429,7 +518,7 @@ export const Sidebar = memo(function Sidebar({
       title: "Nothing completed yet",
       description: "Finished assessments will appear here.",
     },
-  }[filterMode];
+  }[filterMode]);
 
   return (
     <aside
@@ -444,7 +533,7 @@ export const Sidebar = memo(function Sidebar({
       onDrop={handleDrop}
     >
       {isDragOver && (
-        <div className="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/40 bg-background/90 backdrop-blur-sm">
+        <div role="status" aria-live="polite" className="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/40 bg-background/90 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-2.5 px-4 text-center text-foreground">
             <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <FolderOpen className="size-5" />
@@ -457,7 +546,7 @@ export const Sidebar = memo(function Sidebar({
       )}
       <div
         className={cn(
-          "border-b border-sidebar-border/80 bg-background/25 pb-3.5 pt-3.5 min-[1200px]:pb-4 min-[1200px]:pt-4",
+          "border-b border-sidebar-border/80 bg-background/25 pb-3.5 pt-3.5 min-[1200px]:pb-4 min-[1200px]:pt-4 [@media(max-height:760px)]:py-2",
           isCollapsed ? "px-1.5 min-[1200px]:px-2" : "px-3 min-[1200px]:px-4",
         )}
       >
@@ -472,7 +561,7 @@ export const Sidebar = memo(function Sidebar({
           </span>
           <CollapsibleBlock show={!isCollapsed}>
             <h1 className="font-display text-sm font-semibold leading-4 tracking-[-0.015em]">Focal</h1>
-            <p className="mt-1 text-[11px] leading-3 text-muted-foreground max-[900px]:hidden">
+            <p className="mt-1 text-[11px] leading-3 text-muted-foreground max-[900px]:hidden [@media(max-height:760px)]:hidden">
               Your study workspace
             </p>
           </CollapsibleBlock>
@@ -492,7 +581,7 @@ export const Sidebar = memo(function Sidebar({
           </Button>
         </div>
 
-        <div className="mt-3.5 flex justify-center">
+        <div className="mt-3.5 flex justify-center [@media(max-height:760px)]:mt-2">
           <Button
             variant="default"
             onClick={onOpenFocus}
@@ -512,21 +601,18 @@ export const Sidebar = memo(function Sidebar({
 
       <div
         className={cn(
-          "space-y-1.5 pt-3.5",
+          "space-y-1.5 pt-3.5 [@media(max-height:760px)]:space-y-0 [@media(max-height:760px)]:pt-1.5 [@media(max-height:760px)]:[&>button]:h-8",
           isCollapsed ? "px-1.5 min-[1200px]:px-2" : "px-2.5 min-[1200px]:px-3",
         )}
       >
-        <CollapsibleBlock show={!isCollapsed} className="px-2 pb-1">
+        <CollapsibleBlock show={!isCollapsed} className="px-2 pb-1 [@media(max-height:760px)]:hidden">
           <p className="text-micro font-semibold uppercase tracking-wider text-muted-foreground/85">
             Study
           </p>
         </CollapsibleBlock>
         <Button
           variant={homeSelected ? "secondary" : "ghost"}
-          onClick={() => {
-            setLibraryOpen(false);
-            onSelectHome();
-          }}
+          onClick={onSelectHome}
           className={cn(
             "w-full text-muted-foreground",
             !isCollapsed && "justify-start",
@@ -545,7 +631,7 @@ export const Sidebar = memo(function Sidebar({
 
         <Button
           variant={plannerSelected ? "secondary" : "ghost"}
-          onClick={() => { setLibraryOpen(false); onSelectPlanner(); }}
+          onClick={onSelectPlanner}
           className={cn("w-full text-muted-foreground", !isCollapsed && "justify-start", plannerSelected && "bg-sidebar-accent text-sidebar-accent-foreground")}
           size={isCollapsed ? "icon" : "default"}
           title={isCollapsed ? "Adaptive planner" : undefined}
@@ -558,7 +644,7 @@ export const Sidebar = memo(function Sidebar({
 
         <Button
           variant={inboxSelected ? "secondary" : "ghost"}
-          onClick={() => { setLibraryOpen(false); onSelectInbox(); }}
+          onClick={onSelectInbox}
           className={cn("w-full text-muted-foreground", !isCollapsed && "justify-start", inboxSelected && "bg-sidebar-accent text-sidebar-accent-foreground")}
           size={isCollapsed ? "icon" : "default"}
           title={isCollapsed ? "Academic inbox" : undefined}
@@ -571,10 +657,7 @@ export const Sidebar = memo(function Sidebar({
 
         <Button
           variant={timetableSelected ? "secondary" : "ghost"}
-          onClick={() => {
-            setLibraryOpen(false);
-            onSelectTimetable();
-          }}
+          onClick={onSelectTimetable}
           className={cn(
             "w-full text-muted-foreground",
             !isCollapsed && "justify-start",
@@ -593,10 +676,7 @@ export const Sidebar = memo(function Sidebar({
 
         <Button
           variant={analyticsSelected ? "secondary" : "ghost"}
-          onClick={() => {
-            setLibraryOpen(false);
-            onSelectAnalytics();
-          }}
+          onClick={onSelectAnalytics}
           className={cn(
             "w-full text-muted-foreground",
             !isCollapsed && "justify-start",
@@ -615,10 +695,7 @@ export const Sidebar = memo(function Sidebar({
 
         <Button
           variant={examTrackSelected ? "secondary" : "ghost"}
-          onClick={() => {
-            setLibraryOpen(false);
-            onSelectExamTrack();
-          }}
+          onClick={onSelectExamTrack}
           className={cn(
             "w-full text-muted-foreground",
             !isCollapsed && "justify-start",
@@ -660,6 +737,7 @@ export const Sidebar = memo(function Sidebar({
               title={isCollapsed ? "Assessments" : undefined}
               aria-label={isCollapsed ? "Assessments" : undefined}
               aria-expanded={libraryOpen}
+              aria-controls="sidebar-assessment-library"
             >
               <Library />
               <CollapsibleInline show={!isCollapsed} className="font-medium">
@@ -707,7 +785,7 @@ export const Sidebar = memo(function Sidebar({
               {filterItems.map(({ mode, label, icon: Icon, count }) => (
                 <Button
                   key={mode}
-                  onClick={() => setFilterMode(mode)}
+                  onClick={() => handleFilterChange(mode)}
                   variant={filterMode === mode ? "secondary" : "ghost"}
                   size={isCollapsed ? "icon-xs" : "xs"}
                   className={cn(
@@ -715,11 +793,7 @@ export const Sidebar = memo(function Sidebar({
                     filterMode === mode && "font-medium",
                   )}
                   title={isCollapsed ? label : undefined}
-                  aria-label={
-                    isCollapsed
-                      ? `${label}${count != null ? `, ${count}` : ""}`
-                      : undefined
-                  }
+                  aria-label={`${label}${count != null ? `, ${count}` : ""}`}
                   aria-pressed={filterMode === mode}
                 >
                   <Icon />
@@ -742,13 +816,61 @@ export const Sidebar = memo(function Sidebar({
       </div>
 
       {/* Virtualized project list */}
-      {libraryOpen ? <>
+      {libraryOpen ? <div id="sidebar-assessment-library" className="flex min-h-0 flex-1 flex-col">
         {!isCollapsed && (
-          <div className="mt-3 flex items-center border-t border-sidebar-border/70 px-4 pb-1.5 pt-3">
-            <p className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
-              {filtered.length} {filtered.length === 1 ? "item" : "items"}
-            </p>
-            {onSortChange && (
+          <div className="mt-3 grid gap-2 border-t border-sidebar-border/70 px-3 pb-1.5 pt-3 [@media(max-height:760px)]:mt-1 [@media(max-height:760px)]:gap-1 [@media(max-height:760px)]:pt-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                type="search"
+                value={projectQuery}
+                onChange={(event) => {
+                  clearAllSelection();
+                  setProjectQuery(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && projectQuery) {
+                    event.preventDefault();
+                    setProjectQuery("");
+                  }
+                }}
+                placeholder="Filter assessments"
+                aria-label="Filter assessments"
+                aria-describedby="sidebar-assessment-count"
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 rounded-md pl-8 pr-8 text-xs shadow-none"
+              />
+              {projectQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setProjectQuery("")}
+                  aria-label="Clear assessment filter"
+                >
+                  <X />
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <p id="sidebar-assessment-count" className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground" aria-live="polite">
+                {filtered.length} {filtered.length === 1 ? "item" : "items"}
+              </p>
+              {onToggleProjectSelection && filtered.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  onClick={handleToggleSelectAll}
+                  aria-pressed={allFilteredSelected}
+                  aria-label={`${allFilteredSelected ? "Clear" : "Select"} all ${filtered.length} shown assessments`}
+                >
+                  <ListChecks />
+                  {allFilteredSelected ? "Clear" : "Select"}
+                </Button>
+              )}
+              {onSortChange && (
               <DropdownMenu open={showSortMenu} onOpenChange={setShowSortMenu}>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -764,21 +886,20 @@ export const Sidebar = memo(function Sidebar({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
-                  {SORT_OPTIONS.map((opt) => (
-                    <DropdownMenuItem
+                  <DropdownMenuRadioGroup value={effectiveSortKey} onValueChange={(value) => onSortChange(value as ProjectSortKey)}>
+                    {SORT_OPTIONS.map((opt) => (
+                    <DropdownMenuRadioItem
                       key={opt.key}
-                      onSelect={() => onSortChange(opt.key)}
-                      className={cn(sortKey === opt.key && "font-medium")}
+                      value={opt.key}
                     >
                       {opt.label}
-                      {sortKey === opt.key && (
-                        <CircleDot className="ml-auto size-3" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
+                    </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+              )}
+            </div>
           </div>
         )}
         <ScrollArea
@@ -871,7 +992,16 @@ export const Sidebar = memo(function Sidebar({
                 <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
                   {emptyState.description}
                 </p>
-                {filterMode === "active" && (
+                {projectQuery.trim() ? (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="mt-3"
+                    onClick={() => setProjectQuery("")}
+                  >
+                    Clear filter
+                  </Button>
+                ) : filterMode === "active" ? (
                   <Button
                     variant="outline"
                     size="xs"
@@ -881,13 +1011,12 @@ export const Sidebar = memo(function Sidebar({
                     <Plus />
                     New assessment
                   </Button>
-                )}
-                {filterMode !== "active" && (
+                ) : (
                   <Button
                     variant="ghost"
                     size="xs"
                     className="mt-3"
-                    onClick={() => setFilterMode("active")}
+                    onClick={() => handleFilterChange("active")}
                   >
                     Show current
                   </Button>
@@ -896,7 +1025,7 @@ export const Sidebar = memo(function Sidebar({
             </div>
           )}
         </ScrollArea>
-      </> : <div className="min-h-0 flex-1" />}
+      </div> : <div className="min-h-0 flex-1" />}
 
       {/* Bulk action bar */}
       {libraryOpen && bulkBarVisible &&
@@ -904,28 +1033,32 @@ export const Sidebar = memo(function Sidebar({
         onBulkFinish &&
         onBulkDelete && (
           <div
-            className="mx-2 mb-2 flex items-center gap-1.5 rounded-lg border bg-background/65 p-1.5 shadow-sm"
+            className="mx-2 mb-2 flex flex-col gap-1.5 rounded-lg border bg-background/65 p-1.5 shadow-sm"
             role="region"
             aria-label="Selected assessment actions"
           >
-            <span className="px-2 text-xs font-medium tabular-nums" aria-live="polite">
-              {selectedCount} selected
-            </span>
-            <div className="ml-auto flex items-center gap-0.5">
+            <div className="flex items-center gap-1">
+              <span className="px-2 text-xs font-medium tabular-nums" aria-live="polite">
+                {selectedCount} selected
+              </span>
               <Button
                 variant="ghost"
                 size="xs"
+                className="ml-auto"
                 onClick={() =>
                   selectedIdsArray.forEach((id) => onToggleProjectSelection?.(id))
                 }
               >
                 Clear
               </Button>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
               {filterMode === "archived"
                 ? onBulkUnarchive && (
                     <Button
                       variant="ghost"
                       size="xs"
+                      className="w-full"
                       onClick={() => onBulkUnarchive(selectedIdsArray)}
                     >
                       Restore
@@ -935,6 +1068,7 @@ export const Sidebar = memo(function Sidebar({
                     <Button
                       variant="ghost"
                       size="xs"
+                      className="w-full"
                       onClick={() => onBulkArchive(selectedIdsArray)}
                     >
                       Archive
@@ -943,6 +1077,7 @@ export const Sidebar = memo(function Sidebar({
               <Button
                 variant="ghost"
                 size="xs"
+                className="w-full"
                 onClick={() => onBulkFinish(selectedIdsArray)}
               >
                 Finish
@@ -950,6 +1085,7 @@ export const Sidebar = memo(function Sidebar({
               <Button
                 variant="destructive"
                 size="xs"
+                className="w-full"
                 onClick={() => {
                   if (onBulkDelete) onBulkDelete(selectedIdsArray);
                 }}

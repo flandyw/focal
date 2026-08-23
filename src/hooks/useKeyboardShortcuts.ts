@@ -7,7 +7,10 @@ interface ShortcutHandlers {
   onNewSession?: () => void
   onGoHome?: () => void
   onGoTimetable?: () => void
+  onGoPlanner?: () => void
+  onGoInbox?: () => void
   onGoAnalytics?: () => void
+  onGoExamTrack?: () => void
   onOpenFocus?: () => void
   onGoSettings?: () => void
   onOpenAiAssistant?: () => void
@@ -111,36 +114,70 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
 
       // H: Go home
       if (key === "h" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onGoHome?.()
         return
       }
 
       // F: Open focus setup
       if (key === "f" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onOpenFocus?.()
         return
       }
 
       // T: Go timetable
       if (key === "t" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onGoTimetable?.()
+        return
+      }
+
+      // P: Go to the adaptive planner
+      if (key === "p" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        handlersRef.current.onGoPlanner?.()
+        return
+      }
+
+      // B: Go to the academic inbox
+      if (key === "b" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        handlersRef.current.onGoInbox?.()
         return
       }
 
       // A: Go analytics
       if (key === "a" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onGoAnalytics?.()
+        return
+      }
+
+      // E: Go to Exam practice
+      if (key === "e" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        handlersRef.current.onGoExamTrack?.()
         return
       }
 
       // I: Open AI assistant
       if (key === "i" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onOpenAiAssistant?.()
+        return
+      }
+
+      // /: Search without reaching for a modifier key
+      if (e.key === "/" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        handlersRef.current.onSearch?.()
         return
       }
 
       // [ : Toggle sidebar
       if (key === "[" && !meta && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
         handlersRef.current.onToggleSidebar?.()
         return
       }

@@ -1,11 +1,14 @@
 import {
   advanceTimer,
   clampDailyGoal,
+  clampLongBreakInterval,
   closeRunningInterval,
   countCompletedBlocksToday,
   formatFocusTime,
   getActiveSessionSubjectIds,
   getFocusSecondsToday,
+  getSessionFocusSeconds,
+  parseSettings,
   timerReducer,
 } from "../src/features/timer/model.ts";
 import { isTimerShortcutTarget } from "../src/components/timer/FocusView.tsx";
@@ -18,7 +21,9 @@ const settings = {
   workMinutes: 25,
   breakMinutes: 5,
   longBreakMinutes: 15,
-  alertsEnabled: true,
+  longBreakEvery: 4,
+  soundEnabled: true,
+  notificationsEnabled: true,
   autoStartBreak: true,
   autoStartFocus: false,
   dailyGoal: 6,
@@ -27,6 +32,7 @@ const runningWork = {
   running: true,
   mode: "work",
   secondsLeft: 10,
+  totalSeconds: 1500,
   cycles: 0,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -48,6 +54,7 @@ check(advanceTimer(runningWork, settings, 10), {
   running: true,
   mode: "break",
   secondsLeft: 300,
+  totalSeconds: 300,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -58,6 +65,7 @@ check(advanceTimer(runningWork, settings, 311), {
   running: false,
   mode: "work",
   secondsLeft: 1500,
+  totalSeconds: 1500,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -68,6 +76,7 @@ const breakWithTimeUsed = {
   running: true,
   mode: "break",
   secondsLeft: 240,
+  totalSeconds: 300,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -88,6 +97,7 @@ const freeStudy = timerReducer({
   running: false,
   mode: "work",
   secondsLeft: 1500,
+  totalSeconds: 1500,
   cycles: 0,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -98,6 +108,7 @@ check(freeStudy, {
   running: true,
   mode: "break",
   secondsLeft: 300,
+  totalSeconds: 300,
   cycles: 0,
   studyOvertime: true,
   overtimeSeconds: 0,
@@ -136,6 +147,8 @@ check(getActiveSessionSubjectIds("active", [
 check(isTimerShortcutTarget(null), false);
 check(isTimerShortcutTarget({ tagName: "INPUT" }), true);
 check(isTimerShortcutTarget({ tagName: "BUTTON" }), true);
+check(isTimerShortcutTarget({ tagName: "SELECT" }), true);
+check(isTimerShortcutTarget({ tagName: "DIV", isContentEditable: true }), true);
 check(isTimerShortcutTarget({ tagName: "DIV" }), false);
 check(getPomodoroTitle(["mm"], "Methods SAC 1"), "Methods SAC 1 — MCM · Focus");
 check(getPomodoroDescription(25), "Pomodoro — 25m focused study");
@@ -145,6 +158,7 @@ check(advanceTimer(runningWork, { ...settings, autoStartBreak: false }, 10), {
   running: false,
   mode: "break",
   secondsLeft: 300,
+  totalSeconds: 300,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -159,6 +173,7 @@ check(advanceTimer(breakWithTimeUsed, autoStartNextFocus, 240), {
   running: true,
   mode: "work",
   secondsLeft: 1500,
+  totalSeconds: 1500,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
@@ -175,18 +190,54 @@ check(timerReducer(breakWithTimeUsed, { type: "SKIP_BREAK", settings: autoStartN
   running: true,
   mode: "work",
   secondsLeft: 1500,
+  totalSeconds: 1500,
   cycles: 1,
   studyOvertime: false,
   overtimeSeconds: 0,
   freeStudy: false,
   breakSeconds: 0,
 });
+check(advanceTimer({ ...runningWork, cycles: 2 }, { ...settings, longBreakEvery: 3 }, 10), {
+  running: true,
+  mode: "long-break",
+  secondsLeft: 900,
+  totalSeconds: 900,
+  cycles: 3,
+  studyOvertime: false,
+  overtimeSeconds: 0,
+  freeStudy: false,
+  breakSeconds: 0,
+});
+check(timerReducer(runningWork, { type: "ADD_TIME", minutes: 5 }), {
+  ...runningWork,
+  secondsLeft: 310,
+  totalSeconds: 1800,
+});
+check(advanceTimer(runningWork, settings, Number.POSITIVE_INFINITY), runningWork);
 
 // --- Daily goal helpers ---
 check(clampDailyGoal(undefined), 0);
 check(clampDailyGoal(-5), 0);
 check(clampDailyGoal(40), 30);
 check(clampDailyGoal(7), 7);
+check(clampLongBreakInterval(undefined), 4);
+check(clampLongBreakInterval(1), 2);
+check(clampLongBreakInterval(20), 12);
+check(parseSettings(JSON.stringify({
+  workMinutes: 45,
+  alertsEnabled: false,
+  longBreakEvery: 6,
+})), {
+  workMinutes: 45,
+  breakMinutes: 5,
+  longBreakMinutes: 15,
+  longBreakEvery: 6,
+  soundEnabled: false,
+  notificationsEnabled: false,
+  autoStartBreak: true,
+  autoStartFocus: false,
+  dailyGoal: 0,
+});
 check(formatFocusTime(0), "0m");
 check(formatFocusTime(45 * 60), "45m");
 check(formatFocusTime(75 * 60), "1h 15m");
@@ -220,7 +271,49 @@ const todaySessions = [
     },
   },
 ];
-check(countCompletedBlocksToday(todaySessions), 3);
-check(getFocusSecondsToday(todaySessions), (25 + 25 + 50) * 60);
+const endOfToday = new Date();
+endOfToday.setHours(23, 59, 59, 999);
+check(countCompletedBlocksToday(todaySessions, endOfToday), 3);
+check(getFocusSecondsToday(todaySessions, endOfToday), (25 + 25 + 50) * 60);
 check(countCompletedBlocksToday([], new Date()), 0);
 check(getFocusSecondsToday([], new Date()), 0);
+
+const noon = new Date();
+noon.setHours(12, 0, 0, 0);
+const dayStart = new Date(noon);
+dayStart.setHours(0, 0, 0, 0);
+check(countCompletedBlocksToday([{
+  id: "paused",
+  execution: {
+    state: "in-progress",
+    intervals: [{ start: atLocal(10, 0, 0), end: atLocal(10, 10, 0), source: "pomodoro", cycleNumber: 1 }],
+  },
+}], noon), 0);
+check(getFocusSecondsToday([{
+  id: "open",
+  execution: {
+    state: "in-progress",
+    intervals: [{ start: atLocal(11, 30, 0), source: "pomodoro", cycleNumber: 1 }],
+  },
+}], noon), 30 * 60);
+check(getFocusSecondsToday([{
+  id: "midnight",
+  execution: {
+    state: "completed",
+    intervals: [{
+      start: new Date(dayStart.getTime() - 30 * 60 * 1000).toISOString(),
+      end: new Date(dayStart.getTime() + 30 * 60 * 1000).toISOString(),
+      source: "pomodoro",
+      cycleNumber: 1,
+    }],
+  },
+}], noon), 30 * 60);
+check(getSessionFocusSeconds({
+  execution: {
+    state: "in-progress",
+    intervals: [
+      { start: atLocal(10, 0, 0), end: atLocal(10, 20, 0), source: "pomodoro" },
+      { start: atLocal(11, 30, 0), source: "pomodoro" },
+    ],
+  },
+}, noon), 50 * 60);

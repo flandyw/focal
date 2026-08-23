@@ -12,7 +12,11 @@ import {
   SkipForward,
   Timer,
 } from "lucide-react";
-import { formatFocusTime } from "@/features/timer/model";
+import {
+  EXTRA_BREAK_MINUTES,
+  formatFocusTime,
+  MAX_FOCUS_INTENT_LENGTH,
+} from "@/features/timer/model";
 import { TitleBar } from "@/components/shell/TitleBar";
 import { SubjectPicker } from "@/components/timer/SubjectPicker";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +68,8 @@ interface FocusViewProps {
   onSkipBreak: () => void;
   onStartStudyOvertime: () => void;
   onStartFreeStudy: () => void;
-  onMoreBreakTime: () => void;
+  onAddTime: () => void;
+  onManageSubjects?: () => void;
   onClose: () => void;
   closeButtonRef?: RefObject<HTMLButtonElement | null>;
 }
@@ -78,8 +83,18 @@ function finishTime(secondsLeft: number) {
 
 // eslint-disable-next-line react-refresh/only-export-components -- used by the runnable timer self-check
 export function isTimerShortcutTarget(target: EventTarget | null) {
-  const tagName = (target as { tagName?: string } | null)?.tagName;
-  return tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "BUTTON";
+  if (!target || typeof target !== "object") return false;
+  const element = target as HTMLElement;
+  const tagName = typeof element.tagName === "string" ? element.tagName.toLowerCase() : "";
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    tagName === "button" ||
+    tagName === "a" ||
+    Boolean(element.isContentEditable) ||
+    Boolean(element.closest?.('button, a, [role="button"], [role="menuitem"], [contenteditable="true"]'))
+  );
 }
 
 export function FocusView({
@@ -117,13 +132,15 @@ export function FocusView({
   onSkipBreak,
   onStartStudyOvertime,
   onStartFreeStudy,
-  onMoreBreakTime,
+  onAddTime,
+  onManageSubjects,
   onClose,
   closeButtonRef,
 }: FocusViewProps) {
   const fallbackCloseRef = useRef<HTMLButtonElement | null>(null);
   const resolvedCloseRef = closeButtonRef ?? fallbackCloseRef;
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const isFocus = mode === "work" || (isStudyOvertime && (!isFreeStudy || running));
   const safeProgress = Number.isFinite(progress)
     ? Math.min(1, Math.max(0, progress))
@@ -141,12 +158,14 @@ export function FocusView({
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
     const focusTimeout = window.setTimeout(() => primaryButtonRef.current?.focus(), 50);
     document.body.style.overflow = "hidden";
 
     return () => {
       window.clearTimeout(focusTimeout);
       document.body.style.overflow = previousOverflow;
+      previouslyFocusedRef.current?.focus();
     };
   }, []);
 
@@ -157,29 +176,38 @@ export function FocusView({
         onClose();
         return;
       }
-      if (event.code !== "Space" || isTimerShortcutTarget(event.target) || saving) return;
-      event.preventDefault();
-      onToggle();
+      if (isTimerShortcutTarget(event.target) || saving || event.metaKey || event.ctrlKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (event.code === "Space") {
+        event.preventDefault();
+        onToggle();
+      } else if (key === "s" && !event.shiftKey && !isFocus && !isFreeStudy) {
+        event.preventDefault();
+        onSkipBreak();
+      } else if (key === "a" && !event.shiftKey && !isStudyOvertime) {
+        event.preventDefault();
+        onAddTime();
+      } else if (key === "f" && !event.shiftKey && activeSessionId) {
+        event.preventDefault();
+        onFinish();
+      } else if (key === "r" && !event.shiftKey && !activeSessionId) {
+        event.preventDefault();
+        onReset();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose, onToggle, saving]);
-
-  useEffect(() => {
-    const previousTitle = document.title;
-    document.title = `${running || !activeSessionId ? timeDisplay : "Paused"} · ${subjectLabel} · Focal`;
-    return () => {
-      document.title = previousTitle;
-    };
-  }, [activeSessionId, running, subjectLabel, timeDisplay]);
+  }, [activeSessionId, isFocus, isFreeStudy, isStudyOvertime, onAddTime, onClose, onFinish, onReset, onSkipBreak, onToggle, saving]);
 
   const status = activeSessionId
-    ? running
-      ? "Logging to calendar"
-      : "Paused — calendar stopped"
+    ? !isFocus
+      ? "Focus save pending"
+      : running
+        ? "Logging to calendar"
+        : "Paused — calendar stopped"
     : isFocus
       ? "Ready to start"
       : "Break — not logged";
@@ -237,7 +265,9 @@ export function FocusView({
                     subjects={subjects}
                     selectedSubjectIds={selectedSubjectIds}
                     activeSessionId={null}
+                    disabled={saving}
                     onSubjectClick={onSubjectClick}
+                    onManageSubjects={onManageSubjects}
                   />
                   <div>
                     <label htmlFor="focus-intent" className="mb-2 block text-sm font-medium">
@@ -248,7 +278,11 @@ export function FocusView({
                       value={intent}
                       onChange={(event) => onIntentChange(event.target.value)}
                       placeholder="What will be different when this block ends?"
+                      maxLength={MAX_FOCUS_INTENT_LENGTH}
                     />
+                    <p className="mt-1 text-right text-micro tabular-nums text-muted-foreground">
+                      {intent.length}/{MAX_FOCUS_INTENT_LENGTH}
+                    </p>
                   </div>
                 </div>
               )}
@@ -347,7 +381,7 @@ export function FocusView({
                   className={cn(
                     "grid w-full grid-cols-1 gap-2",
                     !activeSessionId && "sm:grid-cols-2",
-                    activeSessionId && !isStudyOvertime && "sm:grid-cols-2",
+                    activeSessionId && !isStudyOvertime && "sm:grid-cols-3",
                     activeSessionId && isStudyOvertime && !isFreeStudy && "sm:grid-cols-3",
                     activeSessionId && isFreeStudy && "sm:grid-cols-2",
                   )}
@@ -381,6 +415,17 @@ export function FocusView({
                     >
                       <Check />
                       Finish &amp; save
+                    </Button>
+                  )}
+                  {activeSessionId && !isStudyOvertime && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={onAddTime}
+                      disabled={saving}
+                    >
+                      <Plus />
+                      {EXTRA_BREAK_MINUTES} min
                     </Button>
                   )}
                   {isStudyOvertime && !isFreeStudy && (
@@ -427,16 +472,28 @@ export function FocusView({
                     {running ? <Pause /> : <Coffee />}
                     {running ? "Pause" : "Resume"}
                   </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={onStartStudyOvertime}
-                    disabled={saving || !!activeSessionId || !canStartFocus}
-                  >
-                    <BookOpen />
-                    Keep focusing
-                  </Button>
-                  <Button size="lg" variant="outline" onClick={onMoreBreakTime}>
+                  {activeSessionId ? (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={onFinish}
+                      disabled={saving}
+                    >
+                      <Check />
+                      Retry save
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={onStartStudyOvertime}
+                      disabled={saving || !canStartFocus}
+                    >
+                      <BookOpen />
+                      Keep focusing
+                    </Button>
+                  )}
+                  <Button size="lg" variant="outline" onClick={onAddTime}>
                     <Plus />
                     5 min
                   </Button>
@@ -466,7 +523,7 @@ export function FocusView({
                   </Button>
                 )}
                 <p className="text-center text-xs text-muted-foreground sm:text-right">
-                  Space to{" "}
+                  Space: {" "}
                   {running
                     ? "pause"
                     : activeSessionId
@@ -476,7 +533,11 @@ export function FocusView({
                       : isFocus
                         ? "start"
                         : "resume break"}{" "}
-                  · Esc to exit
+                  · A: +{EXTRA_BREAK_MINUTES} min
+                  {!isFocus && !isFreeStudy && " · S: skip"}
+                  {activeSessionId && " · F: finish"}
+                  {!activeSessionId && " · R: reset"}
+                  {" · Esc: exit"}
                 </p>
               </div>
             </CardFooter>
@@ -485,7 +546,7 @@ export function FocusView({
       </main>
 
       <span className="sr-only" aria-live="polite">
-        {status}. {timeDisplay} {isFreeStudy ? "elapsed" : "remaining"}.
+        {status}. {modeLabel}.
       </span>
     </div>
   );

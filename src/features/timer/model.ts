@@ -6,7 +6,9 @@ export const DEFAULT_SETTINGS = {
   workMinutes: 25,
   breakMinutes: 5,
   longBreakMinutes: 15,
-  alertsEnabled: true,
+  longBreakEvery: 4,
+  soundEnabled: true,
+  notificationsEnabled: true,
   autoStartBreak: true,
   autoStartFocus: false,
   dailyGoal: 0,
@@ -15,6 +17,10 @@ export const MIN_DURATION_MINUTES = 1;
 export const MAX_DURATION_MINUTES = 180;
 export const EXTRA_BREAK_MINUTES = 5;
 export const MAX_DAILY_GOAL = 30;
+export const MAX_FOCUS_INTENT_LENGTH = 120;
+export const MIN_LONG_BREAK_INTERVAL = 2;
+export const MAX_LONG_BREAK_INTERVAL = 12;
+const MAX_RESTORE_ELAPSED_SECONDS = 24 * 60 * 60;
 
 export const TIMER_PRESETS = [
   {
@@ -41,11 +47,29 @@ export const TIMER_PRESETS = [
     breakMinutes: 3,
     longBreakMinutes: 10,
   },
+  {
+    id: "exam",
+    label: "Exam prep",
+    description: "90 / 15 / 30",
+    workMinutes: 90,
+    breakMinutes: 15,
+    longBreakMinutes: 30,
+  },
 ] as const;
 
 export function clampDailyGoal(value: number | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
   return Math.min(MAX_DAILY_GOAL, Math.max(0, Math.round(value)));
+}
+
+export function clampLongBreakInterval(value: number | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_SETTINGS.longBreakEvery;
+  }
+  return Math.min(
+    MAX_LONG_BREAK_INTERVAL,
+    Math.max(MIN_LONG_BREAK_INTERVAL, Math.round(value)),
+  );
 }
 
 export type TimerMode = "work" | "break" | "long-break";
@@ -54,7 +78,9 @@ export interface TimerSettings {
   workMinutes: number;
   breakMinutes: number;
   longBreakMinutes: number;
-  alertsEnabled: boolean;
+  longBreakEvery: number;
+  soundEnabled: boolean;
+  notificationsEnabled: boolean;
   autoStartBreak: boolean;
   autoStartFocus: boolean;
   dailyGoal: number;
@@ -64,6 +90,7 @@ export interface TimerState {
   running: boolean;
   mode: TimerMode;
   secondsLeft: number;
+  totalSeconds: number;
   cycles: number;
   studyOvertime: boolean;
   overtimeSeconds: number;
@@ -76,7 +103,7 @@ export type TimerAction =
   | { type: "TOGGLE" }
   | { type: "RESET"; settings: TimerSettings }
   | { type: "SKIP_BREAK"; settings: TimerSettings }
-  | { type: "ADD_BREAK_TIME"; minutes: number }
+  | { type: "ADD_TIME"; minutes: number }
   | { type: "START_STUDY_OVERTIME"; settings: TimerSettings }
   | { type: "START_FREE_STUDY"; settings: TimerSettings }
   | { type: "RETURN_TO_BREAK" }
@@ -90,12 +117,17 @@ export interface StoredTimerState {
   running: boolean;
   mode: TimerMode;
   secondsLeft: number;
+  totalSeconds?: number;
   cycles: number;
   studyOvertime?: boolean;
   overtimeSeconds?: number;
   freeStudy?: boolean;
   breakSeconds?: number;
   activeSessionId?: string | null;
+  selectedSubjectIds?: string[];
+  focusProjectId?: string;
+  focusProjectLabel?: string;
+  focusIntent?: string;
   updatedAt: number;
 }
 
@@ -113,6 +145,12 @@ export function clampMinutes(value: number) {
   );
 }
 
+function safeNonNegativeInteger(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : fallback;
+}
+
 export function formatTimer(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safeSeconds / 60);
@@ -123,7 +161,12 @@ export function formatTimer(seconds: number) {
 export function parseSettings(value: string | null): TimerSettings {
   if (!value) return DEFAULT_SETTINGS;
   try {
-    const parsed = JSON.parse(value) as Partial<TimerSettings>;
+    const parsed = JSON.parse(value) as Partial<TimerSettings> & {
+      alertsEnabled?: boolean;
+    };
+    const legacyAlerts = typeof parsed.alertsEnabled === "boolean"
+      ? parsed.alertsEnabled
+      : undefined;
     return {
       workMinutes: clampMinutes(
         parsed.workMinutes ?? DEFAULT_SETTINGS.workMinutes,
@@ -134,10 +177,13 @@ export function parseSettings(value: string | null): TimerSettings {
       longBreakMinutes: clampMinutes(
         parsed.longBreakMinutes ?? DEFAULT_SETTINGS.longBreakMinutes,
       ),
-      alertsEnabled:
-        typeof parsed.alertsEnabled === "boolean"
-          ? parsed.alertsEnabled
-          : DEFAULT_SETTINGS.alertsEnabled,
+      longBreakEvery: clampLongBreakInterval(parsed.longBreakEvery),
+      soundEnabled: typeof parsed.soundEnabled === "boolean"
+        ? parsed.soundEnabled
+        : legacyAlerts ?? DEFAULT_SETTINGS.soundEnabled,
+      notificationsEnabled: typeof parsed.notificationsEnabled === "boolean"
+        ? parsed.notificationsEnabled
+        : legacyAlerts ?? DEFAULT_SETTINGS.notificationsEnabled,
       autoStartBreak:
         typeof parsed.autoStartBreak === "boolean"
           ? parsed.autoStartBreak
@@ -154,7 +200,11 @@ export function parseSettings(value: string | null): TimerSettings {
 }
 
 export function getInitialSettings() {
-  return parseSettings(localStorage.getItem(TIMER_SETTINGS_KEY));
+  try {
+    return parseSettings(localStorage.getItem(TIMER_SETTINGS_KEY));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
 }
 
 export function isValidMode(mode: unknown): mode is TimerMode {
@@ -168,7 +218,9 @@ export function advanceTimer(
   elapsedSeconds: number,
 ): TimerState {
   let next = state;
-  let remaining = Math.max(0, Math.floor(elapsedSeconds));
+  let remaining = Number.isFinite(elapsedSeconds)
+    ? Math.max(0, Math.floor(elapsedSeconds))
+    : 0;
 
   if (next.studyOvertime) {
     if (next.freeStudy && !next.running) {
@@ -186,11 +238,13 @@ export function advanceTimer(
     remaining -= next.secondsLeft;
     if (next.mode === "work") {
       const cycles = next.cycles + 1;
-      const mode = cycles % 4 === 0 ? "long-break" : "break";
+      const mode = cycles % settings.longBreakEvery === 0 ? "long-break" : "break";
+      const totalSeconds = getDurationSeconds(mode, settings);
       next = {
         running: settings.autoStartBreak,
         mode,
-        secondsLeft: getDurationSeconds(mode, settings),
+        secondsLeft: totalSeconds,
+        totalSeconds,
         cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
@@ -198,10 +252,12 @@ export function advanceTimer(
         breakSeconds: 0,
       };
     } else {
+      const totalSeconds = getDurationSeconds("work", settings);
       next = {
         running: settings.autoStartFocus,
         mode: "work",
-        secondsLeft: getDurationSeconds("work", settings),
+        secondsLeft: totalSeconds,
+        totalSeconds,
         cycles: next.cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
@@ -233,10 +289,12 @@ export function getActiveSessionSubjectIds(
 }
 
 export function getInitialState(settings: TimerSettings): TimerState {
+  const workSeconds = getDurationSeconds("work", settings);
   const fallback: TimerState = {
     running: false,
     mode: "work",
-    secondsLeft: getDurationSeconds("work", settings),
+    secondsLeft: workSeconds,
+    totalSeconds: workSeconds,
     cycles: 0,
     studyOvertime: false,
     overtimeSeconds: 0,
@@ -251,28 +309,36 @@ export function getInitialState(settings: TimerSettings): TimerState {
     const parsed = JSON.parse(stored) as Partial<StoredTimerState>;
     const mode = isValidMode(parsed.mode) ? parsed.mode : fallback.mode;
     const duration = getDurationSeconds(mode, settings);
-    const updatedAt =
-      typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now();
-    const cycles = Math.max(0, Math.round(parsed.cycles ?? 0));
+    const now = Date.now();
+    const updatedAt = typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt)
+      ? Math.min(now, parsed.updatedAt)
+      : now;
+    const cycles = safeNonNegativeInteger(parsed.cycles);
     const studyOvertime = parsed.studyOvertime === true && mode !== "work";
     const freeStudy = studyOvertime && parsed.freeStudy === true;
     const elapsedSeconds = parsed.running || (freeStudy && parsed.running === false)
-      ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
+      ? Math.min(
+          MAX_RESTORE_ELAPSED_SECONDS,
+          Math.max(0, Math.floor((now - updatedAt) / 1000)),
+        )
       : 0;
-    const overtimeSeconds = Math.max(
-      0,
-      Math.round(parsed.overtimeSeconds ?? 0),
+    const totalSeconds = Math.min(
+      MAX_DURATION_MINUTES * 60,
+      Math.max(duration, safeNonNegativeInteger(parsed.totalSeconds, duration)),
     );
-    const breakSeconds = Math.max(0, Math.round(parsed.breakSeconds ?? 0));
+    const secondsLeft = Math.min(
+      totalSeconds,
+      Math.max(1, safeNonNegativeInteger(parsed.secondsLeft, duration)),
+    );
+    const overtimeSeconds = safeNonNegativeInteger(parsed.overtimeSeconds);
+    const breakSeconds = safeNonNegativeInteger(parsed.breakSeconds);
 
     if (studyOvertime) {
       return {
         running: parsed.running === true,
         mode,
-        secondsLeft: Math.min(
-          duration,
-          Math.max(1, Math.round(parsed.secondsLeft ?? duration)),
-        ),
+        secondsLeft,
+        totalSeconds,
         cycles,
         studyOvertime: true,
         overtimeSeconds: parsed.running
@@ -289,10 +355,8 @@ export function getInitialState(settings: TimerSettings): TimerState {
       return advanceTimer({
         running: true,
         mode,
-        secondsLeft: Math.min(
-          duration,
-          Math.max(1, Math.round(parsed.secondsLeft ?? duration)),
-        ),
+        secondsLeft,
+        totalSeconds,
         cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
@@ -304,10 +368,8 @@ export function getInitialState(settings: TimerSettings): TimerState {
     return {
       running: false,
       mode,
-      secondsLeft: Math.min(
-        duration,
-        Math.max(1, Math.round(parsed.secondsLeft ?? duration)),
-      ),
+      secondsLeft,
+      totalSeconds,
       cycles,
       studyOvertime: false,
       overtimeSeconds: 0,
@@ -329,36 +391,49 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         running: !state.running,
         breakSeconds: state.freeStudy ? 0 : state.breakSeconds,
       };
-    case "RESET":
+    case "RESET": {
+      const totalSeconds = getDurationSeconds("work", action.settings);
       return {
         running: false,
         mode: "work",
-        secondsLeft: getDurationSeconds("work", action.settings),
+        secondsLeft: totalSeconds,
+        totalSeconds,
         cycles: 0,
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
         breakSeconds: 0,
       };
+    }
     case "SKIP_BREAK":
       if (state.mode === "work" || state.studyOvertime) return state;
       return {
         running: action.settings.autoStartFocus,
         mode: "work",
         secondsLeft: getDurationSeconds("work", action.settings),
+        totalSeconds: getDurationSeconds("work", action.settings),
         cycles: state.cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
         freeStudy: false,
         breakSeconds: 0,
       };
-    case "ADD_BREAK_TIME":
-      if (state.mode === "work" || state.studyOvertime) return state;
-      return { ...state, secondsLeft: state.secondsLeft + action.minutes * 60 };
+    case "ADD_TIME": {
+      if (state.studyOvertime) return state;
+      const extraSeconds = Math.max(0, Math.round(action.minutes * 60));
+      const totalSeconds = Math.min(
+        MAX_DURATION_MINUTES * 60,
+        state.totalSeconds + extraSeconds,
+      );
+      return {
+        ...state,
+        secondsLeft: Math.min(totalSeconds, state.secondsLeft + extraSeconds),
+        totalSeconds,
+      };
+    }
     case "START_STUDY_OVERTIME": {
       if (state.mode === "work") return state;
-      const totalBreakSeconds = getDurationSeconds(state.mode, action.settings);
-      const elapsedBreakSeconds = totalBreakSeconds - state.secondsLeft;
+      const elapsedBreakSeconds = Math.max(0, state.totalSeconds - state.secondsLeft);
       return {
         ...state,
         running: true,
@@ -368,18 +443,21 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         breakSeconds: 0,
       };
     }
-    case "START_FREE_STUDY":
+    case "START_FREE_STUDY": {
       if (state.mode !== "work" || state.studyOvertime) return state;
+      const totalSeconds = getDurationSeconds("break", action.settings);
       return {
         ...state,
         running: true,
         mode: "break",
-        secondsLeft: getDurationSeconds("break", action.settings),
+        secondsLeft: totalSeconds,
+        totalSeconds,
         studyOvertime: true,
         overtimeSeconds: 0,
         freeStudy: true,
         breakSeconds: 0,
       };
+    }
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state;
       return {
@@ -400,7 +478,10 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         state.secondsLeft === oldDuration
           ? nextDuration
           : Math.min(state.secondsLeft, nextDuration);
-      return { ...state, secondsLeft };
+      const totalSeconds = state.totalSeconds === oldDuration
+        ? nextDuration
+        : Math.max(secondsLeft, state.totalSeconds);
+      return { ...state, secondsLeft, totalSeconds };
     }
     default:
       return state;
@@ -422,10 +503,11 @@ export function countCompletedBlocksToday(
 ) {
   const seen = new Set<string>();
   for (const session of sessions) {
+    if (session.execution.state !== "completed") continue;
     for (const interval of session.execution.intervals) {
       if (interval.source !== "pomodoro" || !interval.end) continue;
       const end = new Date(interval.end);
-      if (!Number.isNaN(end.getTime()) && isSameLocalDay(end, now)) {
+      if (!Number.isNaN(end.getTime()) && end <= now && isSameLocalDay(end, now)) {
         seen.add(`${session.id}:${interval.cycleNumber ?? 0}`);
       }
     }
@@ -438,20 +520,41 @@ export function getFocusSecondsToday(
   sessions: StudySession[],
   now = new Date(),
 ) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
   let total = 0;
   for (const session of sessions) {
     for (const interval of session.execution.intervals) {
-      if (interval.source !== "pomodoro" || !interval.end) continue;
+      if (interval.source !== "pomodoro") continue;
       const start = new Date(interval.start);
-      const end = new Date(interval.end);
+      const end = interval.end
+        ? new Date(interval.end)
+        : session.execution.state === "in-progress"
+          ? now
+          : null;
+      if (!end) continue;
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
         continue;
       }
-      if (!isSameLocalDay(end, now)) continue;
-      total += Math.max(0, (end.getTime() - start.getTime()) / 1000);
+      const clippedStart = Math.max(start.getTime(), dayStart.getTime());
+      const clippedEnd = Math.min(end.getTime(), dayEnd.getTime(), now.getTime());
+      total += Math.max(0, (clippedEnd - clippedStart) / 1000);
     }
   }
   return total;
+}
+
+export function getSessionFocusSeconds(session: StudySession, now = new Date()) {
+  return session.execution.intervals.reduce((total, interval) => {
+    if (interval.source !== "pomodoro") return total;
+    const start = new Date(interval.start).getTime();
+    const end = interval.end ? new Date(interval.end).getTime() : now.getTime();
+    return Number.isFinite(start) && Number.isFinite(end)
+      ? total + Math.max(0, end - start) / 1000
+      : total;
+  }, 0);
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- exported for the runnable timer self-check

@@ -29,7 +29,11 @@ const plan = buildAdaptivePlan({
 })
 
 if (plan.items.length !== 2) throw new Error(`Expected two blocks, received ${plan.items.length}`)
-if (plan.items.some((item) => item.startTime.startsWith("2026-08-24") && new Date(item.startTime).getHours() < 17)) throw new Error("Planner overlapped a fixed event")
+const fixedEventStart = new Date("2026-08-24T16:00:00+10:00").getTime()
+const fixedEventEnd = new Date("2026-08-24T17:00:00+10:00").getTime()
+if (plan.items.some((item) => new Date(item.startTime).getTime() < fixedEventEnd && new Date(item.endTime).getTime() > fixedEventStart)) {
+  throw new Error("Planner overlapped a fixed event")
+}
 if (new Set(plan.items.map((item) => item.startTime.slice(0, 10))).size !== 2) throw new Error("Planner did not spread revision across days")
 if (plan.items.reduce((sum, item) => sum + (new Date(item.endTime).getTime() - new Date(item.startTime).getTime()) / 60_000, 0) !== 90) {
   throw new Error("Planner did not allocate the estimated work")

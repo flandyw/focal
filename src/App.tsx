@@ -2168,7 +2168,6 @@ function App() {
                       <Suspense fallback={<ViewFallback label="academic inbox" />}>
                         <AcademicInboxView
                           projects={projects}
-                          subjects={allSubjects}
                           onUpdateProject={(id, updates) => updateProject(id, updates)}
                           onFilesChanged={refreshFileCountForProject}
                         />

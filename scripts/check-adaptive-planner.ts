@@ -1,5 +1,5 @@
 import { buildAdaptivePlan } from "../src/lib/adaptivePlanner.ts"
-import { suggestInboxProject } from "../src/lib/academicInbox.ts"
+import { selectRecentDownloads, suggestInboxProject } from "../src/lib/academicInbox.ts"
 import { getProjectTopicMastery } from "../src/lib/mastery.ts"
 import { reviewStudyCard } from "../src/lib/studyMaterials.ts"
 import { getPriorityItems } from "../src/lib/studyPriority.ts"
@@ -54,6 +54,13 @@ if (reviewed.correctCount !== 1 || reviewed.intervalDays !== 1 || reviewed.dueAt
 
 const subjects: Subject[] = [{ id: "mm", name: "Mathematical Methods", shortCode: "MCM", color: "#000" }]
 if (suggestInboxProject("methods chapter 4 notes.txt", [project], subjects) !== project.id) throw new Error("Inbox did not suggest the matching assessment")
+const recentDownloads = selectRecentDownloads([
+  { name: "older.pdf", modifiedAt: 1 },
+  { name: ".hidden.pdf", modifiedAt: 4 },
+  { name: "unfinished.crdownload", modifiedAt: 3 },
+  { name: "newer.pdf", modifiedAt: 2 },
+], 2)
+if (recentDownloads.map((file) => file.name).join(",") !== "newer.pdf,older.pdf") throw new Error("Inbox recent-download filtering is incorrect")
 
 // eslint-disable-next-line no-console
 console.log("Adaptive planner checks passed")

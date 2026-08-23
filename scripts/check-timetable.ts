@@ -1,5 +1,6 @@
 import {
   getDayLabelForDate,
+  getNextTimetableDay,
   getTimetablePeriodError,
   getTimetablePeriodsForDay,
   getTimetablePeriodsForDate,
@@ -104,6 +105,17 @@ check(rejectedInvalidRange, "imports should reject periods that end before they 
 
 check(getDayLabelForDate(new Date(2026, 0, 30), "2026-01-26", [], 10) === 5, "weekdays should advance the cycle")
 check(getDayLabelForDate(new Date(2026, 0, 31), "2026-01-26", [], 10) === null, "weekends should be skipped")
+const nextSchoolDay = getNextTimetableDay(new Date(2026, 0, 31), "2026-01-26", [], 10)
+check(nextSchoolDay?.date.getDay() === 1, "the next timetable date after a weekend should be Monday")
+check(nextSchoolDay?.dayLabel === 6, "the next timetable date should expose Monday's cycle day")
+const nextDayAfterBreak = getNextTimetableDay(
+  new Date(2026, 0, 31),
+  "2026-01-26",
+  [{ name: "Break", startDate: "2026-02-02", endDate: "2026-02-06" }],
+  10,
+)
+check(nextDayAfterBreak?.date.getDate() === 9, "the next timetable date should skip school holidays")
+check(nextDayAfterBreak?.dayLabel === 6, "school holidays should not advance the cycle")
 check(
   getDayLabelForDate(
     new Date(2026, 1, 2),

@@ -423,6 +423,33 @@ export function getDayLabelForDate(
   return (schoolDayCount % length) + 1
 }
 
+/** Find the next calendar date that has a timetable day. */
+export function getNextTimetableDay(
+  date: Date,
+  day1Starts: string,
+  holidays: SchoolHoliday[],
+  cycleLength = 10,
+  weekendTimetables = false,
+): { date: Date; dayLabel: TimetableDayLabel } | null {
+  const candidate = new Date(date)
+
+  // ponytail: one year covers normal school breaks; lift the cap if multi-year
+  // timetable pauses ever become a supported use case.
+  for (let offset = 1; offset <= 366; offset++) {
+    candidate.setDate(candidate.getDate() + 1)
+    const dayLabel = getDayLabelForDate(
+      candidate,
+      day1Starts,
+      holidays,
+      cycleLength,
+      weekendTimetables,
+    )
+    if (dayLabel !== null) return { date: candidate, dayLabel }
+  }
+
+  return null
+}
+
 /**
  * Find the timetable entries for a given day label.
  */

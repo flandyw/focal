@@ -30,6 +30,7 @@ import {
 import {
   getCurrentPeriodInfo,
   getDayLabelForDate,
+  getNextTimetableDay,
   getTimetablePeriodError,
   getTimetablePeriodsForDay,
   isTimetableBreakLabel,
@@ -153,6 +154,7 @@ function DayCard({
   subjects,
   isSelected,
   isToday,
+  isNextSchoolDay,
   now,
   showLocations,
   showBreaks,
@@ -166,6 +168,7 @@ function DayCard({
   subjects: Map<string, Subject>
   isSelected: boolean
   isToday: boolean
+  isNextSchoolDay: boolean
   now: Date
   showLocations: boolean
   showBreaks: boolean
@@ -185,6 +188,7 @@ function DayCard({
         "h-full min-w-0 gap-0 py-0 transition-colors",
         isSelected && "ring-primary/45",
         isToday && "bg-primary/[0.025] ring-primary/60",
+        isNextSchoolDay && "bg-primary/[0.025] ring-primary/60",
       )}
     >
       <CardHeader className="border-b border-border/70 px-3 py-3">
@@ -192,6 +196,7 @@ function DayCard({
           <div className="flex items-center gap-2">
             <CardTitle>Day {dayLabel}</CardTitle>
             {isToday && <Badge variant="secondary">Today</Badge>}
+            {isNextSchoolDay && <Badge variant="secondary">Next school day</Badge>}
           </div>
           <p className="mt-0.5 text-caption text-muted-foreground">{WEEKDAY_SHORT[weekday] ?? "Day"} · {visiblePeriods.length} {visiblePeriods.length === 1 ? "entry" : "entries"}</p>
         </button>
@@ -283,7 +288,17 @@ export const TimetableView = memo(function TimetableView({
 }: TimetableViewProps) {
   const [config, setConfig] = useState<TimetableConfig>(getTimetableConfig)
   const [now, setNow] = useState(() => new Date())
-  const [selectedDay, setSelectedDay] = useState<TimetableDayLabel>(() => dayForDate(getTimetableConfig(), new Date()) ?? 1)
+  const [selectedDay, setSelectedDay] = useState<TimetableDayLabel>(() => {
+    const todayDay = dayForDate(config, now)
+    if (todayDay !== null) return todayDay
+    return getNextTimetableDay(
+      now,
+      config.day1Starts,
+      config.holidays,
+      getCycleLength(config),
+      getWeekendTimetables(config),
+    )?.dayLabel ?? 1
+  })
   const [managerOpen, setManagerOpen] = useState(false)
   const [editingDay, setEditingDay] = useState<TimetableDayLabel>(selectedDay)
   const focusPriorities = useMemo(readFocusPriorities, [])
@@ -316,6 +331,13 @@ export const TimetableView = memo(function TimetableView({
 
   const cycleLength = getCycleLength(config)
   const todayDay = dayForDate(config, now)
+  const nextTimetableDay = todayDay === null ? getNextTimetableDay(
+    now,
+    config.day1Starts,
+    config.holidays,
+    cycleLength,
+    getWeekendTimetables(config),
+  ) : null
   const computedCalendarDay = getDayLabelForDate(
     now,
     config.day1Starts,
@@ -352,8 +374,9 @@ export const TimetableView = memo(function TimetableView({
     setSelectedDay(nextBlock * DAYS_PER_BLOCK + 1)
   }
 
-  const goToToday = () => {
-    if (todayDay) setSelectedDay(todayDay)
+  const goToRelevantDay = () => {
+    const day = todayDay ?? nextTimetableDay?.dayLabel
+    if (day) setSelectedDay(day)
   }
 
   const clearDayOverride = () => {
@@ -408,7 +431,9 @@ export const TimetableView = memo(function TimetableView({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={goToToday} disabled={!todayDay}>Today</Button>
+            <Button type="button" variant="outline" size="sm" onClick={goToRelevantDay} disabled={!todayDay && !nextTimetableDay}>
+              {todayDay ? "Today" : "Next school day"}
+            </Button>
             <Button type="button" size="sm" onClick={() => openManager()}>
               <Settings2 />
               Manage
@@ -425,7 +450,11 @@ export const TimetableView = memo(function TimetableView({
                 <CalendarOff className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">No timetable today</p>
-                  <p className="text-caption text-muted-foreground">Weekend, holiday, or before the cycle starts.</p>
+                  <p className="text-caption text-muted-foreground">
+                    {nextTimetableDay
+                      ? `Next up: ${nextTimetableDay.date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })} · Day ${nextTimetableDay.dayLabel}`
+                      : "Weekend, holiday, or before the cycle starts."}
+                  </p>
                 </div>
               </div>
             ) : liveInfo.current ? (
@@ -482,7 +511,7 @@ export const TimetableView = memo(function TimetableView({
                       variant={selectedDay === day ? "secondary" : "ghost"}
                       onClick={() => setSelectedDay(day)}
                       aria-pressed={selectedDay === day}
-                      className={cn(todayDay === day && selectedDay !== day && "text-primary")}
+                      className={cn((todayDay === day || nextTimetableDay?.dayLabel === day) && selectedDay !== day && "text-primary")}
                     >
                       Day {day}
                     </Button>
@@ -511,6 +540,7 @@ export const TimetableView = memo(function TimetableView({
                     subjects={subjects}
                     isSelected={selectedDay === day}
                     isToday={todayDay === day}
+                    isNextSchoolDay={todayDay === null && nextTimetableDay?.dayLabel === day}
                     now={now}
                     showLocations={viewSettings.showLocations}
                     showBreaks={viewSettings.showBreaks}

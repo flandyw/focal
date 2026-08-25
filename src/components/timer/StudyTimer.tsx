@@ -12,7 +12,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "sonner";
 import {
   Check,
-  ChevronDown,
+  ChevronRight,
   Coffee,
   ExternalLink,
   Flame,
@@ -31,6 +31,11 @@ import { SubjectPicker } from "@/components/timer/SubjectPicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   VCE_SUBJECTS,
   type Project,
@@ -1006,44 +1011,53 @@ const StudyTimerInner = memo(function StudyTimerInner({
         onDiscard={handleRecoveryDiscard}
       />
 
-      <section className="min-w-0 border-t border-sidebar-border/70" aria-label="Focus timer">
-        <div className="flex items-center gap-1 p-2">
-          <Button
-            variant="ghost"
-            className="min-w-0 flex-1 justify-start"
-            onClick={() => setExpanded((current) => !current)}
-            aria-expanded={expanded}
-          >
-            <Timer />
-            <span className="font-heading tabular-nums">
-              {running || activeSessionId || mode !== "work" ? timeDisplay : "Focus"}
-            </span>
-            <span className="ml-auto truncate text-xs text-muted-foreground">
-              {isFocus ? subjectLabel : modeLabel}
-            </span>
-            <ChevronDown className={cn("transition-transform", expanded && "rotate-180")} />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant={running ? "outline" : "default"}
-            onClick={() => void handleToggle()}
-            disabled={saving || (isFocus && !canStartFocus && !activeSessionId)}
-            aria-label={timerActionLabel}
-          >
-            {running ? <Pause /> : <Play />}
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={() => setFocusView(true)}
-            aria-label="Open focus view"
-          >
-            <Maximize2 />
-          </Button>
-        </div>
+      <Popover open={expanded} onOpenChange={setExpanded}>
+        <section className="min-w-0 border-t border-sidebar-border/70" aria-label="Focus timer">
+          <div className="flex items-center gap-1 p-2">
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                className="min-w-0 flex-1 justify-start"
+              >
+                <Timer />
+                <span className="font-heading tabular-nums">
+                  {running || activeSessionId || mode !== "work" ? timeDisplay : "Focus"}
+                </span>
+                <span className="ml-auto truncate text-xs text-muted-foreground">
+                  {isFocus ? subjectLabel : modeLabel}
+                </span>
+                <ChevronRight className={cn("transition-transform", expanded && "rotate-180")} />
+              </Button>
+            </PopoverTrigger>
+            <Button
+              size="icon-xs"
+              variant={running ? "outline" : "default"}
+              onClick={() => void handleToggle()}
+              disabled={saving || (isFocus && !canStartFocus && !activeSessionId)}
+              aria-label={timerActionLabel}
+            >
+              {running ? <Pause /> : <Play />}
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={() => setFocusView(true)}
+              aria-label="Open focus view"
+            >
+              <Maximize2 />
+            </Button>
+          </div>
+        </section>
 
-        {expanded && (
-          <div className="space-y-3 px-3 pb-3">
+        <PopoverContent
+          side="right"
+          align="end"
+          sideOffset={8}
+          collisionPadding={8}
+          aria-label="Focus timer controls"
+          className="w-[min(22rem,var(--radix-popover-content-available-width))] gap-0 p-0"
+        >
+          <div className="space-y-3 p-3">
             <div className="flex items-center justify-between gap-2">
               <Badge variant={activeSessionId ? "success" : "secondary"}>
                 {activeSessionId
@@ -1401,8 +1415,8 @@ const StudyTimerInner = memo(function StudyTimerInner({
               </div>
             </details>
           </div>
-        )}
-      </section>
+        </PopoverContent>
+      </Popover>
     </>
   );
 });

@@ -2086,8 +2086,8 @@ function App() {
                 className="min-h-0 h-full shrink-0"
                 style={{
                   width: sidebarCollapsed
-                    ? "4.25rem"
-                    : "clamp(13rem, 23vw, 18rem)",
+                    ? "4rem"
+                    : "16rem",
                 }}
                 transition={layoutTransition}
               >

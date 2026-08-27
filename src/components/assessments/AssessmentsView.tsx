@@ -2,14 +2,18 @@ import { memo, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   Archive,
   ArrowUpDown,
+  BookOpen,
   CheckCircle2,
   ChevronDown,
   CircleDot,
+  Clock3,
+  Files,
   FolderOpen,
   ListChecks,
   Plus,
   Search,
   Star,
+  TriangleAlert,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -26,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { sortProjects, type ProjectSortKey } from "@/hooks/useProjects";
 import type { Project, StudySession } from "@/lib/types";
-import { getSubjectById } from "@/lib/utils";
+import { getSubjectById, isOverdue } from "@/lib/utils";
 
 type FilterMode = "active" | "favorites" | "finished" | "archived";
 
@@ -100,6 +104,7 @@ export const AssessmentsView = memo(function AssessmentsView({
   onBulkDelete,
 }: AssessmentsViewProps) {
   const [filterMode, setFilterMode] = useState<FilterMode>("active");
+  const [subjectId, setSubjectId] = useState("all");
   const [query, setQuery] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
@@ -136,6 +141,7 @@ export const AssessmentsView = memo(function AssessmentsView({
     let finished = 0;
     let archived = 0;
     let dueSoon = 0;
+    let overdue = 0;
     const now = Date.now();
     const nextWeek = now + 7 * 24 * 60 * 60 * 1000;
     for (const project of projects) {
@@ -146,14 +152,14 @@ export const AssessmentsView = memo(function AssessmentsView({
         if (project.isFavorite) favorites += 1;
         const deadline = project.deadline ? new Date(project.deadline).getTime() : Number.NaN;
         if (Number.isFinite(deadline) && deadline >= now && deadline <= nextWeek) dueSoon += 1;
+        if (project.deadline && isOverdue(project.deadline)) overdue += 1;
       }
     }
-    return { active, favorites, finished, archived, dueSoon };
-  }, [projects]);
+    const materials = Object.values(fileCounts).reduce((total, count) => total + count, 0);
+    return { active, favorites, finished, archived, dueSoon, overdue, materials };
+  }, [fileCounts, projects]);
 
-  const filtered = useMemo(() => {
-    const normalisedQuery = query.trim().toLocaleLowerCase();
-    return sortProjects(projects, sortKey, fileCounts).filter((project) => {
+  const statusProjects = useMemo(() => projects.filter((project) => {
       const inFilter = filterMode === "archived"
         ? project.isArchived
         : filterMode === "finished"
@@ -161,31 +167,36 @@ export const AssessmentsView = memo(function AssessmentsView({
           : filterMode === "favorites"
             ? project.isFavorite && !project.isFinished && !project.isArchived
             : !project.isFinished && !project.isArchived;
-      if (!inFilter) return false;
+      return inFilter;
+    }), [filterMode, projects]);
+
+  const subjectTabs = useMemo(() => {
+    const tabs = new Map<string, { label: string; count: number }>();
+    for (const project of statusProjects) {
+      const subject = getSubjectById(project.subjectId);
+      const id = project.subjectId ?? "unassigned";
+      const current = tabs.get(id);
+      tabs.set(id, { label: subject?.name ?? "Unassigned", count: (current?.count ?? 0) + 1 });
+    }
+    return [...tabs.entries()]
+      .map(([id, tab]) => ({ id, ...tab }))
+      .sort((a, b) => a.id === "unassigned" ? 1 : b.id === "unassigned" ? -1 : a.label.localeCompare(b.label));
+  }, [statusProjects]);
+
+  const selectedSubjectId = subjectId === "all" || subjectTabs.some((tab) => tab.id === subjectId)
+    ? subjectId
+    : "all";
+
+  const filtered = useMemo(() => {
+    const normalisedQuery = query.trim().toLocaleLowerCase();
+    return sortProjects(statusProjects, sortKey, fileCounts).filter((project) => {
+      if (selectedSubjectId !== "all" && (project.subjectId ?? "unassigned") !== selectedSubjectId) return false;
       if (!normalisedQuery) return true;
       const subject = getSubjectById(project.subjectId);
       return [project.name, project.description, subject?.name, subject?.shortCode]
         .some((value) => value?.toLocaleLowerCase().includes(normalisedQuery));
     });
-  }, [fileCounts, filterMode, projects, query, sortKey]);
-
-  const groups = useMemo(() => {
-    const bySubject = new Map<string, { label: string; color?: string; projects: Project[] }>();
-    for (const project of filtered) {
-      const subject = getSubjectById(project.subjectId);
-      const key = project.subjectId ?? "unassigned";
-      const group = bySubject.get(key);
-      if (group) group.projects.push(project);
-      else bySubject.set(key, {
-        label: subject?.name ?? "Unassigned",
-        color: subject?.color,
-        projects: [project],
-      });
-    }
-    return [...bySubject.entries()]
-      .sort(([a, aGroup], [b, bGroup]) => a === "unassigned" ? 1 : b === "unassigned" ? -1 : aGroup.label.localeCompare(bGroup.label))
-      .map(([id, group]) => ({ id, ...group }));
-  }, [filtered]);
+  }, [fileCounts, query, selectedSubjectId, sortKey, statusProjects]);
 
   const selectedIds = filtered.filter((project) => selectedProjectIds.has(project.id)).map((project) => project.id);
   const allSelected = filtered.length > 0 && selectedIds.length === filtered.length;
@@ -198,6 +209,9 @@ export const AssessmentsView = memo(function AssessmentsView({
     });
   };
   const sortLabel = SORT_OPTIONS.find((option) => option.key === sortKey)?.label ?? "Sort";
+  const selectedSubjectLabel = selectedSubjectId === "all"
+    ? "All subjects"
+    : subjectTabs.find((tab) => tab.id === selectedSubjectId)?.label ?? "All subjects";
 
   return (
     <div
@@ -215,38 +229,81 @@ export const AssessmentsView = memo(function AssessmentsView({
           </div>
         </div>
       )}
-      <header className="border-b bg-card/35 px-6 py-5 lg:px-8">
-        <div className="mx-auto flex max-w-6xl items-start justify-between gap-4">
+      <header className="border-b border-border/70 px-6 pb-0 pt-6 lg:px-10 lg:pt-8">
+        <div className="mx-auto flex max-w-[94rem] items-start justify-between gap-6">
           <div>
             <p className="text-micro font-semibold uppercase tracking-wider text-muted-foreground">Study library</p>
-            <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">Assessments</h1>
+            <h1 className="mt-1 font-display text-3xl font-semibold tracking-[-0.035em]">Assessments</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Keep assessment materials, deadlines and study work together.
+              All your assessment materials, deadlines and study work in one place.
             </p>
           </div>
-          <Button onClick={onNewProject}>
+          <Button className="mt-1" onClick={onNewProject}>
             <Plus />
             New assessment
           </Button>
         </div>
-        <div className="mx-auto mt-5 grid max-w-6xl grid-cols-3 gap-2">
-          <div className="rounded-lg border bg-background/70 px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">Current</p>
-            <p className="mt-0.5 font-heading text-xl font-semibold tabular-nums">{counts.active}</p>
+        <div className="mx-auto mt-7 grid max-w-[94rem] grid-cols-2 divide-x divide-border/70 overflow-hidden sm:grid-cols-3 lg:grid-cols-5">
+          <div className="px-0 pb-5 pr-5">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><BookOpen className="size-3.5" />Current</p>
+            <p className="mt-1.5 font-heading text-2xl font-semibold tabular-nums">{counts.active}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">Across {subjectTabs.length} subjects</p>
           </div>
-          <div className="rounded-lg border bg-background/70 px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">Due in 7 days</p>
-            <p className="mt-0.5 font-heading text-xl font-semibold tabular-nums">{counts.dueSoon}</p>
+          <div className="px-5 pb-5">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-3.5" />Due in 7 days</p>
+            <p className="mt-1.5 font-heading text-2xl font-semibold tabular-nums">{counts.dueSoon}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">Needs attention soon</p>
           </div>
-          <div className="rounded-lg border bg-background/70 px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">Completed</p>
-            <p className="mt-0.5 font-heading text-xl font-semibold tabular-nums">{counts.finished}</p>
+          <div className="hidden px-5 pb-5 sm:block">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><TriangleAlert className="size-3.5" />Overdue</p>
+            <p className="mt-1.5 font-heading text-2xl font-semibold tabular-nums">{counts.overdue}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">Past deadline</p>
+          </div>
+          <div className="hidden px-5 pb-5 lg:block">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5" />Completed</p>
+            <p className="mt-1.5 font-heading text-2xl font-semibold tabular-nums">{counts.finished}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">Finished work</p>
+          </div>
+          <div className="hidden px-5 pb-5 lg:block">
+            <p className="flex items-center gap-2 text-xs text-muted-foreground"><Files className="size-3.5" />Materials</p>
+            <p className="mt-1.5 font-heading text-2xl font-semibold tabular-nums">{counts.materials}</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">Resources and notes</p>
           </div>
         </div>
       </header>
 
-      <div className="border-b px-6 py-3 lg:px-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+      <div className="border-b border-border/70 px-6 lg:px-10">
+        <div className="mx-auto flex max-w-[94rem] items-center gap-1 overflow-x-auto py-0" role="tablist" aria-label="Assessment subjects">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={selectedSubjectId === "all"}
+            onClick={() => setSubjectId("all")}
+            className={selectedSubjectId === "all"
+              ? "relative shrink-0 px-3 py-3 text-xs font-medium text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-primary"
+              : "shrink-0 px-3 py-3 text-xs text-muted-foreground transition-colors hover:text-foreground"}
+          >
+            All subjects
+          </button>
+          {subjectTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedSubjectId === tab.id}
+              onClick={() => setSubjectId(tab.id)}
+              className={selectedSubjectId === tab.id
+                ? "relative shrink-0 px-3 py-3 text-xs font-medium text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-primary"
+                : "shrink-0 px-3 py-3 text-xs text-muted-foreground transition-colors hover:text-foreground"}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-b border-border/70 px-6 py-3 lg:px-10">
+        <div className="mx-auto flex max-w-[94rem] flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label="Filter assessments">
             {FILTERS.map(({ mode, label, icon: Icon }) => (
               <Button
@@ -256,16 +313,17 @@ export const AssessmentsView = memo(function AssessmentsView({
                 onClick={() => {
                   clearSelection();
                   setFilterMode(mode);
+                  setSubjectId("all");
                 }}
                 aria-pressed={filterMode === mode}
               >
-                <Icon />
+                <Icon className="max-[1200px]:hidden" />
                 {label}
-                <span className="text-xs tabular-nums text-muted-foreground">{filterCount(mode)}</span>
+                <span className="text-xs tabular-nums text-muted-foreground max-[1200px]:hidden">{filterCount(mode)}</span>
               </Button>
             ))}
           </div>
-          <div className="relative ml-auto min-w-52 flex-1 sm:max-w-xs">
+          <div className="relative ml-auto min-w-48 flex-1 sm:max-w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               type="search"
@@ -298,25 +356,31 @@ export const AssessmentsView = memo(function AssessmentsView({
             </DropdownMenuContent>
           </DropdownMenu>
           {filtered.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={toggleAll} aria-pressed={allSelected}>
+            <Button variant="ghost" size="sm" onClick={toggleAll} aria-pressed={allSelected} title={allSelected ? "Clear selection" : "Select all assessments"}>
               <ListChecks />
-              {allSelected ? "Clear" : "Select all"}
+              <span className="max-[1050px]:hidden">{allSelected ? "Clear" : "Select all"}</span>
             </Button>
           )}
         </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto max-w-6xl space-y-6 px-6 py-6 lg:px-8">
-          {groups.length > 0 ? groups.map((group) => (
-            <section key={group.id} aria-labelledby={`assessment-group-${group.id}`}>
-              <div className="mb-2.5 flex items-center gap-2">
-                <span className="size-2 rounded-full bg-muted-foreground/50" style={group.color ? { backgroundColor: group.color } : undefined} />
-                <h2 id={`assessment-group-${group.id}`} className="text-sm font-semibold">{group.label}</h2>
-                <span className="text-xs tabular-nums text-muted-foreground">{group.projects.length}</span>
+        <div className="mx-auto max-w-[94rem] px-6 py-5 lg:px-10">
+          <div className="mb-4 flex items-baseline gap-2">
+            <h2 className="font-display text-xl font-semibold tracking-tight">{selectedSubjectLabel}</h2>
+            <span className="text-xs tabular-nums text-muted-foreground">{filtered.length} assessments</span>
+          </div>
+          {filtered.length > 0 ? (
+            <section aria-label={`${selectedSubjectLabel} assessments`} className="border-y border-border/70">
+              <div className="grid grid-cols-[auto_auto_minmax(0,1fr)_2rem] items-center gap-3 border-b border-border/70 px-3 py-2 text-micro font-medium uppercase tracking-wide text-muted-foreground min-[760px]:grid-cols-[auto_auto_minmax(0,1fr)_8rem_2rem] min-[1100px]:grid-cols-[auto_auto_minmax(0,1fr)_5rem_8rem_8rem_2rem]">
+                <span className="col-span-3">Assessment</span>
+                <span className="hidden min-[1100px]:block">Materials</span>
+                <span className="hidden min-[1100px]:block">Status</span>
+                <span className="hidden min-[760px]:block">Due date</span>
+                <span className="sr-only">Actions</span>
               </div>
-              <div className="grid gap-2 lg:grid-cols-2">
-                {group.projects.map((project) => (
+              <div>
+                {filtered.map((project) => (
                   <AssessmentRow
                     key={project.id}
                     project={project}
@@ -340,8 +404,8 @@ export const AssessmentsView = memo(function AssessmentsView({
                 ))}
               </div>
             </section>
-          )) : (
-            <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed bg-card/30 px-6 text-center">
+          ) : (
+            <div className="flex min-h-72 flex-col items-center justify-center border-y border-dashed px-6 text-center">
               <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground"><FolderOpen /></span>
               <h2 className="mt-4 font-display text-lg font-semibold">
                 {query.trim() ? "No matching assessments" : filterMode === "active" ? "No current assessments" : `No ${FILTERS.find((filter) => filter.mode === filterMode)?.label.toLocaleLowerCase()} assessments`}
@@ -354,7 +418,7 @@ export const AssessmentsView = memo(function AssessmentsView({
               ) : filterMode === "active" ? (
                 <Button className="mt-4" onClick={onNewProject}><Plus />New assessment</Button>
               ) : (
-                <Button variant="outline" className="mt-4" onClick={() => setFilterMode("active")}>Show current</Button>
+                <Button variant="outline" className="mt-4" onClick={() => { setFilterMode("active"); setSubjectId("all"); }}>Show current</Button>
               )}
             </div>
           )}
@@ -362,8 +426,8 @@ export const AssessmentsView = memo(function AssessmentsView({
       </ScrollArea>
 
       {selectedIds.length > 0 && (
-        <div className="border-t bg-card px-6 py-2.5 lg:px-8" role="region" aria-label="Selected assessment actions">
-          <div className="mx-auto flex max-w-6xl items-center gap-2">
+        <div className="border-t bg-card px-6 py-2.5 lg:px-10" role="region" aria-label="Selected assessment actions">
+          <div className="mx-auto flex max-w-[94rem] items-center gap-2">
             <span className="mr-auto text-sm font-medium tabular-nums">{selectedIds.length} selected</span>
             <Button variant="ghost" size="sm" onClick={() => selectedIds.forEach(onToggleProjectSelection)}>Clear</Button>
             {filterMode === "archived" ? (

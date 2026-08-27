@@ -79,7 +79,6 @@ interface DestinationButtonProps {
   selected: boolean;
   collapsed: boolean;
   onClick: () => void;
-  wide?: boolean;
 }
 
 function DestinationButton({
@@ -89,7 +88,6 @@ function DestinationButton({
   selected,
   collapsed,
   onClick,
-  wide,
 }: DestinationButtonProps) {
   return (
     <Button
@@ -100,10 +98,9 @@ function DestinationButton({
       aria-label={accessibleLabel === label && !collapsed ? undefined : accessibleLabel}
       aria-current={selected ? "page" : undefined}
       className={cn(
-        "min-w-0 text-muted-foreground",
-        !collapsed && "h-9 justify-start px-2.5",
-        selected && "bg-sidebar-accent text-sidebar-accent-foreground",
-        wide && !collapsed && "col-span-2 justify-center",
+        "min-w-0 rounded-lg text-muted-foreground transition-colors",
+        !collapsed && "h-10 w-full justify-start gap-3 px-3",
+        selected && "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--sidebar-primary),transparent_78%)]",
       )}
     >
       <Icon />
@@ -144,14 +141,14 @@ export const Sidebar = memo(function Sidebar({
   return (
     <aside
       aria-label="Primary navigation and focus timer"
-      className="flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border/90 bg-sidebar text-sidebar-foreground shadow-[1px_0_0_color-mix(in_oklch,var(--border),transparent_45%)]"
+      className="flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border/80 bg-sidebar text-sidebar-foreground"
     >
-      <div className={cn("border-b border-sidebar-border/70 bg-background/20 py-3", isCollapsed ? "px-1.5" : "px-3")}>
+      <div className={cn("py-4", isCollapsed ? "px-2" : "px-4")}>
         <div className={cn("flex items-center gap-2.5", isCollapsed && "justify-center gap-1")}>
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary ring-1 ring-primary/20">
             <CircleDot className="size-4" aria-hidden />
           </span>
-          <CollapsibleInline show={!isCollapsed} className="font-display text-sm font-semibold tracking-tight">
+          <CollapsibleInline show={!isCollapsed} className="font-display text-base font-semibold tracking-tight">
             Focal
           </CollapsibleInline>
           <Button
@@ -167,46 +164,33 @@ export const Sidebar = memo(function Sidebar({
         </div>
       </div>
 
-      {!isCollapsed && (
-        <div className="min-h-0 flex-1">
-          <Suspense fallback={null}>
-            <StudyTimer
-              prominent
-              customSubjects={customSubjects}
-              availableSubjects={availableSubjects}
-              sessions={sessions}
-              selectedProject={selectedProject}
-              onSearch={onSearch}
-              onSettings={onSettings}
-              onStartSession={onStartPomodoroSession}
-              onUpdateSession={onUpdatePomodoroSession}
-              onDeleteSession={onDeletePomodoroSession}
-            />
-          </Suspense>
-        </div>
-      )}
-
       <nav
         aria-label="Workspace"
         className={cn(
-          "border-t border-sidebar-border/70 bg-background/15",
-          isCollapsed ? "flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 py-2" : "grid grid-cols-2 gap-1.5 p-2.5",
+          "min-h-0 flex-1 overflow-y-auto",
+          isCollapsed ? "flex flex-col items-center gap-1 px-2 py-2" : "space-y-1 px-3 pb-4 pt-2",
         )}
       >
+        {!isCollapsed && (
+          <p className="mb-2 px-3 text-micro font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+            Workspace
+          </p>
+        )}
         <DestinationButton label="Today" icon={Home} selected={homeSelected} collapsed={isCollapsed} onClick={onSelectHome} />
         <DestinationButton label="Planner" accessibleLabel="Adaptive planner" icon={CalendarClock} selected={plannerSelected} collapsed={isCollapsed} onClick={onSelectPlanner} />
+        <DestinationButton label="Assessments" icon={Library} selected={assessmentsSelected} collapsed={isCollapsed} onClick={onSelectAssessments} />
         <DestinationButton label="Inbox" accessibleLabel="Academic inbox" icon={InboxIcon} selected={inboxSelected} collapsed={isCollapsed} onClick={onSelectInbox} />
         <DestinationButton label="Schedule" icon={CalendarIcon} selected={timetableSelected} collapsed={isCollapsed} onClick={onSelectTimetable} />
         <DestinationButton label="Progress" icon={BarChart3} selected={analyticsSelected} collapsed={isCollapsed} onClick={onSelectAnalytics} />
         <DestinationButton label="Exams" accessibleLabel="Exam practice" icon={GraduationCap} selected={examTrackSelected} collapsed={isCollapsed} onClick={onSelectExamTrack} />
-        <DestinationButton label="Assessments" icon={Library} selected={assessmentsSelected} collapsed={isCollapsed} onClick={onSelectAssessments} wide />
       </nav>
 
-      {isCollapsed && (
+      <div className="shrink-0">
         <Suspense fallback={null}>
           <StudyTimer
-            isCollapsed
-            onExpand={onToggleCollapse}
+            isCollapsed={isCollapsed}
+            prominent={!isCollapsed}
+            onExpand={isCollapsed ? onToggleCollapse : undefined}
             customSubjects={customSubjects}
             availableSubjects={availableSubjects}
             sessions={sessions}
@@ -218,7 +202,7 @@ export const Sidebar = memo(function Sidebar({
             onDeleteSession={onDeletePomodoroSession}
           />
         </Suspense>
-      )}
+      </div>
     </aside>
   );
 });

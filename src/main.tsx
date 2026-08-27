@@ -30,4 +30,12 @@ function renderStartupError(error: unknown) {
   )
 }
 
-void initializeSettingsStorage().then(renderApp, renderStartupError)
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("design-preview")) {
+  document.documentElement.classList.add("dark")
+  void import("@/DesignPreview").then(
+    ({ DesignPreview }) => root.render(<DesignPreview />),
+    renderStartupError,
+  )
+} else {
+  void initializeSettingsStorage().then(renderApp, renderStartupError)
+}

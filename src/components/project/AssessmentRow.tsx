@@ -1,6 +1,7 @@
 import { memo } from "react";
 import {
   CheckCircle2,
+  Circle,
   Copy,
   Link,
   MoreHorizontal,
@@ -11,6 +12,7 @@ import {
   Timer,
   Upload,
   Folder,
+  FileText,
   BookOpen,
   Languages,
   Library,
@@ -140,6 +142,42 @@ export const AssessmentRow = memo(function AssessmentRow({
   const DeadlineIcon = getSidebarDeadlineIcon(project.deadlineType);
   const isMultiSelecting = (selectedProjectIds?.size ?? 0) > 0;
   const isSelected = selectedProjectIds?.has(project.id) ?? false;
+  const checklistCount = project.checklist?.length ?? 0;
+  const completedChecklistCount = project.checklist?.filter((item) => item.completed).length ?? 0;
+  const progress = project.isFinished
+    ? 100
+    : checklistCount > 0
+      ? Math.round((completedChecklistCount / checklistCount) * 100)
+      : 0;
+  const overdue = Boolean(project.deadline && isOverdue(project.deadline));
+  const statusLabel = project.isFinished
+    ? "Completed"
+    : overdue
+      ? "Overdue"
+      : progress > 0
+        ? "In progress"
+        : "Not started";
+  const deadlineLabel = project.deadline
+    ? new Date(project.deadline).toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: new Date(project.deadline).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+      })
+    : "No deadline";
+  const deadlineDays = project.deadline
+    ? Math.ceil((new Date(project.deadline).getTime() - Date.now()) / 86_400_000)
+    : null;
+  const deadlineMeta = project.isFinished
+    ? "Finished"
+    : deadlineDays === null
+      ? "Add a due date"
+      : deadlineDays < 0
+        ? `${Math.abs(deadlineDays)} ${Math.abs(deadlineDays) === 1 ? "day" : "days"} overdue`
+        : deadlineDays === 0
+          ? "Today"
+          : deadlineDays === 1
+            ? "Tomorrow"
+            : `in ${deadlineDays} days`;
 
   const handleProjectClick = () => {
     if (selectedProjectIds && selectedProjectIds.size > 0 && onToggleProjectSelection) {
@@ -158,12 +196,12 @@ export const AssessmentRow = memo(function AssessmentRow({
           aria-label={project.name}
           aria-current={selectedId === project.id ? "page" : undefined}
           className={cn(
-            "group relative flex w-full min-w-0 max-w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md transition-colors",
+            "group relative w-full min-w-0 max-w-full cursor-pointer overflow-hidden transition-colors",
             isCollapsed
-              ? "justify-center px-2 py-1.25"
+              ? "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.25"
               : variant === "homepage"
-                ? "rounded-lg border bg-card px-3 py-3 pr-10 shadow-xs hover:border-primary/25 hover:shadow-sm"
-                : "px-2 py-1.25 pr-8",
+                ? "grid min-h-18 grid-cols-[auto_auto_minmax(0,1fr)_2rem] items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-b-0 hover:bg-muted/35 min-[760px]:grid-cols-[auto_auto_minmax(0,1fr)_8rem_2rem] min-[1100px]:grid-cols-[auto_auto_minmax(0,1fr)_5rem_8rem_8rem_2rem]"
+                : "flex items-center gap-1.5 rounded-md px-2 py-1.25 pr-8",
             selectedId === project.id
               ? "bg-accent text-accent-foreground"
               : "hover:bg-accent hover:text-accent-foreground",
@@ -240,7 +278,7 @@ export const AssessmentRow = memo(function AssessmentRow({
                     </span>
                   )}
                 </div>
-                {fileCounts[project.id] > 0 && (
+                {variant !== "homepage" && fileCounts[project.id] > 0 && (
                   <span
                     className={cn(
                       "ml-2 text-sm text-muted-foreground tabular-nums shrink-0 max-[900px]:hidden inline-block",
@@ -251,12 +289,12 @@ export const AssessmentRow = memo(function AssessmentRow({
                   </span>
                 )}
               </div>
-              {variant === "homepage" && project.description && (
+              {variant === "homepage" && (
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {project.description}
+                  {[subject?.name, project.description].filter(Boolean).join(" · ") || "Unassigned assessment"}
                 </p>
               )}
-              {project.deadline && !project.isFinished && (
+              {variant !== "homepage" && project.deadline && !project.isFinished && (
                 <div className="mt-0.5 flex max-w-full items-center gap-1 overflow-hidden">
                   <span
                     className="flex items-center gap-0.5 text-xs text-muted-foreground/70 select-none max-[900px]:hidden"
@@ -279,8 +317,43 @@ export const AssessmentRow = memo(function AssessmentRow({
               )}
             </div>
           )}
+          {!isCollapsed && variant === "homepage" && (
+            <>
+              <div className="hidden items-center gap-1.5 text-xs tabular-nums text-muted-foreground min-[1100px]:flex">
+                <FileText className="size-3.5" aria-hidden="true" />
+                <span className={cn(bumpProjectIds?.has(project.id) && "animate-badge-bump")}>
+                  {fileCounts[project.id] ?? 0}
+                </span>
+              </div>
+              <div className="hidden min-w-0 min-[1100px]:block">
+                <div className={cn(
+                  "flex items-center gap-1.5 text-xs",
+                  project.isFinished ? "text-success" : overdue ? "text-destructive" : "text-muted-foreground",
+                )}>
+                  {project.isFinished ? <CheckCircle2 className="size-3.5" aria-hidden="true" /> : <Circle className="size-3.5" aria-hidden="true" />}
+                  <span className="truncate">{statusLabel}</span>
+                </div>
+                {!project.isFinished && !overdue && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`${project.name} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} />
+                    </div>
+                    <span className="text-caption tabular-nums text-muted-foreground">{progress}%</span>
+                  </div>
+                )}
+              </div>
+              <div className="hidden min-w-0 min-[760px]:block">
+                <p className={cn("truncate text-xs font-medium", overdue && !project.isFinished ? "text-destructive" : "text-foreground/85")}>
+                  {deadlineLabel}
+                </p>
+                <p className="mt-0.5 truncate text-caption text-muted-foreground">
+                  {deadlineMeta}
+                </p>
+              </div>
+            </>
+          )}
           {!isCollapsed && (
-            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0">
+            <div className={cn("shrink-0", variant === "homepage" ? "relative" : "absolute right-1.5 top-1/2 -translate-y-1/2")}>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

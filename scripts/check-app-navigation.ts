@@ -24,7 +24,9 @@ assert(
 
 const timetable = navigateTo(restored, { kind: "timetable" })
 assert(timetable.destination.kind === "timetable", "primary navigation must be mutually exclusive")
-const examTrack = navigateTo(timetable, { kind: "examtrack" })
+const assessments = navigateTo(timetable, { kind: "assessments" })
+assert(assessments.destination.kind === "assessments", "assessments must be a first-class destination")
+const examTrack = navigateTo(assessments, { kind: "examtrack" })
 assert(examTrack.destination.kind === "examtrack", "ExamTrack must be a first-class destination")
 const planner = navigateTo(examTrack, { kind: "planner" })
 assert(planner.destination.kind === "planner", "adaptive planner must be a first-class destination")
@@ -58,11 +60,15 @@ assert(titleBarSource.includes("onNewSession={onNewSession}"), "the title bar mu
 const sidebarSource = await fetch(
   new URL("../src/components/shell/Sidebar.tsx", import.meta.url),
 ).then((response) => response.text())
-assert(sidebarSource.includes("onOpenFocus: () => void"), "the sidebar must expose the focus flow")
-assert(sidebarSource.includes("Start focus"), "the sidebar must prioritize starting focus")
+assert(sidebarSource.includes("prominent"), "the sidebar must give the timer its primary workspace")
 assert(sidebarSource.includes("Assessments"), "the sidebar must label the assessment library clearly")
 assert(sidebarSource.includes("Adaptive planner"), "the sidebar must expose the adaptive planner")
 assert(sidebarSource.includes("Academic inbox"), "the sidebar must expose the academic inbox")
+
+const studyTimerSource = await fetch(
+  new URL("../src/components/timer/StudyTimer.tsx", import.meta.url),
+).then((response) => response.text())
+assert(studyTimerSource.includes("Start focus"), "the sidebar timer must expose the focus flow")
 
 const appSource = await fetch(new URL("../src/App.tsx", import.meta.url)).then(
   (response) => response.text(),
@@ -70,5 +76,5 @@ const appSource = await fetch(new URL("../src/App.tsx", import.meta.url)).then(
 assert(appSource.includes("onNewAssessment={handleNewProject}"), "the global New menu must create assessments")
 assert(appSource.includes("onNewEvent={() => handleOpenNewEvent()}"), "the global New menu must create events")
 assert(appSource.includes("onNewSession={() => handleOpenNewSession()}"), "the global New menu must create study sessions")
-assert(appSource.includes("onOpenFocus={handleOpenFocus}"), "the app must connect the sidebar to focus")
+assert(appSource.includes("onOpenFocus: handleOpenFocus"), "the app must keep the focus keyboard shortcut connected")
 assert(appSource.includes('label: "Add files"'), "new assessments must offer the next core action")

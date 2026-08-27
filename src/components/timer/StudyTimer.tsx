@@ -78,6 +78,7 @@ import { notifyTimerBlock, playTimerChime } from "@/lib/timerAlerts";
 
 interface StudyTimerProps {
   isCollapsed?: boolean;
+  prominent?: boolean;
   onExpand?: () => void;
   customSubjects?: Subject[];
   availableSubjects?: Subject[];
@@ -138,6 +139,7 @@ function closedBlocks(intervals: StudySession["execution"]["intervals"]) {
 
 const StudyTimerInner = memo(function StudyTimerInner({
   isCollapsed = false,
+  prominent = false,
   onExpand,
   customSubjects = [],
   availableSubjects,
@@ -934,8 +936,8 @@ const StudyTimerInner = memo(function StudyTimerInner({
     }
 
     return (
-      <section className="min-w-0 border-t border-sidebar-border/70" aria-label="ExamTrack timer">
-        <div className="space-y-3 p-3">
+      <section className={cn("min-w-0 border-t border-sidebar-border/70", prominent && "h-full overflow-y-auto")} aria-label="ExamTrack timer">
+        <div className={cn("space-y-3 p-3", prominent && "flex min-h-full flex-col justify-center")}>
           <div className="flex items-center gap-2">
             <Badge variant={externalRunning ? "success" : "secondary"}>ExamTrack</Badge>
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
@@ -992,6 +994,133 @@ const StudyTimerInner = memo(function StudyTimerInner({
             <Maximize2 />
           </Button>
         </div>
+      </>
+    );
+  }
+
+  if (prominent) {
+    return (
+      <>
+        {focusPortal}
+        <RecoveryDialog
+          open={recoveryDialogOpen}
+          onOpenChange={setRecoveryDialogOpen}
+          sessionLabel={recoverySession?.title}
+          elapsedLabel={recoverySession ? formatFocusTime(getSessionFocusSeconds(recoverySession, todayNow)) : undefined}
+          ready={!!recoverySession}
+          canDiscard={!!onDeleteSession}
+          onResume={() => setRecoveryDialogOpen(false)}
+          onFinish={handleRecoveryFinish}
+          onDiscard={handleRecoveryDiscard}
+        />
+        <section className="h-full min-h-0 overflow-y-auto p-3" aria-label="Focus timer">
+          <div className="flex min-h-full items-center">
+            <div className="w-full rounded-2xl border border-sidebar-border/80 bg-background/50 p-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Timer className="size-4" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold">Focus timer</p>
+                  <p className="truncate text-micro text-muted-foreground">
+                    {activeSessionId ? running ? "Recording study time" : "Session paused" : "Ready when you are"}
+                  </p>
+                </div>
+                <Button size="icon-xs" variant="ghost" onClick={() => setFocusView(true)} aria-label="Open focus view">
+                  <Maximize2 />
+                </Button>
+              </div>
+
+              <div className="pb-4 pt-5 text-center">
+                <p className="font-heading text-4xl font-semibold tabular-nums tracking-tight">{timeDisplay}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {modeLabel}{isFocus ? ` · ${subjectLabel}` : " · not added to study time"}
+                </p>
+                <div
+                  role="progressbar"
+                  aria-label={`${modeLabel} progress`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={progressPercent}
+                  className="mt-3 h-1 overflow-hidden rounded-full bg-muted"
+                >
+                  <div
+                    className={cn("h-full rounded-full transition-[width] duration-1000 motion-reduce:transition-none", isFocus ? "bg-primary" : "bg-success")}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mb-3 flex items-center justify-between border-y border-sidebar-border/70 py-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><Flame className="size-3.5" />Today</span>
+                <span className="tabular-nums">
+                  {todayStats.blocks} {todayStats.blocks === 1 ? "block" : "blocks"}
+                  {todayStats.seconds >= 60 && ` · ${formatFocusTime(todayStats.seconds)}`}
+                </span>
+              </div>
+
+              {mode === "work" && !activeSessionId && (
+                <div className="space-y-3">
+                  <SubjectPicker
+                    variant="select"
+                    subjects={subjects}
+                    selectedSubjectIds={validSelectedSubjectIds}
+                    activeSessionId={null}
+                    disabled={saving}
+                    onSubjectClick={handleSubjectClick}
+                    onManageSubjects={onSettings}
+                  />
+                  <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted/55 p-1" aria-label="Focus length">
+                    {[25, 45, 60].map((minutes) => (
+                      <Button
+                        key={minutes}
+                        size="xs"
+                        variant={settings.workMinutes === minutes ? "secondary" : "ghost"}
+                        onClick={() => updateDuration("workMinutes", String(minutes))}
+                      >
+                        {minutes} min
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3">
+                {isFocus ? (
+                  <div className={cn("grid gap-1.5", activeSessionId ? "grid-cols-2" : "grid-cols-1")}>
+                    <Button onClick={() => void handleToggle()} disabled={saving || (!activeSessionId && !canStartFocus)}>
+                      {running ? <Pause /> : <Play />}{timerActionLabel}
+                    </Button>
+                    {activeSessionId && (
+                      <Button variant="outline" onClick={() => void handleFinish()} disabled={saving}><Check />Finish</Button>
+                    )}
+                  </div>
+                ) : isFreeStudy ? (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button onClick={() => void handleToggle()} disabled={saving}><Play />Continue</Button>
+                    <Button variant="outline" onClick={() => void handleFinish()} disabled={saving}><Check />Finish</Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button onClick={() => void handleToggle()} disabled={saving}>{running ? <Pause /> : <Coffee />}{running ? "Pause" : "Resume"}</Button>
+                    <Button variant="outline" onClick={() => void handleSkipBreak()} disabled={saving}><SkipForward />Skip</Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-1.5 flex items-center gap-1">
+                {mode === "work" && !activeSessionId && (
+                  <Button className="min-w-0 flex-1" size="xs" variant="ghost" onClick={() => void handleStartFreeStudy()} disabled={!canStartFocus}>
+                    <Timer />Free study
+                  </Button>
+                )}
+                <Button className="ml-auto" size="xs" variant="ghost" onClick={() => void handleReset()} disabled={saving}>
+                  <RotateCcw />Reset
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
       </>
     );
   }

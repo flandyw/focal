@@ -123,6 +123,7 @@ const AdaptivePlannerView = lazy(() => import("@/components/planning/AdaptivePla
 const AcademicInboxView = lazy(() => import("@/components/inbox/AcademicInboxView").then((m) => ({ default: m.AcademicInboxView })));
 const ProjectDetail = lazy(() => import("@/components/project/ProjectDetail").then((m) => ({ default: m.ProjectDetail })));
 const HomeView = lazy(() => import("@/components/home/HomeView").then((m) => ({ default: m.HomeView })));
+const AssessmentsView = lazy(() => import("@/components/assessments/AssessmentsView").then((m) => ({ default: m.AssessmentsView })));
 const ProjectDialog = lazy(() => import("@/components/project/ProjectDialog").then((m) => ({ default: m.ProjectDialog })));
 const ProjectTemplateDialog = lazy(() => import("@/components/project/ProjectTemplateDialog").then((m) => ({ default: m.ProjectTemplateDialog })));
 const StudySessionDialog = lazy(() => import("@/components/planning/StudySessionDialog").then((m) => ({ default: m.StudySessionDialog })));
@@ -242,6 +243,7 @@ function App() {
   const {
     selectedId,
     homeSelected,
+    assessmentsView,
     settingsView,
     analyticsView,
     examTrackView,
@@ -524,6 +526,10 @@ function App() {
 
   const handleSelectHome = useCallback(() => {
     navigation.selectHome();
+  }, [navigation]);
+
+  const handleSelectAssessments = useCallback(() => {
+    navigation.selectAssessments();
   }, [navigation]);
 
   const handleSelectTimetable = useCallback(() => {
@@ -1988,6 +1994,8 @@ function App() {
 
   const contentKey = settingsView
     ? "settings"
+    : assessmentsView
+      ? "assessments"
     : examTrackView
       ? "examtrack"
     : plannerView
@@ -2005,6 +2013,8 @@ function App() {
             : "empty";
   const viewLabel = settingsView
     ? "Settings"
+    : assessmentsView
+      ? "Assessments"
     : examTrackView
       ? "Exam practice"
       : plannerView
@@ -2082,51 +2092,31 @@ function App() {
                 transition={layoutTransition}
               >
                 <Sidebar
-                  projects={projects}
                   sessions={sessions}
                   customSubjects={customSubjects}
                   availableSubjects={availableSubjects}
-                  selectedId={selectedId}
+                  selectedProject={selectedProject ?? undefined}
                   homeSelected={homeSelected}
+                  assessmentsSelected={assessmentsView}
                   plannerSelected={plannerView}
                   inboxSelected={inboxView}
                   analyticsSelected={analyticsView}
                   examTrackSelected={examTrackView}
                   isCollapsed={sidebarCollapsed}
                   onToggleCollapse={handleToggleCollapse}
-                  onSelect={handleSelectProject}
                   onSelectHome={handleSelectHome}
+                  onSelectAssessments={handleSelectAssessments}
                   onSelectPlanner={handleSelectPlanner}
                   onSelectInbox={handleSelectInbox}
-                  onOpenFocus={handleOpenFocus}
                   onSelectAnalytics={handleSelectAnalytics}
                   onSelectExamTrack={handleSelectExamTrack}
-                  onDelete={handleDeleteProject}
-                  onNewProject={handleNewProject}
-                  onToggleFavorite={handleToggleFavorite}
-                  onToggleArchive={handleToggleArchive}
-                  onToggleFinished={handleToggleFinished}
                   onStartPomodoroSession={handleStartPomodoroSession}
                   onUpdatePomodoroSession={handleUpdatePomodoroSession}
                   onDeletePomodoroSession={handleDeleteStudySession}
-                  onAddFile={handleAddFileFromSidebar}
-                  onOpenProjectSettings={handleOpenProjectSettings}
-                  onDuplicateProject={handleDuplicateProject}
-                  onDropFolder={handleDropFolder}
-                  fileCounts={fileCounts}
-                  bumpProjectIds={bumpProjectIds}
                   onSelectTimetable={handleSelectTimetable}
                   timetableSelected={timetableView}
                   onSearch={() => setSearchOpen(true)}
                   onSettings={navigation.openSettings}
-                  sortKey={sidebarSortKey}
-                  onSortChange={setSidebarSortKey}
-                  selectedProjectIds={selectedProjectIds}
-                  onToggleProjectSelection={handleToggleProjectSelection}
-                  onBulkArchive={handleBulkArchive}
-                  onBulkUnarchive={handleBulkUnarchive}
-                  onBulkFinish={handleBulkFinish}
-                  onBulkDelete={handleBulkDelete}
                 />
               </motion.div>}
               <motion.main
@@ -2214,6 +2204,33 @@ function App() {
                           }}
                           onScanAndImportProjects={scanAndImportProjects}
                           onLinkFolderAsProject={linkFolderAsProject}
+                        />
+                      </Suspense>
+                    ) : assessmentsView ? (
+                      <Suspense fallback={<ViewFallback label="assessments" />}>
+                        <AssessmentsView
+                          projects={projects}
+                          fileCounts={fileCounts}
+                          bumpProjectIds={bumpProjectIds}
+                          sortKey={sidebarSortKey}
+                          onSortChange={setSidebarSortKey}
+                          selectedProjectIds={selectedProjectIds}
+                          onToggleProjectSelection={handleToggleProjectSelection}
+                          onSelectProject={handleSelectProject}
+                          onNewProject={handleNewProject}
+                          onDelete={handleDeleteProject}
+                          onOpenProjectSettings={handleOpenProjectSettings}
+                          onDuplicateProject={handleDuplicateProject}
+                          onToggleFavorite={handleToggleFavorite}
+                          onToggleArchive={handleToggleArchive}
+                          onToggleFinished={handleToggleFinished}
+                          onStartSession={handleStartPomodoroSession}
+                          onAddFile={handleAddFileFromSidebar}
+                          onDropFolder={handleDropFolder}
+                          onBulkArchive={handleBulkArchive}
+                          onBulkUnarchive={handleBulkUnarchive}
+                          onBulkFinish={handleBulkFinish}
+                          onBulkDelete={handleBulkDelete}
                         />
                       </Suspense>
                     ) : examTrackView ? (

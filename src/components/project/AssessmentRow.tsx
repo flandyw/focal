@@ -92,6 +92,7 @@ function getSidebarDeadlineIcon(type?: DeadlineType): LucideIcon {
 
 interface AssessmentRowProps {
   project: Project;
+  variant?: "sidebar" | "homepage";
   isCollapsed: boolean;
   selectedId: string | null;
   selectedProjectIds?: Set<string>;
@@ -116,6 +117,7 @@ interface AssessmentRowProps {
 
 export const AssessmentRow = memo(function AssessmentRow({
   project,
+  variant = "sidebar",
   isCollapsed,
   selectedId,
   selectedProjectIds,
@@ -159,7 +161,9 @@ export const AssessmentRow = memo(function AssessmentRow({
             "group relative flex w-full min-w-0 max-w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md transition-colors",
             isCollapsed
               ? "justify-center px-2 py-1.25"
-              : "px-2 py-1.25 pr-8",
+              : variant === "homepage"
+                ? "rounded-lg border bg-card px-3 py-3 pr-10 shadow-xs hover:border-primary/25 hover:shadow-sm"
+                : "px-2 py-1.25 pr-8",
             selectedId === project.id
               ? "bg-accent text-accent-foreground"
               : "hover:bg-accent hover:text-accent-foreground",
@@ -193,7 +197,7 @@ export const AssessmentRow = memo(function AssessmentRow({
             <span
               className={cn(
                 "flex items-center justify-center rounded-md border bg-background text-muted-foreground",
-                isCollapsed ? "size-6.5" : "size-5",
+                isCollapsed ? "size-6.5" : variant === "homepage" ? "size-9" : "size-5",
               )}
               style={
                 subject
@@ -205,7 +209,7 @@ export const AssessmentRow = memo(function AssessmentRow({
               }
             >
               <ProjectIcon
-                className={cn(isCollapsed ? "size-4" : "size-3")}
+                className={cn(isCollapsed ? "size-4" : variant === "homepage" ? "size-4" : "size-3")}
                 aria-hidden="true"
               />
             </span>
@@ -218,7 +222,7 @@ export const AssessmentRow = memo(function AssessmentRow({
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
               <div className="flex w-full min-w-0 items-center gap-1">
-                <p className="w-0 min-w-0 flex-1 truncate text-xs font-medium leading-4">
+                <p className={cn("w-0 min-w-0 flex-1 truncate font-medium", variant === "homepage" ? "text-sm leading-5" : "text-xs leading-4")}>
                   {project.name}
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
@@ -247,6 +251,11 @@ export const AssessmentRow = memo(function AssessmentRow({
                   </span>
                 )}
               </div>
+              {variant === "homepage" && project.description && (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {project.description}
+                </p>
+              )}
               {project.deadline && !project.isFinished && (
                 <div className="mt-0.5 flex max-w-full items-center gap-1 overflow-hidden">
                   <span

@@ -1,10 +1,17 @@
 import { useRef } from "react"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { Subject } from "@/lib/types"
 
 interface SubjectPickerProps {
-  variant: "focus" | "sidebar"
+  variant: "focus" | "sidebar" | "select"
   subjects: Subject[]
   selectedSubjectIds: string[]
   activeSessionId: string | null
@@ -33,6 +40,35 @@ export function SubjectPicker({
             Manage subjects
           </Button>
         )}
+      </div>
+    )
+  }
+
+  if (variant === "select") {
+    return (
+      <div className="min-w-0 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">Subject</span>
+          {activeSessionId && <span className="text-micro text-muted-foreground">Logging now</span>}
+        </div>
+        <Select
+          value={selectedSubjectIds[0]}
+          onValueChange={onSubjectClick}
+          disabled={disabled}
+        >
+          <SelectTrigger className="w-full bg-background/65" aria-label="Focus subject">
+            <SelectValue placeholder="Choose a subject" />
+          </SelectTrigger>
+          <SelectContent position="popper" align="start">
+            {subjects.map((subject) => (
+              <SelectItem key={subject.id} value={subject.id} textValue={subject.name}>
+                <span className="size-2 rounded-full" style={{ backgroundColor: subject.color }} />
+                <span className="min-w-0 truncate">{subject.name}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{subject.shortCode}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     )
   }

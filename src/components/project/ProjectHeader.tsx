@@ -15,9 +15,17 @@ import {
   ListChecks,
   Play,
   Brain,
+  MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -80,7 +88,7 @@ export function ProjectHeader({
     .reduce((total, session) => total + getSessionEffectiveMinutes(session), 0);
   return (
     <div className="border-b">
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 min-[1200px]:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 @min-[900px]/project:px-5">
         {/* Left: icon + title + inline metadata */}
         <div className="flex min-w-0 items-center gap-2.5">
           <span
@@ -107,7 +115,7 @@ export function ProjectHeader({
                 variant="ghost"
                 size="icon-xs"
                 onClick={onOpenSettings}
-                className="shrink-0 opacity-0 focus-visible:opacity-100 group-hover/left:opacity-100"
+                className="shrink-0 opacity-60 transition-opacity focus-visible:opacity-100 group-hover/left:opacity-100"
                 aria-label={`Rename ${project.name}`}
                 title="Rename"
               >
@@ -115,7 +123,7 @@ export function ProjectHeader({
               </Button>
             </div>
 
-            <div className="hidden items-center gap-1 sm:flex">
+            <div className="hidden items-center gap-1 @min-[560px]/project:flex">
               {project.deadline && (
                 <Badge
                   variant={
@@ -148,24 +156,26 @@ export function ProjectHeader({
         {/* Right: view toggle + actions */}
         <div className="flex shrink-0 items-center gap-1">
           {/* View toggle */}
-          <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+          <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5" role="group" aria-label="Assessment view">
             <Button
               variant={viewMode === "files" ? "secondary" : "ghost"}
               size="xs"
               onClick={() => onViewModeChange("files")}
               aria-pressed={viewMode === "files"}
+              aria-label="Files view"
             >
               <Folder />
-              Files
+              <span className="hidden @min-[520px]/project:inline">Files</span>
             </Button>
             <Button
               variant={viewMode === "sessions" ? "secondary" : "ghost"}
               size="xs"
               onClick={() => onViewModeChange("sessions")}
               aria-pressed={viewMode === "sessions"}
+              aria-label="Study sessions view"
             >
               <Clock />
-              Sessions
+              <span className="hidden @min-[640px]/project:inline">Sessions</span>
               {sessions.length > 0 && (
                 <span className="tabular-nums">{sessions.length}</span>
               )}
@@ -175,16 +185,17 @@ export function ProjectHeader({
               size="xs"
               onClick={() => onViewModeChange("learning")}
               aria-pressed={viewMode === "learning"}
+              aria-label="Learning view"
             >
               <Brain />
-              Learn
+              <span className="hidden @min-[640px]/project:inline">Learn</span>
               {(project.studyCards?.length ?? 0) > 0 && (
                 <span className="tabular-nums">{project.studyCards?.length}</span>
               )}
             </Button>
           </div>
 
-          <div className="mx-1 hidden h-4 w-px bg-border/60 sm:block" />
+          <div className="mx-1 hidden h-4 w-px bg-border/60 @min-[900px]/project:block" />
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -192,6 +203,7 @@ export function ProjectHeader({
                   variant="ghost"
                   size="icon"
                   onClick={onOpenSettings}
+                  className="hidden @min-[900px]/project:inline-flex"
                 aria-label="Assessment details"
               >
                 <Settings />
@@ -206,9 +218,9 @@ export function ProjectHeader({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="relative"
                   onClick={onRefresh}
                   aria-label={hasPendingChanges ? "Refresh files with external changes" : "Refresh files"}
+                  className="relative hidden @min-[900px]/project:inline-flex"
                 >
                   <RefreshCw />
                   {hasPendingChanges && (
@@ -234,6 +246,7 @@ export function ProjectHeader({
                   variant="ghost"
                   size="icon"
                   onClick={() => onToggleFinished(project.id)}
+                  className="hidden @min-[900px]/project:inline-flex"
                   aria-label={project.isFinished ? "Mark as current" : "Mark as complete"}
                 >
                   <CheckCircle2 className={project.isFinished ? "text-success" : undefined} />
@@ -252,6 +265,7 @@ export function ProjectHeader({
                   variant="ghost"
                   size="icon"
                   onClick={onSaveAsTemplate}
+                  className="hidden @min-[900px]/project:inline-flex"
                   aria-label="Save as template"
                 >
                   <Bookmark />
@@ -268,6 +282,7 @@ export function ProjectHeader({
                   variant="ghost"
                   size="icon"
                   onClick={onExport}
+                  className="hidden @min-[900px]/project:inline-flex"
                   aria-label="Export project"
                 >
                   <Download />
@@ -285,11 +300,27 @@ export function ProjectHeader({
                 onClick={onOpenFolder}
               >
                 <FolderUp />
-                <span className="max-[950px]:hidden">Open folder</span>
+                <span className="hidden @min-[720px]/project:inline">Open folder</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Open in Finder</TooltipContent>
           </Tooltip>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="@min-[900px]/project:hidden" aria-label="More assessment actions">
+                <MoreHorizontal />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onSelect={onOpenSettings}><Settings />Assessment details</DropdownMenuItem>
+              {onRefresh && <DropdownMenuItem onSelect={onRefresh}><RefreshCw />Refresh files</DropdownMenuItem>}
+              {onToggleFinished && <DropdownMenuItem onSelect={() => onToggleFinished(project.id)}><CheckCircle2 />{project.isFinished ? "Mark as current" : "Mark as complete"}</DropdownMenuItem>}
+              {(onSaveAsTemplate ?? onExport) && <DropdownMenuSeparator />}
+              {onSaveAsTemplate && <DropdownMenuItem onSelect={onSaveAsTemplate}><Bookmark />Save as template</DropdownMenuItem>}
+              {onExport && <DropdownMenuItem onSelect={onExport}><Download />Export assessment</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button size="sm" onClick={onAddFiles}>
             <Plus />
@@ -297,7 +328,7 @@ export function ProjectHeader({
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3 border-t border-border/60 px-4 py-2.5 min-[1200px]:px-5">
+      <div className="flex flex-wrap items-center gap-3 border-t border-border/60 px-3 py-2.5 @min-[900px]/project:px-5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <ListChecks className="size-4" />
@@ -311,7 +342,7 @@ export function ProjectHeader({
             <Clock className="size-4" />
             <span className="font-medium text-foreground">{Math.round(plannedMinutes / 6) / 10}h</span> planned
           </span>
-          <span className="min-w-0 truncate text-muted-foreground">
+          <span className="hidden min-w-0 truncate text-muted-foreground @min-[720px]/project:inline">
             Next action: <span className="font-medium text-foreground">{nextTask ?? "Define the first task"}</span>
           </span>
         </div>

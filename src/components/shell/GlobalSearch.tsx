@@ -21,7 +21,8 @@ import {
  CalendarDays,
  CalendarClock,
  CircleHelp,
- GraduationCap,
+	 GraduationCap,
+	 Library,
  History,
  Inbox,
  Plus,
@@ -63,7 +64,8 @@ interface GlobalSearchProps {
  onNewProject?: () => void;
  onNewSession?: () => void;
  onNewEvent?: () => void;
- onGoHome?: () => void;
+	 onGoHome?: () => void;
+	 onGoAssessments?: () => void;
  onGoTimetable?: () => void;
  onGoPlanner?: () => void;
  onGoInbox?: () => void;
@@ -151,7 +153,8 @@ export function GlobalSearch({
  onNewProject,
  onNewSession,
  onNewEvent,
- onGoHome,
+	 onGoHome,
+	 onGoAssessments,
  onGoTimetable,
  onGoPlanner,
  onGoInbox,
@@ -212,7 +215,7 @@ export function GlobalSearch({
  icon: CalendarDays,
  run: onNewEvent,
  },
- onGoHome && {
+	 onGoHome && {
  type:"action" as const,
  id:"go-home",
  label:"Go to Today",
@@ -220,8 +223,18 @@ export function GlobalSearch({
  aliases: ["home","dashboard","overview","month","plan"],
  shortcut:"H",
  icon: Home,
- run: onGoHome,
- },
+	 run: onGoHome,
+	 },
+	 onGoAssessments && {
+	 type:"action" as const,
+	 id:"go-assessments",
+	 label:"Open assessments",
+	 hint:"Find deadlines, materials, and next actions",
+	 aliases: ["assessments","projects","deadlines","library","coursework"],
+	 shortcut: `${modKeyLabel} 2`,
+	 icon: Library,
+	 run: onGoAssessments,
+	 },
  onGoTimetable && {
  type:"action" as const,
  id:"go-timetable",
@@ -307,7 +320,8 @@ export function GlobalSearch({
  },
  [
  modKeyLabel,
- onGoAnalytics,
+	 onGoAnalytics,
+	 onGoAssessments,
  onGoExamTrack,
  onGoHome,
  onGoInbox,

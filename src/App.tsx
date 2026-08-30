@@ -585,6 +585,7 @@ function App() {
     onNewEvent: () => handleOpenNewEvent(),
     onNewSession: () => handleOpenNewSession(),
     onGoHome: handleSelectHome,
+    onGoAssessments: handleSelectAssessments,
     onOpenFocus: handleOpenFocus,
     onGoTimetable: handleSelectTimetable,
     onGoPlanner: handleSelectPlanner,
@@ -2087,7 +2088,7 @@ function App() {
                 style={{
                   width: sidebarCollapsed
                     ? "4rem"
-                    : "16rem",
+                    : "clamp(13.5rem, 20vw, 15rem)",
                 }}
                 transition={layoutTransition}
               >
@@ -2497,6 +2498,7 @@ function App() {
               onNewSession={() => handleOpenNewSession()}
               onNewEvent={() => handleOpenNewEvent()}
               onGoHome={handleSelectHome}
+              onGoAssessments={handleSelectAssessments}
               onGoTimetable={handleSelectTimetable}
               onGoPlanner={handleSelectPlanner}
               onGoInbox={handleSelectInbox}

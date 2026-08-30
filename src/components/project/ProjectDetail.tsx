@@ -633,7 +633,7 @@ export const ProjectDetail = memo(function ProjectDetail({
   const hasDependencies = onAddDependency && onRemoveDependency && onOpenProject && availableProjects
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="@container/project relative flex h-full min-w-0 flex-col overflow-hidden">
       {isDragging && (
         <div className="pointer-events-none absolute inset-4 z-modal-backdrop flex items-center justify-center rounded-lg border bg-background/90">
           <div className="flex items-center gap-2">

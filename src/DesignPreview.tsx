@@ -31,7 +31,7 @@ export function DesignPreview() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      <div className={collapsed ? "w-16 shrink-0" : "w-64 shrink-0"}>
+      <div className={collapsed ? "w-16 shrink-0" : "w-[clamp(13.5rem,20vw,15rem)] shrink-0"}>
         <Sidebar
           sessions={[]}
           customSubjects={[]}
@@ -51,6 +51,7 @@ export function DesignPreview() {
           onSelectInbox={noop}
           onSelectAnalytics={noop}
           onSelectExamTrack={noop}
+          onSearch={noop}
           onStartPomodoroSession={createSession}
           onUpdatePomodoroSession={() => Promise.resolve()}
         />

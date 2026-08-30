@@ -31,7 +31,9 @@ function renderStartupError(error: unknown) {
 }
 
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("design-preview")) {
-  document.documentElement.classList.add("dark")
+  if (new URLSearchParams(window.location.search).get("theme") !== "light") {
+    document.documentElement.classList.add("dark")
+  }
   void import("@/DesignPreview").then(
     ({ DesignPreview }) => root.render(<DesignPreview />),
     renderStartupError,

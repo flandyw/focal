@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { setCachedPreference } from "@/lib/storage/preferences"
 
 export type AppDestination =
   | { kind: "home" }
@@ -12,6 +13,21 @@ export type AppDestination =
   | { kind: "settings" }
 
 const HOME: AppDestination = { kind: "home" }
+const LAST_DESTINATION_KEY = "focal-last-destination"
+const RESTORABLE_DESTINATIONS = new Set<AppDestination["kind"]>([
+  "home",
+  "assessments",
+  "timetable",
+  "planner",
+  "inbox",
+  "analytics",
+  "examtrack",
+])
+
+export function normaliseStoredDestination(value: string | null): AppDestination {
+  if (!value || !RESTORABLE_DESTINATIONS.has(value as AppDestination["kind"])) return HOME
+  return { kind: value as Exclude<AppDestination["kind"], "project" | "settings"> }
+}
 
 export interface AppNavigationState {
   destination: AppDestination
@@ -37,11 +53,21 @@ export function closeSettingsDestination(state: AppNavigationState): AppNavigati
 }
 
 export function useAppNavigation() {
-  const [state, setState] = useState<AppNavigationState>({
-    destination: HOME,
-    previousDestination: HOME,
+  const [state, setState] = useState<AppNavigationState>(() => {
+    let destination = HOME
+    try {
+      destination = normaliseStoredDestination(localStorage.getItem(LAST_DESTINATION_KEY))
+    } catch {
+      // ponytail: private browsing may block storage; home remains the safe default.
+    }
+    return { destination, previousDestination: HOME }
   })
   const destination = state.destination
+
+  useEffect(() => {
+    if (destination.kind === "project" || destination.kind === "settings") return
+    setCachedPreference(LAST_DESTINATION_KEY, destination.kind, false)
+  }, [destination])
 
   const navigate = useCallback((next: AppDestination) => {
     setState((current) => navigateTo(current, next))

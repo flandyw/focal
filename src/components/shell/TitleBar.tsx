@@ -122,7 +122,7 @@ function AppActions({
             title="Create new item"
           >
             <Plus />
-            <span className="max-[620px]:hidden">New</span>
+            <span className="max-[620px]:hidden">Create</span>
             <ChevronDown className="size-3 opacity-70" />
           </Button>
         </DropdownMenuTrigger>
@@ -162,12 +162,15 @@ function AppActions({
         <TooltipTrigger asChild>
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="sm"
             onClick={onSearch}
             aria-label="Search"
             aria-keyshortcuts={SEARCH_ARIA_SHORTCUT}
+            className="gap-1.5"
           >
             <Search />
+            <span className="hidden min-[980px]:inline">Search</span>
+            <kbd className="hidden rounded border bg-muted/60 px-1.5 font-mono text-micro text-muted-foreground min-[1120px]:inline">{SEARCH_SHORTCUT}</kbd>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">Search · {SEARCH_SHORTCUT}</TooltipContent>

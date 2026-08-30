@@ -6,6 +6,7 @@ interface ShortcutHandlers {
   onNewEvent?: () => void
   onNewSession?: () => void
   onGoHome?: () => void
+  onGoAssessments?: () => void
   onGoTimetable?: () => void
   onGoPlanner?: () => void
   onGoInbox?: () => void
@@ -100,6 +101,24 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
         e.preventDefault()
         handlersRef.current.onGoSettings?.()
         return
+      }
+
+      // Cmd/Ctrl + 1–7: jump directly between primary workspaces.
+      if (meta && !e.shiftKey && !e.altKey) {
+        const destination = {
+          "1": handlersRef.current.onGoHome,
+          "2": handlersRef.current.onGoAssessments,
+          "3": handlersRef.current.onGoPlanner,
+          "4": handlersRef.current.onGoTimetable,
+          "5": handlersRef.current.onGoInbox,
+          "6": handlersRef.current.onGoExamTrack,
+          "7": handlersRef.current.onGoAnalytics,
+        }[key]
+        if (destination) {
+          e.preventDefault()
+          destination()
+          return
+        }
       }
 
       // Single-key commands should never escape a field or modal dialog.

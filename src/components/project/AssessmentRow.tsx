@@ -196,11 +196,11 @@ export const AssessmentRow = memo(function AssessmentRow({
           aria-label={project.name}
           aria-current={selectedId === project.id ? "page" : undefined}
           className={cn(
-            "group relative w-full min-w-0 max-w-full cursor-pointer overflow-hidden transition-colors",
+            "group relative w-full min-w-0 max-w-full cursor-pointer overflow-hidden transition-colors focus-visible:z-10 focus-visible:bg-muted/55 focus-within:bg-muted/35",
             isCollapsed
               ? "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.25"
               : variant === "homepage"
-                ? "grid min-h-18 grid-cols-[auto_auto_minmax(0,1fr)_2rem] items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-b-0 hover:bg-muted/35 min-[760px]:grid-cols-[auto_auto_minmax(0,1fr)_8rem_2rem] min-[1100px]:grid-cols-[auto_auto_minmax(0,1fr)_5rem_8rem_8rem_2rem]"
+                ? "grid min-h-16 grid-cols-[auto_auto_minmax(0,1fr)_6.5rem_4.25rem] items-center gap-2 border-b border-border/60 px-2 py-2 last:border-b-0 hover:bg-muted/35 @min-[760px]/assessments:grid-cols-[auto_auto_minmax(0,1fr)_8rem_4.25rem] @min-[1050px]/assessments:grid-cols-[auto_auto_minmax(0,1fr)_5rem_8rem_8rem_4.25rem]"
                 : "flex items-center gap-1.5 rounded-md px-2 py-1.25 pr-8",
             selectedId === project.id
               ? "bg-accent text-accent-foreground"
@@ -227,7 +227,7 @@ export const AssessmentRow = memo(function AssessmentRow({
               className={cn(
                 isMultiSelecting
                   ? "opacity-100"
-                  : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                  : "opacity-55 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
               )}
             />
           )}
@@ -260,7 +260,7 @@ export const AssessmentRow = memo(function AssessmentRow({
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
               <div className="flex w-full min-w-0 items-center gap-1">
-                <p className={cn("w-0 min-w-0 flex-1 truncate font-medium", variant === "homepage" ? "text-sm leading-5" : "text-xs leading-4")}>
+                <p title={project.name} className={cn("w-0 min-w-0 flex-1 truncate font-medium", variant === "homepage" ? "text-sm leading-5" : "text-xs leading-4")}>
                   {project.name}
                 </p>
                 <div className="flex shrink-0 items-center gap-1">
@@ -291,7 +291,7 @@ export const AssessmentRow = memo(function AssessmentRow({
               </div>
               {variant === "homepage" && (
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {[subject?.name, project.description].filter(Boolean).join(" · ") || "Unassigned assessment"}
+                  {[subject?.name, statusLabel, project.description].filter(Boolean).join(" · ") || "Unassigned assessment"}
                 </p>
               )}
               {variant !== "homepage" && project.deadline && !project.isFinished && (
@@ -319,13 +319,13 @@ export const AssessmentRow = memo(function AssessmentRow({
           )}
           {!isCollapsed && variant === "homepage" && (
             <>
-              <div className="hidden items-center gap-1.5 text-xs tabular-nums text-muted-foreground min-[1100px]:flex">
+              <div className="hidden items-center gap-1.5 text-xs tabular-nums text-muted-foreground @min-[1050px]/assessments:flex">
                 <FileText className="size-3.5" aria-hidden="true" />
                 <span className={cn(bumpProjectIds?.has(project.id) && "animate-badge-bump")}>
                   {fileCounts[project.id] ?? 0}
                 </span>
               </div>
-              <div className="hidden min-w-0 min-[1100px]:block">
+              <div className="hidden min-w-0 @min-[1050px]/assessments:block">
                 <div className={cn(
                   "flex items-center gap-1.5 text-xs",
                   project.isFinished ? "text-success" : overdue ? "text-destructive" : "text-muted-foreground",
@@ -342,7 +342,7 @@ export const AssessmentRow = memo(function AssessmentRow({
                   </div>
                 )}
               </div>
-              <div className="hidden min-w-0 min-[760px]:block">
+              <div className="min-w-0">
                 <p className={cn("truncate text-xs font-medium", overdue && !project.isFinished ? "text-destructive" : "text-foreground/85")}>
                   {deadlineLabel}
                 </p>
@@ -353,20 +353,66 @@ export const AssessmentRow = memo(function AssessmentRow({
             </>
           )}
           {!isCollapsed && (
-            <div className={cn("shrink-0", variant === "homepage" ? "relative" : "absolute right-1.5 top-1/2 -translate-y-1/2")}>
+            <div className={cn("shrink-0", variant === "homepage" ? "relative flex items-center justify-end gap-0.5" : "absolute right-1.5 top-1/2 -translate-y-1/2")}>
+              {variant === "homepage" && (
+                <Button
+                  aria-label={`Start focus for ${project.name}`}
+                  title="Start 25-minute focus"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="opacity-65 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onStartPomodoroSession({
+                      subjectIds: project.subjectId ? [project.subjectId] : [],
+                      durationSeconds: 25 * 60,
+                      projectId: project.id,
+                      cycleNumber: 0,
+                    });
+                  }}
+                >
+                  <Timer />
+                </Button>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     aria-label={`Assessment actions for ${project.name}`}
                     variant="ghost"
                     size="icon-xs"
-                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                    className="opacity-65 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.stopPropagation();
+                      void onStartPomodoroSession({
+                        subjectIds: project.subjectId ? [project.subjectId] : [],
+                        durationSeconds: 25 * 60,
+                        projectId: project.id,
+                        cycleNumber: 0,
+                      });
+                    }}
+                  >
+                    <Timer />
+                    Start focus
+                  </DropdownMenuItem>
+                  {onAddFile && (
+                    <DropdownMenuItem
+                      onSelect={(event) => {
+                        event.stopPropagation();
+                        onAddFile(project.id);
+                      }}
+                    >
+                      <Upload />
+                      Add file
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
                   {onOpenProjectSettings && (
                     <DropdownMenuItem
                       onSelect={(event) => {
@@ -472,7 +518,7 @@ export const AssessmentRow = memo(function AssessmentRow({
           }}
         >
           <Timer />
-          Start Session
+          Start focus
         </CtxMenuItem>
         {onAddFile && (
           <CtxMenuItem
@@ -482,7 +528,7 @@ export const AssessmentRow = memo(function AssessmentRow({
             }}
           >
             <Upload />
-            Add File
+            Add file
           </CtxMenuItem>
         )}
         <CtxMenuSep />

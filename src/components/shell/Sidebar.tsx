@@ -10,11 +10,15 @@ import {
   Library,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Project, StudySession, Subject } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { isMacOS } from "@/lib/platform";
+
+const WORKSPACE_MODIFIER = isMacOS ? "⌘" : "Ctrl+";
 
 const StudyTimer = lazy(() =>
   import("@/components/timer/StudyTimer").then((module) => ({
@@ -79,6 +83,7 @@ interface DestinationButtonProps {
   selected: boolean;
   collapsed: boolean;
   onClick: () => void;
+  shortcut?: string;
 }
 
 function DestinationButton({
@@ -88,14 +93,20 @@ function DestinationButton({
   selected,
   collapsed,
   onClick,
+  shortcut,
 }: DestinationButtonProps) {
   return (
     <Button
       variant={selected ? "secondary" : "ghost"}
       size={collapsed ? "icon" : "sm"}
       onClick={onClick}
-      title={collapsed ? accessibleLabel : undefined}
+      title={collapsed ? `${accessibleLabel}${shortcut ? ` · ${shortcut}` : ""}` : undefined}
       aria-label={accessibleLabel === label && !collapsed ? undefined : accessibleLabel}
+      aria-keyshortcuts={shortcut?.startsWith("⌘")
+        ? `Meta+${shortcut.slice(1)}`
+        : shortcut?.startsWith("Ctrl+")
+          ? `Control+${shortcut.slice(5)}`
+          : shortcut}
       aria-current={selected ? "page" : undefined}
       className={cn(
         "min-w-0 rounded-lg text-muted-foreground transition-colors",
@@ -107,6 +118,7 @@ function DestinationButton({
       <CollapsibleInline show={!collapsed} className="font-medium">
         {label}
       </CollapsibleInline>
+      {!collapsed && shortcut && <kbd aria-hidden="true" className="ml-auto font-mono text-micro text-muted-foreground/65">{shortcut}</kbd>}
     </Button>
   );
 }
@@ -176,13 +188,14 @@ export const Sidebar = memo(function Sidebar({
             Workspace
           </p>
         )}
-        <DestinationButton label="Today" icon={Home} selected={homeSelected} collapsed={isCollapsed} onClick={onSelectHome} />
-        <DestinationButton label="Planner" accessibleLabel="Adaptive planner" icon={CalendarClock} selected={plannerSelected} collapsed={isCollapsed} onClick={onSelectPlanner} />
-        <DestinationButton label="Assessments" icon={Library} selected={assessmentsSelected} collapsed={isCollapsed} onClick={onSelectAssessments} />
-        <DestinationButton label="Inbox" accessibleLabel="Academic inbox" icon={InboxIcon} selected={inboxSelected} collapsed={isCollapsed} onClick={onSelectInbox} />
-        <DestinationButton label="Schedule" icon={CalendarIcon} selected={timetableSelected} collapsed={isCollapsed} onClick={onSelectTimetable} />
-        <DestinationButton label="Progress" icon={BarChart3} selected={analyticsSelected} collapsed={isCollapsed} onClick={onSelectAnalytics} />
-        <DestinationButton label="Exams" accessibleLabel="Exam practice" icon={GraduationCap} selected={examTrackSelected} collapsed={isCollapsed} onClick={onSelectExamTrack} />
+        {onSearch && <DestinationButton label="Search" icon={Search} selected={false} collapsed={isCollapsed} onClick={onSearch} shortcut="/" />}
+        <DestinationButton label="Today" icon={Home} selected={homeSelected} collapsed={isCollapsed} onClick={onSelectHome} shortcut={`${WORKSPACE_MODIFIER}1`} />
+        <DestinationButton label="Assessments" icon={Library} selected={assessmentsSelected} collapsed={isCollapsed} onClick={onSelectAssessments} shortcut={`${WORKSPACE_MODIFIER}2`} />
+        <DestinationButton label="Planner" accessibleLabel="Adaptive planner" icon={CalendarClock} selected={plannerSelected} collapsed={isCollapsed} onClick={onSelectPlanner} shortcut={`${WORKSPACE_MODIFIER}3`} />
+        <DestinationButton label="Schedule" icon={CalendarIcon} selected={timetableSelected} collapsed={isCollapsed} onClick={onSelectTimetable} shortcut={`${WORKSPACE_MODIFIER}4`} />
+        <DestinationButton label="Inbox" accessibleLabel="Academic inbox" icon={InboxIcon} selected={inboxSelected} collapsed={isCollapsed} onClick={onSelectInbox} shortcut={`${WORKSPACE_MODIFIER}5`} />
+        <DestinationButton label="Exams" accessibleLabel="Exam practice" icon={GraduationCap} selected={examTrackSelected} collapsed={isCollapsed} onClick={onSelectExamTrack} shortcut={`${WORKSPACE_MODIFIER}6`} />
+        <DestinationButton label="Progress" icon={BarChart3} selected={analyticsSelected} collapsed={isCollapsed} onClick={onSelectAnalytics} shortcut={`${WORKSPACE_MODIFIER}7`} />
       </nav>
 
       <div className="shrink-0">

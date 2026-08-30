@@ -32,6 +32,7 @@ export function KeyboardShortcutsDialog({
     {
       label: "Navigate",
       shortcuts: [
+        { keys: [`${mod} 1–7`], action: "Jump between workspaces" },
         { keys: ["F"], action: "Start focus" },
         { keys: ["H"], action: "Go to Today" },
         { keys: ["T"], action: "Go to Schedule" },

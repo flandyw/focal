@@ -1,6 +1,7 @@
 import {
   closeSettingsDestination,
   navigateTo,
+  normaliseStoredDestination,
   type AppNavigationState,
 } from "../src/features/shell/useAppNavigation"
 import { blocksSingleKeyShortcut } from "../src/hooks/useKeyboardShortcuts"
@@ -13,6 +14,9 @@ const initial: AppNavigationState = {
   destination: { kind: "home" },
   previousDestination: { kind: "home" },
 }
+assert(normaliseStoredDestination("assessments").kind === "assessments", "saved workspaces must restore")
+assert(normaliseStoredDestination("project").kind === "home", "unstable destinations must not restore")
+assert(normaliseStoredDestination("unknown").kind === "home", "invalid destinations must fail closed")
 const project = navigateTo(initial, { kind: "project", projectId: "methods" })
 const settings = navigateTo(project, { kind: "settings" })
 const restored = closeSettingsDestination(settings)
@@ -70,6 +74,12 @@ const studyTimerSource = await fetch(
 ).then((response) => response.text())
 assert(studyTimerSource.includes("Start focus"), "the sidebar timer must expose the focus flow")
 
+const shortcutSource = await fetch(
+  new URL("../src/hooks/useKeyboardShortcuts.ts", import.meta.url),
+).then((response) => response.text())
+assert(shortcutSource.includes('"2": handlersRef.current.onGoAssessments'), "Cmd/Ctrl+2 must open assessments")
+assert(shortcutSource.includes('"7": handlersRef.current.onGoAnalytics'), "workspace shortcuts must cover the full primary navigation")
+
 const appSource = await fetch(new URL("../src/App.tsx", import.meta.url)).then(
   (response) => response.text(),
 )
@@ -77,4 +87,5 @@ assert(appSource.includes("onNewAssessment={handleNewProject}"), "the global New
 assert(appSource.includes("onNewEvent={() => handleOpenNewEvent()}"), "the global New menu must create events")
 assert(appSource.includes("onNewSession={() => handleOpenNewSession()}"), "the global New menu must create study sessions")
 assert(appSource.includes("onOpenFocus: handleOpenFocus"), "the app must keep the focus keyboard shortcut connected")
+assert(appSource.includes("onGoAssessments: handleSelectAssessments"), "assessment navigation must have a direct shortcut")
 assert(appSource.includes('label: "Add files"'), "new assessments must offer the next core action")

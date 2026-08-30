@@ -42,6 +42,11 @@ const NON_SYNCABLE_PREFERENCE_KEYS = new Set<string>([
   "focal-app-scale",
   "focal-project-templates",
   "focal-pomodoro-settings",
+	"focal-sidebar-collapsed",
+	"focal-sidebar-sort",
+	"focal-last-destination",
+	"focal-assessment-filter",
+	"focal-assessment-subject",
 ])
 const SETTINGS_PREFERENCE_KEYS = [
   ...Object.values(KEYS).filter((key) => key !== KEYS.apiKey && key !== KEYS.notionToken),
@@ -53,6 +58,11 @@ const SETTINGS_PREFERENCE_KEYS = [
   "focal-project-templates",
   "focal-theme",
   "focal-pomodoro-settings",
+	"focal-sidebar-collapsed",
+	"focal-sidebar-sort",
+	"focal-last-destination",
+	"focal-assessment-filter",
+	"focal-assessment-subject",
 ]
 let secretCache = { apiKey: "", notionToken: "" }
 export type ReasoningEffort = "xhigh" | "high" | "medium" | "low" | "minimal" | "none"

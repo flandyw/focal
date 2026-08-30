@@ -1,7 +1,7 @@
 {
   "name": "focal",
   "private": true,
-  "version": "1.2.5",
+  "version": "1.2.6",
   "packageManager": "bun@1.3.14",
   "type": "module",
   "scripts": {

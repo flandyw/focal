@@ -423,6 +423,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - lastTickAtRef.current) / 1000);
     if (elapsedSeconds < 1) return;
+    setTodayNow(new Date(now));
     const current = stateRef.current;
     let tickSettings = settingsRef.current;
     if (

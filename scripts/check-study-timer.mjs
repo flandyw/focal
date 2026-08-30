@@ -308,6 +308,13 @@ check(getFocusSecondsToday([{
     }],
   },
 }], noon), 30 * 60);
+check(getFocusSecondsToday([{
+  id: "manual",
+  execution: {
+    state: "completed",
+    intervals: [{ start: atLocal(9, 0, 0), end: atLocal(10, 30, 0), source: "manual" }],
+  },
+}], noon), 90 * 60);
 check(getSessionFocusSeconds({
   execution: {
     state: "in-progress",

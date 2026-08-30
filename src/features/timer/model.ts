@@ -527,7 +527,6 @@ export function getFocusSecondsToday(
   let total = 0;
   for (const session of sessions) {
     for (const interval of session.execution.intervals) {
-      if (interval.source !== "pomodoro") continue;
       const start = new Date(interval.start);
       const end = interval.end
         ? new Date(interval.end)

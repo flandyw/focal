@@ -4,6 +4,8 @@ import {
   Check,
   Coffee,
   Flame,
+  ArrowUpRight,
+  Target,
   Minimize2,
   Pause,
   Play,
@@ -19,17 +21,8 @@ import {
 } from "@/features/timer/model";
 import { TitleBar } from "@/components/shell/TitleBar";
 import { SubjectPicker } from "@/components/timer/SubjectPicker";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import type { Subject } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -235,160 +228,67 @@ export function FocusView({
       </TitleBar>
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid min-h-full w-full max-w-5xl place-items-center p-3 sm:p-6 lg:p-10">
-          <Card className="w-full max-w-3xl gap-0 py-0">
-            <CardHeader className="border-b px-5 py-4 sm:px-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 text-left">
-                  <CardTitle className="truncate font-heading">
-                    {headerTitle}
-                  </CardTitle>
-                  <CardDescription className="truncate">
-                    {headerDescription}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={activeSessionId ? "success" : "secondary"}>
-                    <Timer />
-                    {status}
-                  </Badge>
-                  <Badge variant="outline">Cycle {cycles + 1}</Badge>
-                </div>
+        <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-5 py-6 sm:px-10 lg:px-14 lg:py-9">
+          <header className="flex items-center justify-between gap-4 border-b border-border/60 pb-5">
+            <div className="flex items-center gap-3">
+              <span className={cn("flex size-10 items-center justify-center rounded-2xl", isFocus ? "bg-primary/10 text-primary" : "bg-success/10 text-success")}>
+                {isFocus ? <Target className="size-5" /> : <Coffee className="size-5" />}
+              </span>
+              <div>
+                <h1 className="font-heading text-lg font-medium tracking-tight">Focus space</h1>
+                <p className="text-xs text-muted-foreground">One thing at a time.</p>
               </div>
-            </CardHeader>
+            </div>
+            <span className="text-xs tabular-nums text-muted-foreground">Cycle {cycles + 1}</span>
+          </header>
 
-            <CardContent className="flex flex-col items-center px-5 py-10 text-center sm:px-10 sm:py-14 lg:py-16">
-              {!activeSessionId && isFocus && (
-                <div className="mb-7 w-full max-w-xl space-y-5 text-left">
-                  <SubjectPicker
-                    variant="focus"
-                    subjects={subjects}
-                    selectedSubjectIds={selectedSubjectIds}
-                    activeSessionId={null}
-                    disabled={saving}
-                    onSubjectClick={onSubjectClick}
-                    onManageSubjects={onManageSubjects}
-                  />
-                  <div>
-                    <label htmlFor="focus-intent" className="mb-2 block text-sm font-medium">
-                      Focus outcome
-                    </label>
-                    <Input
-                      id="focus-intent"
-                      value={intent}
-                      onChange={(event) => onIntentChange(event.target.value)}
-                      placeholder="What will be different when this block ends?"
-                      maxLength={MAX_FOCUS_INTENT_LENGTH}
-                    />
-                    <p className="mt-1 text-right text-micro tabular-nums text-muted-foreground">
-                      {intent.length}/{MAX_FOCUS_INTENT_LENGTH}
-                    </p>
-                  </div>
-                </div>
-              )}
-              <p className="text-sm font-medium text-muted-foreground">
-                {modeLabel}
-              </p>
-              <h1 className="mt-2 font-heading text-7xl font-semibold leading-none tabular-nums tracking-[-0.05em] sm:text-8xl lg:text-9xl">
-                {timeDisplay}
-              </h1>
+          <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16 lg:py-10">
+            <section aria-label="Session timer" className="flex min-w-0 flex-col items-center text-center">
+              <div className={cn("mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium", isFocus ? "border-primary/20 bg-primary/5 text-primary" : "border-success/20 bg-success/5 text-success")}>
+                <span className={cn("size-1.5 rounded-full", running ? "bg-current" : "border border-current")} />
+                {modeLabel}{!running && activeSessionId && " · Paused"}
+              </div>
 
-              <div className="mt-8 w-full max-w-xl">
-                <div
-                  role="progressbar"
-                  aria-label={`${modeLabel} progress`}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={progressPercent}
-                  className="h-1.5 overflow-hidden rounded-full bg-muted"
+              <div className="relative isolate flex aspect-square w-full max-w-[320px] items-center justify-center sm:max-w-[340px]">
+                <div aria-hidden="true" className={cn("absolute inset-8 -z-10 rounded-full blur-3xl", isFocus ? "bg-primary/5" : "bg-success/5")} />
+                <svg
+                  viewBox="0 0 400 400"
+                  className="absolute inset-0 size-full -rotate-90"
+                  role={isStudyOvertime ? "img" : "progressbar"}
+                  aria-label={isStudyOvertime ? "Open-ended session" : `${modeLabel} progress`}
+                  aria-valuemin={isStudyOvertime ? undefined : 0}
+                  aria-valuemax={isStudyOvertime ? undefined : 100}
+                  aria-valuenow={isStudyOvertime ? undefined : progressPercent}
                 >
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-[width] duration-1000 motion-reduce:transition-none",
-                      isFocus ? "bg-primary" : "bg-success",
-                    )}
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <div className="mt-3 flex items-center justify-between gap-4 text-xs text-muted-foreground">
-                  <span>
+                  <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="1" className="text-border" />
+                  <circle cx="200" cy="200" r="176" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="1 8" className="text-border" />
+                  <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="4" pathLength="100" strokeDasharray="100" strokeDashoffset={isStudyOvertime ? 0 : 100 - progressPercent} strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-1000 motion-reduce:transition-none", isFocus ? "text-primary" : "text-success")} />
+                </svg>
+                <div className="max-w-[80%]">
+                  <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    {isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}
+                  </p>
+                  <p className="font-sans text-[clamp(2.75rem,12vw,5.75rem)] font-light leading-none tabular-nums tracking-[-0.065em]" aria-label={`${isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}: ${timeDisplay}`}>
+                    {timeDisplay}
+                  </p>
+                  <p className="mt-5 text-xs text-muted-foreground">
                     {isFreeStudy
-                      ? running
-                        ? "Open-ended session"
-                        : `Study time ${studyTimeDisplay}`
-                      : `${progressPercent}% complete`}
-                  </span>
-                  <span className="text-right">
-                    {isFreeStudy
-                      ? running
-                        ? "No time limit"
-                        : "Break in progress"
-                      : isStudyOvertime
-                        ? "Open-ended focus"
-                      : running
-                        ? `Finishes ${projectedFinish}`
-                        : `${Math.ceil(totalSeconds / 60)} min block`}
-                  </span>
+                      ? running ? "Find your own rhythm" : `Study time ${studyTimeDisplay}`
+                      : isStudyOvertime ? "A little further, at your pace"
+                      : running ? `Finishes at ${projectedFinish}` : `${Math.ceil(totalSeconds / 60)} minutes to ${isFocus ? "make room for progress" : "recharge"}`}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-6 w-full max-w-xl rounded-xl border bg-muted/40 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Flame className="h-3.5 w-3.5" />
-                    Today
-                  </span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {dailyGoal > 0
-                      ? `${Math.min(todayBlocks, dailyGoal)} / ${dailyGoal} blocks`
-                      : `${todayBlocks} ${todayBlocks === 1 ? "block" : "blocks"}`}
-                    {todaySeconds >= 60 && (
-                      <span className="ml-1.5">· {formatFocusTime(todaySeconds)} focused</span>
-                    )}
-                  </span>
-                </div>
-                {dailyGoal > 0 && (
-                  <>
-                    <div
-                      role="progressbar"
-                      aria-label="Daily goal progress"
-                      aria-valuemin={0}
-                      aria-valuemax={dailyGoal}
-                      aria-valuenow={Math.min(todayBlocks, dailyGoal)}
-                      className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"
-                    >
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none",
-                          goalReached ? "bg-success" : "bg-primary",
-                        )}
-                        style={{ width: `${Math.round(goalProgress * 100)}%` }}
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs font-medium text-muted-foreground">
-                      {goalReached
-                        ? "Daily goal reached — well done!"
-                        : `${dailyGoal - todayBlocks} ${dailyGoal - todayBlocks === 1 ? "block" : "blocks"} to go`}
-                    </p>
-                  </>
-                )}
-              </div>
-            </CardContent>
-
-            <CardFooter className="flex-col gap-3 p-4 sm:p-5">
+              <div className="mt-8 w-full">
               {isFocus ? (
                 <div
-                  className={cn(
-                    "grid w-full grid-cols-1 gap-2",
-                    !activeSessionId && "sm:grid-cols-2",
-                    activeSessionId && !isStudyOvertime && "sm:grid-cols-3",
-                    activeSessionId && isStudyOvertime && !isFreeStudy && "sm:grid-cols-3",
-                    activeSessionId && isFreeStudy && "sm:grid-cols-2",
-                  )}
+                  className="flex w-full flex-wrap justify-center gap-2"
                 >
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
+                    className="h-12 rounded-full px-5"
                     onClick={onToggle}
                     disabled={saving || (!activeSessionId && !canStartFocus)}
                   >
@@ -398,6 +298,7 @@ export function FocusView({
                   {!activeSessionId && (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onStartFreeStudy}
                       disabled={saving || !canStartFocus}
@@ -409,6 +310,7 @@ export function FocusView({
                   {activeSessionId && (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onFinish}
                       disabled={saving}
@@ -420,6 +322,7 @@ export function FocusView({
                   {activeSessionId && !isStudyOvertime && (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onAddTime}
                       disabled={saving}
@@ -431,6 +334,7 @@ export function FocusView({
                   {isStudyOvertime && !isFreeStudy && (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onReturnToBreak}
                       disabled={saving}
@@ -441,10 +345,11 @@ export function FocusView({
                   )}
                 </div>
               ) : isFreeStudy ? (
-                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="flex w-full flex-wrap justify-center gap-2">
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
+                    className="h-12 rounded-full px-5"
                     onClick={onToggle}
                     disabled={saving}
                   >
@@ -453,6 +358,7 @@ export function FocusView({
                   </Button>
                   <Button
                     size="lg"
+                    className="h-12 rounded-full px-5"
                     variant="outline"
                     onClick={onFinish}
                     disabled={saving}
@@ -462,10 +368,11 @@ export function FocusView({
                   </Button>
                 </div>
               ) : (
-                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="flex w-full flex-wrap justify-center gap-2">
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
+                    className="h-12 rounded-full px-5"
                     onClick={onToggle}
                     disabled={saving}
                   >
@@ -475,6 +382,7 @@ export function FocusView({
                   {activeSessionId ? (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onFinish}
                       disabled={saving}
@@ -485,6 +393,7 @@ export function FocusView({
                   ) : (
                     <Button
                       size="lg"
+                    className="h-12 rounded-full px-5"
                       variant="outline"
                       onClick={onStartStudyOvertime}
                       disabled={saving || !canStartFocus}
@@ -493,55 +402,125 @@ export function FocusView({
                       Keep focusing
                     </Button>
                   )}
-                  <Button size="lg" variant="outline" onClick={onAddTime}>
+                  <Button size="lg"
+                    className="h-12 rounded-full px-5" variant="outline" disabled={saving} onClick={onAddTime}>
                     <Plus />
                     5 min
                   </Button>
-                  <Button size="lg" variant="outline" onClick={onSkipBreak}>
+                  <Button size="lg"
+                    className="h-12 rounded-full px-5" variant="outline" disabled={saving} onClick={onSkipBreak}>
                     <SkipForward />
                     Skip
                   </Button>
                 </div>
               )}
 
-              <div
-                className={cn(
-                  "flex w-full flex-col items-center gap-2 border-t pt-3 sm:flex-row",
-                  activeSessionId ? "sm:justify-end" : "sm:justify-between",
-                )}
-              >
-                {!activeSessionId && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground"
-                    onClick={onReset}
-                    disabled={saving}
-                  >
-                    <RotateCcw />
-                    Reset timer
-                  </Button>
-                )}
-                <p className="text-center text-xs text-muted-foreground sm:text-right">
-                  Space: {" "}
-                  {running
-                    ? "pause"
-                    : activeSessionId
-                      ? isFreeStudy
-                        ? "continue"
-                        : "resume"
-                      : isFocus
-                        ? "start"
-                        : "resume break"}{" "}
-                  · A: +{EXTRA_BREAK_MINUTES} min
-                  {!isFocus && !isFreeStudy && " · S: skip"}
-                  {activeSessionId && " · F: finish"}
-                  {!activeSessionId && " · R: reset"}
-                  {" · Esc: exit"}
-                </p>
               </div>
-            </CardFooter>
-          </Card>
+              <div className="mt-4 flex min-h-8 items-center justify-center">
+                {!activeSessionId ? (
+                  <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onReset} disabled={saving}>
+                    <RotateCcw className="size-3.5" /> Reset timer
+                  </Button>
+                ) : (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className={cn("size-1.5 rounded-full", running && isFocus ? "bg-success" : "bg-muted-foreground")} />
+                    {status}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <aside aria-label="Session details" className="min-w-0 space-y-8 border-t border-border/60 pt-8 lg:border-t-0 lg:border-l lg:pl-8 lg:pt-0">
+              <section>
+                <p className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <BookOpen className="size-3.5" /> {activeFocus ? "In focus" : isFocus ? "Set your intention" : "Take a breather"}
+                </p>
+                {!activeSessionId && isFocus ? (
+                  <div className="space-y-6">
+                    <div>
+                      <label htmlFor="focus-intent" className="mb-3 block font-heading text-xl leading-snug tracking-tight">
+                        What will you<br />make progress on?
+                      </label>
+                      <Input
+                        id="focus-intent"
+                        className="h-11 bg-card"
+                        value={intent}
+                        onChange={(event) => onIntentChange(event.target.value)}
+                        placeholder="e.g. Finish practice questions"
+                        maxLength={MAX_FOCUS_INTENT_LENGTH}
+                        disabled={saving}
+                      />
+                      <p className="mt-2 text-right text-[10px] tabular-nums text-muted-foreground">{intent.length}/{MAX_FOCUS_INTENT_LENGTH}</p>
+                    </div>
+                    <SubjectPicker
+                      variant="focus"
+                      subjects={subjects}
+                      selectedSubjectIds={selectedSubjectIds}
+                      activeSessionId={null}
+                      disabled={saving}
+                      onSubjectClick={onSubjectClick}
+                      onManageSubjects={onManageSubjects}
+                    />
+                    {projectLabel && <p className="break-words text-xs text-muted-foreground">{projectLabel}</p>}
+                    {!canStartFocus && <p className="text-xs text-muted-foreground">Choose a subject to begin your session.</p>}
+                  </div>
+                ) : (
+                  <div>
+                    <h2 className="break-words font-heading text-2xl leading-snug tracking-tight">
+                      {isFocus ? headerTitle : "A little space to reset."}
+                    </h2>
+                    <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">
+                      {isFocus ? headerDescription : "Step away, stretch, or grab some water. Your next block can wait."}
+                    </p>
+                    {!isFocus && activeSessionId && <p className="mt-3 text-xs text-warning">Your focus session still needs to be saved. Use Retry save below the timer.</p>}
+                  </div>
+                )}
+              </section>
+
+              <section className="border-t border-border/60 pt-6" aria-label="Today's progress">
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"><Flame className="size-3.5" /> Today’s progress</p>
+                  {goalReached && <Check className="size-4 text-success" aria-label="Daily goal reached" />}
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-3xl font-light tabular-nums tracking-tight">{todayBlocks}<span className="ml-1 text-base text-muted-foreground">{dailyGoal > 0 ? `/ ${dailyGoal}` : ""}</span></p>
+                    <p className="mt-1 text-xs text-muted-foreground">Blocks completed</p>
+                  </div>
+                  <div>
+                    <p className="text-3xl font-light tabular-nums tracking-tight">{formatFocusTime(todaySeconds)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Time focused</p>
+                  </div>
+                </div>
+                {dailyGoal > 0 && (
+                  <div className="mt-5">
+                    <div role="progressbar" aria-label="Daily goal progress" aria-valuemin={0} aria-valuemax={dailyGoal} aria-valuenow={Math.min(todayBlocks, dailyGoal)} className="h-1 overflow-hidden rounded-full bg-muted">
+                      <div className={cn("h-full rounded-full", goalReached ? "bg-success" : "bg-primary")} style={{ width: `${Math.round(goalProgress * 100)}%` }} />
+                    </div>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {goalReached ? "Daily goal reached. Nicely done." : `${dailyGoal - todayBlocks} more ${dailyGoal - todayBlocks === 1 ? "block" : "blocks"} to your daily goal.`}
+                    </p>
+                  </div>
+                )}
+              </section>
+              <p className="border-t border-border/60 pt-5 text-xs leading-relaxed text-muted-foreground">
+                {isFocus ? "Small steps count. Give this moment your attention." : "Rest is part of the work, too."}
+              </p>
+            </aside>
+          </div>
+
+          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-4 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span><kbd className="mr-1.5 rounded border px-1.5 py-0.5 font-sans">Space</kbd>{running ? "Pause" : "Start / resume"}</span>
+              {!isStudyOvertime && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">A</kbd> +{EXTRA_BREAK_MINUTES} min</span>}
+              {!isFocus && !isFreeStudy && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">S</kbd> Skip break</span>}
+              {activeSessionId && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">F</kbd> Finish</span>}
+            </div>
+            <Button variant="ghost" size="sm" onClick={onClose} className="gap-2 text-xs text-muted-foreground">
+              Back to workspace <ArrowUpRight className="size-3.5" />
+              <kbd className="rounded border px-1 py-0.5 font-sans text-[10px]">Esc</kbd>
+            </Button>
+          </footer>
         </div>
       </main>
 

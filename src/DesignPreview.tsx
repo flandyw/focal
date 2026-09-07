@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { AssessmentsView } from "@/components/assessments/AssessmentsView";
+import { AcademicInboxView, type RecentDownload } from "@/components/inbox/AcademicInboxView";
 import { Sidebar } from "@/components/shell/Sidebar";
-import type { Project, StudySession } from "@/lib/types";
+import type { Project, StudySession, Subject } from "@/lib/types";
 
 const projects: Project[] = [
   { id: "chem-1", name: "Equilibrium & Acid Reactions", description: "Practice questions and exam-style tasks", subjectId: "chem", deadline: "2026-09-04T09:00:00+10:00", deadlineType: "sac", created_at: "2026-08-01T00:00:00Z", folder_path: "/Chemistry/Equilibrium", checklist: [{ id: "1", text: "Review notes", completed: true }, { id: "2", text: "Practice set", completed: false }] },
@@ -14,20 +14,25 @@ const projects: Project[] = [
   { id: "pe-1", name: "Training Plan — Week 6", description: "Skill execution and analysis", subjectId: "pe", deadline: "2026-09-03T09:00:00+10:00", deadlineType: "assignment", created_at: "2026-08-13T00:00:00Z", folder_path: "/PE/Training" },
 ];
 
-const fileCounts = { "chem-1": 18, "chem-2": 6, "chem-3": 12, "eng-1": 8, "eng-2": 5, "mm-1": 14, "mm-2": 4, "pe-1": 7 };
+const subjects: Subject[] = [
+  { id: "chem", name: "Chemistry", shortCode: "CHE", color: "#059669" },
+  { id: "eng-lang", name: "English Language", shortCode: "ELG", color: "#E11D48" },
+  { id: "mm", name: "Mathematical Methods", shortCode: "MCM", color: "#2563EB" },
+  { id: "pe", name: "Physical Education", shortCode: "PED", color: "#16A34A" },
+];
+const now = Date.now();
+const downloads: RecentDownload[] = [
+  { name: "integration_techniques_notes.pdf", path: "/Downloads/integration_techniques_notes.pdf", size: 1_887_437, modifiedAt: now - 2 * 60_000 },
+  { name: "equilibrium_reaction_rates.docx", path: "/Downloads/equilibrium_reaction_rates.docx", size: 872_448, modifiedAt: now - 18 * 60_000 },
+  { name: "practice_test_2_results.xlsx", path: "/Downloads/practice_test_2_results.xlsx", size: 626_688, modifiedAt: now - 24 * 60_000 },
+  { name: "language_analysis_annotated.pptx", path: "/Downloads/language_analysis_annotated.pptx", size: 1_258_291, modifiedAt: now - 51 * 60_000 },
+  { name: "training_plan_week_6.docx", path: "/Downloads/training_plan_week_6.docx", size: 719_872, modifiedAt: now - 3 * 60 * 60_000 },
+];
 const createSession = () => Promise.resolve({ id: "preview-session" } as StudySession);
 const noop = () => undefined;
 
 export function DesignPreview() {
   const [collapsed, setCollapsed] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sortKey, setSortKey] = useState<"deadline" | "name" | "created-newest" | "created-oldest" | "fileCount">("deadline");
-  const toggleSelected = (id: string) => setSelected((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  });
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -36,10 +41,10 @@ export function DesignPreview() {
           sessions={[]}
           customSubjects={[]}
           homeSelected={false}
-          assessmentsSelected
+          assessmentsSelected={false}
           timetableSelected={false}
           plannerSelected={false}
-          inboxSelected={false}
+          inboxSelected
           analyticsSelected={false}
           examTrackSelected={false}
           isCollapsed={collapsed}
@@ -57,27 +62,13 @@ export function DesignPreview() {
         />
       </div>
       <main className="min-w-0 flex-1">
-        <AssessmentsView
+        <AcademicInboxView
           projects={projects}
-          fileCounts={fileCounts}
-          sortKey={sortKey}
-          onSortChange={setSortKey}
-          selectedProjectIds={selected}
-          onToggleProjectSelection={toggleSelected}
-          onSelectProject={noop}
-          onNewProject={noop}
-          onDelete={noop}
-          onOpenProjectSettings={noop}
-          onDuplicateProject={noop}
-          onToggleFavorite={noop}
-          onToggleArchive={noop}
-          onToggleFinished={noop}
-          onStartSession={createSession}
-          onAddFile={noop}
-          onBulkArchive={noop}
-          onBulkUnarchive={noop}
-          onBulkFinish={noop}
-          onBulkDelete={noop}
+          subjects={subjects}
+          onUpdateProject={noop}
+          onFilesChanged={noop}
+          loadRecentDownloads={() => Promise.resolve(downloads)}
+          copyDownloadToProject={() => Promise.resolve()}
         />
       </main>
     </div>

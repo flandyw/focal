@@ -228,7 +228,7 @@ export function FocusView({
       </TitleBar>
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-5 py-6 sm:px-10 lg:px-14 lg:py-9">
+        <div className="flex min-h-full w-full flex-col px-5 py-6 sm:px-8 lg:px-[clamp(2rem,4vw,6rem)] lg:py-8">
           <header className="flex items-center justify-between gap-4 border-b border-border/60 pb-5">
             <div className="flex items-center gap-3">
               <span className={cn("flex size-10 items-center justify-center rounded-2xl", isFocus ? "bg-primary/10 text-primary" : "bg-success/10 text-success")}>
@@ -242,14 +242,14 @@ export function FocusView({
             <span className="text-xs tabular-nums text-muted-foreground">Cycle {cycles + 1}</span>
           </header>
 
-          <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-16 lg:py-10">
+          <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-[minmax(0,1fr)_clamp(20rem,28vw,30rem)] lg:gap-[clamp(2rem,4vw,5rem)] lg:py-8">
             <section aria-label="Session timer" className="flex min-w-0 flex-col items-center text-center">
               <div className={cn("mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium", isFocus ? "border-primary/20 bg-primary/5 text-primary" : "border-success/20 bg-success/5 text-success")}>
                 <span className={cn("size-1.5 rounded-full", running ? "bg-current" : "border border-current")} />
                 {modeLabel}{!running && activeSessionId && " · Paused"}
               </div>
 
-              <div className="relative isolate flex aspect-square w-full max-w-[320px] items-center justify-center sm:max-w-[340px]">
+              <div className="relative isolate flex aspect-square w-full max-w-[360px] items-center justify-center sm:max-w-[440px] lg:max-w-[min(100%,clamp(20rem,calc(100dvh-30rem),54rem))] [container-type:inline-size]">
                 <div aria-hidden="true" className={cn("absolute inset-8 -z-10 rounded-full blur-3xl", isFocus ? "bg-primary/5" : "bg-success/5")} />
                 <svg
                   viewBox="0 0 400 400"
@@ -265,13 +265,13 @@ export function FocusView({
                   <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="4" pathLength="100" strokeDasharray="100" strokeDashoffset={isStudyOvertime ? 0 : 100 - progressPercent} strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-1000 motion-reduce:transition-none", isFocus ? "text-primary" : "text-success")} />
                 </svg>
                 <div className="max-w-[80%]">
-                  <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                  <p className="mb-[3cqw] text-[clamp(10px,2cqw,16px)] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                     {isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}
                   </p>
-                  <p className="font-sans text-[clamp(2.75rem,12vw,5.75rem)] font-light leading-none tabular-nums tracking-[-0.065em]" aria-label={`${isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}: ${timeDisplay}`}>
+                  <p className="font-sans text-[25cqw] font-light leading-none tabular-nums tracking-[-0.065em]" aria-label={`${isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}: ${timeDisplay}`}>
                     {timeDisplay}
                   </p>
-                  <p className="mt-5 text-xs text-muted-foreground">
+                  <p className="mt-[4cqw] text-[clamp(12px,2.5cqw,18px)] text-muted-foreground">
                     {isFreeStudy
                       ? running ? "Find your own rhythm" : `Study time ${studyTimeDisplay}`
                       : isStudyOvertime ? "A little further, at your pace"
@@ -288,7 +288,7 @@ export function FocusView({
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                     onClick={onToggle}
                     disabled={saving || (!activeSessionId && !canStartFocus)}
                   >
@@ -298,7 +298,7 @@ export function FocusView({
                   {!activeSessionId && (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onStartFreeStudy}
                       disabled={saving || !canStartFocus}
@@ -310,7 +310,7 @@ export function FocusView({
                   {activeSessionId && (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onFinish}
                       disabled={saving}
@@ -322,7 +322,7 @@ export function FocusView({
                   {activeSessionId && !isStudyOvertime && (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onAddTime}
                       disabled={saving}
@@ -334,7 +334,7 @@ export function FocusView({
                   {isStudyOvertime && !isFreeStudy && (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onReturnToBreak}
                       disabled={saving}
@@ -349,7 +349,7 @@ export function FocusView({
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                     onClick={onToggle}
                     disabled={saving}
                   >
@@ -358,7 +358,7 @@ export function FocusView({
                   </Button>
                   <Button
                     size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                     variant="outline"
                     onClick={onFinish}
                     disabled={saving}
@@ -372,7 +372,7 @@ export function FocusView({
                   <Button
                     ref={primaryButtonRef}
                     size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                     onClick={onToggle}
                     disabled={saving}
                   >
@@ -382,7 +382,7 @@ export function FocusView({
                   {activeSessionId ? (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onFinish}
                       disabled={saving}
@@ -393,7 +393,7 @@ export function FocusView({
                   ) : (
                     <Button
                       size="lg"
-                    className="h-12 rounded-full px-5"
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onStartStudyOvertime}
                       disabled={saving || !canStartFocus}
@@ -403,12 +403,12 @@ export function FocusView({
                     </Button>
                   )}
                   <Button size="lg"
-                    className="h-12 rounded-full px-5" variant="outline" disabled={saving} onClick={onAddTime}>
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base" variant="outline" disabled={saving} onClick={onAddTime}>
                     <Plus />
                     5 min
                   </Button>
                   <Button size="lg"
-                    className="h-12 rounded-full px-5" variant="outline" disabled={saving} onClick={onSkipBreak}>
+                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base" variant="outline" disabled={saving} onClick={onSkipBreak}>
                     <SkipForward />
                     Skip
                   </Button>
@@ -430,7 +430,7 @@ export function FocusView({
               </div>
             </section>
 
-            <aside aria-label="Session details" className="min-w-0 space-y-8 border-t border-border/60 pt-8 lg:border-t-0 lg:border-l lg:pl-8 lg:pt-0">
+            <aside aria-label="Session details" className="min-w-0 space-y-8 border-t border-border/60 pt-8 lg:border-t-0 lg:border-l lg:pl-[clamp(2rem,3vw,4rem)] lg:pt-0 2xl:py-6 2xl:space-y-10">
               <section>
                 <p className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   <BookOpen className="size-3.5" /> {activeFocus ? "In focus" : isFocus ? "Set your intention" : "Take a breather"}
@@ -438,12 +438,12 @@ export function FocusView({
                 {!activeSessionId && isFocus ? (
                   <div className="space-y-6">
                     <div>
-                      <label htmlFor="focus-intent" className="mb-3 block font-heading text-xl leading-snug tracking-tight">
-                        What will you<br />make progress on?
+                      <label htmlFor="focus-intent" className="mb-5 block font-heading text-2xl leading-snug tracking-tight 2xl:text-4xl">
+                        What will you make progress on?
                       </label>
                       <Input
                         id="focus-intent"
-                        className="h-11 bg-card"
+                        className="h-12 bg-card 2xl:h-14 xl:text-base"
                         value={intent}
                         onChange={(event) => onIntentChange(event.target.value)}
                         placeholder="e.g. Finish practice questions"
@@ -466,7 +466,7 @@ export function FocusView({
                   </div>
                 ) : (
                   <div>
-                    <h2 className="break-words font-heading text-2xl leading-snug tracking-tight">
+                    <h2 className="break-words font-heading text-2xl leading-snug tracking-tight 2xl:text-4xl">
                       {isFocus ? headerTitle : "A little space to reset."}
                     </h2>
                     <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">
@@ -484,11 +484,11 @@ export function FocusView({
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-3xl font-light tabular-nums tracking-tight">{todayBlocks}<span className="ml-1 text-base text-muted-foreground">{dailyGoal > 0 ? `/ ${dailyGoal}` : ""}</span></p>
+                    <p className="text-3xl font-light tabular-nums tracking-tight xl:text-4xl">{todayBlocks}<span className="ml-1 text-base text-muted-foreground">{dailyGoal > 0 ? `/ ${dailyGoal}` : ""}</span></p>
                     <p className="mt-1 text-xs text-muted-foreground">Blocks completed</p>
                   </div>
                   <div>
-                    <p className="text-3xl font-light tabular-nums tracking-tight">{formatFocusTime(todaySeconds)}</p>
+                    <p className="text-3xl font-light tabular-nums tracking-tight xl:text-4xl">{formatFocusTime(todaySeconds)}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Time focused</p>
                   </div>
                 </div>

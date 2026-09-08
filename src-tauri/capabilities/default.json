@@ -23,6 +23,7 @@
     "opener:allow-default-urls",
     "dialog:default",
     "fs:allow-download-meta",
+    "fs:scope-download",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     {

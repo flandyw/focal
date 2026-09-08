@@ -249,35 +249,14 @@ fn rename_landed_after_error(_src: &Path, dest: &Path) -> bool {
 /// Normalize a path that may come from a drag-and-drop event or file picker.
 /// Strips `file://`/`file:///` / `file://localhost/` prefixes and URL-decodes percent-encoded characters.
 fn normalize_path(path: &str) -> String {
-    let mut path = path.to_string();
-
-    // Strip file:// prefix (handles file:///, file://, and file://localhost/)
-    if let Some(stripped) = path.strip_prefix("file:///") {
-        path = stripped.to_string();
-    } else if let Some(stripped) = path.strip_prefix("file://localhost/") {
-        path = stripped.to_string();
-    } else if let Some(stripped) = path.strip_prefix("file://") {
-        path = stripped.to_string();
+    if !path.starts_with("file://") {
+        return path.to_string();
     }
-
-    // Percent-decode
-    let mut decoded = Vec::with_capacity(path.len());
-    let bytes = path.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
-            if let Ok(byte) = u8::from_str_radix(hex, 16) {
-                decoded.push(byte);
-                i += 3;
-                continue;
-            }
-        }
-        decoded.push(bytes[i]);
-        i += 1;
-    }
-
-    String::from_utf8_lossy(&decoded).to_string()
+    tauri::Url::parse(path)
+        .ok()
+        .and_then(|url| url.to_file_path().ok())
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string())
 }
 
 #[tauri::command]
@@ -331,10 +310,6 @@ pub async fn move_files_to_project(
             let mut moved = false;
             if copy_only {
                 if let Err(e) = std::fs::copy(&src, &dest) {
-                    if let Some(previous_dest) = recently_moved_dest(&normalized) {
-                        new_paths.push(previous_dest.to_string_lossy().to_string());
-                        continue;
-                    }
                     skipped.push(format!("{} (copy failed: {})", normalized, e));
                 } else {
                     moved = true;
@@ -1105,6 +1080,64 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn inbox_copy_preserves_source_and_reports_failure() {
+        let base = std::env::temp_dir().join(format!(
+            "focal-inbox-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = base.join("projects");
+        std::fs::create_dir_all(&root).unwrap();
+        let source = base.join("Chemistry 100%20complete.txt");
+        std::fs::write(&source, "assessment material").unwrap();
+        let source_path = source.to_string_lossy().to_string();
+        assert_eq!(normalize_path(&source_path), source_path);
+        assert_eq!(
+            normalize_path(tauri::Url::from_file_path(&source).unwrap().as_str()),
+            source_path
+        );
+        *projects_dir_override().lock().unwrap() = Some(root.clone());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let copied =
+                move_files_to_project(vec![source_path.clone()], "Chemistry".into(), Some(true))
+                    .await
+                    .unwrap();
+            assert_eq!(copied.len(), 1);
+            assert_eq!(
+                std::fs::read(&copied[0]).unwrap(),
+                std::fs::read(&source).unwrap()
+            );
+            let duplicate =
+                move_files_to_project(vec![source_path.clone()], "Chemistry".into(), Some(true))
+                    .await
+                    .unwrap();
+            assert_ne!(copied, duplicate);
+            remember_moved_file(&source_path, Path::new(&copied[0]));
+            std::fs::remove_file(&source).unwrap();
+            assert!(move_files_to_project(
+                vec![source_path],
+                "Other assessment".into(),
+                Some(true)
+            )
+            .await
+            .is_err());
+            assert_eq!(
+                std::fs::read_dir(root.join("Other assessment"))
+                    .unwrap()
+                    .count(),
+                0
+            );
+        });
+        *projects_dir_override().lock().unwrap() = None;
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
     fn project_child_path_rejects_paths() {
         let root = Path::new("projects");
         assert_eq!(
@@ -1194,7 +1227,7 @@ mod tests {
     #[test]
     fn rename_landed_after_error_dest_exists() {
         let base = std::env::temp_dir().join(format!(
-            "focal-files-test-{}",
+            "rename_landed_after_error_dest_exists-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -1214,7 +1247,7 @@ mod tests {
     #[test]
     fn rename_landed_after_error_both_exist() {
         let base = std::env::temp_dir().join(format!(
-            "focal-files-test-{}",
+            "rename_landed_after_error_both_exist-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -1235,7 +1268,7 @@ mod tests {
     #[test]
     fn rename_landed_after_error_neither_exist() {
         let base = std::env::temp_dir().join(format!(
-            "focal-files-test-{}",
+            "rename_landed_after_error_neither_exist-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

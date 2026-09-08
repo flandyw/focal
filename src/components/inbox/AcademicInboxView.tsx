@@ -120,6 +120,7 @@ function persistHandledDownloads(handled: Set<string>) {
 async function readRecentDownloads(): Promise<RecentDownload[]> {
   const directory = await downloadDir()
   const entries = await readDir(directory)
+  let metadataError: string | undefined
 
   // ponytail: a shallow O(n) metadata scan covers normal Downloads folders.
   // Move to a filesystem index/watcher if very large folders become common.
@@ -129,10 +130,13 @@ async function readRecentDownloads(): Promise<RecentDownload[]> {
       const info = await stat(path)
       const timestamp = info.mtime?.getTime() ?? info.birthtime?.getTime() ?? 0
       return { name: entry.name, path, size: info.size, modifiedAt: Number.isFinite(timestamp) ? timestamp : 0 }
-    } catch {
+    } catch (error) {
+      metadataError = error instanceof Error ? error.message : String(error)
       return null
     }
   }))
+
+  if (metadataError && files.every((file) => file === null)) throw new Error(`Could not read download metadata: ${metadataError}`)
 
   return selectRecentDownloads(files.filter((file): file is RecentDownload => file !== null), 64)
 }
@@ -164,6 +168,7 @@ export function AcademicInboxView({ projects, subjects, onUpdateProject, onFiles
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const downloadsRequestRef = useRef(0)
+  const assignmentInFlight = useRef(false)
 
   const activeProjects = useMemo(() => projects.filter((project) => !project.isArchived && !project.isFinished).sort((a, b) => a.name.localeCompare(b.name)), [projects])
   const queueDownloads = useMemo(() => selectRecentDownloads(recentDownloads.filter((download) => !handledDownloads.has(recentDownloadFingerprint(download))), RECENT_DOWNLOAD_LIMIT), [handledDownloads, recentDownloads])
@@ -264,17 +269,24 @@ export function AcademicInboxView({ projects, subjects, onUpdateProject, onFiles
 
   const addDownload = async (download: RecentDownload, projectId: string) => {
     const project = projects.find((candidate) => candidate.id === projectId)
-    if (!project) return
+    if (!project || assignmentInFlight.current) return
+    assignmentInFlight.current = true
     setAssigningId(`download:${download.path}`)
     try {
       if (copyDownloadToProject) await copyDownloadToProject(download, project)
-      else await invoke("move_files_to_project", { files: [download.path], projectName: project.folder_path, copy: true })
+      else {
+        const paths = await invoke<string[]>("move_files_to_project", { files: [download.path], projectName: project.folder_path, copy: true })
+        if (paths.length !== 1) throw new Error("The file copy was not confirmed. Please try again.")
+      }
       markDownloadHandled(download)
-      await Promise.resolve(onFilesChanged(project.id)).catch(() => undefined)
+      await Promise.resolve().then(() => onFilesChanged(project.id)).catch(() => {
+        toast.warning("File copied, but the assessment file list could not refresh. Reopen the assessment to see it.")
+      })
       toast.success(`${download.name} added to ${project.name}`)
     } catch (error) {
       toast.error(`Could not add file: ${String(error)}`)
     } finally {
+      assignmentInFlight.current = false
       setAssigningId(null)
     }
   }
@@ -335,7 +347,7 @@ export function AcademicInboxView({ projects, subjects, onUpdateProject, onFiles
 
             <div className="px-5 py-3 sm:px-7">
               {downloadsLoading && recentDownloads.length === 0 ? <div className="flex min-h-72 items-center justify-center text-muted-foreground"><Loader2 className="size-5 animate-spin" aria-label="Loading recent downloads" /></div> : visibleDownloads.length === 0 ? (
-                <div className="flex min-h-72 flex-col items-center justify-center text-center"><span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"><CheckCircle2 className="size-6" /></span><p className="mt-3 font-medium">{downloadQuery ? "No matching downloads" : "Inbox empty"}</p><p className="mt-1 max-w-xs text-sm text-muted-foreground">{downloadQuery ? "Try a different filename." : "You’re all caught up. New downloads will appear here."}</p>{downloadQuery && <Button variant="ghost" size="sm" className="mt-2" onClick={() => setDownloadQuery("")}>Clear search</Button>}</div>
+                <div className="flex min-h-72 flex-col items-center justify-center text-center"><span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary"><CheckCircle2 className="size-6" /></span><p className="mt-3 font-medium">{downloadsError ? "Downloads unavailable" : downloadQuery ? "No matching downloads" : "Inbox empty"}</p><p className="mt-1 max-w-xs text-sm text-muted-foreground">{downloadsError ? "Refresh to try again once folder access is available." : downloadQuery ? "Try a different filename." : "You’re all caught up. New downloads will appear here."}</p>{downloadQuery && <Button variant="ghost" size="sm" className="mt-2" onClick={() => setDownloadQuery("")}>Clear search</Button>}</div>
               ) : groupedDownloads.map(([label, downloads]) => <div key={label} className="mb-2 last:mb-0"><p className="border-b py-2 text-xs font-semibold text-muted-foreground">{label}</p>{downloads.map((download) => <DownloadQueueRow key={download.path} download={download} selected={download.path === selectedDownload?.path} onSelect={() => setSelectedDownloadPath(download.path)} />)}</div>)}
             </div>
           </section>

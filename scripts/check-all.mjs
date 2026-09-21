@@ -15,6 +15,7 @@ const checks = [
   "scripts/check-timetable-reorder.ts",
   "scripts/check-timetable.ts",
   "scripts/check-study-timer.mjs",
+  "scripts/check-study-tray.ts",
   "scripts/check-lib-helpers.ts",
   "scripts/check-vce-prep.ts",
   "scripts/check-repeat-planning-item.ts",

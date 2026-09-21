@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { isMacOS } from "@/lib/platform";
+import { studyTrayItems, TRAY_PREFERENCES } from "@/features/timer/tray";
 import {
   memo,
   useCallback,
@@ -872,18 +873,42 @@ const StudyTimerInner = memo(function StudyTimerInner({
     dispatch({ type: "ADD_TIME", minutes: EXTRA_BREAK_MINUTES });
   };
 
+  const trayItems = useMemo(() => studyTrayItems({
+    state, settings, subjects, selectedSubjectIds: validSelectedSubjectIds,
+    activeSession: !!activeSessionId,
+    blocked: saving || recoveryDialogOpen || !!externalSession,
+  }), [state, settings, subjects, validSelectedSubjectIds, activeSessionId, saving, recoveryDialogOpen, externalSession]);
   const trayActionsRef = useRef<((action: string) => void) | undefined>(undefined);
+  const [trayRevision, setTrayRevision] = useState(0);
   useEffect(() => {
     trayActionsRef.current = (action) => {
-      if (action === "open") {
+      if (action === "timer-open") {
         setExpanded(true);
         return;
       }
-      if (savingRef.current || recoveryDialogOpen || externalSession) return;
+      if (action === "timer-focus-view") {
+        setFocusView(true);
+        return;
+      }
+      // Validate against the current state too: native menu events may arrive after a save starts.
+      if (savingRef.current || !trayItems.some((item) => item.id === action && item.enabled)) return;
       if (action === "timer-toggle") void handleToggle();
+      if (action === "timer-free") void handleStartFreeStudy();
       if (action === "timer-finish") void handleFinish();
       if (action === "timer-reset") void handleReset();
-      if (action === "timer-skip" && mode !== "work" && !isStudyOvertime) void handleSkipBreak();
+      if (action === "timer-skip") void handleSkipBreak();
+      if (action === "timer-overtime") void handleStartStudyOvertime();
+      if (action === "timer-return") void handleReturnToBreak();
+      if (action === "timer-add") handleAddTime();
+      if (action.startsWith("timer-subject:")) void handleSubjectClick(action.slice("timer-subject:".length));
+      const preset = TIMER_PRESETS.find((item) => action === `timer-preset:${item.id}`);
+      if (preset) applyPreset(preset);
+      const preference = TRAY_PREFERENCES.find(([key]) => action === `timer-preference:${key}`);
+      if (preference) updatePreference({ [preference[0]]: !settings[preference[0]] });
+      for (const key of ["workMinutes", "breakMinutes", "longBreakMinutes"] as const) {
+        const prefix = `timer-duration:${key}:`;
+        if (action.startsWith(prefix)) updateDuration(key, action.slice(prefix.length));
+      }
     };
   });
 
@@ -894,6 +919,8 @@ const StudyTimerInner = memo(function StudyTimerInner({
     let stopListening: (() => void) | undefined;
     void listen<string>("study-tray-action", ({ payload }) => {
       trayActionsRef.current?.(payload);
+      // Reconcile native checkbox toggles even when the selected subject/preset is clicked again.
+      setTrayRevision((value) => value + 1);
     }).then((stop) => {
       if (disposed) stop();
       else { stopListening = stop; setTrayReady(true); }
@@ -905,30 +932,25 @@ const StudyTimerInner = memo(function StudyTimerInner({
       disposed = true;
       stopListening?.();
       void invoke("update_study_tray", {
-        title: "Focal", status: "Open Focal to use the study timer", toggleLabel: "Start focus",
-        canToggle: false, canFinish: false, canSkip: false, canReset: false,
+        title: "Focal", status: "Open Focal to use the study timer", summary: "", items: [],
       }).catch((error: unknown) => console.error("Could not disconnect menu bar timer:", error));
     };
   }, []);
 
   useEffect(() => {
     if (!trayReady) return;
-    const available = !saving && !recoveryDialogOpen && !externalSession;
     void invoke("update_study_tray", {
       title: running || activeSessionId || mode !== "work"
         ? `${running ? "" : "Ⅱ "}${timeDisplay}`
         : "Focal",
       status: recoveryDialogOpen ? "Open Focal to recover your study session"
         : externalSession ? "ExamTrack session active"
-        : `${modeLabel} · ${timeDisplay} · ${subjectLabel}`,
-      toggleLabel: running ? "Pause" : mode !== "work" ? "Resume" : activeSessionId ? "Resume focus" : "Start focus",
-      canToggle: available && (running || !!activeSessionId || mode !== "work" || canStartFocus),
-      canFinish: available && !!activeSessionId,
-      canSkip: available && mode !== "work" && !isStudyOvertime,
-      canReset: available,
+        : `${modeLabel} · ${timeDisplay} · ${selectedSubjects.map((subject) => subject.name).join(", ") || "Choose a subject below"}`,
+      summary: `Today: ${formatFocusTime(todayStats.seconds)} · ${todayStats.blocks}${settings.dailyGoal ? ` / ${settings.dailyGoal}` : ""} focus blocks`,
+      items: trayItems,
     }).catch((error: unknown) => console.error("Could not update menu bar timer:", error));
-  }, [trayReady, running, activeSessionId, mode, timeDisplay, modeLabel, subjectLabel,
-    saving, recoveryDialogOpen, externalSession, canStartFocus, isStudyOvertime]);
+  }, [trayReady, trayRevision, trayItems, running, activeSessionId, mode, timeDisplay, modeLabel,
+    selectedSubjects, todayStats, settings.dailyGoal, recoveryDialogOpen, externalSession]);
 
   const focusPortal = focusViewOpen
     ? createPortal(

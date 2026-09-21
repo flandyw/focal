@@ -1,5 +1,7 @@
+use serde::Deserialize;
+use std::sync::Mutex;
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
@@ -16,73 +18,132 @@ pub fn show_main(app: &tauri::AppHandle) {
     }
 }
 
-pub struct StudyTray {
-    status: MenuItem<tauri::Wry>,
-    toggle: MenuItem<tauri::Wry>,
-    finish: MenuItem<tauri::Wry>,
-    skip: MenuItem<tauri::Wry>,
-    reset: MenuItem<tauri::Wry>,
+#[derive(Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TrayGroup {
+    Controls,
+    Subjects,
+    Presets,
+    WorkMinutes,
+    BreakMinutes,
+    LongBreakMinutes,
+    Preferences,
 }
 
-pub fn setup(app: &tauri::App) -> tauri::Result<()> {
-    let status = MenuItem::with_id(
-        app,
-        "timer-status",
-        "Study timer loading…",
-        false,
-        None::<&str>,
-    )?;
-    let toggle = MenuItem::with_id(app, "timer-toggle", "Start focus", false, None::<&str>)?;
-    let finish = MenuItem::with_id(
-        app,
-        "timer-finish",
-        "Finish study session",
-        false,
-        None::<&str>,
-    )?;
-    let skip = MenuItem::with_id(app, "timer-skip", "Skip break", false, None::<&str>)?;
-    let reset = MenuItem::with_id(app, "timer-reset", "Reset timer", false, None::<&str>)?;
-    let open = MenuItem::with_id(
-        app,
-        "timer-open",
-        "Open Focal / choose subject…",
-        true,
-        None::<&str>,
-    )?;
-    let quit = MenuItem::with_id(app, "timer-quit", "Quit Focal", true, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
+#[derive(Clone, Deserialize, PartialEq)]
+pub struct TrayItem {
+    id: String,
+    label: String,
+    enabled: bool,
+    checked: Option<bool>,
+    group: TrayGroup,
+}
+
+pub struct StudyTray {
+    status: MenuItem<tauri::Wry>,
+    summary: MenuItem<tauri::Wry>,
+    items: Mutex<Option<Vec<TrayItem>>>,
+}
+
+fn build_menu(
+    app: &tauri::AppHandle,
+    state: &StudyTray,
+    items: &[TrayItem],
+) -> tauri::Result<Menu<tauri::Wry>> {
     let menu = Menu::with_items(
         app,
         &[
-            &status, &toggle, &finish, &skip, &reset, &separator, &open, &quit,
+            &state.status,
+            &state.summary,
+            &PredefinedMenuItem::separator(app)?,
         ],
     )?;
+    for item in items
+        .iter()
+        .filter(|item| item.group == TrayGroup::Controls)
+    {
+        menu.append(&MenuItem::with_id(
+            app,
+            &item.id,
+            &item.label,
+            item.enabled,
+            None::<&str>,
+        )?)?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    for (group, label) in [
+        (TrayGroup::Subjects, "Subject"),
+        (TrayGroup::Presets, "Timer preset"),
+        (TrayGroup::WorkMinutes, "Focus duration"),
+        (TrayGroup::BreakMinutes, "Short break duration"),
+        (TrayGroup::LongBreakMinutes, "Long break duration"),
+        (TrayGroup::Preferences, "Preferences"),
+    ] {
+        let entries: Vec<_> = items.iter().filter(|item| item.group == group).collect();
+        let submenu = Submenu::new(app, label, entries.iter().any(|item| item.enabled))?;
+        for item in entries {
+            submenu.append(&CheckMenuItem::with_id(
+                app,
+                &item.id,
+                &item.label,
+                item.enabled,
+                item.checked.unwrap_or(false),
+                None::<&str>,
+            )?)?;
+        }
+        menu.append(&submenu)?;
+    }
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+    for (id, label) in [
+        ("timer-focus-view", "Open focus view"),
+        ("timer-open", "Open Focal"),
+        ("timer-quit", "Quit Focal"),
+    ] {
+        menu.append(&MenuItem::with_id(app, id, label, true, None::<&str>)?)?;
+    }
+    Ok(menu)
+}
+
+pub fn setup(app: &tauri::App) -> tauri::Result<()> {
+    let state = StudyTray {
+        status: MenuItem::with_id(
+            app,
+            "timer-status",
+            "Study timer loading…",
+            false,
+            None::<&str>,
+        )?,
+        summary: MenuItem::with_id(app, "timer-summary", "Today’s study", false, None::<&str>)?,
+        items: Mutex::new(None),
+    };
+    let menu = build_menu(app.handle(), &state, &[])?;
     TrayIconBuilder::with_id("study-timer")
         .title("Focal")
         .tooltip("Focal study timer")
         .menu(&menu)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "timer-open" => {
-                show_main(app);
-                let _ = app.emit_to("main", "study-tray-action", "open");
+        .on_menu_event(|app, event| {
+            let action = event.id.as_ref();
+            if action == "timer-quit" {
+                app.exit(0);
+                return;
             }
-            "timer-quit" => app.exit(0),
-            "timer-toggle" | "timer-finish" | "timer-skip" | "timer-reset" => {
-                if let Err(error) = app.emit_to("main", "study-tray-action", event.id.as_ref()) {
+            if action == "timer-open" || action == "timer-focus-view" {
+                show_main(app);
+            }
+            if action.starts_with("timer-") {
+                if let Some(state) = app.try_state::<StudyTray>() {
+                    if let Ok(mut previous) = state.items.lock() {
+                        *previous = None;
+                    }
+                }
+                if let Err(error) = app.emit_to("main", "study-tray-action", action) {
                     eprintln!("Could not control study timer: {error}");
                     show_main(app);
                 }
             }
-            _ => {}
         })
         .build(app)?;
-    app.manage(StudyTray {
-        status,
-        toggle,
-        finish,
-        skip,
-        reset,
-    });
+    app.manage(state);
     Ok(())
 }
 
@@ -91,29 +152,36 @@ pub fn update_study_tray(
     app: tauri::AppHandle,
     title: String,
     status: String,
-    toggle_label: String,
-    can_toggle: bool,
-    can_finish: bool,
-    can_skip: bool,
-    can_reset: bool,
+    summary: String,
+    items: Vec<TrayItem>,
 ) -> Result<(), String> {
-    let Some(items) = app.try_state::<StudyTray>() else {
+    let Some(state) = app.try_state::<StudyTray>() else {
         return Ok(());
     };
-    if title.len() > 100 || status.len() > 500 || toggle_label.len() > 100 {
-        return Err("Invalid timer menu text".into());
+    if title.len() > 100
+        || status.len() > 1000
+        || summary.len() > 500
+        || items.len() > 512
+        || items.iter().any(|item| {
+            !item.id.starts_with("timer-") || item.id.len() > 500 || item.label.len() > 1000
+        })
+    {
+        return Err("Invalid timer menu".into());
     }
+    let mut previous = state.items.lock().map_err(|error| error.to_string())?;
     let update = || -> tauri::Result<()> {
-        items.status.set_text(status)?;
-        items.toggle.set_text(toggle_label)?;
-        items.toggle.set_enabled(can_toggle)?;
-        items.finish.set_enabled(can_finish)?;
-        items.skip.set_enabled(can_skip)?;
-        items.reset.set_enabled(can_reset)?;
+        state.status.set_text(status)?;
+        state.summary.set_text(summary)?;
         if let Some(tray) = app.tray_by_id("study-timer") {
+            // ponytail: only rebuild on control/subject/settings changes, never on clock ticks.
+            if previous.as_ref() != Some(&items) {
+                tray.set_menu(Some(build_menu(&app, &state, &items)?))?;
+            }
             tray.set_title(Some(title))?;
         }
         Ok(())
     };
-    update().map_err(|error| error.to_string())
+    update().map_err(|error| error.to_string())?;
+    *previous = Some(items);
+    Ok(())
 }

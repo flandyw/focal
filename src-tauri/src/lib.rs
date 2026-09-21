@@ -1,4 +1,5 @@
 mod commands;
+mod study_tray;
 
 use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
 use tauri::Manager;
@@ -122,7 +123,20 @@ pub fn run() {
                 eprintln!("could not normalize the legacy migration checksum: {error}");
             }
             commands::chatgpt::start(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(target_os = "macos")]
+            study_tray::setup(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            #[cfg(target_os = "macos")]
+            if window.label() == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    // ponytail: retain the timer/session writer in the hidden webview.
+                    // Reliable background execution needs macOS 14+; older systems
+                    // need a native timer engine if support is extended.
+                    if window.hide().is_ok() { api.prevent_close(); }
+                }
+            }
         })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
@@ -170,11 +184,16 @@ pub fn run() {
             commands::ollama::ollama_request,
             commands::ollama::cancel_ollama_request,
             commands::window::window_set_zoom,
+            study_tray::update_study_tray,
             commands::vcaa::fetch_vcaa_exam_timetable,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, tauri::RunEvent::Reopen { .. }) {
+                study_tray::show_main(app);
+            }
             if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
                 if let Err(error) = commands::chatgpt::stop(app) {
                     eprintln!("could not stop ChatGPT sidecar on exit: {error}");

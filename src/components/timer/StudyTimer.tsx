@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { isMacOS } from "@/lib/platform";
 import {
   memo,
   useCallback,
@@ -868,6 +871,64 @@ const StudyTimerInner = memo(function StudyTimerInner({
   const handleAddTime = () => {
     dispatch({ type: "ADD_TIME", minutes: EXTRA_BREAK_MINUTES });
   };
+
+  const trayActionsRef = useRef<((action: string) => void) | undefined>(undefined);
+  useEffect(() => {
+    trayActionsRef.current = (action) => {
+      if (action === "open") {
+        setExpanded(true);
+        return;
+      }
+      if (savingRef.current || recoveryDialogOpen || externalSession) return;
+      if (action === "timer-toggle") void handleToggle();
+      if (action === "timer-finish") void handleFinish();
+      if (action === "timer-reset") void handleReset();
+      if (action === "timer-skip" && mode !== "work" && !isStudyOvertime) void handleSkipBreak();
+    };
+  });
+
+  const [trayReady, setTrayReady] = useState(false);
+  useEffect(() => {
+    if (!isMacOS) return;
+    let disposed = false;
+    let stopListening: (() => void) | undefined;
+    void listen<string>("study-tray-action", ({ payload }) => {
+      trayActionsRef.current?.(payload);
+    }).then((stop) => {
+      if (disposed) stop();
+      else { stopListening = stop; setTrayReady(true); }
+    }).catch((error: unknown) => {
+      console.error("Could not connect menu bar controls:", error);
+      toast.error("Could not connect the menu bar timer controls");
+    });
+    return () => {
+      disposed = true;
+      stopListening?.();
+      void invoke("update_study_tray", {
+        title: "Focal", status: "Open Focal to use the study timer", toggleLabel: "Start focus",
+        canToggle: false, canFinish: false, canSkip: false, canReset: false,
+      }).catch((error: unknown) => console.error("Could not disconnect menu bar timer:", error));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!trayReady) return;
+    const available = !saving && !recoveryDialogOpen && !externalSession;
+    void invoke("update_study_tray", {
+      title: running || activeSessionId || mode !== "work"
+        ? `${running ? "" : "Ⅱ "}${timeDisplay}`
+        : "Focal",
+      status: recoveryDialogOpen ? "Open Focal to recover your study session"
+        : externalSession ? "ExamTrack session active"
+        : `${modeLabel} · ${timeDisplay} · ${subjectLabel}`,
+      toggleLabel: running ? "Pause" : mode !== "work" ? "Resume" : activeSessionId ? "Resume focus" : "Start focus",
+      canToggle: available && (running || !!activeSessionId || mode !== "work" || canStartFocus),
+      canFinish: available && !!activeSessionId,
+      canSkip: available && mode !== "work" && !isStudyOvertime,
+      canReset: available,
+    }).catch((error: unknown) => console.error("Could not update menu bar timer:", error));
+  }, [trayReady, running, activeSessionId, mode, timeDisplay, modeLabel, subjectLabel,
+    saving, recoveryDialogOpen, externalSession, canStartFocus, isStudyOvertime]);
 
   const focusPortal = focusViewOpen
     ? createPortal(

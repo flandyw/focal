@@ -324,3 +324,15 @@ check(getSessionFocusSeconds({
     ],
   },
 }, noon), 50 * 60);
+
+// Menu bar controls share this reducer; a hidden window catches up by elapsed time.
+const pausedFromMenu = timerReducer(runningWork, { type: "TOGGLE" });
+check(advanceTimer(pausedFromMenu, settings, 600), pausedFromMenu);
+const resumedFromMenu = timerReducer(pausedFromMenu, { type: "TOGGLE" });
+check(advanceTimer(resumedFromMenu, settings, 7).secondsLeft, 3);
+check(timerReducer(breakWithTimeUsed, { type: "RESET", settings }), {
+  ...runningWork, running: false, secondsLeft: 1500,
+});
+check(advanceTimer({ ...runningWork, secondsLeft: 600 }, settings, 360), {
+  ...runningWork, secondsLeft: 240,
+});

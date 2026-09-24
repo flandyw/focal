@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
@@ -199,6 +200,20 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
             timer.deadline?.let { TimerAlarm.schedule(app, account, it) }
             reload()
         }
+        syncAll()
+    }
+    fun retargetTimerSubject(subjectId: String?) = launchAction {
+        timerMutex.withLock {
+            val current = timer
+            if (current.phase != "focus" || current.sessionId == null) return@withLock
+            db.row(account, "study_sessions", current.sessionId)?.data?.let { session ->
+                session.put("subjectIds", JSONArray().apply { if (subjectId != null) put(subjectId) })
+                val label = subjectId?.let { id -> subjects.firstOrNull { it.id == id }?.name } ?: "Pomodoro"
+                session.put("title", "$label · Focus")
+                withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+            }
+        }
+        reload()
         syncAll()
     }
     fun pauseTimer() = launchAction {

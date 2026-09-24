@@ -1,5 +1,6 @@
 package com.andy.focal
 
+import android.app.Activity
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.os.Bundle
@@ -7,6 +8,7 @@ import android.content.Intent
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -62,6 +64,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -86,6 +89,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -99,6 +104,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -111,6 +117,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.graphics.ColorUtils
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -127,27 +137,128 @@ class MainActivity : ComponentActivity() {
     private val model: FocalViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // ponytail: edge-to-edge draws behind the status and navigation bars; Scaffold
+        // insets keep content clear, and Focus hides the bars entirely (see below).
+        enableEdgeToEdge()
         if (BuildConfig.DEBUG) checkNativeLogic()
         setContent { FocalApp(model) }
     }
 }
 
+private const val THEME_PREFS = "focal-theme"
+private const val KEY_THEME_MODE = "mode" // system | light | dark
+private const val KEY_THEME_STYLE = "style" // dynamic | focal | ocean | plum | ember
+
+private data class ThemePreset(
+    val id: String,
+    val label: String,
+    val primaryL: Color,
+    val secondaryL: Color,
+    val tertiaryL: Color,
+    val primaryD: Color,
+    val secondaryD: Color,
+    val tertiaryD: Color,
+)
+
+// ponytail: four hand-picked accents on shared neutral surfaces; containers are
+// blended from the accent so new presets stay readable without full M3 tables.
+private val THEME_PRESETS = listOf(
+    ThemePreset("focal", "Focal",
+        Color(0xFF245C47), Color(0xFFD86F4D), Color(0xFFC18A2D),
+        Color(0xFF9BD2B2), Color(0xFFFFB69A), Color(0xFFE8C66E)),
+    ThemePreset("ocean", "Ocean",
+        Color(0xFF2B5BA6), Color(0xFF0D9488), Color(0xFF7C3AED),
+        Color(0xFFA8C7FA), Color(0xFF4FD8C8), Color(0xFFD0BCFF)),
+    ThemePreset("plum", "Plum",
+        Color(0xFF8C4A60), Color(0xFF7C3AED), Color(0xFF7D5260),
+        Color(0xFFFFB1C8), Color(0xFFD0BCFF), Color(0xFFD8C4D8)),
+    ThemePreset("ember", "Ember",
+        Color(0xFF8A4F00), Color(0xFFD86F4D), Color(0xFFA16207),
+        Color(0xFFFFB957), Color(0xFFFFB69A), Color(0xFFE8C66E)),
+)
+
+private fun blend(from: Color, to: Color, ratio: Float): Color =
+    Color(ColorUtils.blendARGB(from.toArgb(), to.toArgb(), ratio))
+
+private fun ThemePreset.lightScheme(): ColorScheme {
+    val background = Color(0xFFF5F2E9)
+    return lightColorScheme(
+        primary = primaryL, onPrimary = Color.White,
+        primaryContainer = primaryL, onPrimaryContainer = Color.White,
+        secondary = secondaryL, onSecondary = Color.White,
+        secondaryContainer = blend(secondaryL, background, 0.82f),
+        onSecondaryContainer = blend(secondaryL, Color.Black, 0.35f),
+        tertiary = tertiaryL,
+        background = background, onBackground = Color(0xFF202820),
+        surface = Color(0xFFFFFEFA), onSurface = Color(0xFF202820),
+        surfaceVariant = Color(0xFFE8E8DD), onSurfaceVariant = Color(0xFF606B61),
+        outline = Color(0xFFBBC4B9)
+    )
+}
+
+private fun ThemePreset.darkScheme(): ColorScheme {
+    val background = Color(0xFF151B17)
+    return darkColorScheme(
+        primary = primaryD, onPrimary = blend(primaryD, Color.Black, 0.78f),
+        primaryContainer = blend(primaryD, background, 0.55f),
+        onPrimaryContainer = blend(primaryD, Color.White, 0.8f),
+        secondary = secondaryD, onSecondary = blend(secondaryD, Color.Black, 0.78f),
+        secondaryContainer = blend(secondaryD, background, 0.55f),
+        onSecondaryContainer = blend(secondaryD, Color.White, 0.8f),
+        tertiary = tertiaryD,
+        background = background, onBackground = Color(0xFFE8E9DF),
+        surface = Color(0xFF1B221D), onSurface = Color(0xFFE8E9DF),
+        surfaceVariant = Color(0xFF303A33), onSurfaceVariant = Color(0xFFB9C5BB)
+    )
+}
+
 @Composable
 private fun FocalApp(vm: FocalViewModel) {
-    val dark = androidx.compose.foundation.isSystemInDarkTheme()
-    val colors = if (dark) darkColorScheme(
-        primary = Color(0xFF9BD2B2), onPrimary = Color(0xFF12382A), primaryContainer = Color(0xFF214B39), onPrimaryContainer = Color(0xFFD3F1DD),
-        secondary = Color(0xFFFFB69A), onSecondary = Color(0xFF4A1F10), secondaryContainer = Color(0xFF633522), onSecondaryContainer = Color(0xFFFFDDCF),
-        tertiary = Color(0xFFE8C66E), background = Color(0xFF151B17), onBackground = Color(0xFFE8E9DF), surface = Color(0xFF1B221D), onSurface = Color(0xFFE8E9DF),
-        surfaceVariant = Color(0xFF303A33), onSurfaceVariant = Color(0xFFB9C5BB)
-    ) else lightColorScheme(
-        primary = Color(0xFF245C47), onPrimary = Color.White, primaryContainer = Color(0xFF245C47), onPrimaryContainer = Color.White,
-        secondary = Color(0xFFD86F4D), onSecondary = Color.White, secondaryContainer = Color(0xFFFFE2D6), onSecondaryContainer = Color(0xFF542312),
-        tertiary = Color(0xFFC18A2D), background = Color(0xFFF5F2E9), onBackground = Color(0xFF202820), surface = Color(0xFFFFFEFA), onSurface = Color(0xFF202820),
-        surfaceVariant = Color(0xFFE8E8DD), onSurfaceVariant = Color(0xFF606B61), outline = Color(0xFFBBC4B9)
-    )
+    val context = LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences(THEME_PREFS, Activity.MODE_PRIVATE) }
+    var themeMode by remember { mutableStateOf(prefs.getString(KEY_THEME_MODE, "system") ?: "system") }
+    var themeStyle by remember { mutableStateOf(prefs.getString(KEY_THEME_STYLE, "focal") ?: "focal") }
+    val dark = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+    val dynamicAvailable = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    // ponytail: dynamic schemes come from the system wallpaper (Android 12+);
+    // presets are static fallbacks that also cover older devices.
+    val colors = remember(dark, themeStyle) {
+        if (themeStyle == "dynamic" && dynamicAvailable) {
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        } else {
+            val preset = THEME_PRESETS.firstOrNull { it.id == themeStyle } ?: THEME_PRESETS.first()
+            if (dark) preset.darkScheme() else preset.lightScheme()
+        }
+    }
+    fun saveTheme(mode: String, style: String) {
+        themeMode = mode
+        themeStyle = style
+        prefs.edit().putString(KEY_THEME_MODE, mode).putString(KEY_THEME_STYLE, style).apply()
+    }
     MaterialTheme(colorScheme = colors, shapes = MaterialTheme.shapes.copy(large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(32.dp))) {
         var tab by rememberSaveable { mutableStateOf(0) }
+        val activity = context as? Activity
+        DisposableEffect(activity, tab, dark) {
+            val window = activity?.window
+            if (window != null) {
+                val controller = WindowCompat.getInsetsController(window, window.decorView)
+                controller.isAppearanceLightStatusBars = !dark
+                controller.isAppearanceLightNavigationBars = !dark
+                if (tab == 1) {
+                    // ponytail: Focus owns the whole screen; hidden bars return with an edge swipe.
+                    controller.hide(WindowInsetsCompat.Type.systemBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    controller.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+            onDispose {}
+        }
         val snackbar = remember { SnackbarHostState() }
         val message = vm.message
         LaunchedEffect(message) {
@@ -187,7 +298,7 @@ private fun FocalApp(vm: FocalViewModel) {
                             when (tab) {
                                 0 -> CalendarScreen(vm, Modifier.padding(padding))
                                 1 -> FocusScreen(vm, Modifier.padding(padding))
-                                else -> AccountScreen(vm, Modifier.padding(padding))
+                                else -> AccountScreen(vm, Modifier.padding(padding), themeMode, themeStyle, dynamicAvailable, ::saveTheme)
                             }
                         }
                     }
@@ -207,7 +318,7 @@ private fun FocalApp(vm: FocalViewModel) {
                     when (tab) {
                         0 -> CalendarScreen(vm, Modifier.padding(padding))
                         1 -> FocusScreen(vm, Modifier.padding(padding))
-                        else -> AccountScreen(vm, Modifier.padding(padding))
+                        else -> AccountScreen(vm, Modifier.padding(padding), themeMode, themeStyle, dynamicAvailable, ::saveTheme)
                     }
                 }
             }
@@ -668,12 +779,21 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     val seconds = timer.seconds(vm.now)
     val total = if (timer.phase == "focus") (timer.minutes * 60L).coerceAtLeast(1) else 300L
     val progress = (1f - seconds.toFloat() / total).coerceIn(0f, 1f)
+    // ponytail: the picker stays on screen while paused so the subject can change
+    // mid-session; while running the active subject is read-only under the clock.
+    val sessionSubject = timer.sessionId?.let { id -> vm.sessions.firstOrNull { it.id == id }?.data?.let(::sessionSubjectId) }
+    val pickerSubject = subject ?: sessionSubject
+    val subjectEditable = timer.phase == "focus" && timer.deadline == null
+    fun chooseSubject(next: String?) {
+        subject = next
+        if (timer.sessionId != null) vm.retargetTimerSubject(next)
+    }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val wide = maxWidth >= 840.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                TimerHeroCard(vm, seconds, total, progress, subject, onSubject = { subject = it }, onStart = ::start, modifier = Modifier.weight(1.4f).fillMaxHeight(), expanded = true)
+                TimerHeroCard(vm, seconds, total, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, modifier = Modifier.weight(1.4f).fillMaxHeight(), expanded = true)
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     TodayStatsCard(vm)
                     MusicCard(music, attemptedMusicAccess, onEnable = {
@@ -686,7 +806,7 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { PageTitle("Make this hour count", "Focus", "A little structure for deeper work.") }
-                item { TimerHeroCard(vm, seconds, total, progress, subject, onSubject = { subject = it }, onStart = ::start) }
+                item { TimerHeroCard(vm, seconds, total, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start) }
                 item { TodayStatsCard(vm) }
                 item { MusicCard(music, attemptedMusicAccess, onEnable = {
                     attemptedMusicAccess = true
@@ -705,7 +825,7 @@ private fun formatClock(seconds: Long): String {
 }
 
 @Composable
-private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progress: Float, subject: String?, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, expanded: Boolean = false) {
+private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progress: Float, subject: String?, subjectEditable: Boolean, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, expanded: Boolean = false) {
     val timer = vm.timer
     val isBreak = timer.phase != "focus"
     val running = timer.deadline != null
@@ -718,19 +838,20 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progre
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(32.dp), modifier = modifier) {
         // ponytail: fill/scroll inside needs a bounded height (wide branch); in a Lazy item both measure infinite and crash.
         val scroll = rememberScrollState()
-        Column((if (expanded) Modifier.fillMaxSize().verticalScroll(scroll) else Modifier.fillMaxWidth()).padding(32.dp),
+        Column((if (expanded) Modifier.fillMaxSize().verticalScroll(scroll) else Modifier.fillMaxWidth()).padding(if (expanded) 32.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)) {
             AssistChip(
                 onClick = {},
                 label = { Text(if (isBreak) "BREAK · 5 MIN" else "FOCUS · ${timer.minutes} MIN", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp) },
                 leadingIcon = { Icon(if (isBreak) Icons.Filled.Headphones else Icons.Filled.Timer, null, Modifier.size(AssistChipDefaults.IconSize)) }
             )
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(320.dp)) {
+            // ponytail: fixed 320dp overflows 320px-wide phones; fill caps at 340dp on tablets.
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp).aspectRatio(1f)) {
                 CircularProgressIndicator(progress = { progress },
                     modifier = Modifier.fillMaxSize(), strokeWidth = 12.dp,
                     color = MaterialTheme.colorScheme.secondary, trackColor = Color.White.copy(alpha = 0.18f))
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(formatClock(seconds), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 64.sp, letterSpacing = (-1).sp)
+                    Text(formatClock(seconds), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 60.sp, letterSpacing = (-1).sp, maxLines = 1)
                     Text(
                         when {
                             running && endsAt != null -> "Ends $endsAt"
@@ -744,21 +865,26 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progre
                     if (subjectName != null) Text(subjectName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .9f), fontWeight = FontWeight.Bold)
                 }
             }
-            if (idle) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(15, 25, 50).forEach { minutes ->
-                        FilterChip(selected = timer.minutes == minutes, onClick = { vm.chooseDuration(minutes) }, label = { Text("${minutes}m") })
+            if (subjectEditable) {
+                if (idle) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(15, 25, 50).forEach { minutes ->
+                            FilterChip(selected = timer.minutes == minutes, onClick = { vm.chooseDuration(minutes) }, label = { Text("${minutes}m") })
+                        }
+                    }
+                    var draft by remember(timer.minutes) { mutableStateOf(timer.minutes.toFloat()) }
+                    Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Slider(value = draft, onValueChange = { draft = it }, valueRange = 5f..120f, steps = 22,
+                            onValueChangeFinished = { vm.chooseDuration(draft.toInt().coerceIn(5, 120)) })
+                        Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f))
                     }
                 }
-                var draft by remember(timer.minutes) { mutableStateOf(timer.minutes.toFloat()) }
-                Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Slider(value = draft, onValueChange = { draft = it }, valueRange = 5f..120f, steps = 22,
-                        onValueChangeFinished = { vm.chooseDuration(draft.toInt().coerceIn(5, 120)) })
-                    Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f))
-                }
                 SubjectPickerRow(vm, subject, onSubject)
-            } else if (!running && timer.sessionId != null) {
-                Text("Paused with ${formatClock(seconds)} left", color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f), style = MaterialTheme.typography.bodyMedium)
+                if (!idle && timer.sessionId != null) {
+                    Text("Paused with ${formatClock(seconds)} left · switch subject anytime",
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f), style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center)
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!running) Button(onClick = onStart, enabled = !isBreak || true,
@@ -898,7 +1024,39 @@ private fun RecentFocusCard(vm: FocalViewModel) {
 }
 
 @Composable
-private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
+private fun AppearanceCard(themeMode: String, themeStyle: String, dynamicAvailable: Boolean, onTheme: (String, String) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Appearance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                if (dynamicAvailable) "System follows your phone. Dynamic uses your wallpaper colors."
+                else "System follows your phone.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (id, label) ->
+                    FilterChip(selected = themeMode == id, onClick = { onTheme(id, themeStyle) }, label = { Text(label) })
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (dynamicAvailable) {
+                    FilterChip(selected = themeStyle == "dynamic", onClick = { onTheme(themeMode, "dynamic") }, label = { Text("Dynamic") })
+                }
+                THEME_PRESETS.forEach { preset ->
+                    FilterChip(
+                        selected = themeStyle == preset.id,
+                        onClick = { onTheme(themeMode, preset.id) },
+                        label = { Text(preset.label) },
+                        leadingIcon = { Box(Modifier.size(12.dp).background(preset.primaryL, CircleShape)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, themeMode: String, themeStyle: String, dynamicAvailable: Boolean, onTheme: (String, String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var notionToken by remember { mutableStateOf("") }
@@ -940,6 +1098,7 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                item { AppearanceCard(themeMode, themeStyle, dynamicAvailable, onTheme) }
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

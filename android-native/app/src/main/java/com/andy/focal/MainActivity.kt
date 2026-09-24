@@ -233,7 +233,9 @@ private fun eventOnDay(row: FocalRow, day: LocalDate): Boolean = runCatching {
 private fun subjectColorHex(vm: FocalViewModel, id: String?): Color? {
     if (id.isNullOrBlank()) return null
     val row = vm.subjects.firstOrNull { it.id == id } ?: return null
-    return runCatching { Color(row.color.toULong()) }.getOrNull()
+    // ponytail: stored colors are 0xAARRGGBB Longs; Color(Int) is the ARGB constructor.
+    // Color(ULong) is a packed color-space value and draws garbage/crashes with raw ARGB.
+    return Color((row.color and 0xffffffffL).toInt())
 }
 
 private fun eventSubjectId(data: JSONObject): String? = data.optString("subjectId").takeIf { it.isNotBlank() }
@@ -671,7 +673,7 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         val wide = maxWidth >= 840.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                TimerHeroCard(vm, seconds, total, progress, subject, onSubject = { subject = it }, onStart = ::start, modifier = Modifier.weight(1.4f).fillMaxHeight())
+                TimerHeroCard(vm, seconds, total, progress, subject, onSubject = { subject = it }, onStart = ::start, modifier = Modifier.weight(1.4f).fillMaxHeight(), expanded = true)
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     TodayStatsCard(vm)
                     MusicCard(music, attemptedMusicAccess, onEnable = {
@@ -703,7 +705,7 @@ private fun formatClock(seconds: Long): String {
 }
 
 @Composable
-private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progress: Float, subject: String?, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier) {
+private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progress: Float, subject: String?, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, expanded: Boolean = false) {
     val timer = vm.timer
     val isBreak = timer.phase != "focus"
     val running = timer.deadline != null
@@ -714,7 +716,9 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progre
     val subjectName = subject?.let { id -> vm.subjects.firstOrNull { it.id == id }?.name }
         ?: timer.sessionId?.let { id -> vm.sessions.firstOrNull { it.id == id }?.data?.let(::sessionSubjectId)?.let { sid -> vm.subjects.firstOrNull { it.id == sid }?.name } }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(32.dp), modifier = modifier) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
+        // ponytail: fill/scroll inside needs a bounded height (wide branch); in a Lazy item both measure infinite and crash.
+        val scroll = rememberScrollState()
+        Column((if (expanded) Modifier.fillMaxSize().verticalScroll(scroll) else Modifier.fillMaxWidth()).padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)) {
             AssistChip(
                 onClick = {},
@@ -788,7 +792,7 @@ private fun SubjectPickerRow(vm: FocalViewModel, selected: String?, onSubject: (
             vm.subjects.forEach { option ->
                 FilterChip(selected = selected == option.id, onClick = { onSubject(option.id) },
                     label = { Text(option.name) },
-                    leadingIcon = { Box(Modifier.size(10.dp).background(runCatching { Color(option.color.toULong()) }.getOrDefault(MaterialTheme.colorScheme.primary), CircleShape)) })
+                    leadingIcon = { Box(Modifier.size(10.dp).background(Color((option.color and 0xffffffffL).toInt()), CircleShape)) })
             }
         }
     }

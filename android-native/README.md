@@ -1,6 +1,10 @@
 # Focal for Android
 
-Native Kotlin and Jetpack Compose app for Focal's calendar and study timer. It uses Android SQLite, Android Keystore, Material 3, dynamic color, a themed launcher icon, a wall-clock timer with alarm recovery, and Android media-session controls. It does not load the desktop UI in a WebView.
+Native Kotlin and Jetpack Compose app for Focal's calendar and study timer. It uses Android SQLite, Android Keystore, the default Material 3 light and dark themes, a themed launcher icon, a wall-clock timer with alarm recovery, and Android media-session controls. It does not load the desktop UI in a WebView.
+
+## Layout
+
+Tablets are the primary UI target. A navigation rail appears at 600dp window width. With at least 720dp of content space after the rail, Plan keeps the month and agenda side by side, Focus gives the timer a larger pane beside music and history, and Account uses two settings columns. Content is capped at 1440dp on larger displays. Narrow windows and phones fall back to a single scrolling column and, below 600dp, bottom navigation. Material 3 colors and type remain standard.
 
 ## Build
 

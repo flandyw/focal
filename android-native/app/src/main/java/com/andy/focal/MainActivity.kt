@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +30,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -40,8 +43,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -60,11 +63,8 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -74,6 +74,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -89,22 +92,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -115,12 +115,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.graphics.ColorUtils
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -137,8 +133,7 @@ class MainActivity : ComponentActivity() {
     private val model: FocalViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // ponytail: edge-to-edge draws behind the status and navigation bars; Scaffold
-        // insets keep content clear, and Focus hides the bars entirely (see below).
+        // Scaffold applies system bar insets to every screen.
         enableEdgeToEdge()
         if (BuildConfig.DEBUG) checkNativeLogic()
         setContent { FocalApp(model) }
@@ -147,114 +142,30 @@ class MainActivity : ComponentActivity() {
 
 private const val THEME_PREFS = "focal-theme"
 private const val KEY_THEME_MODE = "mode" // system | light | dark
-private const val KEY_THEME_STYLE = "style" // dynamic | focal | ocean | plum | ember
-
-private data class ThemePreset(
-    val id: String,
-    val label: String,
-    val primaryL: Color,
-    val secondaryL: Color,
-    val tertiaryL: Color,
-    val primaryD: Color,
-    val secondaryD: Color,
-    val tertiaryD: Color,
-)
-
-// ponytail: four hand-picked accents on shared neutral surfaces; containers are
-// blended from the accent so new presets stay readable without full M3 tables.
-private val THEME_PRESETS = listOf(
-    ThemePreset("focal", "Focal",
-        Color(0xFF245C47), Color(0xFFD86F4D), Color(0xFFC18A2D),
-        Color(0xFF9BD2B2), Color(0xFFFFB69A), Color(0xFFE8C66E)),
-    ThemePreset("ocean", "Ocean",
-        Color(0xFF2B5BA6), Color(0xFF0D9488), Color(0xFF7C3AED),
-        Color(0xFFA8C7FA), Color(0xFF4FD8C8), Color(0xFFD0BCFF)),
-    ThemePreset("plum", "Plum",
-        Color(0xFF8C4A60), Color(0xFF7C3AED), Color(0xFF7D5260),
-        Color(0xFFFFB1C8), Color(0xFFD0BCFF), Color(0xFFD8C4D8)),
-    ThemePreset("ember", "Ember",
-        Color(0xFF8A4F00), Color(0xFFD86F4D), Color(0xFFA16207),
-        Color(0xFFFFB957), Color(0xFFFFB69A), Color(0xFFE8C66E)),
-)
-
-private fun blend(from: Color, to: Color, ratio: Float): Color =
-    Color(ColorUtils.blendARGB(from.toArgb(), to.toArgb(), ratio))
-
-private fun ThemePreset.lightScheme(): ColorScheme {
-    val background = Color(0xFFF5F2E9)
-    return lightColorScheme(
-        primary = primaryL, onPrimary = Color.White,
-        primaryContainer = primaryL, onPrimaryContainer = Color.White,
-        secondary = secondaryL, onSecondary = Color.White,
-        secondaryContainer = blend(secondaryL, background, 0.82f),
-        onSecondaryContainer = blend(secondaryL, Color.Black, 0.35f),
-        tertiary = tertiaryL,
-        background = background, onBackground = Color(0xFF202820),
-        surface = Color(0xFFFFFEFA), onSurface = Color(0xFF202820),
-        surfaceVariant = Color(0xFFE8E8DD), onSurfaceVariant = Color(0xFF606B61),
-        outline = Color(0xFFBBC4B9)
-    )
-}
-
-private fun ThemePreset.darkScheme(): ColorScheme {
-    val background = Color(0xFF151B17)
-    return darkColorScheme(
-        primary = primaryD, onPrimary = blend(primaryD, Color.Black, 0.78f),
-        primaryContainer = blend(primaryD, background, 0.55f),
-        onPrimaryContainer = blend(primaryD, Color.White, 0.8f),
-        secondary = secondaryD, onSecondary = blend(secondaryD, Color.Black, 0.78f),
-        secondaryContainer = blend(secondaryD, background, 0.55f),
-        onSecondaryContainer = blend(secondaryD, Color.White, 0.8f),
-        tertiary = tertiaryD,
-        background = background, onBackground = Color(0xFFE8E9DF),
-        surface = Color(0xFF1B221D), onSurface = Color(0xFFE8E9DF),
-        surfaceVariant = Color(0xFF303A33), onSurfaceVariant = Color(0xFFB9C5BB)
-    )
-}
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FocalApp(vm: FocalViewModel) {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences(THEME_PREFS, Activity.MODE_PRIVATE) }
     var themeMode by remember { mutableStateOf(prefs.getString(KEY_THEME_MODE, "system") ?: "system") }
-    var themeStyle by remember { mutableStateOf(prefs.getString(KEY_THEME_STYLE, "focal") ?: "focal") }
     val dark = when (themeMode) {
         "light" -> false
         "dark" -> true
         else -> androidx.compose.foundation.isSystemInDarkTheme()
     }
-    val dynamicAvailable = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-    // ponytail: dynamic schemes come from the system wallpaper (Android 12+);
-    // presets are static fallbacks that also cover older devices.
-    val colors = remember(dark, themeStyle) {
-        if (themeStyle == "dynamic" && dynamicAvailable) {
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        } else {
-            val preset = THEME_PRESETS.firstOrNull { it.id == themeStyle } ?: THEME_PRESETS.first()
-            if (dark) preset.darkScheme() else preset.lightScheme()
-        }
-    }
-    fun saveTheme(mode: String, style: String) {
+    val colors = if (dark) darkColorScheme() else lightColorScheme()
+    fun saveTheme(mode: String) {
         themeMode = mode
-        themeStyle = style
-        prefs.edit().putString(KEY_THEME_MODE, mode).putString(KEY_THEME_STYLE, style).apply()
+        prefs.edit().putString(KEY_THEME_MODE, mode).apply()
     }
-    MaterialTheme(colorScheme = colors, shapes = MaterialTheme.shapes.copy(large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(32.dp))) {
+    MaterialTheme(colorScheme = colors) {
         var tab by rememberSaveable { mutableStateOf(0) }
         val activity = context as? Activity
-        DisposableEffect(activity, tab, dark) {
-            val window = activity?.window
-            if (window != null) {
-                val controller = WindowCompat.getInsetsController(window, window.decorView)
-                controller.isAppearanceLightStatusBars = !dark
-                controller.isAppearanceLightNavigationBars = !dark
-                if (tab == 1) {
-                    // ponytail: Focus owns the whole screen; hidden bars return with an edge swipe.
-                    controller.hide(WindowInsetsCompat.Type.systemBars())
-                    controller.systemBarsBehavior =
-                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                } else {
-                    controller.show(WindowInsetsCompat.Type.systemBars())
+        DisposableEffect(activity, dark) {
+            activity?.window?.let { window ->
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
                 }
             }
             onDispose {}
@@ -275,63 +186,39 @@ private fun FocalApp(vm: FocalViewModel) {
             Triple("Focus", Icons.Filled.Timer, 1),
             Triple("Account", Icons.Filled.Tune, 2)
         )
-        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            // ponytail: single breakpoint keeps one adaptive shell; rail on wide tablet, bar on phones.
-            val wide = maxWidth >= 840.dp
-            if (wide) {
-                Row(Modifier.fillMaxSize()) {
-                    NavigationRail(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        header = {
-                            Surface(color = MaterialTheme.colorScheme.primary, shape = CircleShape, modifier = Modifier.padding(bottom = 16.dp)) {
-                                Text("F", Modifier.padding(horizontal = 14.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
-                            }
-                        }
-                    ) {
-                        Spacer(Modifier.weight(0.2f))
-                        tabs.forEach { (label, icon, index) ->
-                            NavigationRailItem(selected = tab == index, onClick = { tab = index }, icon = { Icon(icon, null) }, label = { Text(label) })
-                        }
-                    }
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        Scaffold(containerColor = MaterialTheme.colorScheme.background, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
-                            when (tab) {
-                                0 -> CalendarScreen(vm, Modifier.padding(padding))
-                                1 -> FocusScreen(vm, Modifier.padding(padding))
-                                else -> AccountScreen(vm, Modifier.padding(padding), themeMode, themeStyle, dynamicAvailable, ::saveTheme)
-                            }
-                        }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 600.dp
+            Row(Modifier.fillMaxSize()) {
+                if (wide) NavigationRail {
+                    tabs.forEach { (label, icon, index) ->
+                        NavigationRailItem(selected = tab == index, onClick = { tab = index },
+                            icon = { Icon(icon, null) }, label = { Text(label) })
                     }
                 }
-            } else {
                 Scaffold(
-                    containerColor = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.weight(1f),
+                    topBar = { TopAppBar(title = { Text(tabs[tab].first) }) },
                     snackbarHost = { SnackbarHost(snackbar) },
                     bottomBar = {
-                        NavigationBar {
+                        if (!wide) NavigationBar {
                             tabs.forEach { (label, icon, index) ->
-                                NavigationBarItem(selected = tab == index, onClick = { tab = index }, icon = { Icon(icon, null) }, label = { Text(label) })
+                                NavigationBarItem(selected = tab == index, onClick = { tab = index },
+                                    icon = { Icon(icon, null) }, label = { Text(label) })
                             }
                         }
                     }
                 ) { padding ->
-                    when (tab) {
-                        0 -> CalendarScreen(vm, Modifier.padding(padding))
-                        1 -> FocusScreen(vm, Modifier.padding(padding))
-                        else -> AccountScreen(vm, Modifier.padding(padding), themeMode, themeStyle, dynamicAvailable, ::saveTheme)
+                    Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                        val content = Modifier.widthIn(max = 1440.dp).fillMaxSize()
+                        when (tab) {
+                            0 -> CalendarScreen(vm, content)
+                            1 -> FocusScreen(vm, content)
+                            else -> AccountScreen(vm, content, themeMode, ::saveTheme)
+                        }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PageTitle(kicker: String, title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-        Text(kicker.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
-        Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -397,11 +284,12 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val wide = maxWidth >= 840.dp
+        // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
+        val wide = maxWidth >= 720.dp
+        val monthWidth = if (maxWidth >= 1000.dp) 380.dp else 320.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    PageTitle("Make room for what matters", "Your plan", "Month on the left, day on the right.")
+                Column(Modifier.width(monthWidth).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     MonthCard(vm, month, day,
                         onPrev = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
                         onNext = { month = month.plusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
@@ -432,7 +320,6 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         } else {
             Box(Modifier.fillMaxSize()) {
                 LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 100.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item { PageTitle("Make room for what matters", "Your plan", "A clear view of the days ahead.") }
                     item {
                         MonthCard(vm, month, day,
                             onPrev = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
@@ -462,16 +349,15 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun MonthCard(vm: FocalViewModel, month: YearMonth, day: LocalDate, onPrev: () -> Unit, onNext: () -> Unit, onToday: () -> Unit, onPick: (LocalDate) -> Unit) {
     val today = LocalDate.now()
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), shape = RoundedCornerShape(28.dp)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.weight(1f)) {
-                    Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("${vm.events.size} events · ${vm.sessions.size} sessions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconButton(onClick = onPrev) { Icon(Icons.Filled.ArrowBack, "Previous month") }
+                Text("${vm.events.size} events · ${vm.sessions.size} sessions", modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous month") }
                 IconButton(onClick = onToday) { Icon(Icons.Filled.Today, "Jump to today") }
-                IconButton(onClick = onNext) { Icon(Icons.Filled.ArrowForward, "Next month") }
+                IconButton(onClick = onNext) { Icon(Icons.AutoMirrored.Filled.ArrowForward, "Next month") }
             }
             Row { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
             val firstOffset = month.atDay(1).dayOfWeek.value - 1
@@ -513,8 +399,8 @@ private fun MonthCard(vm: FocalViewModel, month: YearMonth, day: LocalDate, onPr
 
 @Composable
 private fun FilterCard(filter: Int, onFilter: (Int) -> Unit, eventCount: Int, sessionCount: Int) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(24.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Card {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             FilterChip(selected = filter == 0, onClick = { onFilter(0) }, label = { Text("All") })
             FilterChip(selected = filter == 1, onClick = { onFilter(1) }, label = { Text("Events · $eventCount") })
             FilterChip(selected = filter == 2, onClick = { onFilter(2) }, label = { Text("Study · $sessionCount") })
@@ -524,19 +410,19 @@ private fun FilterCard(filter: Int, onFilter: (Int) -> Unit, eventCount: Int, se
 
 @Composable
 private fun UpNextCard(upcoming: List<FocalRow>, onJump: (FocalRow) -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(24.dp)) {
+    Card {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Filled.EventAvailable, null, tint = MaterialTheme.colorScheme.primary)
-                Text("Up next", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Up next", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             }
             if (upcoming.isEmpty()) {
-                Text("Nothing coming up. Enjoy the clear sky.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No upcoming events.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else upcoming.forEach { row ->
                 val data = row.data
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { onJump(row) }.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(data.optString("title"), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(data.optString("title"), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(timeRangeText(data), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(runCatching { FocalJson.localDate(data.getString("startTime")).format(DateTimeFormatter.ofPattern("d MMM")) }.getOrDefault(""), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -548,22 +434,22 @@ private fun UpNextCard(upcoming: List<FocalRow>, onJump: (FocalRow) -> Unit) {
 
 @Composable
 private fun DayHeader(day: LocalDate, count: Int, isToday: Boolean, onToday: () -> Unit, onNew: () -> Unit, compact: Boolean = false) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else 4.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(day.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-            Text(if (count == 0) "Nothing scheduled" else "$count planned", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(day.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.headlineSmall)
+        Text(if (count == 0) "Nothing scheduled" else "$count planned", style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!compact) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = onNew) { Icon(Icons.Filled.Add, null); Text(" New event") }
+            if (!isToday) AssistChip(onClick = onToday, label = { Text("Today") })
         }
-        if (!isToday) AssistChip(onClick = onToday, label = { Text("Today") }, leadingIcon = { Icon(Icons.Filled.Today, null, Modifier.size(AssistChipDefaults.IconSize)) })
-        Spacer(Modifier.width(8.dp))
-        Button(onClick = onNew) { Icon(Icons.Filled.Add, null); Text(" New event") }
     }
 }
 
 @Composable
 private fun EmptyDayCard(onNew: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer), modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
         Column(Modifier.padding(26.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Space to focus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Space to focus", style = MaterialTheme.typography.titleLarge)
             Text("Nothing scheduled for this day. Add an event when you're ready.", style = MaterialTheme.typography.bodyMedium)
             Button(onClick = onNew, modifier = Modifier.padding(top = 8.dp)) { Icon(Icons.Filled.Add, null); Text(" Add event") }
         }
@@ -579,13 +465,12 @@ private fun AgendaCard(vm: FocalViewModel, row: FocalRow, onOpenEvent: (JSONObje
     val done = isEvent && data.optBoolean("isFinished")
     Card(
         onClick = { if (isEvent) onOpenEvent(data) else onOpenSession(data) },
-        colors = CardDefaults.cardColors(containerColor = if (done) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(Modifier.size(5.dp, 56.dp).clip(CircleShape).background(accent))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(data.optString("title").ifBlank { "Untitled" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(data.optString("title").ifBlank { "Untitled" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.AccessTime, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -622,7 +507,7 @@ private fun SessionDetailDialog(data: JSONObject?, onDismiss: () -> Unit) {
     if (data == null) return
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(data.optString("title").ifBlank { "Study session" }, fontWeight = FontWeight.Bold) },
+        title = { Text(data.optString("title").ifBlank { "Study session" }) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val start = data.optString("startTime")
@@ -683,11 +568,11 @@ private fun EventEditor(vm: FocalViewModel, initial: JSONObject?, selectedDay: L
         } catch (e: Exception) { error = e.message ?: "Check the date and time" }
     }
     Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(28.dp), modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth()) {
+        Card(modifier = Modifier.widthIn(max = 680.dp).fillMaxWidth()) {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (initial == null) "New event" else "Edit event", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                        Text(if (initial == null) "New event" else "Edit event", style = MaterialTheme.typography.headlineSmall)
                         Text(selectedDay.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close editor") }
@@ -743,9 +628,9 @@ private fun EventEditor(vm: FocalViewModel, initial: JSONObject?, selectedDay: L
 
 @Composable
 private fun DateTimeBlock(label: String, date: String, time: String, onDate: () -> Unit, onTime: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape = RoundedCornerShape(20.dp), modifier = modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onDate) { Text(date, maxLines = 1) }
                 OutlinedButton(onClick = onTime) { Text(time, maxLines = 1) }
@@ -790,10 +675,13 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val wide = maxWidth >= 840.dp
+        // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
+        val wide = maxWidth >= 720.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                TimerHeroCard(vm, seconds, total, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, modifier = Modifier.weight(1.4f).fillMaxHeight(), expanded = true)
+                Column(Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, tablet = true)
+                }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     TodayStatsCard(vm)
                     MusicCard(music, attemptedMusicAccess, onEnable = {
@@ -805,8 +693,7 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
             }
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                item { PageTitle("Make this hour count", "Focus", "A little structure for deeper work.") }
-                item { TimerHeroCard(vm, seconds, total, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start) }
+                item { TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start) }
                 item { TodayStatsCard(vm) }
                 item { MusicCard(music, attemptedMusicAccess, onEnable = {
                     attemptedMusicAccess = true
@@ -825,7 +712,7 @@ private fun formatClock(seconds: Long): String {
 }
 
 @Composable
-private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progress: Float, subject: String?, subjectEditable: Boolean, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, expanded: Boolean = false) {
+private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, progress: Float, subject: String?, subjectEditable: Boolean, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, tablet: Boolean = false) {
     val timer = vm.timer
     val isBreak = timer.phase != "focus"
     val running = timer.deadline != null
@@ -835,34 +722,33 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progre
     }.getOrNull() }
     val subjectName = subject?.let { id -> vm.subjects.firstOrNull { it.id == id }?.name }
         ?: timer.sessionId?.let { id -> vm.sessions.firstOrNull { it.id == id }?.data?.let(::sessionSubjectId)?.let { sid -> vm.subjects.firstOrNull { it.id == sid }?.name } }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary), shape = RoundedCornerShape(32.dp), modifier = modifier) {
-        // ponytail: fill/scroll inside needs a bounded height (wide branch); in a Lazy item both measure infinite and crash.
-        val scroll = rememberScrollState()
-        Column((if (expanded) Modifier.fillMaxSize().verticalScroll(scroll) else Modifier.fillMaxWidth()).padding(if (expanded) 32.dp else 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically)) {
-            AssistChip(
-                onClick = {},
-                label = { Text(if (isBreak) "BREAK · 5 MIN" else "FOCUS · ${timer.minutes} MIN", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp) },
-                leadingIcon = { Icon(if (isBreak) Icons.Filled.Headphones else Icons.Filled.Timer, null, Modifier.size(AssistChipDefaults.IconSize)) }
-            )
-            // ponytail: fixed 320dp overflows 320px-wide phones; fill caps at 340dp on tablets.
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth().widthIn(max = 340.dp).aspectRatio(1f)) {
-                CircularProgressIndicator(progress = { progress },
-                    modifier = Modifier.fillMaxSize(), strokeWidth = 12.dp,
-                    color = MaterialTheme.colorScheme.secondary, trackColor = Color.White.copy(alpha = 0.18f))
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(formatClock(seconds), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 60.sp, letterSpacing = (-1).sp, maxLines = 1)
-                    Text(
-                        when {
-                            running && endsAt != null -> "Ends $endsAt"
-                            running -> "In progress"
-                            timer.sessionId != null -> "Paused · resume when ready"
-                            isBreak -> "Breathe · stretch · sip water"
-                            else -> "Ready when you are"
-                        },
-                        style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .8f)
-                    )
-                    if (subjectName != null) Text(subjectName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .9f), fontWeight = FontWeight.Bold)
+    Card(modifier = modifier) {
+        Column(Modifier.fillMaxWidth().heightIn(min = if (tablet) 520.dp else 0.dp).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)) {
+            Text(if (isBreak) "Break" else "Focus session", style = MaterialTheme.typography.titleLarge)
+            Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(formatClock(seconds), style = MaterialTheme.typography.displayLarge, maxLines = 1)
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                Text(when {
+                    running && endsAt != null -> "Ends $endsAt"
+                    running -> "In progress"
+                    timer.sessionId != null -> "Paused"
+                    isBreak -> "Time for a break"
+                    else -> "Ready to focus"
+                }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (subjectName != null) Text(subjectName, style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { if (running) vm.pauseTimer() else onStart() }) {
+                    Icon(if (running) Icons.Filled.Pause else Icons.Filled.PlayArrow, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (running) "Pause" else if (idle) "Start focus" else "Resume")
+                }
+                if (timer.sessionId != null || isBreak) OutlinedButton(onClick = vm::finishTimer) {
+                    Text(if (isBreak) "Skip break" else "Finish")
                 }
             }
             if (subjectEditable) {
@@ -876,49 +762,33 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, total: Long, progre
                     Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Slider(value = draft, onValueChange = { draft = it }, valueRange = 5f..120f, steps = 22,
                             onValueChangeFinished = { vm.chooseDuration(draft.toInt().coerceIn(5, 120)) })
-                        Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f))
+                        Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 SubjectPickerRow(vm, subject, onSubject)
                 if (!idle && timer.sessionId != null) {
                     Text("Paused with ${formatClock(seconds)} left · switch subject anytime",
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f), style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center)
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!running) Button(onClick = onStart, enabled = !isBreak || true,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp)) {
-                    Icon(Icons.Filled.PlayArrow, null); Text(if (timer.sessionId == null && !isBreak) " Start focus" else " Resume", style = MaterialTheme.typography.titleMedium)
-                }
-                else Button(onClick = vm::pauseTimer,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 16.dp)) {
-                    Icon(Icons.Filled.Pause, null); Text(" Pause", style = MaterialTheme.typography.titleMedium)
-                }
-                if (timer.sessionId != null || isBreak) OutlinedButton(
-                    onClick = vm::finishTimer,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
-                    Text(if (isBreak) "Skip break" else "Finish", style = MaterialTheme.typography.titleMedium)
-                }
-            }
-            if (isBreak) Text("Finishing the break resets the timer for your next block.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .7f), textAlign = TextAlign.Center)
+
         }
     }
 }
 
 @Composable
 private fun SubjectPickerRow(vm: FocalViewModel, selected: String?, onSubject: (String?) -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Subject", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = .85f), fontWeight = FontWeight.Bold)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = selected == null, onClick = { onSubject(null) }, label = { Text("None") })
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.widthIn(max = 400.dp).fillMaxWidth()) {
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(vm.subjects.firstOrNull { it.id == selected }?.name ?: "Choose subject",
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("No subject") }, onClick = { onSubject(null); open = false })
             vm.subjects.forEach { option ->
-                FilterChip(selected = selected == option.id, onClick = { onSubject(option.id) },
-                    label = { Text(option.name) },
-                    leadingIcon = { Box(Modifier.size(10.dp).background(Color((option.color and 0xffffffffL).toInt()), CircleShape)) })
+                DropdownMenuItem(text = { Text(option.name) }, onClick = { onSubject(option.id); open = false })
             }
         }
     }
@@ -935,9 +805,9 @@ private fun TodayStatsCard(vm: FocalViewModel) {
             }.getOrDefault(0)
         }.coerceAtLeast(0)
     }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(24.dp)) {
+    Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Today", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Today", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatTile("${minutes}m", "focused", Modifier.weight(1f))
                 StatTile("${todays.size}", "sessions", Modifier.weight(1f))
@@ -949,9 +819,9 @@ private fun TodayStatsCard(vm: FocalViewModel) {
 
 @Composable
 private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), shape = RoundedCornerShape(18.dp), modifier = modifier) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small, modifier = modifier) {
         Column(Modifier.padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+            Text(value, style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -959,11 +829,11 @@ private fun StatTile(value: String, label: String, modifier: Modifier = Modifier
 
 @Composable
 private fun MusicCard(music: MusicPlayer, attemptedAccess: Boolean, onEnable: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), shape = RoundedCornerShape(24.dp)) {
+    Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Filled.Headphones, null, tint = MaterialTheme.colorScheme.primary)
-                Text("Music", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Music", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (music.accessGranted) IconButton(onClick = music::refresh) { Icon(Icons.Filled.Refresh, "Refresh music player") }
             }
             if (!music.accessGranted) {
@@ -999,9 +869,9 @@ private fun MusicCard(music: MusicPlayer, attemptedAccess: Boolean, onEnable: ()
 
 @Composable
 private fun RecentFocusCard(vm: FocalViewModel) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(24.dp)) {
+    Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Recent focus", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Recent focus", style = MaterialTheme.typography.titleMedium)
             if (vm.sessions.isEmpty()) {
                 Text("Finish a focus session to see it here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else vm.sessions.takeLast(6).reversed().forEach { session ->
@@ -1011,7 +881,7 @@ private fun RecentFocusCard(vm: FocalViewModel) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(10.dp).background(accent, CircleShape))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(data.optString("title").ifBlank { "Focus session" }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(data.optString("title").ifBlank { "Focus session" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${data.optString("status").takeIf { it.isNotBlank() } ?: "session"} · ${runCatching { FocalJson.localDate(data.getString("startTime")).format(DateTimeFormatter.ofPattern("d MMM")) }.getOrDefault("")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     val dur = runCatching { durationText(data.getString("startTime"), data.optString("endTime").takeIf { it.isNotBlank() } ?: data.getString("startTime")) }.getOrDefault("")
@@ -1024,31 +894,15 @@ private fun RecentFocusCard(vm: FocalViewModel) {
 }
 
 @Composable
-private fun AppearanceCard(themeMode: String, themeStyle: String, dynamicAvailable: Boolean, onTheme: (String, String) -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow), shape = RoundedCornerShape(24.dp)) {
+private fun AppearanceCard(themeMode: String, onTheme: (String) -> Unit) {
+    Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Appearance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                if (dynamicAvailable) "System follows your phone. Dynamic uses your wallpaper colors."
-                else "System follows your phone.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (id, label) ->
-                    FilterChip(selected = themeMode == id, onClick = { onTheme(id, themeStyle) }, label = { Text(label) })
-                }
-            }
+            Text("Appearance", style = MaterialTheme.typography.titleLarge)
+            Text("Default Material 3 colors. Match your device or choose light or dark.",
+                style = MaterialTheme.typography.bodyMedium)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (dynamicAvailable) {
-                    FilterChip(selected = themeStyle == "dynamic", onClick = { onTheme(themeMode, "dynamic") }, label = { Text("Dynamic") })
-                }
-                THEME_PRESETS.forEach { preset ->
-                    FilterChip(
-                        selected = themeStyle == preset.id,
-                        onClick = { onTheme(themeMode, preset.id) },
-                        label = { Text(preset.label) },
-                        leadingIcon = { Box(Modifier.size(12.dp).background(preset.primaryL, CircleShape)) }
-                    )
+                listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (id, label) ->
+                    FilterChip(selected = themeMode == id, onClick = { onTheme(id) }, label = { Text(label) })
                 }
             }
         }
@@ -1056,7 +910,7 @@ private fun AppearanceCard(themeMode: String, themeStyle: String, dynamicAvailab
 }
 
 @Composable
-private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, themeMode: String, themeStyle: String, dynamicAvailable: Boolean, onTheme: (String, String) -> Unit) {
+private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, themeMode: String, onTheme: (String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var notionToken by remember { mutableStateOf("") }
@@ -1068,16 +922,17 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
     var subjectProperty by remember(vm.account) { mutableStateOf(vm.notionSettings().subject) }
     var showMapping by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val wide = maxWidth >= 840.dp
-        val contentModifier = if (wide) Modifier.widthIn(max = 760.dp).fillMaxWidth() else Modifier.fillMaxWidth()
+        // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
+        val wide = maxWidth >= 720.dp
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(contentModifier, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                item { PageTitle("Stay in sync", "Account", "Your plans and study time, wherever you work.") }
+            LazyVerticalGrid(columns = GridCells.Fixed(if (wide) 2 else 1), modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 item {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                    Card {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Focal account", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            if (!vm.configured) Text("Add your Focal Supabase URL and publishable key to local.properties, then rebuild.")
+                            Text("Focal account", style = MaterialTheme.typography.titleLarge)
+                            if (!vm.configured) Text("Account sign-in is unavailable in this build.")
                             else if (vm.account == "guest") {
                                 Text("Guest plans stay on this device until you sign in.", style = MaterialTheme.typography.bodyMedium)
                                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
@@ -1089,7 +944,7 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
                                 }
                             } else {
                                 Text(vm.email ?: "Signed in · ${vm.account.take(8)}…", style = MaterialTheme.typography.bodyMedium)
-                                Text(vm.syncStatus, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                Text(vm.syncStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     FilledTonalButton(onClick = vm::syncNow, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Refresh, null); Text(" Sync now") }
                                     OutlinedButton(onClick = vm::signOut, enabled = !vm.accountBusy, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
@@ -1098,11 +953,11 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
                         }
                     }
                 }
-                item { AppearanceCard(themeMode, themeStyle, dynamicAvailable, onTheme) }
+                item { AppearanceCard(themeMode, onTheme) }
                 item {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Card {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("Notion calendar", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Notion calendar", style = MaterialTheme.typography.titleLarge)
                             Text("Two-way sync with the same database and Focal ID fields used by desktop.", style = MaterialTheme.typography.bodyMedium)
                             OutlinedTextField(notionToken, { notionToken = it }, label = { Text(if (vm.hasNotionToken()) "Integration token saved · enter to replace" else "Integration token") },
                                 modifier = Modifier.fillMaxWidth(), visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
@@ -1120,11 +975,11 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
                     }
                 }
                 item {
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Card {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("App updates", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("App updates", style = MaterialTheme.typography.titleLarge)
                             Text("Version ${BuildConfig.VERSION_NAME} · GitHub Releases", style = MaterialTheme.typography.bodyMedium)
-                            vm.availableUpdate?.let { Text("Version ${it.version} is ready", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
+                            vm.availableUpdate?.let { Text("Version ${it.version} is ready", color = MaterialTheme.colorScheme.primary) }
                             if (vm.updateStatus.isNotBlank()) Text(vm.updateStatus, style = MaterialTheme.typography.bodySmall)
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = vm::checkUpdates, enabled = !vm.updateBusy, modifier = Modifier.fillMaxWidth()) { Text("Check updates") }
@@ -1133,10 +988,10 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
                         }
                     }
                 }
-                if (vm.cloudConflicts.isNotEmpty() || vm.notionConflicts.isNotEmpty()) item { Text("Changes to review", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                if (vm.cloudConflicts.isNotEmpty() || vm.notionConflicts.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) { Text("Changes to review", style = MaterialTheme.typography.titleLarge) }
                 items(vm.cloudConflicts) { conflict -> ConflictCard("Focal account", conflict, { vm.resolveCloud(conflict, true) }, { vm.resolveCloud(conflict, false) }) }
                 items(vm.notionConflicts) { conflict -> ConflictCard("Notion", conflict, { vm.resolveNotion(conflict, true) }, { vm.resolveNotion(conflict, false) }) }
-                item { Text("Notion tokens stay on this device. Account data sync uses your own Focal login.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item(span = { GridItemSpan(maxLineSpan) }) { Text("Notion tokens stay on this device. Account data sync uses your own Focal login.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
     }
@@ -1146,7 +1001,7 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
 private fun ConflictCard(source: String, conflict: MergeConflict, keepLocal: () -> Unit, useRemote: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("$source · ${conflict.entity.replace('_', ' ')}", fontWeight = FontWeight.Bold)
+            Text("$source · ${conflict.entity.replace('_', ' ')}")
             Text(conflict.remote?.optString("title")?.takeIf { it.isNotBlank() } ?: conflict.rowId, style = MaterialTheme.typography.bodyMedium)
             Text("This item changed in two places. Choose the version to keep.", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

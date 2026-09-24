@@ -3,9 +3,9 @@ package com.andy.focal
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.os.Bundle
-import android.provider.OpenableColumns
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -50,10 +51,10 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -81,13 +82,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -118,7 +125,7 @@ private fun FocalApp(vm: FocalViewModel) {
     } else if (dark) darkColorScheme(primary = Color(0xFFAEC6FF), secondary = Color(0xFFC4C6D0))
     else lightColorScheme(primary = Color(0xFF254A82), secondary = Color(0xFF4C6289))
     MaterialTheme(colorScheme = colors, shapes = MaterialTheme.shapes.copy(large = RoundedCornerShape(28.dp), extraLarge = RoundedCornerShape(32.dp))) {
-        var tab by remember { mutableStateOf(0) }
+        var tab by rememberSaveable { mutableStateOf(0) }
         val snackbar = remember { SnackbarHostState() }
         val message = vm.message
         LaunchedEffect(message) {
@@ -180,8 +187,8 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = { month = month.minusMonths(1) }) { Icon(Icons.Filled.ArrowBack, "Previous month") }
-                            IconButton(onClick = { month = month.plusMonths(1) }) { Icon(Icons.Filled.ArrowForward, "Next month") }
+                            IconButton(onClick = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) }) { Icon(Icons.Filled.ArrowBack, "Previous month") }
+                            IconButton(onClick = { month = month.plusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) }) { Icon(Icons.Filled.ArrowForward, "Next month") }
                         }
                         Row { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                         val firstOffset = month.atDay(1).dayOfWeek.value - 1
@@ -196,6 +203,7 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                                         val selected = date == day
                                         Column(Modifier.weight(1f).aspectRatio(0.95f).clip(RoundedCornerShape(16.dp))
                                             .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                            .semantics { contentDescription = date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")); this.selected = selected }
                                             .clickable { day = date }, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                             Text(number.toString(), color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                                 style = MaterialTheme.typography.bodyLarge, fontWeight = if (selected || date == LocalDate.now()) FontWeight.Bold else FontWeight.Normal)
@@ -266,6 +274,8 @@ private fun EventEditor(vm: FocalViewModel, initial: JSONObject?, selectedDay: L
     var typeMenu by remember { mutableStateOf(false) }
     var subjectMenu by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var completed by remember(initial) { mutableStateOf(initial?.optBoolean("isFinished") ?: false) }
     var confirmDelete by remember { mutableStateOf(false) }
     fun pickDate(current: String, change: (String) -> Unit) {
         val date = LocalDate.parse(current)
@@ -300,8 +310,12 @@ private fun EventEditor(vm: FocalViewModel, initial: JSONObject?, selectedDay: L
                 }
                 OutlinedTextField(location, { location = it }, label = { Text("Location") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(description, { description = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = completed, onCheckedChange = { completed = it })
+                    Text("Completed")
+                }
                 if (error != null) Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                if (initial != null) OutlinedButton(onClick = { confirmDelete = true }) { Icon(Icons.Filled.Delete, null); Text(" Delete event") }
+                if (initial != null) OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy) { Icon(Icons.Filled.Delete, null); Text(" Delete event") }
             }
         },
         confirmButton = { Button(onClick = {
@@ -313,30 +327,35 @@ private fun EventEditor(vm: FocalViewModel, initial: JSONObject?, selectedDay: L
                 if (Instant.parse(end) <= Instant.parse(start)) error("End must be after start")
                 record.put("title", title.trim()).put("startTime", start).put("endTime", end).put("eventType", type)
                     .put("subjectId", subject ?: JSONObject.NULL).put("location", location.trim()).put("description", description.trim())
-                vm.saveEvent(record); onDismiss()
+                    .put("isFinished", completed)
+                busy = true
+                vm.saveEvent(record, onDismiss, { busy = false })
             } catch (e: Exception) { error = e.message ?: "Check the date and time" }
-        }) { Text("Save") } },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } })
+        }, enabled = !busy) { Text(if (busy) "Saving…" else "Save") } },
+        dismissButton = { OutlinedButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") } })
     if (confirmDelete && initial != null) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("Delete event?") },
         text = { Text("This removes it from your calendar and connected accounts.") },
-        confirmButton = { Button(onClick = { vm.deleteEvent(initial.getString("id")); confirmDelete = false; onDismiss() }) { Text("Delete") } },
-        dismissButton = { OutlinedButton(onClick = { confirmDelete = false }) { Text("Keep") } })
+        confirmButton = { Button(onClick = {
+            busy = true
+            vm.deleteEvent(initial.getString("id"), { confirmDelete = false; onDismiss() }, { busy = false })
+        }, enabled = !busy) { Text(if (busy) "Deleting…" else "Delete") } },
+        dismissButton = { OutlinedButton(onClick = { confirmDelete = false }, enabled = !busy) { Text("Keep") } })
 }
 
 @Composable
 private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val music = remember { MusicPlayer(context) }
-    DisposableEffect(music) { onDispose { music.release() } }
-    val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } ?: "Audio"
-            music.load(uri, name)
-        }
+    var attemptedMusicAccess by rememberSaveable { mutableStateOf(false) }
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(music, owner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) music.refresh() }
+        owner.lifecycle.addObserver(observer)
+        music.refresh()
+        onDispose { owner.lifecycle.removeObserver(observer); music.release() }
     }
     var subject by remember { mutableStateOf<String?>(null) }
-    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val askNotifications = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     fun start() {
         if (android.os.Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED)
             askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -352,12 +371,14 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), shape = RoundedCornerShape(32.dp)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     Text(if (timer.phase == "focus") "FOCUS SESSION" else "TAKE A BREATH", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Box(Modifier.size(244.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(progress = { if (timer.phase == "focus") 1f - seconds.toFloat() / (timer.minutes * 60) else 1f - seconds.toFloat() / 300f },
-                            modifier = Modifier.fillMaxSize(), strokeWidth = 12.dp, trackColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(time, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                            Text(if (timer.deadline != null) "In progress" else "Ready when you are", style = MaterialTheme.typography.bodyMedium)
+                    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(maxWidth.coerceAtMost(244.dp)), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(progress = { if (timer.phase == "focus") 1f - seconds.toFloat() / (timer.minutes * 60) else 1f - seconds.toFloat() / 300f },
+                                modifier = Modifier.fillMaxSize(), strokeWidth = 12.dp, trackColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(time, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
+                                Text(if (timer.deadline != null) "In progress" else "Ready when you are", style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                     if (timer.sessionId == null && timer.phase == "focus") {
@@ -382,20 +403,44 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(Icons.Filled.Headphones, null, tint = MaterialTheme.colorScheme.primary)
-                        Text("Your music", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("Music controls", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        if (music.accessGranted) IconButton(onClick = music::refresh) { Icon(Icons.Filled.Refresh, "Refresh music player") }
                     }
-                    Text(music.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { music.seek(-10_000) }, enabled = music.ready) { Icon(Icons.Filled.SkipPrevious, "Back ten seconds") }
-                        FilledIconButton(onClick = music::toggle, enabled = music.ready) { Icon(if (music.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (music.playing) "Pause music" else "Play music") }
-                        IconButton(onClick = { music.seek(10_000) }, enabled = music.ready) { Icon(Icons.Filled.SkipNext, "Forward ten seconds") }
-                        OutlinedButton(onClick = { pickAudio.launch(arrayOf("audio/*")) }) { Text("Choose audio") }
+                    if (!music.accessGranted) {
+                        Text("To control Spotify, Apple Music, or another active player, allow Focal notification access. Android uses this to share media controls.", style = MaterialTheme.typography.bodyMedium)
+                        Button(onClick = { attemptedMusicAccess = true; context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("Enable music controls") }
+                        if (attemptedMusicAccess && android.os.Build.VERSION.SDK_INT >= 33)
+                            Text("If Android blocks access for this APK, open Focal in App info, tap More, then Allow restricted settings.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        if (music.sources.size > 1) {
+                            var playerMenu by remember { mutableStateOf(false) }
+                            Box {
+                                AssistChip(onClick = { playerMenu = true }, label = { Text(music.sources[music.selectedIndex]) })
+                                DropdownMenu(playerMenu, { playerMenu = false }) {
+                                    music.sources.forEachIndexed { index, label ->
+                                        DropdownMenuItem(text = { Text(label) }, onClick = { music.select(index); playerMenu = false })
+                                    }
+                                }
+                            }
+                        } else if (music.sources.isNotEmpty()) Text(music.sources.first(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(music.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (music.artist.isNotBlank()) Text(music.artist, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (music.sources.isEmpty()) Text("Open your music app and start a track, then return here.", style = MaterialTheme.typography.bodyMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = music::previous, enabled = music.canPrevious) { Icon(Icons.Filled.SkipPrevious, "Previous track") }
+                            FilledIconButton(onClick = music::toggle, enabled = music.canToggle) { Icon(if (music.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (music.playing) "Pause music" else "Play music") }
+                            IconButton(onClick = music::next, enabled = music.canNext) { Icon(Icons.Filled.SkipNext, "Next track") }
+                        }
                     }
+                    music.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
         item {
             Text("Recent focus", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        if (vm.sessions.isEmpty()) item {
+            Text("Finish a focus session to see it here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         items(vm.sessions.takeLast(5).reversed()) { session ->
             val data = session.data
@@ -429,19 +474,20 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                     Text("Focal account", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     if (!vm.configured) Text("Add your Focal Supabase URL and publishable key to local.properties, then rebuild.")
                     else if (vm.account == "guest") {
-                        OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("Guest plans stay on this device until you sign in.", style = MaterialTheme.typography.bodyMedium)
+                        OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                         OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(onClick = { vm.signIn(email, password) }) { Text("Sign in") }
-                            OutlinedButton(onClick = { vm.signUp(email, password) }) { Text("Create account") }
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { vm.signIn(email, password) }, enabled = !vm.accountBusy, modifier = Modifier.fillMaxWidth()) { Text(if (vm.accountBusy) "Working…" else "Sign in") }
+                            OutlinedButton(onClick = { vm.signUp(email, password) }, enabled = !vm.accountBusy, modifier = Modifier.fillMaxWidth()) { Text("Create account") }
                         }
                     } else {
                         Text(vm.email ?: "Signed in · ${vm.account.take(8)}…", style = MaterialTheme.typography.bodyMedium)
                         Text(vm.syncStatus, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            FilledTonalButton(onClick = vm::syncNow) { Icon(Icons.Filled.Refresh, null); Text(" Sync now") }
-                            OutlinedButton(onClick = vm::signOut) { Text("Sign out") }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalButton(onClick = vm::syncNow, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Filled.Refresh, null); Text(" Sync now") }
+                            OutlinedButton(onClick = vm::signOut, enabled = !vm.accountBusy, modifier = Modifier.fillMaxWidth()) { Text("Sign out") }
                         }
                     }
                 }
@@ -463,7 +509,7 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                         OutlinedTextField(completedProperty, { completedProperty = it }, label = { Text("Complete property") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         OutlinedTextField(subjectProperty, { subjectProperty = it }, label = { Text("Subject property") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                     }
-                    Button(onClick = { vm.saveNotion(notionToken, NotionSettings(notionDatabase, titleProperty, dateProperty, typeProperty, completedProperty, subjectProperty)); notionToken = "" }) { Text("Save and sync") }
+                    Button(onClick = { vm.saveNotion(notionToken, NotionSettings(notionDatabase, titleProperty, dateProperty, typeProperty, completedProperty, subjectProperty)) }, modifier = Modifier.fillMaxWidth()) { Text("Save and sync") }
                 }
             }
         }
@@ -474,9 +520,9 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                     Text("Version ${BuildConfig.VERSION_NAME} · GitHub Releases", style = MaterialTheme.typography.bodyMedium)
                     vm.availableUpdate?.let { Text("Version ${it.version} is ready", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }
                     if (vm.updateStatus.isNotBlank()) Text(vm.updateStatus, style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedButton(onClick = vm::checkUpdates, enabled = !vm.updateBusy) { Text("Check updates") }
-                        if (vm.availableUpdate != null) Button(onClick = vm::installUpdate, enabled = !vm.updateBusy) { Text("Install update") }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = vm::checkUpdates, enabled = !vm.updateBusy, modifier = Modifier.fillMaxWidth()) { Text("Check updates") }
+                        if (vm.availableUpdate != null) Button(onClick = vm::installUpdate, enabled = !vm.updateBusy, modifier = Modifier.fillMaxWidth()) { Text("Install update") }
                     }
                 }
             }

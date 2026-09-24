@@ -42,8 +42,8 @@ android {
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", quoted(supabaseKey))
     }
     buildFeatures { compose = true; buildConfig = true }
-    // ponytail: Lifecycle 2.8.7's lint detector crashes with Kotlin 2.1 analysis; keep all other release lint checks.
-    lint { disable += "NullSafeMutableLiveData" }
+    // ponytail: these library detectors crash with Kotlin 2.1 analysis; keep all other lint checks.
+    lint { disable += listOf("NullSafeMutableLiveData", "FrequentlyChangingValue", "RememberInComposition", "AutoboxingStateCreation") }
     signingConfigs {
         create("focalRelease") {
             if (signingValues.values.all(String::isNotBlank)) {
@@ -64,7 +64,7 @@ android {
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.06.01"))
-    implementation("androidx.compose.material3:material3:1.5.0-alpha01")
+    implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

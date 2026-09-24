@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,6 +34,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     var cloudConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
     var notionConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
     var syncStatus by mutableStateOf("Offline ready"); private set
+    var accountBusy by mutableStateOf(false); private set
     var message by mutableStateOf<String?>(null); private set
     var timer by mutableStateOf(TimerState()); private set
     var now by mutableStateOf(System.currentTimeMillis()); private set
@@ -69,23 +71,36 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun clearMessage() { message = null }
     private fun launchAction(block: suspend () -> Unit) = viewModelScope.launch {
-        try { block() } catch (error: Exception) { message = error.message ?: "Something went wrong" }
+        try { block() }
+        catch (error: CancellationException) { throw error }
+        catch (error: Exception) { message = error.message ?: "Something went wrong" }
     }
-    fun signIn(emailValue: String, password: String) = launchAction {
+    private fun accountAction(block: suspend () -> Unit) = launchAction {
+        if (accountBusy) return@launchAction
+        accountBusy = true
+        try { block() }
+        catch (error: Exception) { syncStatus = "Sign-in needed"; throw error }
+        finally { accountBusy = false }
+    }
+    fun signIn(emailValue: String, password: String) = accountAction {
         if (timer.deadline != null) throw IllegalStateException("Pause or finish the timer before signing in.")
+        require(android.util.Patterns.EMAIL_ADDRESS.matcher(emailValue.trim()).matches()) { "Enter a valid email address." }
+        require(password.isNotBlank()) { "Enter your password." }
         syncStatus = "Signing in…"
         cloud.signIn(emailValue, password)
         email = emailValue.trim()
         reload()
         syncAll()
     }
-    fun signUp(emailValue: String, password: String) = launchAction {
+    fun signUp(emailValue: String, password: String) = accountAction {
         if (timer.deadline != null) throw IllegalStateException("Pause or finish the timer before creating an account.")
+        require(android.util.Patterns.EMAIL_ADDRESS.matcher(emailValue.trim()).matches()) { "Enter a valid email address." }
+        require(password.length >= 6) { "Use a password with at least 6 characters." }
         val signedIn = cloud.signUp(emailValue, password)
         if (signedIn) { email = emailValue.trim(); reload(); syncAll() }
         else message = "Check your email to confirm the account, then sign in."
     }
-    fun signOut() = launchAction {
+    fun signOut() = accountAction {
         if (timer.deadline != null) throw IllegalStateException("Finish or pause the timer before signing out.")
         cloud.signOut(); email = null; syncStatus = "Offline ready"; reload()
     }
@@ -107,7 +122,8 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
             syncStatus = if (cloudConflicts.isNotEmpty() || notionConflicts.isNotEmpty()) "Changes need review"
                 else if (pending > 0) "$pending changes waiting to sync"
                 else "Synced · ${java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}"
-        } catch (error: Exception) { syncStatus = "Sync needed"; message = error.message ?: "Sync failed" }
+        } catch (error: CancellationException) { throw error }
+        catch (error: Exception) { syncStatus = "Sync needed"; message = error.message ?: "Sync failed" }
     }
     fun syncNow() = launchAction { syncAll() }
     fun checkUpdates() = viewModelScope.launch { checkUpdates(true) }
@@ -127,13 +143,19 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
         try { updateStatus = updates.install(update) }
         finally { updateBusy = false }
     }
-    fun saveEvent(record: JSONObject) = launchAction {
-        withContext(Dispatchers.IO) { db.saveLocal(account, "events", record) }
-        reload(); syncAll()
+    fun saveEvent(record: JSONObject, onSaved: () -> Unit, onFailure: () -> Unit) = launchAction {
+        try {
+            withContext(Dispatchers.IO) { db.saveLocal(account, "events", record) }
+            reload(); onSaved()
+        } catch (error: Exception) { onFailure(); throw error }
+        syncAll()
     }
-    fun deleteEvent(id: String) = launchAction {
-        withContext(Dispatchers.IO) { db.deleteLocal(account, "events", id) }
-        reload(); syncAll()
+    fun deleteEvent(id: String, onDeleted: () -> Unit, onFailure: () -> Unit) = launchAction {
+        try {
+            withContext(Dispatchers.IO) { db.deleteLocal(account, "events", id) }
+            reload(); onDeleted()
+        } catch (error: Exception) { onFailure(); throw error }
+        syncAll()
     }
     fun resolveCloud(conflict: MergeConflict, keepLocal: Boolean) = launchAction {
         withContext(Dispatchers.IO) { db.resolve(account, conflict, keepLocal) }

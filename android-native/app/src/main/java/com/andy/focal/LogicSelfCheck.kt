@@ -1,6 +1,7 @@
 package com.andy.focal
 
 import java.time.Instant
+import android.media.session.PlaybackState
 
 // Runnable on every debug launch; small enough to catch timer persistence regressions.
 internal fun checkNativeLogic() {
@@ -17,4 +18,7 @@ internal fun checkNativeLogic() {
     check(UpdateSchedule.nextFailure(now, 429, "120", null, null, 0) >= now + 120_000)
     check(UpdateSchedule.nextFailure(now, 403, null, "0", "1700000300", 0) >= now + 300_000)
     check(UpdateSchedule.nextFailure(now, 429, null, null, null, 0) >= now + 60_000)
+    check(musicCanToggle(PlaybackState.ACTION_PLAY, false))
+    check(!musicCanToggle(PlaybackState.ACTION_PLAY, true))
+    check(musicCanToggle(PlaybackState.ACTION_PAUSE, true))
 }

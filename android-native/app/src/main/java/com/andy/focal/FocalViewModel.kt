@@ -1,0 +1,227 @@
+package com.andy.focal
+
+import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.time.Instant
+
+class FocalViewModel(application: Application) : AndroidViewModel(application) {
+    private val db = FocalDb(application)
+    private val app = application
+    private val secrets = SecretStore(application)
+    private val cloud = FocalCloud(application, db, secrets)
+    private val notion = NotionSync(db, secrets)
+    private val updates = UpdateEngine(application)
+    private val syncMutex = Mutex()
+    private val timerMutex = Mutex()
+    val configured get() = cloud.configured
+    val account get() = cloud.session?.userId ?: "guest"
+    var email by mutableStateOf<String?>(null); private set
+    var events by mutableStateOf<List<FocalRow>>(emptyList()); private set
+    var sessions by mutableStateOf<List<FocalRow>>(emptyList()); private set
+    var subjects by mutableStateOf(Subjects.builtIn); private set
+    var cloudConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
+    var notionConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
+    var syncStatus by mutableStateOf("Offline ready"); private set
+    var message by mutableStateOf<String?>(null); private set
+    var timer by mutableStateOf(TimerState()); private set
+    var now by mutableStateOf(System.currentTimeMillis()); private set
+    var availableUpdate by mutableStateOf<AppUpdate?>(null); private set
+    var updateStatus by mutableStateOf(""); private set
+    var updateBusy by mutableStateOf(false); private set
+
+    init {
+        reload()
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                now = System.currentTimeMillis()
+                if (timer.deadline != null && timer.seconds(now) == 0L) finishExpiredTimer()
+            }
+        }
+        viewModelScope.launch {
+            if (cloud.session != null || notion.token().isNotBlank()) syncAll()
+            while (true) { delay(60_000); if (cloud.session != null || notion.token().isNotBlank()) syncAll() }
+        }
+        viewModelScope.launch { checkUpdates(false) }
+    }
+    private fun reload() {
+        events = db.rows(account, "events").sortedBy { it.data.optString("startTime") }
+        sessions = db.rows(account, "study_sessions").sortedBy { it.data.optString("startTime") }
+        val hidden = db.rows(account, "hidden_subjects").map { it.id }.toSet()
+        subjects = Subjects.builtIn.filterNot { it.id in hidden } + db.rows(account, "custom_subjects").mapNotNull { row ->
+            val o = row.data
+            o.optString("name").takeIf { it.isNotBlank() }?.let { Subject(row.id, it, runCatching { android.graphics.Color.parseColor(o.optString("color")) }.getOrDefault(0xFF6750A4.toInt()).toLong() and 0xffffffffL) }
+        }
+        cloudConflicts = db.conflicts(account)
+        notionConflicts = db.notionConflicts(account)
+        timer = TimerState.parse(db.meta(account, "timer"))
+    }
+    fun clearMessage() { message = null }
+    private fun launchAction(block: suspend () -> Unit) = viewModelScope.launch {
+        try { block() } catch (error: Exception) { message = error.message ?: "Something went wrong" }
+    }
+    fun signIn(emailValue: String, password: String) = launchAction {
+        if (timer.deadline != null) throw IllegalStateException("Pause or finish the timer before signing in.")
+        syncStatus = "Signing in…"
+        cloud.signIn(emailValue, password)
+        email = emailValue.trim()
+        reload()
+        syncAll()
+    }
+    fun signUp(emailValue: String, password: String) = launchAction {
+        if (timer.deadline != null) throw IllegalStateException("Pause or finish the timer before creating an account.")
+        val signedIn = cloud.signUp(emailValue, password)
+        if (signedIn) { email = emailValue.trim(); reload(); syncAll() }
+        else message = "Check your email to confirm the account, then sign in."
+    }
+    fun signOut() = launchAction {
+        if (timer.deadline != null) throw IllegalStateException("Finish or pause the timer before signing out.")
+        cloud.signOut(); email = null; syncStatus = "Offline ready"; reload()
+    }
+    suspend fun syncAll() = syncMutex.withLock {
+        if (cloud.session == null && (notion.token().isBlank() || notion.settings(account).database.isBlank())) return@withLock
+        try {
+            var pending = 0
+            if (cloud.session != null) {
+                syncStatus = "Syncing Focal…"
+                pending = withContext(Dispatchers.IO) { cloud.sync() }
+                reload()
+            }
+            if (notion.token().isNotBlank() && notion.settings(account).database.isNotBlank()) {
+                syncStatus = "Syncing Notion…"
+                withContext(Dispatchers.IO) { notion.sync(account) }
+                if (cloud.session != null) pending = withContext(Dispatchers.IO) { cloud.sync() }
+                reload()
+            }
+            syncStatus = if (cloudConflicts.isNotEmpty() || notionConflicts.isNotEmpty()) "Changes need review"
+                else if (pending > 0) "$pending changes waiting to sync"
+                else "Synced · ${java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("h:mm a"))}"
+        } catch (error: Exception) { syncStatus = "Sync needed"; message = error.message ?: "Sync failed" }
+    }
+    fun syncNow() = launchAction { syncAll() }
+    fun checkUpdates() = viewModelScope.launch { checkUpdates(true) }
+    private suspend fun checkUpdates(manual: Boolean) {
+        if (updateBusy) return
+        updateBusy = true
+        try {
+            val (update, status) = updates.check(manual)
+            availableUpdate = update
+            if (status.isNotBlank()) updateStatus = status
+        } finally { updateBusy = false }
+    }
+    fun installUpdate() = launchAction {
+        val update = availableUpdate ?: return@launchAction
+        if (updateBusy) return@launchAction
+        updateBusy = true
+        try { updateStatus = updates.install(update) }
+        finally { updateBusy = false }
+    }
+    fun saveEvent(record: JSONObject) = launchAction {
+        withContext(Dispatchers.IO) { db.saveLocal(account, "events", record) }
+        reload(); syncAll()
+    }
+    fun deleteEvent(id: String) = launchAction {
+        withContext(Dispatchers.IO) { db.deleteLocal(account, "events", id) }
+        reload(); syncAll()
+    }
+    fun resolveCloud(conflict: MergeConflict, keepLocal: Boolean) = launchAction {
+        withContext(Dispatchers.IO) { db.resolve(account, conflict, keepLocal) }
+        reload(); syncAll()
+    }
+    fun resolveNotion(conflict: MergeConflict, keepLocal: Boolean) = launchAction {
+        withContext(Dispatchers.IO) { notion.resolve(account, conflict, keepLocal) }
+        reload(); syncAll()
+    }
+    fun notionSettings() = notion.settings(account)
+    fun hasNotionToken() = notion.token().isNotBlank()
+    fun saveNotion(token: String, mapping: NotionSettings) = launchAction {
+        withContext(Dispatchers.IO) { notion.saveSettings(account, token.ifBlank { notion.token() }, mapping) }
+        reload(); syncAll()
+    }
+    private fun persistTimer(next: TimerState) {
+        timer = next
+        db.setMeta(account, "timer", next.json())
+    }
+    fun chooseDuration(minutes: Int) {
+        if (timer.sessionId != null || timer.deadline != null) return
+        persistTimer(TimerState(minutes = minutes, remaining = minutes * 60L))
+    }
+    fun startTimer(subjectId: String?) = launchAction {
+        timerMutex.withLock {
+            val current = timer
+            if (current.deadline != null) return@withLock
+            val instant = Instant.now()
+            if (current.phase == "focus") {
+                if (current.sessionId == null) {
+                    val session = FocalJson.session(subjectId, current.minutes, instant, subjects.firstOrNull { it.id == subjectId }?.name)
+                    withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                    persistTimer(current.copy(sessionId = session.getString("id")).resumed())
+                } else {
+                    val session = db.row(account, "study_sessions", current.sessionId)?.data ?: error("Study session is missing")
+                    FocalJson.reopenInterval(session, instant)
+                    withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                    persistTimer(current.resumed())
+                }
+            } else persistTimer(current.resumed())
+            timer.deadline?.let { TimerAlarm.schedule(app, account, it) }
+            reload()
+        }
+        syncAll()
+    }
+    fun pauseTimer() = launchAction {
+        timerMutex.withLock {
+            val current = timer
+            if (current.deadline == null) return@withLock
+            if (current.phase == "focus") current.sessionId?.let { id ->
+                db.row(account, "study_sessions", id)?.data?.let { session ->
+                    FocalJson.closeInterval(session, Instant.now())
+                    withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                }
+            }
+            persistTimer(current.paused())
+            TimerAlarm.cancel(app, account)
+            reload()
+        }
+        syncAll()
+    }
+    fun finishTimer() = launchAction {
+        timerMutex.withLock {
+            val current = timer
+            if (current.phase == "focus") current.sessionId?.let { id ->
+                db.row(account, "study_sessions", id)?.data?.let { session ->
+                    FocalJson.finishSession(session, Instant.now())
+                    withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                }
+            }
+            persistTimer(TimerState())
+            TimerAlarm.cancel(app, account)
+            reload()
+        }
+        syncAll()
+    }
+    private suspend fun finishExpiredTimer() = timerMutex.withLock {
+        val phase = timer.phase
+        if (TimerAlarm.complete(app, account)) {
+            reload()
+            message = if (phase == "focus") "Focus complete. Take a break." else "Break complete. Ready to focus?"
+            viewModelScope.launch { syncAll() }
+        }
+    }
+    fun onResume() = launchAction {
+        now = System.currentTimeMillis()
+        if (timer.deadline != null && timer.seconds(now) == 0L) finishExpiredTimer()
+        viewModelScope.launch { checkUpdates(false) }
+        syncAll()
+    }
+}

@@ -31,6 +31,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     var email by mutableStateOf<String?>(null); private set
     var events by mutableStateOf<List<FocalRow>>(emptyList()); private set
     var sessions by mutableStateOf<List<FocalRow>>(emptyList()); private set
+    val sharedSessions get() = sessions.filter { it.id != timer.sessionId && it.data.optJSONObject("execution")?.optString("state") == "in-progress" }
     var subjects by mutableStateOf(Subjects.builtIn); private set
     var cloudConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
     var notionConflicts by mutableStateOf<List<MergeConflict>>(emptyList()); private set
@@ -54,7 +55,10 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             if (cloud.session != null || notion.token().isNotBlank()) syncAll()
-            while (true) { delay(60_000); if (cloud.session != null || notion.token().isNotBlank()) syncAll() }
+            while (true) {
+                delay(if (timer.sessionId != null || sessions.any { it.data.optJSONObject("execution")?.optString("state") == "in-progress" }) 5_000 else 60_000)
+                if (cloud.session != null || notion.token().isNotBlank()) syncAll()
+            }
         }
         viewModelScope.launch { checkUpdates(false) }
     }
@@ -113,12 +117,14 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
                 syncStatus = "Syncing Focal…"
                 pending = withContext(Dispatchers.IO) { cloud.sync() }
                 reload()
+                reconcileSharedTimer()
             }
             if (notion.token().isNotBlank() && notion.settings(account).database.isNotBlank()) {
                 syncStatus = "Syncing Notion…"
                 withContext(Dispatchers.IO) { notion.sync(account) }
                 if (cloud.session != null) pending = withContext(Dispatchers.IO) { cloud.sync() }
                 reload()
+                if (cloud.session != null) reconcileSharedTimer()
             }
             syncStatus = if (cloudConflicts.isNotEmpty() || notionConflicts.isNotEmpty()) "Changes need review"
                 else if (pending > 0) "$pending changes waiting to sync"
@@ -175,6 +181,111 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     private fun persistTimer(next: TimerState) {
         timer = next
         db.setMeta(account, "timer", next.json())
+    }
+    private suspend fun reconcileSharedTimer() = timerMutex.withLock {
+        val current = timer
+        val sessionId = current.sessionId
+        if (sessionId != null) {
+            val ownSession = db.row(account, "study_sessions", sessionId)?.data
+            val execution = ownSession?.optJSONObject("execution")
+            if (ownSession == null || execution == null || execution.optString("state") == "completed") {
+                persistTimer(TimerState())
+                TimerAlarm.cancel(app, account)
+            } else {
+                val intervals = execution.optJSONArray("intervals")
+                val last = intervals?.optJSONObject((intervals.length() - 1).coerceAtLeast(0))
+                val open = intervals != null && intervals.length() > 0 && last != null && !last.has("end")
+                val ownIntegrations = ownSession.optJSONObject("integrations")
+                val phase = (ownIntegrations?.optJSONObject("examtrack") ?: ownIntegrations?.optJSONObject("folio"))?.optString("phase")
+                val remoteRunning = phase == "reading" || (phase != "paused" && open)
+                val otherRunning = sessions.any { row ->
+                    if (row.id == sessionId) false else {
+                        val data = row.data
+                        val state = data.optJSONObject("execution")
+                        val rowIntervals = state?.optJSONArray("intervals")
+                        val rowLast = rowIntervals?.optJSONObject((rowIntervals.length() - 1).coerceAtLeast(0))
+                        val rowOpen = rowIntervals != null && rowIntervals.length() > 0 && rowLast != null && !rowLast.has("end")
+                        val rowIntegrations = data.optJSONObject("integrations")
+                        val rowPhase = (rowIntegrations?.optJSONObject("examtrack") ?: rowIntegrations?.optJSONObject("folio"))?.optString("phase")
+                        state?.optString("state") == "in-progress" && rowPhase != "paused" && (rowOpen || rowPhase == "reading")
+                    }
+                }
+                when {
+                    !remoteRunning && current.deadline != null -> {
+                        persistTimer(current.paused())
+                        TimerAlarm.cancel(app, account)
+                    }
+                    remoteRunning && current.deadline == null -> {
+                        persistTimer(current.resumed())
+                        timer.deadline?.let { TimerAlarm.schedule(app, account, it) }
+                    }
+                }
+                if (otherRunning && timer.deadline != null) {
+                    timer.sessionId?.let { id -> db.row(account, "study_sessions", id)?.data?.let { session ->
+                        FocalJson.closeInterval(session, Instant.now())
+                        withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                    } }
+                    persistTimer(timer.paused())
+                    TimerAlarm.cancel(app, account)
+                    reload()
+                }
+            }
+        }
+    }
+    fun controlSharedSession(id: String, action: String) = launchAction {
+        require(action in setOf("pause", "resume", "finish", "discard"))
+        timerMutex.withLock {
+            if (action == "discard") {
+                withContext(Dispatchers.IO) { db.deleteLocal(account, "study_sessions", id) }
+                if (timer.sessionId == id) {
+                    persistTimer(TimerState())
+                    TimerAlarm.cancel(app, account)
+                }
+            } else {
+                val session = db.row(account, "study_sessions", id)?.data ?: return@withLock
+                val execution = session.optJSONObject("execution") ?: return@withLock
+                if (execution.optString("state") != "in-progress") return@withLock
+                val intervals = execution.optJSONArray("intervals") ?: JSONArray().also { execution.put("intervals", it) }
+                val now = Instant.now()
+                val last = intervals.optJSONObject((intervals.length() - 1).coerceAtLeast(0))
+                val open = intervals.length() > 0 && last != null && !last.has("end")
+                val integrations = session.optJSONObject("integrations")
+                val examtrack = integrations?.optJSONObject("examtrack") ?: integrations?.optJSONObject("folio")
+                when (action) {
+                    "pause" -> {
+                        if (open) last?.put("end", now.toString())
+                        if (examtrack != null) {
+                            val previous = examtrack.optString("phase").takeIf { it == "reading" || it == "writing" }
+                                ?: examtrack.optString("phaseBeforePause").takeIf { it == "reading" || it == "writing" }
+                                ?: "writing"
+                            examtrack.put("phaseBeforePause", previous).put("phase", "paused")
+                        }
+                    }
+                    "resume" -> {
+                        val priorPhase = examtrack?.optString("phaseBeforePause")
+                        if (!open && priorPhase != "reading") intervals.put(JSONObject().put("start", now.toString()).put("source", "imported"))
+                        if (examtrack != null) examtrack.put("phase", if (priorPhase == "reading") "reading" else "writing").remove("phaseBeforePause")
+                    }
+                    "finish" -> {
+                        if (open) last?.put("end", now.toString())
+                        execution.put("state", "completed").put("completedAt", now.toString())
+                        session.put("status", "completed").put("completedAt", now.toString())
+                    }
+                }
+                if (action == "pause") session.put("status", "in-progress")
+                if (action == "resume") session.put("status", "in-progress")
+                withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
+                if (timer.sessionId == id) {
+                    when (action) {
+                        "pause" -> { persistTimer(timer.paused()); TimerAlarm.cancel(app, account) }
+                        "resume" -> { persistTimer(timer.resumed()); timer.deadline?.let { TimerAlarm.schedule(app, account, it) } }
+                        "finish" -> { persistTimer(TimerState()); TimerAlarm.cancel(app, account) }
+                    }
+                }
+            }
+            reload()
+        }
+        syncAll()
     }
     fun chooseDuration(minutes: Int) {
         if (timer.sessionId != null || timer.deadline != null) return

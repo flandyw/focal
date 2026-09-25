@@ -27,6 +27,7 @@ import {
   RotateCcw,
   SkipForward,
   Timer,
+  Trash2,
 } from "lucide-react";
 import { FocusView } from "@/components/timer/FocusView";
 import { DurationInputs } from "@/components/timer/DurationInputs";
@@ -193,6 +194,13 @@ const StudyTimerInner = memo(function StudyTimerInner({
     () => getActiveExamTrackTimer(sessions),
     [sessions],
   );
+  const otherActiveSession = useMemo(
+    () => sessions
+      .filter((session) => session.id !== activeSessionId && session.execution.state === "in-progress")
+      .sort((first, second) => (second.updated_at ?? second.created_at).localeCompare(first.updated_at ?? first.created_at))[0],
+    [activeSessionId, sessions],
+  );
+  const sharedSession = externalSession ?? otherActiveSession;
   const [externalNow, setExternalNow] = useState(() => new Date());
   const [todayNow, setTodayNow] = useState(() => new Date());
 
@@ -241,10 +249,10 @@ const StudyTimerInner = memo(function StudyTimerInner({
   }, [state]);
 
   useEffect(() => {
-    if (!externalSession?.execution.intervals.some((interval) => !interval.end)) return;
+    if (!sharedSession?.execution.intervals.some((interval) => !interval.end)) return;
     const timer = window.setInterval(() => setExternalNow(new Date()), 1000);
     return () => window.clearInterval(timer);
-  }, [externalSession]);
+  }, [sharedSession]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setTodayNow(new Date()), 60_000);
@@ -266,7 +274,34 @@ const StudyTimerInner = memo(function StudyTimerInner({
   }, [activeSessionId, sessions]);
 
   useEffect(() => {
-    if (!externalSession || !activeSessionId || !state.running || savingRef.current) return;
+    if (!activeSessionId) return;
+    const session = sessions.find((item) => item.id === activeSessionId);
+    if (!session) {
+      if (!activeSessionRef.current) return;
+      activeSessionRef.current = null;
+      activeSessionIdRef.current = null;
+      setActiveSessionId(null);
+      setRecoveryDialogOpen(false);
+      dispatch({ type: "RESET", settings });
+      return;
+    }
+    if (session.execution.state === "completed") {
+      activeSessionRef.current = null;
+      activeSessionIdRef.current = null;
+      setActiveSessionId(null);
+      setRecoveryDialogOpen(false);
+      dispatch({ type: "RESET", settings });
+      return;
+    }
+    if (session.execution.state !== "in-progress") return;
+    const intervals = session.execution.intervals;
+    const interval = intervals[intervals.length - 1];
+    const remotelyRunning = Boolean(interval && !interval.end);
+    if (remotelyRunning !== stateRef.current.running) dispatch({ type: "TOGGLE" });
+  }, [activeSessionId, sessions, settings]);
+
+  useEffect(() => {
+    if (!sharedSession || !activeSessionId || !state.running || savingRef.current) return;
     const session = activeSessionRef.current;
     if (!session) return;
     savingRef.current = true;
@@ -280,12 +315,12 @@ const StudyTimerInner = memo(function StudyTimerInner({
       activeSessionRef.current = { ...session, ...updates };
       dispatch({ type: "TOGGLE" });
     }).catch((error: unknown) => {
-      console.error("Failed to pause Focal while ExamTrack timer started:", error);
+      console.error("Failed to pause Focal while another app's session started:", error);
     }).finally(() => {
       savingRef.current = false;
       setSaving(false);
     });
-  }, [activeSessionId, externalSession, onUpdateSession, state.running]);
+  }, [activeSessionId, onUpdateSession, sharedSession, state.running]);
 
   useEffect(() => {
     if (!selectedProject?.subjectId || activeSessionIdRef.current) return;
@@ -452,7 +487,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
             !savingRef.current &&
             !activeSessionIdRef.current &&
             validSelectedSubjectIds.length > 0 &&
-            !externalSession
+            !sharedSession
           ) {
             savingRef.current = true;
             setSaving(true);
@@ -478,7 +513,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
       settings: tickSettings,
       seconds: elapsedSeconds,
     });
-  }, [announceBlockEnd, completeActiveSession, externalSession, validSelectedSubjectIds]);
+  }, [announceBlockEnd, completeActiveSession, sharedSession, validSelectedSubjectIds]);
 
   useEffect(() => {
     clearTimer();
@@ -542,7 +577,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
   );
   const subjectLabel = selectedSubjects[0]?.shortCode ?? "Choose subject";
   const activeProjectId = focusProjectId;
-  const canStartFocus = validSelectedSubjectIds.length > 0 && !saving && !externalSession;
+  const canStartFocus = validSelectedSubjectIds.length > 0 && !saving && !sharedSession;
   const timerActionLabel = saving
     ? "Saving…"
     : running
@@ -873,11 +908,77 @@ const StudyTimerInner = memo(function StudyTimerInner({
     dispatch({ type: "ADD_TIME", minutes: EXTRA_BREAK_MINUTES });
   };
 
+  const controlSharedSession = async (action: "toggle" | "finish" | "discard") => {
+    const session = sharedSession;
+    if (!session || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      if (action === "discard") {
+        if (!onDeleteSession) return;
+        await onDeleteSession(session.id);
+        return;
+      }
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const intervals = session.execution.state === "planned" ? [] : [...session.execution.intervals];
+      const examtrackSource = session.integrations?.examtrack;
+      const folioSource = session.integrations?.folio;
+      const source = examtrackSource ?? folioSource;
+      const last = intervals[intervals.length - 1];
+      const running = source?.phase
+        ? source.phase !== "paused"
+        : Boolean(last && !last.end);
+      let phase = source?.phase;
+      let phaseBeforePause = source?.phaseBeforePause;
+      let nextIntervals = intervals;
+      let execution: StudySession["execution"];
+      if (action === "finish") {
+        nextIntervals = closeRunningInterval(intervals, nowIso);
+        execution = { state: "completed", intervals: nextIntervals, completedAt: nowIso };
+      } else if (running) {
+        nextIntervals = closeRunningInterval(intervals, nowIso);
+        if (source) {
+          phaseBeforePause = source.phase === "reading" || source.phase === "writing" ? source.phase : "writing";
+          phase = "paused";
+        }
+        execution = { state: "in-progress", intervals: nextIntervals };
+      } else {
+        phase = phaseBeforePause ?? "writing";
+        phaseBeforePause = undefined;
+        if (phase !== "reading" && (!last || last.end)) {
+          nextIntervals = [...intervals, { start: nowIso, source: "manual" }];
+        }
+        execution = { state: "in-progress", intervals: nextIntervals };
+      }
+      await onUpdateSession(session.id, {
+        execution,
+        ...(examtrackSource ? {
+          integrations: {
+            ...session.integrations,
+            examtrack: { ...examtrackSource, ...(phase ? { phase } : {}), ...(phaseBeforePause ? { phaseBeforePause } : { phaseBeforePause: undefined }) },
+          },
+        } : folioSource ? {
+          integrations: {
+            ...session.integrations,
+            folio: { ...folioSource, ...(phase ? { phase } : {}), ...(phaseBeforePause ? { phaseBeforePause } : { phaseBeforePause: undefined }) },
+          },
+        } : {}),
+      });
+    } catch (error) {
+      console.error(`Could not ${action} shared session:`, error);
+      toast.error(`Could not ${action} shared session`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const trayItems = useMemo(() => studyTrayItems({
     state, settings, subjects, selectedSubjectIds: validSelectedSubjectIds,
     activeSession: !!activeSessionId,
-    blocked: saving || recoveryDialogOpen || !!externalSession,
-  }), [state, settings, subjects, validSelectedSubjectIds, activeSessionId, saving, recoveryDialogOpen, externalSession]);
+    blocked: saving || recoveryDialogOpen || !!sharedSession,
+  }), [state, settings, subjects, validSelectedSubjectIds, activeSessionId, saving, recoveryDialogOpen, sharedSession]);
   const trayActionsRef = useRef<((action: string) => void) | undefined>(undefined);
   const [trayRevision, setTrayRevision] = useState(0);
   useEffect(() => {
@@ -944,13 +1045,13 @@ const StudyTimerInner = memo(function StudyTimerInner({
         ? `${running ? "" : "Ⅱ "}${timeDisplay}`
         : "Focal",
       status: recoveryDialogOpen ? "Open Focal to recover your study session"
-        : externalSession ? "ExamTrack session active"
+        : sharedSession ? "Shared session active"
         : `${modeLabel} · ${timeDisplay} · ${selectedSubjects.map((subject) => subject.name).join(", ") || "Choose a subject below"}`,
       summary: `Today: ${formatFocusTime(todayStats.seconds)} · ${todayStats.blocks}${settings.dailyGoal ? ` / ${settings.dailyGoal}` : ""} focus blocks`,
       items: trayItems,
     }).catch((error: unknown) => console.error("Could not update menu bar timer:", error));
   }, [trayReady, trayRevision, trayItems, running, activeSessionId, mode, timeDisplay, modeLabel,
-    selectedSubjects, todayStats, settings.dailyGoal, recoveryDialogOpen, externalSession]);
+    selectedSubjects, todayStats, settings.dailyGoal, recoveryDialogOpen, sharedSession]);
 
   const focusPortal = focusViewOpen
     ? createPortal(
@@ -998,12 +1099,19 @@ const StudyTimerInner = memo(function StudyTimerInner({
       )
     : null;
 
-  if (externalSession) {
-    const source = externalSession.integrations!.examtrack!;
-    const externalRunning = externalSession.execution.state === "in-progress"
-      && externalSession.execution.intervals.some((interval) => !interval.end);
-    const elapsed = formatTimer(getExamTrackElapsedSeconds(externalSession, externalNow));
-    const externalUrl = getExamTrackTimerUrl(source.kind);
+  if (sharedSession) {
+    const examtrackSource = sharedSession.integrations?.examtrack;
+    const folioSource = sharedSession.integrations?.folio;
+    const source = examtrackSource ?? folioSource;
+    const lastInterval = sharedSession.execution.state === "planned"
+      ? undefined
+      : sharedSession.execution.intervals[sharedSession.execution.intervals.length - 1];
+    const sharedRunning = source?.phase
+      ? source.phase !== "paused"
+      : Boolean(lastInterval && !lastInterval.end);
+    const elapsedSeconds = getExamTrackElapsedSeconds(sharedSession, externalNow);
+    const elapsed = formatTimer(elapsedSeconds);
+    const externalUrl = examtrackSource ? getExamTrackTimerUrl(examtrackSource.kind) : null;
     const openTimer = () => {
       if (externalUrl) void openUrl(externalUrl).catch((error) => console.error("Could not open ExamTrack timer:", error));
     };
@@ -1015,38 +1123,43 @@ const StudyTimerInner = memo(function StudyTimerInner({
             variant="ghost"
             size="icon"
             onClick={onExpand}
-            aria-label="Expand ExamTrack timer"
-            title={`${source.kind === "exam" ? "Exam" : "SAC"} · ${elapsed}`}
+            aria-label="Expand shared study session"
+            title={`${sharedSession.title} · ${elapsed}`}
           >
             <Timer />
           </Button>
-          <Button variant="ghost" size="icon" onClick={openTimer} disabled={!externalUrl} aria-label="Open timer in ExamTrack">
-            <ExternalLink />
-          </Button>
+          {examtrackSource ? <Button variant="ghost" size="icon" onClick={openTimer} disabled={!externalUrl} aria-label="Open timer in ExamTrack"><ExternalLink /></Button> : null}
         </div>
       );
     }
 
     return (
-      <section className={cn("min-w-0 border-t border-sidebar-border/70", prominent && "h-full overflow-y-auto")} aria-label="ExamTrack timer">
+      <section className={cn("min-w-0 border-t border-sidebar-border/70", prominent && "h-full overflow-y-auto")} aria-label="Shared study session">
         <div className={cn("space-y-3 p-3", prominent && "flex min-h-full flex-col justify-center")}>
           <div className="flex items-center gap-2">
-            <Badge variant={externalRunning ? "success" : "secondary"}>ExamTrack</Badge>
+            <Badge variant={sharedRunning ? "success" : "secondary"}>{examtrackSource ? "ExamTrack" : folioSource ? "Folio" : "Shared session"}</Badge>
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {externalRunning ? "Logging to Focal" : "Paused in ExamTrack"}
+              {source?.phase === "reading" ? "Reading time" : source?.phase === "writing" ? "Writing time" : sharedRunning ? "In progress" : "Paused"}
             </span>
           </div>
           <div>
-            <p className="truncate text-sm font-medium">{externalSession.title}</p>
+            <p className="truncate text-sm font-medium">{sharedSession.title}</p>
             <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{elapsed}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {source.kind === "exam" ? "Exam timer" : "SAC timer"} · {source.subject}
+              {examtrackSource
+                ? `${examtrackSource.kind === "exam" ? "Exam timer" : "SAC timer"} · ${examtrackSource.subject}`
+                : folioSource ? `Folio ${folioSource.kind} session${folioSource.subject ? ` · ${folioSource.subject}` : ""}`
+                : sharedSession.description ?? "Study session shared from Folio"}
             </p>
           </div>
-          <Button className="w-full" onClick={openTimer} disabled={!externalUrl}>
-            <ExternalLink />
-            Open in ExamTrack
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => void controlSharedSession("toggle")} disabled={saving}>
+              {sharedRunning ? <Pause /> : <Play />}{sharedRunning ? "Pause" : "Resume"}
+            </Button>
+            <Button onClick={() => void controlSharedSession("finish")} disabled={saving}><Check />Finish</Button>
+            <Button variant="ghost" onClick={() => void controlSharedSession("discard")} disabled={saving || !onDeleteSession}><Trash2 />Discard</Button>
+            {examtrackSource ? <Button variant="outline" onClick={openTimer} disabled={!externalUrl}><ExternalLink />Open in ExamTrack</Button> : null}
+          </div>
         </div>
       </section>
     );

@@ -1,6 +1,7 @@
 import type {
   ConfidenceScore,
   ExamTrackSource,
+  FolioSource,
   NotionSource,
   NotionSyncSnapshot,
   StudyInterval,
@@ -230,7 +231,21 @@ function parseExamTrackSource(value: unknown): ExamTrackSource | undefined {
     !isRecord(value) || value.type !== "examtrack" || typeof value.id !== "string" ||
     (value.kind !== "exam" && value.kind !== "sac") || typeof value.subject !== "string"
   ) return undefined
-  return { type: "examtrack", id: value.id, kind: value.kind, subject: value.subject }
+  return {
+    type: "examtrack", id: value.id, kind: value.kind, subject: value.subject,
+    phase: value.phase === "reading" || value.phase === "writing" || value.phase === "paused" ? value.phase : undefined,
+    phaseBeforePause: value.phaseBeforePause === "reading" || value.phaseBeforePause === "writing" ? value.phaseBeforePause : undefined,
+  }
+}
+
+function parseFolioSource(value: unknown): FolioSource | undefined {
+  if (!isRecord(value) || value.type !== "folio" || typeof value.id !== "string" ||
+    (value.kind !== "study" && value.kind !== "exam")) return undefined
+  return {
+    type: "folio", id: value.id, kind: value.kind, subject: optionalString(value.subject),
+    phase: value.phase === "reading" || value.phase === "writing" || value.phase === "paused" ? value.phase : undefined,
+    phaseBeforePause: value.phaseBeforePause === "reading" || value.phaseBeforePause === "writing" ? value.phaseBeforePause : undefined,
+  }
 }
 
 function examTrackSubjectId(source?: ExamTrackSource): string | undefined {
@@ -307,6 +322,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
   const integrationsValue = isRecord(value.integrations) ? value.integrations : undefined
   const notion = parseNotionSource(integrationsValue?.notion ?? value.source)
   const examtrack = parseExamTrackSource(integrationsValue?.examtrack)
+  const folio = parseFolioSource(integrationsValue?.folio)
   const rawSubjectIds = stringArray(value.subjectIds)
   const integratedSubjectId = rawSubjectIds.length === 0 ? examTrackSubjectId(examtrack) : undefined
 
@@ -322,7 +338,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
     execution,
     reflection: hasReflection ? reflection : undefined,
     createdVia: inferCreatedVia(value, notion),
-    integrations: notion || examtrack ? { notion, examtrack } : undefined,
+    integrations: notion || examtrack || folio ? { notion, examtrack, folio } : undefined,
     created_at: optionalString(value.created_at) ?? now,
     updated_at: optionalString(value.updated_at) ?? now,
     deleted_at: typeof value.deleted_at === "string" || value.deleted_at === null ? value.deleted_at : null,

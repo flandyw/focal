@@ -63,6 +63,17 @@ export interface ExamTrackSource {
   id: string;
   kind: "exam" | "sac";
   subject: string;
+  phase?: "reading" | "writing" | "paused";
+  phaseBeforePause?: "reading" | "writing";
+}
+
+export interface FolioSource {
+  type: "folio";
+  id: string;
+  kind: "study" | "exam";
+  subject?: string;
+  phase?: "reading" | "writing" | "paused";
+  phaseBeforePause?: "reading" | "writing";
 }
 
 export interface VcaaSource {
@@ -89,7 +100,7 @@ export interface StudySession {
     nextAction?: string;
   };
   createdVia: "manual" | "planner" | "assistant" | "notion" | "examtrack";
-  integrations?: { notion?: NotionSource; examtrack?: ExamTrackSource };
+  integrations?: { notion?: NotionSource; examtrack?: ExamTrackSource; folio?: FolioSource };
   created_at: string;
   updated_at?: string;
   deleted_at?: string | null;

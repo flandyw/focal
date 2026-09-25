@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.os.Bundle
+import android.view.WindowManager
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -61,6 +62,18 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -68,7 +81,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -76,7 +88,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -114,6 +125,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowCompat
@@ -142,7 +154,7 @@ class MainActivity : ComponentActivity() {
 
 private const val THEME_PREFS = "focal-theme"
 private const val KEY_THEME_MODE = "mode" // system | light | dark
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun FocalApp(vm: FocalViewModel) {
     val context = LocalContext.current
@@ -153,12 +165,14 @@ private fun FocalApp(vm: FocalViewModel) {
         "dark" -> true
         else -> androidx.compose.foundation.isSystemInDarkTheme()
     }
-    val colors = if (dark) darkColorScheme() else lightColorScheme()
+    val colors = if (android.os.Build.VERSION.SDK_INT >= 31) {
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else if (dark) darkColorScheme() else lightColorScheme()
     fun saveTheme(mode: String) {
         themeMode = mode
         prefs.edit().putString(KEY_THEME_MODE, mode).apply()
     }
-    MaterialTheme(colorScheme = colors) {
+    MaterialExpressiveTheme(colorScheme = colors) {
         var tab by rememberSaveable { mutableStateOf(0) }
         val activity = context as? Activity
         DisposableEffect(activity, dark) {
@@ -197,7 +211,8 @@ private fun FocalApp(vm: FocalViewModel) {
                 }
                 Scaffold(
                     modifier = Modifier.weight(1f),
-                    topBar = { TopAppBar(title = { Text(tabs[tab].first) }) },
+                    topBar = { if (tab != 1) TopAppBar(title = { Text(tabs[tab].first) }) },
+                    containerColor = if (tab == 1) colors.surfaceContainer else colors.surface,
                     snackbarHost = { SnackbarHost(snackbar) },
                     bottomBar = {
                         if (!wide) NavigationBar {
@@ -288,7 +303,7 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         val wide = maxWidth >= 720.dp
         val monthWidth = if (maxWidth >= 1000.dp) 380.dp else 320.dp
         if (wide) {
-            Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.width(monthWidth).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     MonthCard(vm, month, day,
                         onPrev = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
@@ -661,6 +676,12 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         vm.startTimer(subject)
     }
     val timer = vm.timer
+    val activity = context as? Activity
+    // Android releases this window flag when backgrounded; clear it on pause or leaving Focus.
+    DisposableEffect(activity, timer.deadline) {
+        if (timer.deadline != null) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     val seconds = timer.seconds(vm.now)
     val total = if (timer.phase == "focus") (timer.minutes * 60L).coerceAtLeast(1) else 300L
     val progress = (1f - seconds.toFloat() / total).coerceIn(0f, 1f)
@@ -677,23 +698,26 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxSize()) {
         // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
         val wide = maxWidth >= 720.dp
+        val paneHeight = (maxHeight - 32.dp).coerceAtLeast(0.dp)
         if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(Modifier.weight(1.4f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, tablet = true)
+                Column(Modifier.weight(1.55f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, tablet = true, availableHeight = paneHeight, modifier = Modifier.heightIn(min = paneHeight))
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    TodayStatsCard(vm)
                     MusicCard(music, attemptedMusicAccess, onEnable = {
                         attemptedMusicAccess = true
                         context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     })
+                    SharedSessionControlsCard(vm)
+                    TodayStatsCard(vm)
                     RecentFocusCard(vm)
                 }
             }
         } else {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start) }
+                item { SharedSessionControlsCard(vm) }
                 item { TodayStatsCard(vm) }
                 item { MusicCard(music, attemptedMusicAccess, onEnable = {
                     attemptedMusicAccess = true
@@ -705,74 +729,141 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+@Composable
+private fun SharedSessionControlsCard(vm: FocalViewModel) {
+    val sessions = vm.sharedSessions
+    if (sessions.isEmpty()) return
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Shared study sessions", style = MaterialTheme.typography.titleMedium)
+            sessions.forEach { row ->
+                val data = row.data
+                val execution = data.optJSONObject("execution")
+                val intervals = execution?.optJSONArray("intervals")
+                val last = intervals?.optJSONObject((intervals.length() - 1).coerceAtLeast(0))
+                val integrations = data.optJSONObject("integrations")
+                val source = integrations?.optJSONObject("examtrack") ?: integrations?.optJSONObject("folio")
+                val phase = source?.optString("phase")
+                val paused = phase == "paused" || phase != "reading" && (last == null || last.has("end"))
+                Text(data.optString("title").ifBlank { "Study session" }, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Text(listOf(source?.optString("subject")?.takeIf { !it.isNullOrBlank() }, when {
+                    paused -> "Paused"
+                    phase == "reading" -> "Reading"
+                    else -> "In progress"
+                }).filterNotNull().joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { vm.controlSharedSession(row.id, if (paused) "resume" else "pause") }, modifier = Modifier.weight(1f)) {
+                        Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (paused) "Resume" else "Pause")
+                    }
+                    FilledTonalButton(onClick = { vm.controlSharedSession(row.id, "finish") }, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Filled.Check, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Finish")
+                    }
+                    IconButton(onClick = { vm.controlSharedSession(row.id, "discard") }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Discard shared session")
+                    }
+                }
+                if (row != sessions.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+        }
+    }
+}
+
 private fun formatClock(seconds: Long): String {
     val s = seconds.coerceAtLeast(0)
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
     else "%02d:%02d".format(s / 60, s % 60)
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, progress: Float, subject: String?, subjectEditable: Boolean, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, tablet: Boolean = false) {
+private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, progress: Float, subject: String?, subjectEditable: Boolean, onSubject: (String?) -> Unit, onStart: () -> Unit, modifier: Modifier = Modifier, tablet: Boolean = false, availableHeight: Dp = 720.dp) {
     val timer = vm.timer
     val isBreak = timer.phase != "focus"
     val running = timer.deadline != null
     val idle = !running && timer.sessionId == null && !isBreak
+    val colors = MaterialTheme.colorScheme
     val endsAt = timer.deadline?.let { runCatching {
         Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("h:mm a"))
     }.getOrNull() }
     val subjectName = subject?.let { id -> vm.subjects.firstOrNull { it.id == id }?.name }
-        ?: timer.sessionId?.let { id -> vm.sessions.firstOrNull { it.id == id }?.data?.let(::sessionSubjectId)?.let { sid -> vm.subjects.firstOrNull { it.id == sid }?.name } }
-    Card(modifier = modifier) {
-        Column(Modifier.fillMaxWidth().heightIn(min = if (tablet) 520.dp else 0.dp).padding(24.dp),
+    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(40.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainerLowest)) {
+        Column(Modifier.fillMaxWidth().padding(if (tablet) 24.dp else 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically)) {
-            Text(if (isBreak) "Break" else "Focus session", style = MaterialTheme.typography.titleLarge)
-            Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(formatClock(seconds), style = MaterialTheme.typography.displayLarge, maxLines = 1)
-                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                Text(when {
-                    running && endsAt != null -> "Ends $endsAt"
-                    running -> "In progress"
-                    timer.sessionId != null -> "Paused"
-                    isBreak -> "Time for a break"
-                    else -> "Ready to focus"
-                }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (subjectName != null) Text(subjectName, style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { if (running) vm.pauseTimer() else onStart() }) {
-                    Icon(if (running) Icons.Filled.Pause else Icons.Filled.PlayArrow, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (running) "Pause" else if (idle) "Start focus" else "Resume")
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (isBreak) "Break" else "Focus session", modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                if (!subjectEditable && subjectName != null) Surface(color = colors.secondaryContainer, shape = CircleShape) {
+                    Text(subjectName, Modifier.padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 160.dp),
+                        style = MaterialTheme.typography.labelLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
-                if (timer.sessionId != null || isBreak) OutlinedButton(onClick = vm::finishTimer) {
-                    Text(if (isBreak) "Skip break" else "Finish")
+            }
+            BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val diameter = minOf(maxWidth, if (tablet) (availableHeight - 220.dp).coerceIn(220.dp, 440.dp) else 300.dp)
+                val density = LocalDensity.current
+                val stroke = with(density) { Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round) }
+                Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
+                    CircularWavyProgressIndicator(progress = { 1f - progress }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "Session time remaining" },
+                        color = colors.primary, trackColor = colors.secondaryContainer,
+                        stroke = stroke, trackStroke = stroke, wavelength = 40.dp,
+                        // ponytail: no perpetual wave animation on a screen left running for hours.
+                        waveSpeed = 0.dp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(formatClock(seconds), maxLines = 1,
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = (diameter.value / (if (seconds >= 3600) 5.5f else 4.1f) / density.fontScale).sp,
+                                fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"))
+                        Text(when {
+                            running && endsAt != null -> "Ends $endsAt"
+                            running -> "In progress"
+                            timer.sessionId != null -> "Paused"
+                            isBreak -> "Time for a break"
+                            else -> "${timer.minutes} minutes"
+                        }, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                    }
+                }
+            }
+            // ponytail: exactly two equal-weight controls; use the overflow API if more actions are added.
+            @Suppress("DEPRECATION")
+            ButtonGroup(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                val pauseInteraction = remember { MutableInteractionSource() }
+                Button(onClick = { if (running) vm.pauseTimer() else onStart() },
+                    modifier = Modifier.weight(1f).heightIn(min = 72.dp).animateWidth(pauseInteraction),
+                    interactionSource = pauseInteraction, shapes = ButtonDefaults.shapes()) {
+                    Icon(if (running) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, Modifier.size(28.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (running) "Pause" else if (idle) "Start focus" else "Resume", style = MaterialTheme.typography.titleLarge)
+                }
+                if (!idle) {
+                    val finishInteraction = remember { MutableInteractionSource() }
+                    FilledTonalButton(onClick = vm::finishTimer,
+                        modifier = Modifier.weight(1f).heightIn(min = 72.dp).animateWidth(finishInteraction),
+                        interactionSource = finishInteraction, shapes = ButtonDefaults.shapes()) {
+                        Text(if (isBreak) "Skip break" else "Finish", style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
             if (subjectEditable) {
                 if (idle) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(15, 25, 50).forEach { minutes ->
-                            FilterChip(selected = timer.minutes == minutes, onClick = { vm.chooseDuration(minutes) }, label = { Text("${minutes}m") })
+                            FilterChip(selected = timer.minutes == minutes, onClick = { vm.chooseDuration(minutes) }, label = { Text("$minutes min") })
                         }
                     }
                     var draft by remember(timer.minutes) { mutableStateOf(timer.minutes.toFloat()) }
                     Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Slider(value = draft, onValueChange = { draft = it }, valueRange = 5f..120f, steps = 22,
                             onValueChangeFinished = { vm.chooseDuration(draft.toInt().coerceIn(5, 120)) })
-                        Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Custom · ${draft.toInt()} min", style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 SubjectPickerRow(vm, subject, onSubject)
-                if (!idle && timer.sessionId != null) {
-                    Text("Paused with ${formatClock(seconds)} left · switch subject anytime",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center)
-                }
             }
-
         }
     }
 }
@@ -805,13 +896,12 @@ private fun TodayStatsCard(vm: FocalViewModel) {
             }.getOrDefault(0)
         }.coerceAtLeast(0)
     }
-    Card {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Today", style = MaterialTheme.typography.titleMedium)
+            Text("Today", style = MaterialTheme.typography.titleLarge)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatTile("${minutes}m", "focused", Modifier.weight(1f))
                 StatTile("${todays.size}", "sessions", Modifier.weight(1f))
-                StatTile("${vm.sessions.size}", "total", Modifier.weight(1f))
             }
         }
     }
@@ -819,17 +909,16 @@ private fun TodayStatsCard(vm: FocalViewModel) {
 
 @Composable
 private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.small, modifier = modifier) {
-        Column(Modifier.padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, style = MaterialTheme.typography.headlineSmall)
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    Column(modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MusicCard(music: MusicPlayer, attemptedAccess: Boolean, onEnable: () -> Unit) {
-    Card {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Icon(Icons.Filled.Headphones, null, tint = MaterialTheme.colorScheme.primary)
@@ -853,13 +942,13 @@ private fun MusicCard(music: MusicPlayer, attemptedAccess: Boolean, onEnable: ()
                         }
                     }
                 } else if (music.sources.isNotEmpty()) Text(music.sources.first(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                Text(music.title.ifBlank { "No track detected" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(music.title.ifBlank { "No track detected" }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (music.artist.isNotBlank()) Text(music.artist, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (music.sources.isEmpty()) Text("Open your music app and start a track, then return here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = music::previous, enabled = music.canPrevious) { Icon(Icons.Filled.SkipPrevious, "Previous track") }
-                    FilledIconButton(onClick = music::toggle, enabled = music.canToggle) { Icon(if (music.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (music.playing) "Pause music" else "Play music") }
-                    IconButton(onClick = music::next, enabled = music.canNext) { Icon(Icons.Filled.SkipNext, "Next track") }
+                    FilledTonalButton(onClick = music::previous, enabled = music.canPrevious, modifier = Modifier.weight(1f).height(64.dp), shapes = ButtonDefaults.shapes()) { Icon(Icons.Filled.SkipPrevious, "Previous track") }
+                    Button(onClick = music::toggle, enabled = music.canToggle, modifier = Modifier.weight(1.2f).height(80.dp), shapes = ButtonDefaults.shapes()) { Icon(if (music.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (music.playing) "Pause music" else "Play music") }
+                    FilledTonalButton(onClick = music::next, enabled = music.canNext, modifier = Modifier.weight(1f).height(64.dp), shapes = ButtonDefaults.shapes()) { Icon(Icons.Filled.SkipNext, "Next track") }
                 }
             }
             music.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
@@ -869,15 +958,14 @@ private fun MusicCard(music: MusicPlayer, attemptedAccess: Boolean, onEnable: ()
 
 @Composable
 private fun RecentFocusCard(vm: FocalViewModel) {
-    Card {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Recent focus", style = MaterialTheme.typography.titleMedium)
+            Text("Recent sessions", style = MaterialTheme.typography.titleMedium)
             if (vm.sessions.isEmpty()) {
                 Text("Finish a focus session to see it here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else vm.sessions.takeLast(6).reversed().forEach { session ->
+            } else vm.sessions.takeLast(3).reversed().forEach { session ->
                 val data = session.data
-                val sid = sessionSubjectId(data)
-                val accent = subjectColorHex(vm, sid) ?: MaterialTheme.colorScheme.tertiary
+                val accent = MaterialTheme.colorScheme.primary
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box(Modifier.size(10.dp).background(accent, CircleShape))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -887,7 +975,7 @@ private fun RecentFocusCard(vm: FocalViewModel) {
                     val dur = runCatching { durationText(data.getString("startTime"), data.optString("endTime").takeIf { it.isNotBlank() } ?: data.getString("startTime")) }.getOrDefault("")
                     if (dur.isNotBlank()) Text(dur, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
-                if (session != vm.sessions.takeLast(6).reversed().last()) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                if (session != vm.sessions.takeLast(3).reversed().last()) HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             }
         }
     }
@@ -898,7 +986,7 @@ private fun AppearanceCard(themeMode: String, onTheme: (String) -> Unit) {
     Card {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Appearance", style = MaterialTheme.typography.titleLarge)
-            Text("Default Material 3 colors. Match your device or choose light or dark.",
+            Text("Wallpaper colors on Android 12 and later. Match your device or choose light or dark.",
                 style = MaterialTheme.typography.bodyMedium)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (id, label) ->

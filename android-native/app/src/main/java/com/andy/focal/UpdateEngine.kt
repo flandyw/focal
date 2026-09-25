@@ -3,7 +3,6 @@ package com.andy.focal
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CancellationException
@@ -92,7 +91,7 @@ internal class UpdateEngine(private val context: Context) {
     suspend fun install(update: AppUpdate): String = withContext(Dispatchers.IO) {
         if (System.currentTimeMillis() < prefs.getLong("blockedUntil", 0))
             return@withContext "Update server cooldown active. Try again later."
-        if (Build.VERSION.SDK_INT >= 26 && !context.packageManager.canRequestPackageInstalls()) {
+        if (!context.packageManager.canRequestPackageInstalls()) {
             val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             withContext(Dispatchers.Main) { context.startActivity(intent) }

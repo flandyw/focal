@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Timer
@@ -262,6 +263,23 @@ private fun durationText(startIso: String, endIso: String): String = runCatching
     if (mins < 60L) "${mins}m" else "${mins / 60}h${if (mins % 60 == 0L) "" else " ${mins % 60}m"}"
 }.getOrDefault("")
 
+// ponytail: this is a linear interval sum; move to a range index only if history becomes large enough to notice.
+internal fun focusedMinutesOn(data: JSONObject, day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): Long {
+    val dayStart = day.atStartOfDay(zone).toInstant()
+    val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant()
+    val intervals = data.optJSONObject("execution")?.optJSONArray("intervals") ?: return 0L
+    var minutes = 0L
+    for (i in 0 until intervals.length()) {
+        val interval = intervals.optJSONObject(i) ?: continue
+        minutes += runCatching {
+            val start = Instant.parse(interval.getString("start"))
+            val end = interval.optString("end").takeIf { it.isNotBlank() }?.let(Instant::parse) ?: Instant.now()
+            Duration.between(maxOf(start, dayStart), minOf(end, dayEnd)).toMinutes().coerceAtLeast(0)
+        }.getOrDefault(0L)
+    }
+    return minutes
+}
+
 private fun timeRangeText(data: JSONObject): String {
     val start = data.optString("startTime")
     val end = data.optString("endTime").takeIf { it.isNotBlank() } ?: start
@@ -299,13 +317,15 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
-        val wide = maxWidth >= 720.dp
-        val monthWidth = if (maxWidth >= 1000.dp) 380.dp else 320.dp
+        val landscape = maxWidth > maxHeight
+        // Landscape tablets keep navigation, calendar context and the day agenda visible together.
+        val wide = maxWidth >= 600.dp
+        val monthWidth = if (landscape) 300.dp else if (maxWidth >= 1000.dp) 380.dp else 320.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.width(monthWidth).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     MonthCard(vm, month, day,
+                        dense = landscape,
                         onPrev = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
                         onNext = { month = month.plusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
                         onToday = { month = YearMonth.now(); day = LocalDate.now() },
@@ -322,7 +342,13 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                     if (dayRows.isEmpty()) {
                         EmptyDayCard(onNew = { create = true })
                     } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(if (landscape) 2 else 1),
+                            contentPadding = PaddingValues(top = 12.dp, bottom = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
                             items(dayRows, key = { it.entity + it.id }) { row ->
                                 AgendaCard(vm, row,
                                     onOpenEvent = { editor = it },
@@ -337,6 +363,7 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
                 LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 100.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     item {
                         MonthCard(vm, month, day,
+                            dense = false,
                             onPrev = { month = month.minusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
                             onNext = { month = month.plusMonths(1); day = month.atDay(day.dayOfMonth.coerceAtMost(month.lengthOfMonth())) },
                             onToday = { month = YearMonth.now(); day = LocalDate.now() },
@@ -362,13 +389,17 @@ private fun CalendarScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MonthCard(vm: FocalViewModel, month: YearMonth, day: LocalDate, onPrev: () -> Unit, onNext: () -> Unit, onToday: () -> Unit, onPick: (LocalDate) -> Unit) {
+private fun MonthCard(vm: FocalViewModel, month: YearMonth, day: LocalDate, dense: Boolean, onPrev: () -> Unit, onNext: () -> Unit, onToday: () -> Unit, onPick: (LocalDate) -> Unit) {
     val today = LocalDate.now()
+    val monthStart = month.atDay(1)
+    val monthDays = (0 until month.lengthOfMonth()).map { monthStart.plusDays(it.toLong()) }
+    val eventCount = remember(vm.events, month) { vm.events.count { row -> monthDays.any { dayInMonth -> eventOnDay(row, dayInMonth) } } }
+    val sessionCount = remember(vm.sessions, month) { vm.sessions.count { row -> monthDays.any { dayInMonth -> eventOnDay(row, dayInMonth) } } }
     Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), style = MaterialTheme.typography.titleLarge)
+        Column(Modifier.padding(if (dense) 10.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(if (dense) 4.dp else 8.dp)) {
+            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), style = if (dense) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("${vm.events.size} events · ${vm.sessions.size} sessions", modifier = Modifier.weight(1f),
+                Text("$eventCount events · $sessionCount sessions this month", modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = onPrev) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Previous month") }
                 IconButton(onClick = onToday) { Icon(Icons.Filled.Today, "Jump to today") }
@@ -388,7 +419,7 @@ private fun MonthCard(vm: FocalViewModel, month: YearMonth, day: LocalDate, onPr
                             val selected = date == day
                             val isToday = date == today
                             Column(
-                                Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(16.dp))
+                                Modifier.weight(1f).heightIn(min = if (dense) 40.dp else 52.dp).clip(RoundedCornerShape(16.dp))
                                     .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
                                     .semantics { contentDescription = date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy")); this.selected = selected }
                                     .clickable { onPick(date) },
@@ -509,7 +540,7 @@ private fun AgendaCard(vm: FocalViewModel, row: FocalRow, onOpenEvent: (JSONObje
                     val copy = JSONObject(data.toString())
                     copy.put("isFinished", !done)
                     vm.saveEvent(copy, {}, {})
-                }) { Icon(if (done) Icons.Filled.Check else Icons.Filled.Add, if (done) "Mark not complete" else "Mark complete") }
+                }) { Icon(if (done) Icons.Filled.Check else Icons.Outlined.RadioButtonUnchecked, if (done) "Mark not complete" else "Mark complete") }
             } else {
                 Icon(Icons.Filled.Timer, null, tint = MaterialTheme.colorScheme.tertiary)
             }
@@ -696,10 +727,27 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
-        val wide = maxWidth >= 720.dp
+        val landscape = maxWidth > maxHeight
+        val wide = maxWidth >= 600.dp
         val paneHeight = (maxHeight - 32.dp).coerceAtLeast(0.dp)
-        if (wide) {
+        if (landscape && maxWidth >= 900.dp) {
+            Row(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1.25f).fillMaxHeight().verticalScroll(rememberScrollState())) {
+                    TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, tablet = true, availableHeight = paneHeight, modifier = Modifier.heightIn(min = paneHeight))
+                }
+                Column(Modifier.weight(.9f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MusicCard(music, attemptedMusicAccess, onEnable = {
+                        attemptedMusicAccess = true
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    })
+                    TodayStatsCard(vm)
+                }
+                Column(Modifier.weight(.9f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SharedSessionControlsCard(vm)
+                    RecentFocusCard(vm)
+                }
+            }
+        } else if (wide) {
             Row(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(Modifier.weight(1.55f).fillMaxHeight().verticalScroll(rememberScrollState())) {
                     TimerHeroCard(vm, seconds, progress, pickerSubject, subjectEditable, onSubject = ::chooseSubject, onStart = ::start, tablet = true, availableHeight = paneHeight, modifier = Modifier.heightIn(min = paneHeight))
@@ -732,6 +780,7 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun SharedSessionControlsCard(vm: FocalViewModel) {
     val sessions = vm.sharedSessions
+    var discard by remember { mutableStateOf<FocalRow?>(null) }
     if (sessions.isEmpty()) return
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -762,13 +811,22 @@ private fun SharedSessionControlsCard(vm: FocalViewModel) {
                         Spacer(Modifier.width(6.dp))
                         Text("Finish")
                     }
-                    IconButton(onClick = { vm.controlSharedSession(row.id, "discard") }) {
+                    IconButton(onClick = { discard = row }) {
                         Icon(Icons.Filled.Delete, contentDescription = "Discard shared session")
                     }
                 }
                 if (row != sessions.last()) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
+    }
+    discard?.let { row ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { discard = null },
+            title = { Text("Discard shared session?") },
+            text = { Text("This removes the shared session from your connected apps. It cannot be undone.") },
+            confirmButton = { Button(onClick = { vm.controlSharedSession(row.id, "discard"); discard = null }) { Text("Discard") } },
+            dismissButton = { OutlinedButton(onClick = { discard = null }) { Text("Keep") } }
+        )
     }
 }
 
@@ -808,7 +866,7 @@ private fun TimerHeroCard(vm: FocalViewModel, seconds: Long, progress: Float, su
                 val density = LocalDensity.current
                 val stroke = with(density) { Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round) }
                 Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
-                    CircularWavyProgressIndicator(progress = { 1f - progress }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "Session time remaining" },
+                    CircularWavyProgressIndicator(progress = { 1f - progress }, modifier = Modifier.fillMaxSize().semantics { contentDescription = "${formatClock(seconds)} remaining" },
                         color = colors.primary, trackColor = colors.secondaryContainer,
                         stroke = stroke, trackStroke = stroke, wavelength = 40.dp,
                         // ponytail: no perpetual wave animation on a screen left running for hours.
@@ -889,13 +947,7 @@ private fun SubjectPickerRow(vm: FocalViewModel, selected: String?, onSubject: (
 private fun TodayStatsCard(vm: FocalViewModel) {
     val today = LocalDate.now()
     val todays = remember(vm.sessions) { vm.sessions.filter { eventOnDay(it, today) } }
-    val minutes = remember(todays) {
-        todays.sumOf { row ->
-            runCatching {
-                Duration.between(Instant.parse(row.data.getString("startTime")), Instant.parse(row.data.optString("endTime").takeIf { it.isNotBlank() } ?: row.data.getString("startTime"))).toMinutes()
-            }.getOrDefault(0)
-        }.coerceAtLeast(0)
-    }
+    val minutes = remember(todays) { todays.sumOf { focusedMinutesOn(it.data, today) } }
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Today", style = MaterialTheme.typography.titleLarge)
@@ -1011,11 +1063,12 @@ private fun AccountScreen(vm: FocalViewModel, modifier: Modifier = Modifier, the
     var showMapping by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         // ponytail: two usable panes need 720dp after the navigation rail; smaller windows stack.
-        val wide = maxWidth >= 720.dp
+        val landscape = maxWidth > maxHeight
+        val wide = maxWidth >= 600.dp
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-            LazyVerticalGrid(columns = GridCells.Fixed(if (wide) 2 else 1), modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(24.dp), horizontalArrangement = Arrangement.spacedBy(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            LazyVerticalGrid(columns = GridCells.Fixed(if (landscape) 3 else if (wide) 2 else 1), modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(if (landscape) 16.dp else 24.dp), horizontalArrangement = Arrangement.spacedBy(if (landscape) 12.dp else 24.dp),
+                verticalArrangement = Arrangement.spacedBy(if (landscape) 12.dp else 20.dp)) {
                 item {
                     Card {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -1,7 +1,10 @@
 package com.andy.focal
 
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import android.media.session.PlaybackState
+import org.json.JSONObject
 
 // Runnable on every debug launch; small enough to catch timer persistence regressions.
 internal fun checkNativeLogic() {
@@ -21,4 +24,9 @@ internal fun checkNativeLogic() {
     check(musicCanToggle(PlaybackState.ACTION_PLAY, false))
     check(!musicCanToggle(PlaybackState.ACTION_PLAY, true))
     check(musicCanToggle(PlaybackState.ACTION_PAUSE, true))
+    val day = LocalDate.parse("2026-01-01")
+    val timed = JSONObject().put("execution", org.json.JSONObject().put("intervals", org.json.JSONArray()
+        .put(JSONObject().put("start", "2026-01-01T00:00:00Z").put("end", "2026-01-01T00:20:00Z"))
+        .put(JSONObject().put("start", "2026-01-01T23:50:00Z").put("end", "2026-01-02T00:10:00Z"))))
+    check(focusedMinutesOn(timed, day, ZoneId.of("UTC")) == 30L)
 }

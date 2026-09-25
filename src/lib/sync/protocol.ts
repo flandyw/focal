@@ -66,7 +66,9 @@ export function repairDuplicateSessions(raw: unknown[]): {
       continue
     }
 
-    const keepExisting = sessionSortKey(existing) <= sessionSortKey(session)
+    const existingKey = sessionSortKey(existing)
+    const incomingKey = sessionSortKey(session)
+    const keepExisting = existingKey > incomingKey || (existingKey === incomingKey && existing.id <= session.id)
     const kept = keepExisting ? existing : session
     const duplicate = keepExisting ? session : existing
     canonical.set(fingerprint, mergeDuplicateSessionDetails(kept, duplicate))
@@ -83,6 +85,12 @@ export function repairDuplicateSessions(raw: unknown[]): {
 }
 
 function sessionDuplicateKey(session: StudySession): string {
+  // Folio/ExamTrack updates keep a stable source id even when an older client generated
+  // a new local row id for each checkpoint. Treat those rows as one logical sitting.
+  // Notion page ids are intentionally not used here: two pages can legitimately describe
+  // the same-looking study block and are repaired by the existing fingerprint instead.
+  const source = session.integrations?.folio ?? session.integrations?.examtrack
+  if (source) return `external:${source.type}:${source.id}`
   return JSON.stringify({
     title: session.title.trim(),
     projectId: session.projectId ?? null,
@@ -123,5 +131,5 @@ function executionQuality(session: StudySession): number {
 
 function sessionSortKey(session: StudySession): string {
   const localRank = session.createdVia === "notion" ? "1" : "0"
-  return `${localRank}:${session.created_at}:${session.id}`
+  return `${localRank}:${session.updated_at ?? session.created_at}:${session.created_at}`
 }

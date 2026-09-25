@@ -73,6 +73,7 @@ const duplicateBase = {
   execution: { state: "completed" as const, intervals: [], completedAt: "2026-07-20T01:30:00.000Z" },
   createdVia: "notion" as const,
   created_at: "2026-07-20T02:00:00.000Z",
+  updated_at: "2026-07-20T02:00:00.000Z",
 }
 const repaired = repairDuplicateSessions([
   { ...duplicateBase, id: "session-b", integrations: { notion: { type: "notion", id: "page-b", kind: "session" } } },
@@ -81,6 +82,13 @@ const repaired = repairDuplicateSessions([
 assertEqual(repaired.sessions.map((session) => session.id), ["session-a"], "duplicate repair must choose one stable canonical session")
 assertEqual(repaired.duplicateIds, ["session-b"], "duplicate repair must emit durable deletion ids")
 assertEqual(repaired.duplicateNotionPageIds, ["page-b"], "duplicate repair must retain orphan Notion pages for cleanup")
+
+const folioCheckpoints = repairDuplicateSessions([
+  { ...duplicateBase, id: "folio-old", title: "PE Focus", updated_at: "2026-07-20T02:01:00.000Z", integrations: { folio: { type: "folio", id: "folio-session", kind: "study" } } },
+  { ...duplicateBase, id: "folio-new", title: "PE Focus", updated_at: "2026-07-20T02:02:00.000Z", integrations: { folio: { type: "folio", id: "folio-session", kind: "study" } } },
+])
+assertEqual(folioCheckpoints.sessions.map((session) => session.id), ["folio-new"], "Folio checkpoints must collapse by their stable integration id")
+assertEqual(folioCheckpoints.duplicateIds, ["folio-old"], "Folio checkpoint cleanup must remove the stale local row")
 
 const remoteMigration = await fetch(new URL("../supabase/migrations/0004_rebuild_sync_as_change_log.sql", import.meta.url)).then((response) => response.text())
 for (const required of [

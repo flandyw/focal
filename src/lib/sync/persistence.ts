@@ -1,6 +1,8 @@
 import { openFocalDatabase } from "@/lib/storage/database"
-import { isSyncTable } from "@/lib/sync/protocol"
-import type { RemoteSyncChange, SyncChange, SyncOperation, SyncTable } from "@/lib/sync/types"
+import { isSyncEntity, isSyncTable } from "@/lib/sync/reduce"
+import type { RemoteSyncChange, SyncChange, SyncOperation, SyncRowState, SyncTable } from "@/lib/sync/types"
+
+type Database = Awaited<ReturnType<typeof openFocalDatabase>>
 
 interface OutboxRow {
   change_id: string
@@ -10,6 +12,7 @@ interface OutboxRow {
   operation: string
   payload: string | null
   created_at: string
+  lamport: number
   retry_count: number
   last_error: string | null
   next_attempt_at: string | null
@@ -21,21 +24,30 @@ interface InboxRow {
   entity: string
   row_id: string
   change_id: string
-  device_id: string
+  client_id: string
   operation: string
   payload: string | null
-  revision: number
+  seq: number
   created_at: string
 }
 
-interface StateRow {
-  value: string
+interface AppliedRow {
+  entity: string
+  row_id: string
+  operation: string
+  payload: string | null
+  lamport: number
+  client_id: string
+  seq: number
 }
 
-interface ContextRow {
-  account_id: string
-  last_account_id: string
+interface CursorRow {
+  cursor_seq: number
+  lamport: number
 }
+
+/** The cursor key used before protocol v3. Read once, then retired. */
+const LEGACY_CURSOR_KEY = "change-log-v1"
 
 let lock: Promise<unknown> = Promise.resolve()
 
@@ -45,20 +57,25 @@ function serialized<T>(operation: () => Promise<T>): Promise<T> {
   return result
 }
 
+function nowIso(): string {
+  return new Date().toISOString()
+}
+
+// ---------------------------------------------------------------------------
+// Outbox
+// ---------------------------------------------------------------------------
+
 export async function readOutbox(accountId?: string): Promise<SyncChange[]> {
   await lock
   const database = await openFocalDatabase()
-  const rows = await database.select<OutboxRow[]>(
-    `select change_id, account_id, entity, row_id, operation, payload, created_at,
-            retry_count, last_error, next_attempt_at, blocked_at
-       from sync_outbox
-      ${accountId === undefined ? "" : "where account_id = $1"}
-      order by created_at asc`,
-    accountId === undefined ? [] : [accountId],
-  )
-  return rows.flatMap(parseOutboxRow)
+  return readOutboxUnlocked(database, accountId)
 }
 
+/**
+ * The commit is the event: this is called from the same write path that saves the record,
+ * so a local edit is durable and queued before the UI is told anything. The lamport comes
+ * from the same durable counter, so a crash cannot reuse a version number.
+ */
 export function enqueueChange(
   accountId: string,
   entity: SyncTable,
@@ -68,45 +85,80 @@ export function enqueueChange(
 ): Promise<SyncChange[]> {
   return serialized(async () => {
     const changeId = crypto.randomUUID()
-    const now = new Date().toISOString()
+    const createdAt = nowIso()
     const database = await openFocalDatabase()
-    const context = accountId === ""
-      ? await database.select<ContextRow[]>(
-        "select account_id, last_account_id from sync_local_context where singleton = 1",
-      )
-      : []
-    const ownerAccountId = accountId || context[0]?.account_id || ""
+    const ownerAccountId = accountId || (await readContextAccountId(database))
+    const lamport = ownerAccountId ? await nextLamportUnlocked(database, ownerAccountId, createdAt) : 0
     await database.execute(
       `insert into sync_outbox (
          change_id, account_id, entity, row_id, operation, payload, created_at,
-         retry_count, last_error, next_attempt_at, blocked_at
-       ) values ($1, $2, $3, $4, $5, $6, $7, 0, null, null, null)
+         retry_count, last_error, next_attempt_at, blocked_at, lamport
+       ) values ($1, $2, $3, $4, $5, $6, $7, 0, null, null, null, $8)
        on conflict (account_id, entity, row_id) do update set
          change_id = excluded.change_id,
          operation = excluded.operation,
          payload = excluded.payload,
          created_at = excluded.created_at,
+         lamport = excluded.lamport,
          retry_count = 0,
          last_error = null,
          next_attempt_at = null,
          blocked_at = null`,
-      [changeId, ownerAccountId, entity, rowId, operation, payload === null ? null : JSON.stringify(payload), now],
+      [changeId, ownerAccountId, entity, rowId, operation, payload === null ? null : JSON.stringify(payload), createdAt, lamport],
     )
     return readOutboxUnlocked(database, ownerAccountId)
   })
 }
 
+async function readOutboxUnlocked(database: Database, accountId?: string): Promise<SyncChange[]> {
+  const rows = await database.select<OutboxRow[]>(
+    `select change_id, account_id, entity, row_id, operation, payload, created_at, lamport,
+            retry_count, last_error, next_attempt_at, blocked_at
+       from sync_outbox
+      ${accountId === undefined ? "" : "where account_id = $1"}
+      order by created_at asc`,
+    accountId === undefined ? [] : [accountId],
+  )
+  return rows.flatMap(parseOutboxRow)
+}
+
+function parseOutboxRow(row: OutboxRow): SyncChange[] {
+  if (!isSyncTable(row.entity)) return []
+  if (row.operation !== "put" && row.operation !== "delete") return []
+  try {
+    return [{
+      changeId: row.change_id,
+      entity: row.entity,
+      rowId: row.row_id,
+      operation: row.operation,
+      payload: row.payload === null ? null : JSON.parse(row.payload) as unknown,
+      createdAt: row.created_at,
+      lamport: row.lamport,
+      retryCount: row.retry_count,
+      lastError: row.last_error ?? undefined,
+      nextAttemptAt: row.next_attempt_at ?? undefined,
+      blockedAt: row.blocked_at ?? undefined,
+    }]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Claims changes made while signed out. Rows are only adopted when the previous owner is
+ * the same account, so a shared machine cannot leak one account's queue into another's.
+ */
 export function activateOutboxAccount(accountId: string): Promise<void> {
   return serialized(async () => {
     const database = await openFocalDatabase()
-    const context = await database.select<ContextRow[]>(
+    const context = await database.select<{ account_id: string; last_account_id: string }[]>(
       "select account_id, last_account_id from sync_local_context where singleton = 1",
     )
     const lastAccountId = context[0]?.last_account_id ?? ""
     const canClaimUnowned = accountId.length > 0 && (lastAccountId === "" || lastAccountId === accountId)
     if (canClaimUnowned) {
       const unowned = await database.select<OutboxRow[]>(
-        `select change_id, account_id, entity, row_id, operation, payload, created_at,
+        `select change_id, account_id, entity, row_id, operation, payload, created_at, lamport,
                 retry_count, last_error, next_attempt_at, blocked_at
            from sync_outbox
           where account_id = ''
@@ -119,15 +171,10 @@ export function activateOutboxAccount(accountId: string): Promise<void> {
           [accountId, change.entity, change.row_id, change.created_at],
         )
         await database.execute(
-          `update or ignore sync_outbox
-              set account_id = $1
-            where change_id = $2 and account_id = ''`,
+          "update or ignore sync_outbox set account_id = $1 where change_id = $2 and account_id = ''",
           [accountId, change.change_id],
         )
-        await database.execute(
-          "delete from sync_outbox where change_id = $1 and account_id = ''",
-          [change.change_id],
-        )
+        await database.execute("delete from sync_outbox where change_id = $1 and account_id = ''", [change.change_id])
       }
     }
     await database.execute(
@@ -140,6 +187,14 @@ export function activateOutboxAccount(accountId: string): Promise<void> {
   })
 }
 
+async function readContextAccountId(database: Database): Promise<string> {
+  const context = await database.select<{ account_id: string }[]>(
+    "select account_id from sync_local_context where singleton = 1",
+  )
+  return context[0]?.account_id ?? ""
+}
+
+/** A change leaves the outbox only on a receipt, so a crash mid-push just resends it. */
 export function finishFlush(accountId: string, processedIds: string[], retries: SyncChange[]): Promise<SyncChange[]> {
   return serialized(async () => {
     const database = await openFocalDatabase()
@@ -173,6 +228,11 @@ export function removeOutboxChange(accountId: string, entity: SyncTable, rowId: 
   })
 }
 
+/**
+ * Applying a remote change writes the local record, and a remote write must not queue
+ * itself. These two markers are deleted in the same statement that saves the record, so
+ * the suppression can never outlive the write it was protecting.
+ */
 export function suppressRecordOutbox(
   records: { entity: "projects" | "events" | "study_sessions"; rowId: string; payload: unknown }[],
 ): Promise<void> {
@@ -205,68 +265,226 @@ export function clearRecordOutboxSuppressions(
   })
 }
 
+// ---------------------------------------------------------------------------
+// Inbox: remote changes parked until the user resolves them
+// ---------------------------------------------------------------------------
+
 export async function readInbox(accountId: string): Promise<RemoteSyncChange[]> {
   await lock
   const rows = await (await openFocalDatabase()).select<InboxRow[]>(
-    `select account_id, entity, row_id, change_id, device_id, operation, payload, revision, created_at
+    `select account_id, entity, row_id, change_id, client_id, operation, payload, seq, created_at
        from sync_inbox
       where account_id = $1
-      order by revision asc`,
+      order by seq asc`,
     [accountId],
   )
   return rows.flatMap(parseInboxRow)
 }
 
-export function deferInboxChanges(accountId: string, changes: RemoteSyncChange[]): Promise<void> {
+export function deferInboxChanges(accountId: string, changes: readonly RemoteSyncChange[]): Promise<void> {
   if (changes.length === 0) return Promise.resolve()
   return serialized(async () => {
     const database = await openFocalDatabase()
     for (const change of changes) {
       await database.execute(
         `insert into sync_inbox (
-           account_id, entity, row_id, change_id, device_id, operation, payload, revision, created_at
+           account_id, entity, row_id, change_id, client_id, operation, payload, seq, created_at
          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          on conflict (account_id, entity, row_id) do update set
            change_id = excluded.change_id,
-           device_id = excluded.device_id,
+           client_id = excluded.client_id,
            operation = excluded.operation,
            payload = excluded.payload,
-           revision = excluded.revision,
+           seq = excluded.seq,
            created_at = excluded.created_at
-         where excluded.revision > sync_inbox.revision`,
+         where excluded.seq > sync_inbox.seq`,
         [
           accountId,
           change.entity,
-          change.row_id,
-          change.change_id,
-          change.device_id,
+          change.rowId,
+          change.changeId,
+          change.clientId,
           change.operation,
           change.payload == null ? null : JSON.stringify(change.payload),
-          change.revision,
-          change.created_at,
+          change.seq,
+          change.createdAt,
         ],
       )
     }
   })
 }
 
-export function removeInboxChanges(accountId: string, changes: RemoteSyncChange[]): Promise<void> {
+export function removeInboxChanges(accountId: string, changes: readonly RemoteSyncChange[]): Promise<void> {
   if (changes.length === 0) return Promise.resolve()
   return serialized(async () => {
     const database = await openFocalDatabase()
     for (const change of changes) {
       await database.execute(
-        `delete from sync_inbox
-          where account_id = $1 and entity = $2 and row_id = $3 and revision <= $4`,
-        [accountId, change.entity, change.row_id, change.revision],
+        "delete from sync_inbox where account_id = $1 and entity = $2 and row_id = $3 and seq <= $4",
+        [accountId, change.entity, change.rowId, change.seq],
       )
     }
   })
 }
 
+function parseInboxRow(row: InboxRow): RemoteSyncChange[] {
+  if (!isSyncEntity(row.entity)) return []
+  if (row.operation !== "put" && row.operation !== "delete") return []
+  try {
+    return [{
+      seq: row.seq,
+      changeId: row.change_id,
+      clientId: row.client_id,
+      entity: row.entity,
+      rowId: row.row_id,
+      operation: row.operation,
+      payload: row.payload === null ? null : JSON.parse(row.payload) as unknown,
+      lamport: 0,
+      createdAt: row.created_at,
+    }]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cursor and lamport clock
+// ---------------------------------------------------------------------------
+
+export interface SyncCursorState {
+  seq: number
+  lamport: number
+}
+
+/**
+ * Where this device has read to, and the largest version it has ever seen. The watermark
+ * is what stops a slower device's old change from overwriting a newer local edit, so it
+ * is raised on every pull as well as on every local write.
+ */
+export async function readCursor(accountId: string): Promise<SyncCursorState> {
+  await lock
+  const database = await openFocalDatabase()
+  const rows = await database.select<CursorRow[]>(
+    "select cursor_seq, lamport from sync_cursor where account_id = $1",
+    [accountId],
+  )
+  if (rows[0]) return { seq: rows[0].cursor_seq, lamport: rows[0].lamport }
+  const legacy = await readState<number>(`cursor:${accountId}:${LEGACY_CURSOR_KEY}`)
+  return { seq: legacy ?? 0, lamport: 0 }
+}
+
+export function writeCursor(accountId: string, seq: number, lamport: number): Promise<void> {
+  return serialized(async () => {
+    await (await openFocalDatabase()).execute(
+      `insert into sync_cursor (account_id, cursor_seq, lamport, updated_at)
+       values ($1, $2, $3, $4)
+       on conflict (account_id) do update set
+         cursor_seq = greatest(sync_cursor.cursor_seq, excluded.cursor_seq),
+         lamport = greatest(sync_cursor.lamport, excluded.lamport),
+         updated_at = excluded.updated_at`,
+      [accountId, seq, lamport, nowIso()],
+    )
+  })
+}
+
+async function nextLamportUnlocked(database: Database, accountId: string, at: string): Promise<number> {
+  const rows = await database.select<{ lamport: number }[]>(
+    `insert into sync_cursor (account_id, cursor_seq, lamport, updated_at)
+     values ($1, 0, 1, $2)
+     on conflict (account_id) do update
+       set lamport = sync_cursor.lamport + 1, updated_at = excluded.updated_at
+     returning lamport`,
+    [accountId, at],
+  )
+  return rows[0]?.lamport ?? 1
+}
+
+// ---------------------------------------------------------------------------
+// Applied state: the last version of each row this device knows about
+// ---------------------------------------------------------------------------
+
+export async function readApplied(accountId: string, entities?: readonly SyncTable[]): Promise<SyncRowState[]> {
+  await lock
+  const rows = await (await openFocalDatabase()).select<AppliedRow[]>(
+    `select entity, row_id, operation, payload, lamport, client_id, seq
+       from sync_applied
+      where account_id = $1
+        ${entities && entities.length > 0 ? `and entity in (${entities.map((_, index) => `$${index + 2}`).join(", ")})` : ""}
+      order by seq asc`,
+    entities && entities.length > 0 ? [accountId, ...entities] : [accountId],
+  )
+  return rows.flatMap(parseAppliedRow)
+}
+
+export function writeApplied(accountId: string, rows: readonly SyncRowState[]): Promise<void> {
+  if (rows.length === 0) return Promise.resolve()
+  return serialized(async () => {
+    const database = await openFocalDatabase()
+    for (const row of rows) {
+      await database.execute(
+        `insert into sync_applied (account_id, entity, row_id, operation, payload, lamport, client_id, seq, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         on conflict (account_id, entity, row_id) do update set
+           operation = excluded.operation,
+           payload = excluded.payload,
+           lamport = excluded.lamport,
+           client_id = excluded.client_id,
+           seq = excluded.seq,
+           updated_at = excluded.updated_at`,
+        [
+          accountId,
+          row.entity,
+          row.rowId,
+          row.operation,
+          row.payload === null ? null : JSON.stringify(row.payload),
+          row.lamport,
+          row.clientId,
+          row.seq,
+          nowIso(),
+        ],
+      )
+    }
+  })
+}
+
+export function removeApplied(accountId: string, keys: readonly { entity: string; rowId: string }[]): Promise<void> {
+  if (keys.length === 0) return Promise.resolve()
+  return serialized(async () => {
+    const database = await openFocalDatabase()
+    for (const key of keys) {
+      await database.execute(
+        "delete from sync_applied where account_id = $1 and entity = $2 and row_id = $3",
+        [accountId, key.entity, key.rowId],
+      )
+    }
+  })
+}
+
+function parseAppliedRow(row: AppliedRow): SyncRowState[] {
+  if (!isSyncEntity(row.entity)) return []
+  if (row.operation !== "put" && row.operation !== "delete") return []
+  try {
+    return [{
+      entity: row.entity,
+      rowId: row.row_id,
+      operation: row.operation,
+      payload: row.payload === null ? null : JSON.parse(row.payload) as unknown,
+      lamport: row.lamport,
+      clientId: row.client_id,
+      seq: row.seq,
+    }]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Free-form sync state (bootstrap marker, Notion bookkeeping)
+// ---------------------------------------------------------------------------
+
 export async function readState<T>(key: string): Promise<T | null> {
   await lock
-  const rows = await (await openFocalDatabase()).select<StateRow[]>(
+  const rows = await (await openFocalDatabase()).select<{ value: string }[]>(
     "select value from sync_state where key = $1",
     [key],
   )
@@ -284,60 +502,7 @@ export function writeState(key: string, value: unknown): Promise<void> {
       `insert into sync_state (key, value, updated_at)
        values ($1, $2, $3)
        on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at`,
-      [key, JSON.stringify(value), new Date().toISOString()],
+      [key, JSON.stringify(value), nowIso()],
     )
   })
-}
-
-async function readOutboxUnlocked(database: Awaited<ReturnType<typeof openFocalDatabase>>, accountId: string): Promise<SyncChange[]> {
-  const rows = await database.select<OutboxRow[]>(
-    `select change_id, account_id, entity, row_id, operation, payload, created_at,
-            retry_count, last_error, next_attempt_at, blocked_at
-       from sync_outbox
-      where account_id = $1
-      order by created_at asc`,
-    [accountId],
-  )
-  return rows.flatMap(parseOutboxRow)
-}
-
-function parseOutboxRow(row: OutboxRow): SyncChange[] {
-  if (!isSyncTable(row.entity)) return []
-  if (row.operation !== "put" && row.operation !== "delete") return []
-  try {
-    return [{
-      changeId: row.change_id,
-      entity: row.entity,
-      rowId: row.row_id,
-      operation: row.operation,
-      payload: row.payload === null ? null : JSON.parse(row.payload) as unknown,
-      createdAt: row.created_at,
-      retryCount: row.retry_count,
-      lastError: row.last_error ?? undefined,
-      nextAttemptAt: row.next_attempt_at ?? undefined,
-      blockedAt: row.blocked_at ?? undefined,
-    }]
-  } catch {
-    return []
-  }
-}
-
-function parseInboxRow(row: InboxRow): RemoteSyncChange[] {
-  if (!isSyncTable(row.entity)) return []
-  if (row.operation !== "put" && row.operation !== "delete") return []
-  try {
-    return [{
-      user_id: row.account_id,
-      change_id: row.change_id,
-      device_id: row.device_id,
-      entity: row.entity,
-      row_id: row.row_id,
-      operation: row.operation,
-      payload: row.payload === null ? null : JSON.parse(row.payload) as unknown,
-      revision: row.revision,
-      created_at: row.created_at,
-    }]
-  } catch {
-    return []
-  }
 }

@@ -16,7 +16,7 @@ import { pullFromNotionAfterConflictRecheck } from "@/lib/notion/pull"
 import { executePush, processNotionArchiveIntents } from "@/lib/notion/push"
 import { readNotionIntents } from "@/lib/notion/outbox"
 import { dedupeCalendarEvents } from "@/lib/calendarEvents"
-import { repairDuplicateSessions } from "@/lib/sync/protocol"
+import { repairDuplicateSessions } from "@/lib/sync/sessions"
 import { readState, writeState } from "@/lib/sync/persistence"
 
 export type { NotionCalendarSyncResult } from "@/lib/notion/schema"

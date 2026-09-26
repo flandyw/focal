@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import type { Session } from "@supabase/supabase-js"
 import { setSyncSession, subscribeSyncStatus } from "@/lib/sync/engine"
-import type { SyncStatusSnapshot } from "@/lib/sync/types"
+import { EMPTY_METRICS, type SyncStatusSnapshot } from "@/lib/sync/types"
 
 const INITIAL_STATUS: SyncStatusSnapshot = {
   status: "signed-out",
@@ -13,6 +13,7 @@ const INITIAL_STATUS: SyncStatusSnapshot = {
   failedItems: null,
   conflicts: null,
   isOnline: true,
+  metrics: EMPTY_METRICS,
 }
 
 export function useSupabaseSync(session: Session | null) {

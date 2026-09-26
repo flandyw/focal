@@ -5,7 +5,7 @@ import { usePersistedData } from "@/lib/hooks/usePersistedData"
 import { useLatestRef } from "@/lib/hooks/useLatestRef"
 import { recordLocalSoftDelete, recordLocalUpsert, rememberDuplicateNotionPages } from "@/lib/sync/engine"
 import { createStudySession, normalizeStudySession, updateStudySession, type CreateStudySessionInput } from "@/lib/studySessions"
-import { repairDuplicateSessions } from "@/lib/sync/protocol"
+import { repairDuplicateSessions } from "@/lib/sync/sessions"
 
 export function useStudySessions() {
   const duplicateIdsRef = useRef<string[]>([])
@@ -98,10 +98,10 @@ export function useStudySessions() {
   }, [sessionsRef, saveSessions])
 
   const deleteSession = useCallback(async (id: string) => {
-    const updated = sessionsRef.current.filter((s) => s.id !== id)
     await recordLocalSoftDelete("study_sessions", id)
-    await saveSessions(updated)
-  }, [sessionsRef, saveSessions])
+    // Sync may refresh the list while the durable tombstone is being written.
+    await mutateSessions((current) => current.filter((session) => session.id !== id))
+  }, [mutateSessions])
 
   const restoreSession = useCallback(async (session: StudySession) => {
     const exists = sessionsRef.current.some((s) => s.id === session.id)
@@ -115,10 +115,9 @@ export function useStudySessions() {
   const deleteSessions = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return
     const idSet = new Set(ids)
-    const updated = sessionsRef.current.filter((session) => !idSet.has(session.id))
     await Promise.all(ids.map((id) => recordLocalSoftDelete("study_sessions", id)))
-    await saveSessions(updated)
-  }, [sessionsRef, saveSessions])
+    await mutateSessions((current) => current.filter((session) => !idSet.has(session.id)))
+  }, [mutateSessions])
 
   const restoreSessions = useCallback(async (sessionsToRestore: StudySession[]) => {
     const existingIds = new Set(sessionsRef.current.map((s) => s.id))

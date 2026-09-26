@@ -11,6 +11,14 @@ function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
 }
 
+for (const end of ["2026-06-24T08:00:00.000Z", "invalid", "2026-06-24T07:00:00.000Z"]) {
+  const paused = normalizeStudySession({
+    id: "folio-paused",
+    execution: { state: "in-progress", intervals: [{ start: "2026-06-24T08:00:00.000Z", end, source: "manual" }] },
+  })
+  check(paused.execution.intervals.every((interval) => !!interval.end), "closed Folio interval became a running timer")
+}
+
 const planned = normalizeStudySession({
   id: "legacy-planned",
   subjectIds: ["mm"],

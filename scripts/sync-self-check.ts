@@ -1,4 +1,5 @@
-import { chunkItems, latestChanges, repairDuplicateSessions, retryChange, retryOrBlockChange } from "../src/lib/sync/protocol"
+import { chunkItems, latestChanges, retryChange, retryOrBlockChange } from "../src/lib/sync/reduce"
+import { repairDuplicateSessions } from "../src/lib/sync/sessions"
 import type { RemoteSyncChange, SyncChange } from "../src/lib/sync/types"
 
 interface BunSqliteDatabase {
@@ -20,27 +21,27 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
 
 function remote(overrides: Partial<RemoteSyncChange>): RemoteSyncChange {
   return {
-    user_id: "user-1",
-    change_id: crypto.randomUUID(),
-    device_id: "device-1",
+    seq: 1,
+    changeId: crypto.randomUUID(),
+    clientId: "device-1",
     entity: "events",
-    row_id: "event-1",
+    rowId: "event-1",
     operation: "put",
     payload: { id: "event-1", title: "Event" },
-    revision: 1,
-    created_at: "2026-07-20T00:00:00.000Z",
+    lamport: 1,
+    createdAt: "2026-07-20T00:00:00.000Z",
     ...overrides,
   }
 }
 
 assertEqual(
   latestChanges([
-    remote({ revision: 1, payload: { title: "old" } }),
-    remote({ revision: 3, payload: null, operation: "delete" }),
-    remote({ row_id: "event-2", revision: 2, payload: { title: "other" } }),
-  ]).map((change) => [change.row_id, change.operation, change.revision]),
+    remote({ seq: 1, payload: { title: "old" } }),
+    remote({ seq: 3, payload: null, operation: "delete" }),
+    remote({ rowId: "event-2", seq: 2, payload: { title: "other" } }),
+  ]).map((change) => [change.rowId, change.operation, change.seq]),
   [["event-2", "put", 2], ["event-1", "delete", 3]],
-  "server revision order must deterministically reduce each entity row",
+  "log sequence order must deterministically reduce each row",
 )
 assertEqual(chunkItems([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]], "sync pushes must use bounded batches")
 
@@ -51,6 +52,7 @@ const queued: SyncChange = {
   operation: "put",
   payload: { id: "event-1" },
   createdAt: "2026-07-20T00:00:00.000Z",
+  lamport: 1,
   retryCount: 0,
 }
 assertEqual(
@@ -189,6 +191,16 @@ localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
   ["events", "pre-upgrade-event", JSON.stringify({ id: "pre-upgrade-event", title: "Existing" }), 0],
 )
+const localChangeLogMigration = await fetch(new URL("../src-tauri/migrations/0004_change_log.sql", import.meta.url)).then((response) => response.text())
+for (const required of [
+  "alter table sync_outbox add column lamport",
+  "create table if not exists sync_cursor",
+  "create table if not exists sync_applied",
+  "alter table sync_inbox rename column revision to seq",
+]) {
+  if (!localChangeLogMigration.includes(required)) throw new Error(`Local change-log migration is missing: ${required}`)
+}
+
 localDatabase.exec(localReliabilityMigration)
 localDatabase.run("update sync_local_context set account_id = ? where singleton = 1", ["account-a"])
 assertEqual(
@@ -196,6 +208,10 @@ assertEqual(
   [{ operation: "upsert" }],
   "the reliability migration must backfill existing Notion-eligible records",
 )
+
+// v3 renames the log vocabulary and rebuilds the enqueue triggers, so the durable-behaviour
+// fixtures below run against the current schema rather than the one they were written for.
+localDatabase.exec(localChangeLogMigration)
 localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
   ["events", "atomic-event", JSON.stringify({ id: "atomic-event", title: "Atomic" }), 0],
@@ -204,6 +220,32 @@ assertEqual(
   localDatabase.query("select account_id, operation from sync_outbox where row_id = 'atomic-event'").all(),
   [{ account_id: "account-a", operation: "put" }],
   "a durable record upsert must atomically create its Supabase outbox intent",
+)
+const firstLamport = (localDatabase.query("select lamport from sync_outbox where row_id = 'atomic-event'").all() as { lamport: number }[])[0]
+assertEqual(
+  firstLamport.lamport >= 1,
+  true,
+  "a queued record change must carry a lamport from the durable clock",
+)
+assertEqual(
+  localDatabase.query("select cursor_seq from sync_cursor where account_id = 'account-a'").all(),
+  [{ cursor_seq: 0 }],
+  "enqueuing a local change must not move the read cursor",
+)
+localDatabase.run(
+  "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
+  ["events", "later-event", JSON.stringify({ id: "later-event" }), 1],
+)
+const laterLamport = (localDatabase.query("select lamport from sync_outbox where row_id = 'later-event'").all() as { lamport: number }[])[0]
+assertEqual(
+  laterLamport.lamport > firstLamport.lamport,
+  true,
+  "each queued change must get a strictly newer version than the last",
+)
+assertEqual(
+  (localDatabase.query("select lamport from sync_cursor where account_id = 'account-a'").all() as { lamport: number }[])[0].lamport,
+  laterLamport.lamport,
+  "the per-account clock must survive the enqueue so versions never repeat",
 )
 assertEqual(
   localDatabase.query("select operation from notion_outbox where local_id = 'atomic-event'").all(),
@@ -217,7 +259,7 @@ localDatabase.run(
 )
 localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
-  ["events", "remote-event", remotePayload, 1],
+  ["events", "remote-event", remotePayload, 2],
 )
 assertEqual(
   localDatabase.query("select change_id from sync_outbox where row_id = 'remote-event'").all(),
@@ -226,23 +268,23 @@ assertEqual(
 )
 localDatabase.run(
   `insert into sync_inbox (
-     account_id, entity, row_id, change_id, device_id, operation, payload, revision, created_at
+     account_id, entity, row_id, change_id, client_id, operation, payload, seq, created_at
    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ["account-a", "events", "deferred-event", "remote-1", "device-b", "put", remotePayload, 10, "2026-07-20T00:00:00.000Z"],
 )
 localDatabase.run(
   `insert into sync_inbox (
-     account_id, entity, row_id, change_id, device_id, operation, payload, revision, created_at
+     account_id, entity, row_id, change_id, client_id, operation, payload, seq, created_at
    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
    on conflict (account_id, entity, row_id) do update set
-     change_id = excluded.change_id, revision = excluded.revision
-   where excluded.revision > sync_inbox.revision`,
+     change_id = excluded.change_id, seq = excluded.seq
+   where excluded.seq > sync_inbox.seq`,
   ["account-a", "events", "deferred-event", "remote-2", "device-b", "put", remotePayload, 12, "2026-07-20T00:00:01.000Z"],
 )
 assertEqual(
-  localDatabase.query("select change_id, revision from sync_inbox where row_id = 'deferred-event'").all(),
-  [{ change_id: "remote-2", revision: 12 }],
-  "the durable inbox must retain the newest skipped remote revision",
+  localDatabase.query("select change_id, seq from sync_inbox where row_id = 'deferred-event'").all(),
+  [{ change_id: "remote-2", seq: 12 }],
+  "the durable inbox must retain the newest skipped remote sequence",
 )
 const linkedPayload = JSON.stringify({
   id: "linked-event",
@@ -251,17 +293,18 @@ const linkedPayload = JSON.stringify({
 })
 localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
-  ["events", "linked-event", linkedPayload, 2],
+  ["events", "linked-event", linkedPayload, 3],
 )
 localDatabase.run(
   `insert into sync_outbox (
-     change_id, account_id, entity, row_id, operation, payload, created_at
-   ) values (?, ?, ?, ?, ?, ?, ?)
+     change_id, account_id, entity, row_id, operation, payload, created_at, lamport
+   ) values (?, ?, ?, ?, ?, ?, ?, ?)
    on conflict (account_id, entity, row_id) do update set
      change_id = excluded.change_id,
      operation = excluded.operation,
      payload = excluded.payload,
-     created_at = excluded.created_at`,
+     created_at = excluded.created_at,
+     lamport = excluded.lamport`,
   [
     "linked-delete",
     "account-a",
@@ -270,6 +313,7 @@ localDatabase.run(
     "delete",
     JSON.stringify({ notion: { pageId: "notion-page", kind: "event", dataSourceId: "database" } }),
     "2026-07-20T00:00:00.000Z",
+    99,
   ],
 )
 assertEqual(
@@ -279,24 +323,101 @@ assertEqual(
 )
 localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
-  ["events", "linked-event", linkedPayload, 2],
+  ["events", "linked-event", linkedPayload, 3],
 )
 assertEqual(
   localDatabase.query("select operation, page_id from notion_outbox where local_id = 'linked-event'").all(),
   [{ operation: "upsert", page_id: "notion-page" }],
   "restoring a linked item must atomically cancel its pending Notion archive",
 )
-localDatabase.close()
-
-const engineSource = await fetch(new URL("../src/lib/sync/engine.ts", import.meta.url))
-  .then((response) => response.text())
-  .then((source) => source.replace(/\r\n/g, "\n"))
-for (const required of [
-  "conflict.table !== table || conflict.rowId !== rowId",
-  "finally {\n      await clearRecordOutboxSuppressions(putRecords)",
-  "typeof settings.ollama_model === \"string\"",
-]) {
-  if (!engineSource.includes(required)) throw new Error(`Sync engine reliability guard is missing: ${required}`)
+assertEqual(
+  localDatabase.query("select id from records where id = 'linked-event'").all(),
+  [{ id: "linked-event" }],
+  "a queued delete must still remove the local record, and a restore must bring it back",
+)
+localDatabase.run(
+  "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
+  ["events", "requeued-delete", JSON.stringify({ id: "requeued-delete" }), 4],
+)
+localDatabase.run(
+  `insert into sync_outbox (change_id, account_id, entity, row_id, operation, payload, created_at, lamport)
+   values (?, ?, ?, ?, ?, ?, ?, ?)
+   on conflict (account_id, entity, row_id) do update set
+     change_id = excluded.change_id, operation = excluded.operation, payload = excluded.payload,
+     created_at = excluded.created_at, lamport = excluded.lamport`,
+  ["v3-delete", "account-a", "events", "requeued-delete", "delete", null, "2026-07-20T00:00:00.000Z", 100],
+)
+assertEqual(
+  localDatabase.query("select id from records where id = 'requeued-delete'").all(),
+  [],
+  "a queued delete must still remove the local record in the same statement",
+)
+localDatabase.run(
+  `insert into sync_applied (account_id, entity, row_id, operation, payload, lamport, client_id, seq, updated_at)
+   values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+   on conflict (account_id, entity, row_id) do update set
+     lamport = excluded.lamport, seq = excluded.seq`,
+  ["account-a", "events", "applied-event", "put", remotePayload, 12, "device-b", 40, "2026-07-20T00:00:00.000Z"],
+)
+localDatabase.run(
+  `insert into sync_applied (account_id, entity, row_id, operation, payload, lamport, client_id, seq, updated_at)
+   values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+   on conflict (account_id, entity, row_id) do update set
+     operation = excluded.operation, payload = excluded.payload,
+     lamport = excluded.lamport, client_id = excluded.client_id, seq = excluded.seq`,
+  ["account-a", "events", "applied-event", "put", remotePayload, 3, "device-a", 41, "2026-07-20T00:00:00.000Z"],
+)
+assertEqual(
+  localDatabase.query("select lamport, client_id, seq from sync_applied where row_id = 'applied-event'").all(),
+  [{ lamport: 3, client_id: "device-a", seq: 41 }],
+  "applied state must round-trip the version reduce decided on, not re-decide it here",
+)
+// The guards below used to live in one 950-line file. They now live in the module that owns
+// each behaviour, so an assertion failure points at the thing that actually broke.
+const guards: [string, string[]][] = [
+  ["../src/lib/sync/engine.ts", [
+    "conflict.table !== table || conflict.rowId !== rowId",
+    "stopWakeup = subscribeWakeup(userId",
+    "await removeInboxChanges(accountId, [parkedChange])",
+  ]],
+  ["../src/lib/sync/applier.ts", [
+    "finally {\n    await clearRecordOutboxSuppressions(putRecords)",
+    "typeof settings.ollama_model === \"string\"",
+  ]],
+  ["../src/lib/sync/transport.ts", [
+    "rpc(\"sync_apply_changes\"",
+    "rpc(\"sync_read_changes\"",
+    "A realtime message is a wakeup, not a payload",
+  ]],
+  ["../src/lib/sync/reduce.ts", [
+    "if (state && compareOrder(state.lamport, state.clientId, change.lamport, change.clientId) >= 0) return \"stale\"",
+  ]],
+]
+for (const [file, required] of guards) {
+  const source = await fetch(new URL(file, import.meta.url))
+    .then((response) => response.text())
+    .then((text) => text.replace(/\r\n/g, "\n"))
+  for (const fragment of required) {
+    if (!source.includes(fragment)) throw new Error(`Sync reliability guard is missing from ${file}: ${fragment}`)
+  }
 }
 
+const changeLogMigration = await fetch(new URL("../supabase/migrations/0007_change_log.sql", import.meta.url)).then((response) => response.text())
+for (const required of [
+  "create table if not exists public.sync_log",
+  "create table if not exists public.sync_state",
+  "create table if not exists public.sync_floors",
+  "create view public.sync_changes as",
+  "instead of insert on public.sync_changes",
+  "create or replace function public.sync_apply_changes",
+  "create or replace function public.sync_read_changes",
+  "sync_log_state_after_insert",
+  "compact_sync_log_after_insert",
+  "Focal sync v3 tables or the compatibility view are missing",
+]) {
+  if (!changeLogMigration.includes(required)) throw new Error(`Supabase change-log migration is missing: ${required}`)
+}
+
+
+localDatabase.close()
 console.warn("sync change-log self-check passed")

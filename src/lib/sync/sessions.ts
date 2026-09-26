@@ -1,52 +1,11 @@
+/**
+ * Study sessions arrive as checkpoints from several clients, so the same sitting can
+ * exist twice with different ids. These helpers fold them into one row and report the
+ * duplicates as durable deletions, which is what keeps the log from growing a new row per
+ * checkpoint.
+ */
 import { normalizeStudySession } from "@/lib/studySessions"
-import { SYNC_TABLES, type RemoteSyncChange, type SyncChange, type SyncTable } from "@/lib/sync/types"
 import type { StudySession } from "@/lib/types"
-
-export function isSyncTable(value: unknown): value is SyncTable {
-  return typeof value === "string" && (SYNC_TABLES as readonly string[]).includes(value)
-}
-
-export function isDue(change: Pick<SyncChange, "nextAttemptAt" | "blockedAt">, now: string): boolean {
-  return !change.blockedAt && (!change.nextAttemptAt || change.nextAttemptAt <= now)
-}
-
-export function retryChange(change: SyncChange, error: string, now: string): SyncChange {
-  const retryCount = change.retryCount + 1
-  return {
-    ...change,
-    retryCount,
-    lastError: error,
-    nextAttemptAt: new Date(new Date(now).getTime() + Math.min(300_000, 5_000 * 2 ** Math.max(0, retryCount - 1))).toISOString(),
-  }
-}
-
-export function retryOrBlockChange(
-  change: SyncChange,
-  error: string,
-  now: string,
-  maxRetries: number,
-): SyncChange {
-  const retried = retryChange(change, error, now)
-  return retried.retryCount >= maxRetries
-    ? { ...retried, nextAttemptAt: undefined, blockedAt: now }
-    : retried
-}
-
-export function chunkItems<T>(items: readonly T[], size: number): T[][] {
-  if (!Number.isSafeInteger(size) || size <= 0) throw new Error("Chunk size must be a positive integer")
-  const chunks: T[][] = []
-  for (let offset = 0; offset < items.length; offset += size) chunks.push(items.slice(offset, offset + size))
-  return chunks
-}
-
-export function latestChanges(changes: RemoteSyncChange[]): RemoteSyncChange[] {
-  const latest = new Map<string, RemoteSyncChange>()
-  for (const change of changes) {
-    const key = `${change.entity}:${change.row_id}`
-    if ((latest.get(key)?.revision ?? 0) < change.revision) latest.set(key, change)
-  }
-  return [...latest.values()].sort((a, b) => a.revision - b.revision)
-}
 
 export function repairDuplicateSessions(raw: unknown[]): {
   sessions: StudySession[]

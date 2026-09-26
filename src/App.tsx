@@ -1038,6 +1038,18 @@ function App() {
     [sessions, updateSession, pushSessionChange],
   );
 
+  // Timer discard is already an explicit action. A second toast confirmation can be
+  // hidden behind focus mode; propagate storage failures so recovery stays open.
+  const handleDiscardTimerSession = useCallback(async (id: string) => {
+    const session = sessions.find((item) => item.id === id);
+    await deleteSession(id);
+    if (session) showUndoToast({
+      message: "Study session discarded",
+      onUndo: async () => { await restoreSession(session); },
+    });
+    void requestNotionSync(false);
+  }, [sessions, deleteSession, restoreSession, requestNotionSync]);
+
   const handleDeleteStudySession = useCallback(
     async (id: string) => {
       const session = sessions.find((s) => s.id === id);
@@ -2113,7 +2125,7 @@ function App() {
                   onSelectExamTrack={handleSelectExamTrack}
                   onStartPomodoroSession={handleStartPomodoroSession}
                   onUpdatePomodoroSession={handleUpdatePomodoroSession}
-                  onDeletePomodoroSession={handleDeleteStudySession}
+                  onDeletePomodoroSession={handleDiscardTimerSession}
                   onSelectTimetable={handleSelectTimetable}
                   timetableSelected={timetableView}
                   onSearch={() => setSearchOpen(true)}

@@ -134,8 +134,10 @@ Focal works locally without signing in. To enable multi-device sync:
 1. Create a Supabase project.
 2. Apply every file in `supabase/migrations/` in numeric order (or run them with the Supabase CLI).
 3. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-4. Confirm `sync_changes` is in the `supabase_realtime` publication. Migration `0004` rebuilds the old per-table schema; `0005` removes the legacy helpers and verifies RLS, grants, triggers, and Realtime membership.
+4. Confirm `sync_log` is in the `supabase_realtime` publication. Migration `0004` rebuilds the old per-table schema; `0005` removes the legacy helpers and verifies RLS, grants, triggers, and Realtime membership; `0007` is sync protocol v3 — an append-only `sync_log` with a materialized `sync_state`, a compaction floor, idempotent receipts, and the `sync_apply_changes` / `sync_read_changes` RPCs. `sync_changes` becomes a view over the log, so pre-v3 clients (Focal Android, ExamTrack web, Folio Android) keep working unchanged while they migrate.
 5. Run `bun run dev` or `bun run tauri dev`, then sign in from Settings → Account.
+
+The protocol itself — the rules, the per-entity merge policy, the latency budget, and the conformance vectors both clients run — is written down in [`docs/sync-protocol.md`](docs/sync-protocol.md).
 
 Do not put a Supabase service-role or secret key in `.env` — the desktop client only uses the publishable key. Notion is a separate, optional calendar integration; enable it from Settings → Notion Sync after creating an integration token.
 

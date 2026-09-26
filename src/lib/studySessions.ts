@@ -86,9 +86,9 @@ function intervals(value: unknown, fallbackSource: StudyInterval["source"] = "im
     const start = new Date(item.start).getTime()
     if (!Number.isFinite(start)) return []
     const rawEnd = optionalString(item.end)
-    const end = rawEnd && Number.isFinite(new Date(rawEnd).getTime()) && new Date(rawEnd).getTime() > start
-      ? rawEnd
-      : undefined
+    // A closed zero-length/corrupt interval must never become a running timer.
+    if (rawEnd && (!Number.isFinite(new Date(rawEnd).getTime()) || new Date(rawEnd).getTime() < start)) return []
+    const end = rawEnd
     const source = item.source === "manual" || item.source === "pomodoro" || item.source === "imported"
       ? item.source
       : fallbackSource

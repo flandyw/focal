@@ -859,7 +859,10 @@ const conflictDialogSource = await fetch(new URL("../src/components/sync/NotionC
 assert(conflictDialogSource.includes("h-[min(90dvh,46rem)]"), "the manual resolver must have a bounded viewport")
 assert(conflictDialogSource.includes('className="min-h-0 flex-1"'), "the conflict list must own the scrollable remaining height")
 assert(conflictDialogSource.includes("aria-pressed={resolution ==="), "manual resolution choices must expose their selected state")
+// The delete-tombstone helpers moved out of the engine when the sync modules were split.
+const syncSinksSource = await fetch(new URL("../src/lib/sync/sinks.ts", import.meta.url)).then((response) => response.text())
+assert(syncSinksSource.includes("value.integrations.notion"), "serialized study-session deletes must recover their Notion page identity")
 const syncEngineSource = await fetch(new URL("../src/lib/sync/engine.ts", import.meta.url)).then((response) => response.text())
-assert(syncEngineSource.includes("value.integrations.notion"), "serialized study-session deletes must recover their Notion page identity")
+assert(syncEngineSource.includes("notionDeletePayload(table, rowId, current)"), "a local delete must carry the Notion page identity with it")
 
 console.warn("Notion sync checks passed")

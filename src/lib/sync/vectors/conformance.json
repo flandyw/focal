@@ -1,0 +1,244 @@
+{
+  "protocol": "focal-sync/3",
+  "sha256": "e11ccc12aa934269a3c7563856085fa92099b6c2c04f8be5a50d5961b5d32aff",
+  "cases": [
+    {
+      "name": "ignores its own change but still advances the cursor",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 10,
+      "pending": [],
+      "state": [],
+      "changes": [
+        { "seq": 11, "changeId": "c1", "clientId": "device-a", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Local" }, "lamport": 3 }
+      ],
+      "expected": {
+        "cursor": 11,
+        "applied": [],
+        "deferred": [],
+        "state": []
+      }
+    },
+    {
+      "name": "applies a remote change that is newer by lamport",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 10,
+      "pending": [],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Old" }, "lamport": 2, "clientId": "device-a", "seq": 4 }
+      ],
+      "changes": [
+        { "seq": 12, "changeId": "c2", "clientId": "device-b", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "New" }, "lamport": 5 }
+      ],
+      "expected": {
+        "cursor": 12,
+        "applied": ["c2"],
+        "deferred": [],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "New" }, "lamport": 5, "clientId": "device-b", "seq": 12 }
+        ]
+      }
+    },
+    {
+      "name": "keeps a local state that is newer than the remote change",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 10,
+      "pending": [],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Newer" }, "lamport": 9, "clientId": "device-b", "seq": 8 }
+      ],
+      "changes": [
+        { "seq": 13, "changeId": "c3", "clientId": "device-a", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Stale" }, "lamport": 4 }
+      ],
+      "expected": {
+        "cursor": 13,
+        "applied": [],
+        "deferred": [],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Newer" }, "lamport": 9, "clientId": "device-b", "seq": 8 }
+        ]
+      }
+    },
+    {
+      "name": "breaks a lamport tie on client id",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 10,
+      "pending": [],
+      "state": [
+        { "entity": "events", "rowId": "e1", "operation": "put", "payload": { "title": "Tie" }, "lamport": 5, "clientId": "device-a", "seq": 6 }
+      ],
+      "changes": [
+        { "seq": 14, "changeId": "c4", "clientId": "device-b", "entity": "events", "rowId": "e1", "operation": "put", "payload": { "title": "Tie won" }, "lamport": 5 }
+      ],
+      "expected": {
+        "cursor": 14,
+        "applied": ["c4"],
+        "deferred": [],
+        "state": [
+          { "entity": "events", "rowId": "e1", "operation": "put", "payload": { "title": "Tie won" }, "lamport": 5, "clientId": "device-b", "seq": 14 }
+        ]
+      }
+    },
+    {
+      "name": "parks a change onto a row with a pending local edit",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 10,
+      "pending": ["projects:p1"],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Mine" }, "lamport": 1, "clientId": "device-a", "seq": 3 }
+      ],
+      "changes": [
+        { "seq": 15, "changeId": "c5", "clientId": "device-b", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Theirs" }, "lamport": 6 }
+      ],
+      "expected": {
+        "cursor": 15,
+        "applied": [],
+        "deferred": ["c5"],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Mine" }, "lamport": 1, "clientId": "device-a", "seq": 3 }
+        ]
+      }
+    },
+    {
+      "name": "a newer delete tombstones the row",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 20,
+      "pending": [],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Here" }, "lamport": 7, "clientId": "device-a", "seq": 18 }
+      ],
+      "changes": [
+        { "seq": 21, "changeId": "c6", "clientId": "device-b", "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 8 }
+      ],
+      "expected": {
+        "cursor": 21,
+        "applied": ["c6"],
+        "deferred": [],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 8, "clientId": "device-b", "seq": 21 }
+        ]
+      }
+    },
+    {
+      "name": "an older delete never resurrects or removes a newer row",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 20,
+      "pending": [],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Alive" }, "lamport": 9, "clientId": "device-b", "seq": 19 }
+      ],
+      "changes": [
+        { "seq": 22, "changeId": "c7", "clientId": "device-a", "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 3 }
+      ],
+      "expected": {
+        "cursor": 22,
+        "applied": [],
+        "deferred": [],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Alive" }, "lamport": 9, "clientId": "device-b", "seq": 19 }
+        ]
+      }
+    },
+    {
+      "name": "resumes from a cursor with a gap and applies in order",
+      "kind": "reduce",
+      "ownClientId": "device-a",
+      "cursor": 30,
+      "pending": [],
+      "state": [],
+      "changes": [
+        { "seq": 33, "changeId": "c8", "clientId": "device-b", "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Second" }, "lamport": 2 },
+        { "seq": 31, "changeId": "c9", "clientId": "device-b", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "First" }, "lamport": 1 },
+        { "seq": 32, "changeId": "c10", "clientId": "device-b", "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 4 }
+      ],
+      "expected": {
+        "cursor": 33,
+        "applied": ["c9", "c10", "c8"],
+        "deferred": [],
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 4, "clientId": "device-b", "seq": 32 },
+          { "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Second" }, "lamport": 2, "clientId": "device-b", "seq": 33 }
+        ]
+      }
+    },
+    {
+      "name": "a snapshot replaces state but keeps rows with pending local edits",
+      "kind": "snapshot",
+      "ownClientId": "device-a",
+      "head": 500,
+      "pending": ["projects:p1"],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Mine" }, "lamport": 1, "clientId": "device-a", "seq": 3 },
+        { "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Stale" }, "lamport": 2, "clientId": "device-a", "seq": 4 }
+      ],
+      "rows": [
+        { "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Fresh" }, "lamport": 7, "clientId": "device-b", "seq": 480 },
+        { "entity": "projects", "rowId": "p3", "operation": "delete", "payload": null, "lamport": 8, "clientId": "device-b", "seq": 481 }
+      ],
+      "expected": {
+        "cursor": 500,
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Mine" }, "lamport": 1, "clientId": "device-a", "seq": 3 },
+          { "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Fresh" }, "lamport": 7, "clientId": "device-b", "seq": 480 },
+          { "entity": "projects", "rowId": "p3", "operation": "delete", "payload": null, "lamport": 8, "clientId": "device-b", "seq": 481 }
+        ]
+      }
+    },
+    {
+      "name": "a snapshot never overwrites a row that has a queued local edit",
+      "kind": "snapshot",
+      "ownClientId": "device-a",
+      "head": 600,
+      "pending": ["projects:p1"],
+      "state": [
+        { "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 9, "clientId": "device-a", "seq": 3 }
+      ],
+      "rows": [
+        { "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Back from the dead" }, "lamport": 4, "clientId": "device-b", "seq": 300 }
+      ],
+      "expected": {
+        "cursor": 600,
+        "state": [
+          { "entity": "projects", "rowId": "p1", "operation": "delete", "payload": null, "lamport": 9, "clientId": "device-a", "seq": 3 }
+        ]
+      }
+    },
+    {
+      "name": "coalesces a burst to the newest change per row",
+      "kind": "coalesce",
+      "input": [
+        { "changeId": "d1", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "One" }, "lamport": 1, "createdAt": "2026-01-01T00:00:00.000Z" },
+        { "changeId": "d2", "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Other row" }, "lamport": 1, "createdAt": "2026-01-01T00:00:01.000Z" },
+        { "changeId": "d3", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Three" }, "lamport": 3, "createdAt": "2026-01-01T00:00:02.000Z" },
+        { "changeId": "d4", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Two" }, "lamport": 2, "createdAt": "2026-01-01T00:00:03.000Z" }
+      ],
+      "expected": [
+        { "changeId": "d3", "entity": "projects", "rowId": "p1", "operation": "put", "payload": { "title": "Three" }, "lamport": 3, "createdAt": "2026-01-01T00:00:02.000Z" },
+        { "changeId": "d2", "entity": "projects", "rowId": "p2", "operation": "put", "payload": { "title": "Other row" }, "lamport": 1, "createdAt": "2026-01-01T00:00:01.000Z" }
+      ]
+    },
+    {
+      "name": "a later delete supersedes an earlier put for the same row",
+      "kind": "coalesce",
+      "input": [
+        { "changeId": "e1", "entity": "events", "rowId": "e1", "operation": "put", "payload": { "title": "Here" }, "lamport": 4, "createdAt": "2026-01-01T00:00:00.000Z" },
+        { "changeId": "e2", "entity": "events", "rowId": "e1", "operation": "delete", "payload": null, "lamport": 5, "createdAt": "2026-01-01T00:00:01.000Z" }
+      ],
+      "expected": [
+        { "changeId": "e2", "entity": "events", "rowId": "e1", "operation": "delete", "payload": null, "lamport": 5, "createdAt": "2026-01-01T00:00:01.000Z" }
+      ]
+    },
+    {
+      "name": "backs off exponentially and caps at five minutes",
+      "kind": "backoff",
+      "input": [1, 2, 3, 4, 7, 8, 20],
+      "expected": [5000, 10000, 20000, 40000, 300000, 300000, 300000]
+    }
+  ]
+}

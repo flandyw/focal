@@ -59,6 +59,20 @@ function formatFailedItems(items: NonNullable<SyncStatusSnapshot["failedItems"]>
   return items.map((item) => `${item.table} ${item.rowId.slice(0, 8)}: ${item.error}`).join("\n")
 }
 
+/**
+ * The numbers behind the dot. A spinner cannot be debugged; a lag, a round-trip time and
+ * a snapshot count can, and they are what tells you whether sync is actually healthy.
+ */
+function formatMetrics(metrics: SyncStatusSnapshot["metrics"]): string[] {
+  const lines: string[] = []
+  if (metrics.cursorLag > 0) lines.push(`Behind by ${metrics.cursorLag} change${metrics.cursorLag === 1 ? "" : "s"}`)
+  if (metrics.lastPushMs !== null) lines.push(`Last push: ${metrics.lastPushMs} ms`)
+  if (metrics.lastPullMs !== null) lines.push(`Last pull: ${metrics.lastPullMs} ms`)
+  if (metrics.snapshots > 0) lines.push(`Snapshots: ${metrics.snapshots}`)
+  if (metrics.failures > 0) lines.push(`Failed attempts: ${metrics.failures}`)
+  return lines
+}
+
 export function SupabaseSyncIndicator({ sync, signedIn }: SupabaseSyncIndicatorProps) {
   const isOffline = signedIn && !sync.isOnline
   const dotStatus: DotStatus = !signedIn
@@ -90,6 +104,8 @@ export function SupabaseSyncIndicator({ sync, signedIn }: SupabaseSyncIndicatorP
     const date = new Date(sync.lastSuccessfulSyncAt)
     if (Number.isFinite(date.getTime())) tooltipLines.push(`Last sync: ${date.toLocaleString()}`)
   }
+  const metrics = formatMetrics(sync.metrics)
+  if (metrics.length > 0) tooltipLines.push(...metrics)
   if (sync.tableStats && sync.tableStats.length > 0) {
     const stats = formatTableStats(sync.tableStats)
     if (stats) tooltipLines.push("", stats)

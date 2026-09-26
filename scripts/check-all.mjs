@@ -30,6 +30,7 @@ const checks = [
   "scripts/ollama-structured-output-self-check.ts",
   "scripts/ollama-tool-calling-self-check.ts",
   "scripts/sync-self-check.ts",
+  "scripts/check-sync-conformance.ts",
   "scripts/text-event-planner-self-check.ts",
 ]
 

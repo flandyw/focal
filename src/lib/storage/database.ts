@@ -30,7 +30,7 @@ export function openFocalDatabase(): Promise<Database> {
   return databasePromise
 }
 
-async function withWriteLock<T>(fileName: CoreDataFile, operation: () => Promise<T>): Promise<T> {
+export async function withWriteLock<T>(fileName: CoreDataFile, operation: () => Promise<T>): Promise<T> {
   const previous = writeLocks.get(fileName) ?? Promise.resolve()
   const result = previous.then(operation, operation)
   writeLocks.set(fileName, result.catch(() => undefined))
@@ -166,7 +166,7 @@ export async function writePersistedArray(fileName: CoreDataFile, items: unknown
 
 export async function mutatePersistedArray<T>(
   fileName: CoreDataFile,
-  mutate: (current: unknown[]) => T[],
+  mutate: (current: unknown[]) => T[] | Promise<T[]>,
 ): Promise<T[]> {
   await ensureLegacyImport(fileName)
   return withWriteLock(fileName, async () => {
@@ -175,7 +175,7 @@ export async function mutatePersistedArray<T>(
       "select payload from records where kind = $1 order by position asc",
       [coreRecordKind(fileName)],
     )
-    const updated = mutate(parseStoredPayloads(rows))
+    const updated = await mutate(parseStoredPayloads(rows))
     await replaceRecords(database, fileName, updated)
     return updated
   })

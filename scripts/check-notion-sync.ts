@@ -181,6 +181,11 @@ const distinctPlan = planDuplicateNotionPages(
   notionSettings,
 )
 assert(distinctPlan.archiveIds.size === 0, "distinct tagged Focal items must not be collapsed by matching content")
+const repairedCheckpointPlan = planDuplicateNotionPages(
+  [taggedTwin, secondTaggedPage], new Set([taggedTwin.id]), new Set([secondTaggedPage.id]), notionSettings,
+)
+assert(repairedCheckpointPlan.archiveIds.has(secondTaggedPage.id), "proven duplicate checkpoints must be archived even with different Focal ids")
+assert(repairedCheckpointPlan.hiddenIds.has(secondTaggedPage.id), "deleted checkpoint pages must not be reimported")
 const taggedExam = {
   id: "tagged-exam",
   properties: {

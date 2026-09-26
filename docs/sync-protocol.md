@@ -175,3 +175,10 @@ Clients that predate v3 keep working: they insert into `sync_changes`, which the
 into the log with a server-assigned lamport, and they read the same columns they always did.
 The one thing they lose is realtime, because Realtime replicates tables and not views, so
 ExamTrack's two subscriptions listen to `sync_log` directly.
+
+Supabase's security advisor warns that authenticated users can execute the `SECURITY DEFINER`
+functions `sync_apply_changes` and `sync_read_changes`. This is intentional: clients call
+both RPCs, while direct writes to `sync_log` and reads from the snapshot tables are denied.
+Each RPC requires `auth.uid()` and scopes its queries to that user; `anon` and `PUBLIC` have
+no `EXECUTE` grant. Migration `0009` sets an empty search path. Do not
+revoke `EXECUTE` or switch them to `SECURITY INVOKER` just to clear those warnings.

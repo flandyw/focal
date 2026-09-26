@@ -34,11 +34,12 @@ import {
 } from "@/lib/settings"
 import { getStoredQuickLinks, QUICK_LINKS_STORAGE_KEY } from "@/lib/quickLinks"
 import { setCachedPreference } from "@/lib/storage/preferences"
-import { emitLocalDataChanged, readLocalDataArray, readLocalStorageArray, SYNC_DATA_FILES, writeLocalDataArray } from "@/lib/sync/localData"
-import { clearRecordOutboxSuppressions, suppressRecordOutbox } from "@/lib/sync/persistence"
+import { emitLocalDataChanged, readLocalDataArray, readLocalStorageArray, SYNC_DATA_FILES } from "@/lib/sync/localData"
+import { clearRecordOutboxSuppressions, suppressRecordOutbox, readOutbox } from "@/lib/sync/persistence"
 import { recordNotionUpsertIntent, recordRemoteNotionDeleteIntent } from "@/lib/sync/sinks"
 import type { LocalRecord, SyncRowState, SyncTable } from "@/lib/sync/types"
 import type { Subject, TimetableConfig, UserSettings } from "@/lib/types"
+import { mutatePersistedArray } from "@/lib/storage/database"
 import { normalizeStudySession } from "@/lib/studySessions"
 import { bustSubjectCache } from "@/lib/utils"
 
@@ -82,28 +83,33 @@ export async function applyRemoteEntries(entries: readonly SyncRowState[]): Prom
 
 async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowState[]): Promise<void> {
   const fileName = SYNC_DATA_FILES[table]!
-  const local = await readLocalDataArray<Record<string, unknown>>(fileName)
-  const byId = new Map(local.map((record) => [String(record.id), record]))
   const putRecords: { entity: RecordTable; rowId: string; payload: unknown }[] = []
-  for (const entry of entries) {
-    if (entry.operation === "delete") {
-      await recordRemoteNotionDeleteIntent(
-        { ...entry, changeId: "", createdAt: new Date().toISOString() },
-        byId.get(entry.rowId),
-      )
-      byId.delete(entry.rowId)
-    } else if (isObject(entry.payload)) {
-      const rawPayload = { ...entry.payload, id: entry.rowId }
-      const payload = table === "study_sessions"
-        ? normalizeStudySession(rawPayload) as unknown as Record<string, unknown>
-        : rawPayload
-      byId.set(entry.rowId, payload)
-      putRecords.push({ entity: table, rowId: entry.rowId, payload })
-    }
-  }
   try {
-    await suppressRecordOutbox(putRecords)
-    await writeLocalDataArray(fileName, [...byId.values()])
+    await mutatePersistedArray(fileName, async (local) => {
+      const byId = new Map((local as Record<string, unknown>[]).map((record) => [String(record.id), record]))
+      // A local edit/delete can land after reduction while this projection waits
+      // for the storage lock. Never overwrite that newer, unpublished boundary.
+      const pending = new Set((await readOutbox()).filter((change) => change.entity === table).map((change) => change.rowId))
+      for (const entry of entries) {
+        if (pending.has(entry.rowId)) continue
+        if (entry.operation === "delete") {
+          await recordRemoteNotionDeleteIntent(
+            { ...entry, changeId: "", createdAt: new Date().toISOString() },
+            byId.get(entry.rowId),
+          )
+          byId.delete(entry.rowId)
+        } else if (isObject(entry.payload)) {
+          const rawPayload = { ...entry.payload, id: entry.rowId }
+          const payload = table === "study_sessions"
+            ? normalizeStudySession(rawPayload) as unknown as Record<string, unknown>
+            : rawPayload
+          byId.set(entry.rowId, payload)
+          putRecords.push({ entity: table, rowId: entry.rowId, payload })
+        }
+      }
+      await suppressRecordOutbox(putRecords)
+      return [...byId.values()]
+    })
   } finally {
     await clearRecordOutboxSuppressions(putRecords)
   }

@@ -458,7 +458,7 @@ export function updateStudySession(session: StudySession, patch: LegacyStudySess
     },
     execution,
     reflection,
-    integrations: patch.integrations ?? (patch.source ? { notion: patch.source } : session.integrations),
+    integrations: patch.integrations ?? (patch.source ? { ...session.integrations, notion: patch.source } : session.integrations),
     updated_at: now,
   })
 }

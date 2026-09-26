@@ -165,8 +165,10 @@ export function planDuplicateNotionPages(
     if (fingerprint) addToGroup(fingerprintGroups, fingerprint, page)
   }
 
-  const archiveIds = new Set<string>()
-  const hiddenIds = new Set<string>()
+  // Session repair already proved these are duplicates, even when checkpoint
+  // end times differ and therefore produce different Notion fingerprints.
+  const archiveIds = new Set([...knownDuplicatePageIds].filter((id) => !linkedPageIds.has(id)))
+  const hiddenIds = new Set(archiveIds)
   for (const group of identityGroups.values()) {
     if (group.length < 2) continue
     const canonical = chooseCanonicalNotionPage(group, linkedPageIds)

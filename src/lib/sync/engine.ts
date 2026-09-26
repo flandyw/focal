@@ -14,12 +14,13 @@ import { getTimetableConfig } from "@/lib/settings"
 import { enqueueNotionArchive } from "@/lib/notion/outbox"
 import { supabase } from "@/lib/supabase/client"
 import { applyRemoteEntries, collectUserSettings, readCurrentLocalValue } from "@/lib/sync/applier"
+import { withWriteLock, mutatePersistedArray } from "@/lib/storage/database"
 import { getDeviceId } from "@/lib/sync/device"
 import {
   emitLocalDataChanged,
   readLocalDataArray,
   readLocalStorageArray,
-  writeLocalDataArray,
+  SYNC_DATA_FILES,
 } from "@/lib/sync/localData"
 import {
   activateOutboxAccount,
@@ -274,6 +275,12 @@ export async function recordLocalSoftDelete(
   rowId: string,
   accountId = currentSession?.user.id ?? "",
 ): Promise<void> {
+  const fileName = SYNC_DATA_FILES[table]
+  if (fileName) await withWriteLock(fileName, () => deleteLocalRecord(table, rowId, accountId))
+  else await deleteLocalRecord(table, rowId, accountId)
+}
+
+async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: string): Promise<void> {
   const current = await readCurrentLocalValue(table, rowId)
   const deletePayload = notionDeletePayload(table, rowId, current)
   const queue = await enqueueChange(accountId, table, rowId, "delete", deletePayload)
@@ -465,8 +472,8 @@ async function repairLocalSessionDuplicates(accountId = currentSession?.user.id 
   const repair = repairDuplicateSessions(raw)
   if (repair.duplicateIds.length === 0) return
 
-  await writeLocalDataArray("sessions.json", repair.sessions)
   for (const id of repair.duplicateIds) await recordLocalSoftDelete("study_sessions", id, accountId)
+  await mutatePersistedArray("sessions.json", (current) => repairDuplicateSessions(current).sessions)
   await rememberDuplicateNotionPages(repair.duplicateNotionPageIds)
   emitLocalDataChanged("study_sessions")
   emitStatus({

@@ -11,6 +11,17 @@ function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
 }
 
+for (const type of ["folio", "examtrack"] as const) {
+  const shared = normalizeStudySession({
+    id: "shared-exam",
+    integrations: { [type]: { type, id: "shared-exam", kind: "exam", subject: "mm", phase: "paused" } },
+  })
+  const mirrored = updateStudySession(shared, { source: { type: "notion", id: "page", kind: "session" } })
+  check(mirrored.integrations?.[type]?.id === "shared-exam", "Notion erased shared session identity")
+  check(mirrored.integrations?.[type]?.phase === "paused", "Notion erased shared timer phase")
+  check(mirrored.source?.id === "page", "Notion link was not saved")
+}
+
 for (const end of ["2026-06-24T08:00:00.000Z", "invalid", "2026-06-24T07:00:00.000Z"]) {
   const paused = normalizeStudySession({
     id: "folio-paused",

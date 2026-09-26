@@ -5,7 +5,8 @@ import { usePersistedData } from "@/lib/hooks/usePersistedData"
 import { useLatestRef } from "@/lib/hooks/useLatestRef"
 import { recordLocalSoftDelete, recordLocalUpsert, rememberDuplicateNotionPages } from "@/lib/sync/engine"
 import { createStudySession, normalizeStudySession, updateStudySession, type CreateStudySessionInput } from "@/lib/studySessions"
-import { repairDuplicateSessions } from "@/lib/sync/sessions"
+import { repairDuplicateSessions, sessionDeletionIds } from "@/lib/sync/sessions"
+import { readPersistedArray } from "@/lib/storage/database"
 
 export function useStudySessions() {
   const duplicateIdsRef = useRef<string[]>([])
@@ -30,10 +31,14 @@ export function useStudySessions() {
     duplicateIdsRef.current = []
     duplicateNotionPageIdsRef.current = []
     void Promise.all(duplicateIds.map((id) => recordLocalSoftDelete("study_sessions", id))).then(async () => {
-      await saveSessions(sessions)
+      await mutateSessions((current) => repairDuplicateSessions(current).sessions.filter((session) => !duplicateIds.includes(session.id)))
       await rememberDuplicateNotionPages(duplicateNotionPageIds)
+    }).catch((error: unknown) => {
+      duplicateIdsRef.current = duplicateIds
+      duplicateNotionPageIdsRef.current = duplicateNotionPageIds
+      console.error("Could not persist duplicate session repair:", error)
     })
-  }, [loading, saveSessions, sessions])
+  }, [loading, mutateSessions, sessions])
 
   const addSession = useCallback(async (input: CreateStudySessionInput) => {
     const session = createStudySession(generateId(), input)
@@ -75,11 +80,10 @@ export function useStudySessions() {
     id: string,
     updates: Partial<Omit<StudySession, "id" | "created_at">>
   ) => {
-    const updated = sessionsRef.current.map((s) => s.id === id ? updateStudySession(s, updates) : s)
-    await saveSessions(updated)
+    const updated = await mutateSessions((current) => current.map((s) => s.id === id ? updateStudySession(s, updates) : s))
     const session = updated.find((item) => item.id === id)
     if (session) await recordLocalUpsert("study_sessions", session)
-  }, [sessionsRef, saveSessions])
+  }, [mutateSessions])
 
   const updateSessions = useCallback(async (
     items: { id: string; updates: Partial<Omit<StudySession, "id" | "created_at">> }[]
@@ -97,11 +101,17 @@ export function useStudySessions() {
     }))
   }, [sessionsRef, saveSessions])
 
-  const deleteSession = useCallback(async (id: string) => {
-    await recordLocalSoftDelete("study_sessions", id)
-    // Sync may refresh the list while the durable tombstone is being written.
-    await mutateSessions((current) => current.filter((session) => session.id !== id))
-  }, [mutateSessions])
+  const deleteSessions = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return
+    const current = (await readPersistedArray("sessions.json")).map(normalizeStudySession)
+    const targets = sessionDeletionIds(current, sessionsRef.current, ids)
+    await Promise.all(targets.map((id) => recordLocalSoftDelete("study_sessions", id)))
+    // Deletion and its outbox intent are already atomic in SQLite. Reload rather
+    // than writing an old UI snapshot back over concurrent sync changes.
+    await refresh()
+  }, [refresh, sessionsRef])
+
+  const deleteSession = useCallback((id: string) => deleteSessions([id]), [deleteSessions])
 
   const restoreSession = useCallback(async (session: StudySession) => {
     const exists = sessionsRef.current.some((s) => s.id === session.id)
@@ -111,13 +121,6 @@ export function useStudySessions() {
     await saveSessions(updated)
     await recordLocalUpsert("study_sessions", restored)
   }, [sessionsRef, saveSessions])
-
-  const deleteSessions = useCallback(async (ids: string[]) => {
-    if (ids.length === 0) return
-    const idSet = new Set(ids)
-    await Promise.all(ids.map((id) => recordLocalSoftDelete("study_sessions", id)))
-    await mutateSessions((current) => current.filter((session) => !idSet.has(session.id)))
-  }, [mutateSessions])
 
   const restoreSessions = useCallback(async (sessionsToRestore: StudySession[]) => {
     const existingIds = new Set(sessionsRef.current.map((s) => s.id))

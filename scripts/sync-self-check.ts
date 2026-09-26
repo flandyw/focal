@@ -1,5 +1,6 @@
 import { chunkItems, latestChanges, retryChange, retryOrBlockChange } from "../src/lib/sync/reduce"
-import { repairDuplicateSessions } from "../src/lib/sync/sessions"
+import { repairDuplicateSessions, sessionDeletionIds } from "../src/lib/sync/sessions"
+import { normalizeStudySession } from "../src/lib/studySessions"
 import type { RemoteSyncChange, SyncChange } from "../src/lib/sync/types"
 
 interface BunSqliteDatabase {
@@ -91,6 +92,23 @@ const folioCheckpoints = repairDuplicateSessions([
 ])
 assertEqual(folioCheckpoints.sessions.map((session) => session.id), ["folio-new"], "Folio checkpoints must collapse by their stable integration id")
 assertEqual(folioCheckpoints.duplicateIds, ["folio-old"], "Folio checkpoint cleanup must remove the stale local row")
+
+const legacyCheckpoints = Array.from({ length: 366 }, (_, i) => ({
+  ...duplicateBase, id: `checkpoint-${i}`, last_modified_device_id: "folio-android",
+  description: "Exam practice in Folio · exam · paused",
+  schedule: { blocks: [{ start: "2026-09-24T09:08:46.155Z", end: new Date(Date.UTC(2026, 8, 25, 0, i)).toISOString() }] },
+  integrations: { notion: { type: "notion", id: `page-${i}`, kind: "session" } },
+}))
+const legacyRepair = repairDuplicateSessions(legacyCheckpoints)
+assertEqual(legacyRepair.sessions.length, 1, "changing checkpoint end times must not create separate Folio sittings")
+assertEqual(legacyRepair.duplicateIds.length, 365, "all historical copies must get durable deletes")
+assertEqual(legacyRepair.duplicateNotionPageIds.length, 365, "every duplicate mirror must be archived")
+assertEqual(sessionDeletionIds(legacyCheckpoints.map(normalizeStudySession), legacyRepair.sessions, [legacyRepair.sessions[0].id]).length,
+  366, "discard must delete every persisted copy, including ones hidden by UI repair")
+assertEqual(repairDuplicateSessions([
+  legacyCheckpoints[0],
+  { ...legacyCheckpoints[1], schedule: { blocks: [{ start: "2026-09-24T09:08:46.156Z", end: "2026-09-25T01:00:00.000Z" }] } },
+]).sessions.length, 2, "separate Folio sittings must survive repair")
 
 const remoteMigration = await fetch(new URL("../supabase/migrations/0004_rebuild_sync_as_change_log.sql", import.meta.url)).then((response) => response.text())
 for (const required of [
@@ -212,6 +230,14 @@ assertEqual(
 // v3 renames the log vocabulary and rebuilds the enqueue triggers, so the durable-behaviour
 // fixtures below run against the current schema rather than the one they were written for.
 localDatabase.exec(localChangeLogMigration)
+const persistenceSource = await fetch(new URL("../src/lib/sync/persistence.ts", import.meta.url)).then((response) => response.text())
+const cursorSql = /`([^`]+)`/.exec(persistenceSource.slice(persistenceSource.indexOf("export function writeCursor")))?.[1]
+if (!cursorSql) throw new Error("Could not find production cursor SQL")
+for (const [seq, lamport] of [[10, 20], [5, 15], [11, 18]]) {
+  localDatabase.run(cursorSql.replace(/\$[1-4]/g, "?"), ["cursor-regression", seq, lamport, "2026-09-26T00:00:00.000Z"])
+}
+assertEqual(localDatabase.query("select cursor_seq, lamport from sync_cursor where account_id = 'cursor-regression'").all(),
+  [{ cursor_seq: 11, lamport: 20 }], "production sync cursor SQL must run on SQLite and never move either watermark backwards")
 localDatabase.run(
   "insert into records (kind, id, payload, position) values (?, ?, ?, ?)",
   ["events", "atomic-event", JSON.stringify({ id: "atomic-event", title: "Atomic" }), 0],

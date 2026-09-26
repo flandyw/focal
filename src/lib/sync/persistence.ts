@@ -379,8 +379,8 @@ export function writeCursor(accountId: string, seq: number, lamport: number): Pr
       `insert into sync_cursor (account_id, cursor_seq, lamport, updated_at)
        values ($1, $2, $3, $4)
        on conflict (account_id) do update set
-         cursor_seq = greatest(sync_cursor.cursor_seq, excluded.cursor_seq),
-         lamport = greatest(sync_cursor.lamport, excluded.lamport),
+         cursor_seq = max(sync_cursor.cursor_seq, excluded.cursor_seq),
+         lamport = max(sync_cursor.lamport, excluded.lamport),
          updated_at = excluded.updated_at`,
       [accountId, seq, lamport, nowIso()],
     )

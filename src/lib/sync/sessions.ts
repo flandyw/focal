@@ -7,6 +7,12 @@
 import { normalizeStudySession } from "@/lib/studySessions"
 import type { StudySession } from "@/lib/types"
 
+export function sessionDeletionIds(sessions: StudySession[], selected: StudySession[], ids: string[]): string[] {
+  const targets = new Set(ids)
+  const keys = new Set([...sessions, ...selected].filter((session) => targets.has(session.id)).map(sessionDuplicateKey))
+  return [...new Set([...ids, ...sessions.filter((session) => keys.has(sessionDuplicateKey(session))).map((session) => session.id)])]
+}
+
 export function repairDuplicateSessions(raw: unknown[]): {
   sessions: StudySession[]
   duplicateIds: string[]
@@ -43,13 +49,19 @@ export function repairDuplicateSessions(raw: unknown[]): {
   }
 }
 
-function sessionDuplicateKey(session: StudySession): string {
+export function sessionDuplicateKey(session: StudySession): string {
   // Folio/ExamTrack updates keep a stable source id even when an older client generated
   // a new local row id for each checkpoint. Treat those rows as one logical sitting.
   // Notion page ids are intentionally not used here: two pages can legitimately describe
   // the same-looking study block and are repaired by the existing fingerprint instead.
   const source = session.integrations?.folio ?? session.integrations?.examtrack
   if (source) return `external:${source.type}:${source.id}`
+  // ponytail: repair the old Folio/Notion identity-loss loop only with an exact
+  // millisecond start and Folio provenance. New clients use source ids above.
+  if (session.last_modified_device_id === "folio-android" &&
+      /^(Study|Exam practice) in Folio(?: ·|$)/.test(session.description ?? "")) {
+    return JSON.stringify(["legacy-folio", session.title.trim(), [...session.subjectIds].sort(), session.startTime])
+  }
   return JSON.stringify({
     title: session.title.trim(),
     projectId: session.projectId ?? null,
@@ -62,11 +74,12 @@ function sessionDuplicateKey(session: StudySession): string {
 
 function mergeDuplicateSessionDetails(kept: StudySession, duplicate: StudySession): StudySession {
   const keptRaw = JSON.parse(JSON.stringify(kept)) as Record<string, unknown>
-  const duplicateHasBetterTimeline = executionQuality(duplicate) > executionQuality(kept)
+  const duplicateHasBetterTimeline = kept.execution.state !== "completed" && executionQuality(duplicate) > executionQuality(kept)
   return normalizeStudySession({
     ...keptRaw,
     description: kept.description ?? duplicate.description,
     topics: [...new Set([...(kept.topics ?? []), ...(duplicate.topics ?? [])])],
+    integrations: { ...duplicate.integrations, ...kept.integrations },
     schedule: duplicateHasBetterTimeline ? duplicate.schedule : kept.schedule,
     execution: duplicateHasBetterTimeline ? duplicate.execution : kept.execution,
     reflection: {

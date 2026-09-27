@@ -792,7 +792,7 @@ async function applyPulledResult(
   // A parked change must be durable before the cursor moves past it, or a crash loses it.
   await deferInboxChanges(accountId, deferred)
   await writeApplied(accountId, reduced.state)
-  await applyRemoteEntries(reduced.applied.map(toRowState))
+  await applyRemoteEntries(reduced.applied.map(toRowState), stopWakeup !== null)
   await removeInboxChanges(accountId, reduced.applied)
   return { applied: reduced.applied, deferred, cursor: reduced.cursor }
 }

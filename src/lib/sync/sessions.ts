@@ -7,6 +7,37 @@
 import { normalizeStudySession } from "@/lib/studySessions"
 import type { StudySession } from "@/lib/types"
 
+export interface SharedTimerNotice { title: string; body: string }
+
+/** Only lifecycle changes deserve an alert; frequent timer checkpoints do not. */
+export function sharedTimerNotice(previous: StudySession | undefined, next: StudySession | undefined): SharedTimerNotice | null {
+  const session = next ?? previous
+  const source = session?.integrations?.examtrack ?? session?.integrations?.folio
+  if (!session || !source) return null
+  const app = source.type === "examtrack" ? "ExamTrack" : "Folio"
+  const body = session.title
+  if (!next) return previous?.execution.state === "in-progress" ? { title: `${app} timer discarded`, body } : null
+  if (next.execution.state === "completed") {
+    return previous?.execution.state === "in-progress" ? { title: `${app} timer finished`, body } : null
+  }
+  if (next.execution.state !== "in-progress") return null
+  if (previous?.execution.state !== "in-progress") return { title: `${app} timer started`, body }
+
+  const running = (item: StudySession) => {
+    if (item.execution.state !== "in-progress") return false
+    const phase = item.integrations?.examtrack?.phase ?? item.integrations?.folio?.phase
+    const intervals = item.execution.intervals
+    const last = intervals[intervals.length - 1]
+    return phase ? phase !== "paused" : Boolean(last && !last.end)
+  }
+  if (running(previous) !== running(next)) {
+    return { title: `${app} timer ${running(next) ? "resumed" : "paused"}`, body }
+  }
+  const before = previous.integrations?.examtrack?.phase ?? previous.integrations?.folio?.phase
+  const after = next.integrations?.examtrack?.phase ?? next.integrations?.folio?.phase
+  return before === "reading" && after === "writing" ? { title: `${app} writing time started`, body } : null
+}
+
 export function sessionDeletionIds(sessions: StudySession[], selected: StudySession[], ids: string[]): string[] {
   const targets = new Set(ids)
   const keys = new Set([...sessions, ...selected].filter((session) => targets.has(session.id)).map(sessionDuplicateKey))

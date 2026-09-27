@@ -90,8 +90,10 @@ export function subscribeWakeup(userId: string, onWake: () => void): () => void 
       filter: `user_id=eq.${userId}`,
     }, () => onWake())
     .subscribe((status) => {
+      if (!channel) return
       const state = String(status)
-      if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") onWake()
+      // ponytail: a cursor pull on every subscribe also closes the gap while the socket reconnects.
+      if (state === "SUBSCRIBED" || state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") onWake()
     })
   return () => {
     const closing = channel

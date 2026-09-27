@@ -38,9 +38,10 @@ import { emitLocalDataChanged, readLocalDataArray, readLocalStorageArray, SYNC_D
 import { clearRecordOutboxSuppressions, suppressRecordOutbox, readOutbox } from "@/lib/sync/persistence"
 import { recordNotionUpsertIntent, recordRemoteNotionDeleteIntent } from "@/lib/sync/sinks"
 import type { LocalRecord, SyncRowState, SyncTable } from "@/lib/sync/types"
-import type { Subject, TimetableConfig, UserSettings } from "@/lib/types"
+import type { StudySession, Subject, TimetableConfig, UserSettings } from "@/lib/types"
 import { mutatePersistedArray } from "@/lib/storage/database"
 import { normalizeStudySession } from "@/lib/studySessions"
+import { sharedTimerNotice, type SharedTimerNotice } from "@/lib/sync/sessions"
 import { bustSubjectCache } from "@/lib/utils"
 
 const CUSTOM_SUBJECTS_KEY = "focal-custom-subjects"
@@ -66,10 +67,10 @@ function isSubject(value: unknown): value is Subject {
  * is in the server's materialized state, so a local row missing from a snapshot exists
  * only here, which means it is still queued and `reduceSnapshot` kept it.
  */
-export async function applyRemoteEntries(entries: readonly SyncRowState[]): Promise<void> {
+export async function applyRemoteEntries(entries: readonly SyncRowState[], notifySharedTimers = false): Promise<void> {
   for (const table of RECORD_TABLES) {
     const tableEntries = entries.filter((entry) => entry.entity === table)
-    if (tableEntries.length > 0) await applyRecordEntries(table, tableEntries)
+    if (tableEntries.length > 0) await applyRecordEntries(table, tableEntries, notifySharedTimers)
   }
   applyCustomSubjectChanges(entries.filter((entry) => entry.entity === "custom_subjects"))
   applyHiddenSubjectChanges(entries.filter((entry) => entry.entity === "hidden_subjects"))
@@ -81,9 +82,10 @@ export async function applyRemoteEntries(entries: readonly SyncRowState[]): Prom
   })
 }
 
-async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowState[]): Promise<void> {
+async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowState[], notifySharedTimers: boolean): Promise<void> {
   const fileName = SYNC_DATA_FILES[table]!
   const putRecords: { entity: RecordTable; rowId: string; payload: unknown }[] = []
+  const timerNotices: SharedTimerNotice[] = []
   try {
     await mutatePersistedArray(fileName, async (local) => {
       const byId = new Map((local as Record<string, unknown>[]).map((record) => [String(record.id), record]))
@@ -92,12 +94,18 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
       const pending = new Set((await readOutbox()).filter((change) => change.entity === table).map((change) => change.rowId))
       for (const entry of entries) {
         if (pending.has(entry.rowId)) continue
+        const previous = notifySharedTimers && table === "study_sessions" && byId.has(entry.rowId)
+          ? normalizeStudySession(byId.get(entry.rowId)) : undefined
         if (entry.operation === "delete") {
           await recordRemoteNotionDeleteIntent(
             { ...entry, changeId: "", createdAt: new Date().toISOString() },
             byId.get(entry.rowId),
           )
           byId.delete(entry.rowId)
+          if (notifySharedTimers && previous) {
+            const notice = sharedTimerNotice(previous, undefined)
+            if (notice) timerNotices.push(notice)
+          }
         } else if (isObject(entry.payload)) {
           const rawPayload = { ...entry.payload, id: entry.rowId }
           const payload = table === "study_sessions"
@@ -105,6 +113,10 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
             : rawPayload
           byId.set(entry.rowId, payload)
           putRecords.push({ entity: table, rowId: entry.rowId, payload })
+          if (notifySharedTimers && table === "study_sessions") {
+            const notice = sharedTimerNotice(previous, payload as unknown as StudySession)
+            if (notice) timerNotices.push(notice)
+          }
         }
       }
       await suppressRecordOutbox(putRecords)
@@ -117,6 +129,7 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
     await recordNotionUpsertIntent(table, record.rowId, record.payload as LocalRecord)
   }
   emitLocalDataChanged(table)
+  for (const notice of timerNotices) window.dispatchEvent(new CustomEvent("focal-shared-timer-notice", { detail: notice }))
 }
 
 function applyCustomSubjectChanges(entries: readonly SyncRowState[]): void {

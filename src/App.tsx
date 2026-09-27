@@ -36,6 +36,9 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useNotionSync } from "@/hooks/useNotionSync";
 import { useSupabaseAuth } from "@/hooks/useSupabaseAuth";
 import { useSupabaseSync } from "@/hooks/useSupabaseSync";
+import { getInitialSettings } from "@/features/timer/model";
+import { sendNativeNotification } from "@/lib/nativeNotifications";
+import type { SharedTimerNotice } from "@/lib/sync/sessions";
 import { useTheme } from "@/lib/themes";
 import { setCachedPreference } from "@/lib/storage/preferences";
 import { useAppNavigation } from "@/features/shell/useAppNavigation";
@@ -359,6 +362,16 @@ function App() {
   const { mode, resolvedDark, seedColor, setMode, setSeedColor } = useTheme();
   const supabaseAuth = useSupabaseAuth();
   const supabaseSync = useSupabaseSync(supabaseAuth.session);
+  useEffect(() => {
+    const onSharedTimerNotice = (event: Event) => {
+      const notice = (event as CustomEvent<SharedTimerNotice>).detail;
+      if (!notice || typeof notice.title !== "string" || typeof notice.body !== "string") return;
+      toast.info(notice.title, { description: notice.body });
+      if (getInitialSettings().notificationsEnabled) void sendNativeNotification(notice);
+    };
+    window.addEventListener("focal-shared-timer-notice", onSharedTimerNotice);
+    return () => window.removeEventListener("focal-shared-timer-notice", onSharedTimerNotice);
+  }, []);
   const supabaseInitialSyncSettled = !supabaseAuth.loading && (
     !supabaseAuth.session
     || supabaseSync.status === "synced"

@@ -6,6 +6,7 @@ import {
   startPlannedStudySession,
   updateStudySession,
 } from "../src/lib/studySessions.ts"
+import { sharedTimerNotice } from "../src/lib/sync/sessions.ts"
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(message)
@@ -20,6 +21,24 @@ for (const type of ["folio", "examtrack"] as const) {
   check(mirrored.integrations?.[type]?.id === "shared-exam", "Notion erased shared session identity")
   check(mirrored.integrations?.[type]?.phase === "paused", "Notion erased shared timer phase")
   check(mirrored.source?.id === "page", "Notion link was not saved")
+
+  const started = updateStudySession(shared, {
+    execution: { state: "in-progress", intervals: [{ start: "2026-06-24T08:00:00.000Z", source: "imported" }] },
+    integrations: { [type]: { type, id: "shared-exam", kind: "exam", subject: "mm", phase: "writing" } },
+  })
+  const paused = updateStudySession(started, {
+    execution: { state: "in-progress", intervals: [{ start: "2026-06-24T08:00:00.000Z", end: "2026-06-24T08:05:00.000Z", source: "imported" }] },
+    integrations: { [type]: { type, id: "shared-exam", kind: "exam", subject: "mm", phase: "paused" } },
+  })
+  const finished = updateStudySession(paused, { execution: { state: "completed", intervals: paused.execution.intervals, completedAt: "2026-06-24T08:05:00.000Z" } })
+  const reading = updateStudySession(started, { integrations: { [type]: { type, id: "shared-exam", kind: "exam", subject: "mm", phase: "reading" } } })
+  check(sharedTimerNotice(undefined, started)?.title.endsWith("started") === true, `${type} start alert missing`)
+  check(sharedTimerNotice(started, paused)?.title.endsWith("paused") === true, `${type} pause alert missing`)
+  check(sharedTimerNotice(paused, started)?.title.endsWith("resumed") === true, `${type} resume alert missing`)
+  check(sharedTimerNotice(paused, finished)?.title.endsWith("finished") === true, `${type} finish alert missing`)
+  check(sharedTimerNotice(started, undefined)?.title.endsWith("discarded") === true, `${type} discard alert missing`)
+  check(sharedTimerNotice(reading, started)?.title.endsWith("writing time started") === true, `${type} writing-phase alert missing`)
+  check(sharedTimerNotice(started, started) === null, `${type} checkpoint made a duplicate alert`)
 }
 
 for (const end of ["2026-06-24T08:00:00.000Z", "invalid", "2026-06-24T07:00:00.000Z"]) {

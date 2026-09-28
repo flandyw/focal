@@ -101,7 +101,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           <CardTitle>My subjects</CardTitle>
           <CardDescription>Your first subject is the default. Selected subjects appear first and bold in subject searches.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-start xl:gap-6">
+          <div className="grid gap-4">
           <SubjectCombobox
             subjects={subjects.filter((subject) => !selectedSubjects.includes(subject))}
             preferredSubjects={[]}
@@ -111,10 +112,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               onSubjectsChange([...selectedSubjects, subject])
               setSubjectToAdd("")
             }}
-            className="w-full max-w-md"
+            className="w-full"
             placeholder="Search and add a subject"
           />
-          <form className="flex w-full max-w-md gap-2" onSubmit={(event) => {
+          <form className="flex w-full gap-2" onSubmit={(event) => {
             event.preventDefault()
             const next = customSubject.trim()
             if (!next || selectedSubjects.some((subject) => subject.toLowerCase() === next.toLowerCase())) return
@@ -124,8 +125,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <Input value={customSubject} onChange={(event) => setCustomSubject(event.target.value)} placeholder="Add a custom subject" aria-label="Custom subject name" />
             <Button type="submit" variant="outline" disabled={!customSubject.trim()}><Plus />Add</Button>
           </form>
+          </div>
           {selectedSubjects.length ? (
-            <ol className="grid max-w-xl gap-2">
+            <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
               {selectedSubjects.map((subject, index) => (
                 <li key={subject} className="flex items-center gap-2 rounded-lg border px-3 py-2">
                   <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
@@ -158,7 +160,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             </Button>
           </CardAction>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid gap-4 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-start xl:gap-6">
+          <div className="grid gap-4">
           <div className="flex flex-wrap items-end gap-3">
             <Field className="w-full max-w-xs">
               <FieldLabel htmlFor="difficulty-strength">Adjustment strength</FieldLabel>
@@ -177,7 +180,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             </Button>
             <Button type="button" variant="outline" disabled={difficulty.providerOrder.join("|") === MATHEMATICS_PROVIDER_DIFFICULTY.join("|")} onClick={() => updateDifficulty({ providerOrder: [...MATHEMATICS_PROVIDER_DIFFICULTY] })}>Mathematics preset</Button>
           </div>
-          <form className="flex w-full max-w-xl gap-2" onSubmit={(event) => {
+          <form className="flex w-full gap-2" onSubmit={(event) => {
             event.preventDefault()
             const next = providerToAdd.trim()
             if (!next || difficulty.providerOrder.some((provider) => provider.toLowerCase() === next.toLowerCase())) return
@@ -191,7 +194,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <datalist id="known-exam-providers">{providers.filter((provider) => !difficulty.providerOrder.some((item) => item.toLowerCase() === provider.toLowerCase())).map((provider) => <option key={provider} value={provider} />)}</datalist>
             <Button type="submit" variant="outline" disabled={!difficulty.enabled || !providerToAdd.trim()}><Plus />Add</Button>
           </form>
-          <ol className="grid max-w-xl gap-2">
+          </div>
+          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             {difficulty.providerOrder.map((provider, index) => {
               const vcaaIndex = difficulty.providerOrder.indexOf("VCAA")
               const adjustment = Math.max(-8, Math.min(8, (vcaaIndex - index) * ({ light: 1, balanced: 1.5, strong: 2 }[difficulty.strength])))
@@ -215,7 +219,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               )
             })}
           </ol>
-          <p className="max-w-2xl text-xs leading-5 text-muted-foreground">The starter order is only a broad guide. Paper difficulty varies by subject and year, so remove irrelevant providers and reorder the ones you use. Non-VCAA papers receive less influence the further they sit from the baseline. This is a planning estimate, not an official conversion.</p>
+          <p className="max-w-[68ch] text-xs leading-5 text-muted-foreground text-pretty xl:col-span-2">The starter order is only a broad guide. Paper difficulty varies by subject and year, so remove irrelevant providers and reorder the ones you use. Non-VCAA papers receive less influence the further they sit from the baseline. This is a planning estimate, not an official conversion.</p>
         </CardContent>
       </Card>
 

@@ -3,7 +3,6 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, MoreHorizontal } f
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ExamActivityChart } from "@/components/exam-activity-chart"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -91,12 +90,11 @@ export function ExamTable({
 
   return (
     <>
-      <ExamActivityChart attempts={attempts} />
       <section id="all-exams" aria-labelledby="all-exams-title" className="grid scroll-mt-20 gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="all-exams-title" className="text-lg font-semibold">All exams</h2>
-            <p className="text-sm text-muted-foreground">Search, edit, log mistakes, or expand a row for its VCAA distribution.</p>
+            <h2 id="all-exams-title" className="text-lg font-semibold xl:text-xl">All exams</h2>
+            <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Search, edit, log mistakes, or expand a row for its VCAA distribution. Scroll sideways to reach every column on a narrow screen.</p>
           </div>
           <Input className="w-full sm:w-80" aria-label="Search exams" placeholder="Search exams…" value={query} onChange={(event) => setQuery(event.target.value)} />
         </div>

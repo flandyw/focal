@@ -282,7 +282,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
               <ExamProgressionPanel progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
               {suggestions.length ? <section className="grid gap-2" aria-labelledby="official-suggestions-title">
                 <div><h3 id="official-suggestions-title" className="text-sm font-medium">Official VCAA papers</h3><p className="text-xs text-muted-foreground">Continue through available papers and years for your current subject.</p></div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
                   {suggestions.map((suggestion) => (
                     <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} />
                   ))}
@@ -290,7 +290,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
               </section> : null}
               {companySuggestions.length ? <section className="grid gap-2" aria-labelledby="company-suggestions-title">
                 <div><h3 id="company-suggestions-title" className="text-sm font-medium">Company exam progression</h3><p className="text-xs text-muted-foreground">Finish this provider&apos;s paper set, then progress from easier companies towards harder ones.</p></div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
                   {companySuggestions.map((suggestion) => (
                     <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} showProvider />
                   ))}

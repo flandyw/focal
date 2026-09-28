@@ -102,7 +102,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
 
   return (
     <div className="grid gap-4">
-      <div className="mx-auto grid w-full max-w-4xl gap-2">
+      <div className="grid w-full min-w-0 gap-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Alternative deck</p>

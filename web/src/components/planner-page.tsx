@@ -90,14 +90,14 @@ export function PlannerPage({ data, timetable, onChange, onNavigate }: {
         <Button variant="outline" onClick={() => onNavigate("practice")}><RotateCcw />Open practice studio</Button>
       </PageHeader>
 
-      <MetricGrid>
-        <MetricCard label="Due now" value={dueToday.length}><span className={overdue ? "text-destructive" : undefined}>{overdue ? `${overdue} overdue` : "Nothing overdue"}</span></MetricCard>
-        <MetricCard label="Daily capacity" value={`${data.learning.preferences.dailyMinutes} min`}><span>Available per study day</span></MetricCard>
-        <MetricCard label="Plan completion" value={`${Math.round(completion)}%`}><Progress value={completion} /></MetricCard>
-      </MetricGrid>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)] lg:gap-8">
+        <div className="grid gap-6 lg:gap-8">
+          <MetricGrid>
+            <MetricCard label="Due now" value={dueToday.length}><span className={overdue ? "text-destructive" : undefined}>{overdue ? `${overdue} overdue` : "Nothing overdue"}</span></MetricCard>
+            <MetricCard label="Daily capacity" value={`${data.learning.preferences.dailyMinutes} min`}><span>Available per study day</span></MetricCard>
+            <MetricCard label="Plan completion" value={`${Math.round(completion)}%`}><Progress value={completion} /></MetricCard>
+          </MetricGrid>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)]">
-        <div className="grid gap-8">
           <section className="grid gap-4" aria-labelledby="recommendations-title">
             <SectionHeading id="recommendations-title" title="Recommended next actions" description="Capacity-aware recommendations generated from your current records." action={suggestions.length > 1 ? <Button variant="outline" size="sm" onClick={() => commit((current) => ({ ...current, tasks: [...current.tasks, ...suggestions.map((suggestion) => materialiseTask(suggestion))] }))}><WandSparkles />Add all to plan</Button> : null} />
             {suggestions.length ? <div className="grid gap-3 xl:grid-cols-2">{suggestions.map((suggestion) => (

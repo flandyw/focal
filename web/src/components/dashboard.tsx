@@ -38,6 +38,7 @@ import { WorkspacePage } from "@/components/workspace-layout"
 import { UpcomingExamsCard } from "@/components/upcoming-exams-card"
 import { PerformanceContextInsights } from "@/components/performance-context-insights"
 import { ExamTable } from "@/components/exam-table"
+import { ExamActivityChart } from "@/components/exam-activity-chart"
 import { getExamTarget } from "@/lib/exam-target"
 import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultySettings } from "@/lib/exam-difficulty"
 import { openProgressReport } from "@/lib/progress-report"
@@ -177,9 +178,9 @@ function CoverageSummary({ data }: { data: AppData }) {
   const coverage = useMemo(() => buildCoverage(data.attempts), [data.attempts])
   if (!coverage.length) return null
   return (
-    <section aria-labelledby="coverage-title" className="grid gap-3 rounded-lg border p-5">
-      <div><h2 id="coverage-title" className="font-semibold">Outcome coverage</h2><p className="text-sm text-muted-foreground">Weakest marked topics and skills first. Label sections, questions, essays, or tasks while marking to improve this view.</p></div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <section aria-labelledby="coverage-title" className="grid content-start gap-3 rounded-lg border p-5">
+      <div><h2 id="coverage-title" className="font-semibold">Outcome coverage</h2><p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Weakest marked topics and skills first. Label sections, questions, essays, or tasks while marking to improve this view.</p></div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {coverage.slice(0, 6).map((area) => <div key={`${area.subject}-${area.areaOfStudy}`} className="grid gap-1 rounded-md bg-muted/50 p-3"><div className="flex justify-between gap-3 text-sm"><span className="min-w-0 truncate font-medium">{area.areaOfStudy}</span><span className="tabular-nums">{area.percentage.toFixed(0)}%</span></div><p className="truncate text-xs text-muted-foreground">{area.subject} · {area.questions} marked item{area.questions === 1 ? "" : "s"}</p><Progress value={area.percentage} /></div>)}
       </div>
     </section>
@@ -280,8 +281,8 @@ function StatRow({ data }: { data: AppData }) {
   const completion = total ? (mature / total) * 100 : 0
 
   return (
-    <div className="grid gap-5 rounded-lg border bg-card px-5 py-5 sm:grid-cols-2 sm:gap-y-6 lg:grid-cols-4 lg:gap-y-0 lg:divide-x lg:divide-border">
-      <div className="flex min-w-0 flex-col gap-1.5 sm:pr-6">
+    <div className="grid grid-cols-2 gap-y-6 rounded-lg border bg-card px-5 py-5 lg:grid-cols-4 lg:gap-y-0">
+      <div className="flex min-w-0 flex-col gap-1.5 pr-4 sm:pr-6">
         <p className="text-sm text-muted-foreground">Practice exams</p>
         <p className="text-3xl font-semibold tabular-nums leading-none">{stats.count}</p>
         <p className="text-xs text-muted-foreground">
@@ -291,7 +292,7 @@ function StatRow({ data }: { data: AppData }) {
           {stats.lastDate ? ` · last ${formatDate(stats.lastDate)}` : null}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 sm:pl-6 lg:px-6">
+      <div className="flex min-w-0 flex-col gap-1.5 border-l pl-4 sm:pl-6">
         <p className="text-sm text-muted-foreground">VCAA-aligned average</p>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-semibold tabular-nums leading-none">
@@ -319,12 +320,12 @@ function StatRow({ data }: { data: AppData }) {
                 : "Dropping vs your earlier half"}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 lg:px-6">
+      <div className="flex min-w-0 flex-col gap-1.5 border-l border-t pt-6 pl-4 lg:px-6 lg:pt-0">
         <p className="text-sm text-muted-foreground">Best mark</p>
         <p className="text-3xl font-semibold tabular-nums leading-none">{stats.best.toFixed(1)}%</p>
         <p className="text-xs text-muted-foreground">Your strongest recorded practice result</p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 sm:pl-6">
+      <div className="flex min-w-0 flex-col gap-1.5 border-t border-l pt-6 pl-4 sm:pl-6 lg:pt-0">
         <p className="text-sm text-muted-foreground">Mistake cards</p>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-semibold tabular-nums leading-none">{total === 0 ? "—" : due}</p>
@@ -357,8 +358,8 @@ function ImprovementSignals({ data }: { data: AppData }) {
         <CardDescription>Leading indicators that show whether your study process is turning into stronger exam performance.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-border">
-          <div className="min-w-0 space-y-1 xl:pr-5">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="min-w-0 space-y-1 xl:pr-5">
             <p className="text-sm text-muted-foreground">Recent momentum</p>
             <p className="text-2xl font-semibold tabular-nums">
               {primary ? `${primary.momentum >= 0 ? "+" : ""}${primary.momentum.toFixed(1)} pts` : "—"}
@@ -471,32 +472,34 @@ function RecentExams({
               const reference = findAttemptReferenceForYear(attempt, references, comparisonYear)
               const analysis = analyseAttempt(attempt, reference)
               return (
-                <li key={attempt.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <li key={attempt.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="truncate text-sm font-medium">{attempt.title} · {attempt.paper}</p>
+                    <p className="text-sm font-medium text-pretty">{attempt.title} · {attempt.paper}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(attempt.completedAt)}</p>
                   </div>
-                  {reference && analysis.grade ? (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Badge variant="secondary">{analysis.grade}</Badge>
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                        Est.
-                      </Badge>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {analysis.percentile?.toFixed(0)}th pctile
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
+                    {reference && analysis.grade ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="secondary">{analysis.grade}</Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                          Est.
+                        </Badge>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {analysis.percentile?.toFixed(0)}th pctile
+                        </span>
+                      </div>
+                    ) : null}
+                    <Button variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
+                      Go to exam
+                      <ArrowDownRight aria-hidden />
+                    </Button>
+                    <span className="whitespace-nowrap text-sm font-medium tabular-nums">
+                      {reference ? `${analysis.scaledScore.toFixed(1)}/${reference.maxScore}` : `${attempt.rawScore}/${attempt.rawMax}`}
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                        {reference ? "scaled" : `${analysis.percentage.toFixed(1)}%`}
                       </span>
-                    </div>
-                  ) : null}
-                  <Button variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
-                    Go to exam
-                    <ArrowDownRight aria-hidden />
-                  </Button>
-                  <span className="whitespace-nowrap text-sm font-medium tabular-nums">
-                    {reference ? `${analysis.scaledScore.toFixed(1)}/${reference.maxScore}` : `${attempt.rawScore}/${attempt.rawMax}`}
-                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                      {reference ? "scaled" : `${analysis.percentage.toFixed(1)}%`}
                     </span>
-                  </span>
+                  </div>
                 </li>
               )
             })}
@@ -640,8 +643,12 @@ export function Dashboard(props: DashboardProps) {
         <TabsContent value="overview" className="mt-4">
           {section === "overview" ? (
             <div className="grid gap-6">
-              <NextActionNotice action={nextAction} />
-              {deadlineSection}
+              {/* Lead band: the single next action sits beside the deadlines it competes with,
+                  so the first screen answers "what do I do now" before any statistic does. */}
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
+                <NextActionNotice action={nextAction} />
+                {deadlineSection}
+              </div>
               <StatRow data={data} />
               <div className="grid gap-6 lg:grid-cols-3">
                 <div className="min-w-0 lg:col-span-2">
@@ -651,7 +658,10 @@ export function Dashboard(props: DashboardProps) {
                   <SubjectBreakdown data={data} references={references} />
                 </div>
               </div>
-              <CoverageSummary data={data} />
+              <div className="grid gap-6">
+                <CoverageSummary data={data} />
+                <ExamActivityChart attempts={data.attempts} />
+              </div>
               <ExamTable attempts={data.attempts} references={references} comparisonYear={comparisonYear} onComparisonYearChange={onComparisonYearChange} onEdit={onEditExam} onAddMistake={onAddMistake} onDelete={onDeleteExam} />
             </div>
           ) : null}
@@ -667,7 +677,7 @@ export function Dashboard(props: DashboardProps) {
               <Suspense fallback={<Skeleton className="h-96 w-full" />}>
                 <PerformanceTrendChart attempts={data.attempts} references={references} preferredSubjects={data.subjects} difficultySettings={data.examDifficulty} />
               </Suspense>
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <SubjectBenchmarkChart attempts={data.attempts} references={references} mistakes={data.mistakes} />
                 </Suspense>
@@ -675,7 +685,7 @@ export function Dashboard(props: DashboardProps) {
                   <VcaaPercentileTrendChart attempts={data.attempts} references={references} preferredSubjects={data.subjects} />
                 </Suspense>
               </div>
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <ImprovementOutlookChart attempts={data.attempts} difficultySettings={data.examDifficulty} />
                 </Suspense>
@@ -683,7 +693,7 @@ export function Dashboard(props: DashboardProps) {
                   <ReviewForecastChart mistakes={data.mistakes} />
                 </Suspense>
               </div>
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <FocusPriorityChart attempts={data.attempts} mistakes={data.mistakes} />
                 </Suspense>

@@ -514,7 +514,7 @@ export default function App() {
         onViewChange={setView}
       />
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-4 lg:px-6 2xl:px-8">
           <SidebarTrigger />
           <span className="text-sm font-medium">{getViewLabel(view)}</span>
           <div className="ml-auto flex items-center gap-1">
@@ -535,7 +535,7 @@ export default function App() {
             </DropdownMenu>
           </div>
         </header>
-        <main id="main-content" className="w-full min-w-0 p-4 md:p-6 lg:p-8">
+        <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
           <SharedStudySessions userId={sync.user?.id} sessions={studySessionSync.sessions} onControl={studySessionSync.control} />
           {data.activeExamTimer && view !== "timer" ? (
             <Alert className="mb-6">

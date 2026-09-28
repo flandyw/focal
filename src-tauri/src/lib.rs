@@ -116,6 +116,12 @@ fn database_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0004_change_log.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "study_session_commands",
+            sql: include_str!("../migrations/0005_study_session_commands.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -643,9 +643,9 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
       </section>
       {subjects.length > 1 || showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span>{subjects.length > 1 ? <Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : null}{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div> : null}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)}>
-        <TabsList variant="line" className="h-auto! w-full! flex-wrap justify-start gap-2 border-b pb-2">
-          <TabsTrigger value="browse" className="flex-none px-3">Library</TabsTrigger>
-          <TabsTrigger value="study" className="flex-none px-3">Review{counts.due ? ` (${counts.due})` : ""}</TabsTrigger>
+        <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
+          <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>
+          <TabsTrigger value="study" className="px-3">Review{counts.due ? ` (${counts.due})` : ""}</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="alternative">Alternatives{alternativeCount ? ` (${alternativeCount})` : ""}</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
@@ -700,13 +700,15 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <div className="grid gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
+              <div className="flex gap-2 sm:shrink-0">
               <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); clearSelection() }}>
                 <SelectTrigger aria-label="Filter mistake cards by schedule"><SelectValue>{({ all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Paused" } as Record<BrowserFilter, string>)[browserFilter]}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All cards</SelectItem><SelectItem value="due">Due now</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="learning">Learning</SelectItem><SelectItem value="review">Review</SelectItem><SelectItem value="mature">Mature</SelectItem><SelectItem value="suspended">Reviews paused</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="ghost" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters</Button>
+              <Button variant="ghost" className="flex-1 sm:flex-none" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters</Button>
+              </div>
             </div>
             {showFilters ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3">
               <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>

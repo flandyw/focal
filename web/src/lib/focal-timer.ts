@@ -1,4 +1,4 @@
-import { focalSupabase } from "@/lib/focal-supabase"
+import { supabase } from "@/lib/supabase"
 
 export type FocalTimerKind = "exam" | "sac"
 
@@ -54,8 +54,8 @@ export function isFocalTimerLink(value: unknown): value is FocalTimerLink {
 }
 
 export async function readSharedFocalSessionChange(userId: string, sessionId: string): Promise<SharedFocalSessionChange | null> {
-  if (!focalSupabase) return null
-  const { data, error } = await focalSupabase.from("sync_changes")
+  if (!supabase) return null
+  const { data, error } = await supabase.from("sync_changes")
     .select("change_id,device_id,row_id,operation,payload,revision")
     .eq("user_id", userId).eq("entity", "study_sessions").eq("row_id", sessionId)
     .order("revision", { ascending: false }).limit(1)
@@ -174,8 +174,8 @@ export function setFocalTimerPhase(link: FocalTimerLink, phase: "reading" | "wri
 }
 
 async function sendTimerChange(change: PendingTimerChange): Promise<boolean> {
-  if (!focalSupabase) return false
-  const { data: { session } } = await focalSupabase.auth.getSession()
+  if (!supabase) return false
+  const { data: { session } } = await supabase.auth.getSession()
   if (!session) return false
   const { link, operation } = change
   const now = new Date(change.changedAt)
@@ -208,7 +208,7 @@ async function sendTimerChange(change: PendingTimerChange): Promise<boolean> {
     deleted_at: null,
     last_modified_device_id: "examtrack-web",
   }
-  const { error } = await focalSupabase.from("sync_changes").insert({
+  const { error } = await supabase.from("sync_changes").insert({
     user_id: session.user.id,
     change_id: change.nonce,
     device_id: "examtrack-web",

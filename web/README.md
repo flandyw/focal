@@ -9,7 +9,9 @@ cd ..
 supabase db push
 ```
 
-There is no second project and no second sign-in. The `FocalTimerLink` mirror, the `activeExamTimerUpdatedAt` conflict resolution and `src/lib/focal-supabase.ts` are what remain of the old cross-project arrangement, and they are removed in the canonical session rewrite. Until then `VITE_FOCAL_SUPABASE_URL` and `VITE_FOCAL_SUPABASE_PUBLABLE_KEY` still drive the mirror and must still be set on the Vercel deployment. No service-role key is exposed by either client.
+There is no second project and no second sign-in. The second Supabase client, the separate-account settings card and the `VITE_FOCAL_SUPABASE_*` variables are gone; `web/` writes with the same client as the rest of the app.
+
+What remains is the *protocol*, not the project boundary. `focal-timer.ts` still keeps a `FocalTimerLink` beside each running exam or SAC and publishes it into the shared `study_sessions` entity of the change log, because that log is currently the only study-session store: migration `0004` dropped Focal's `public.study_sessions` table, so there is no canonical row to write instead. Deleting the link today would silently empty Focal's study history for exam and SAC timers. It goes when the canonical `study_sessions` command protocol replaces it.
 
 A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recharts, and KaTeX.
 

@@ -35,6 +35,7 @@ import {
   type SavedAtarEstimate,
 } from "@/lib/exam-data"
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/lib/storage"
+import { supabase } from "@/lib/supabase"
 import { useSupabaseSync } from "@/lib/sync"
 import {
   flushFocalTimerOutbox,
@@ -42,7 +43,6 @@ import {
   publishFocalTimer,
   readSharedFocalSessionChange,
 } from "@/lib/focal-timer"
-import { focalSupabase } from "@/lib/focal-supabase"
 import { pauseExamSession, resumeExamSession } from "@/lib/ongoing-timers"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
 import { ExamTrackerPicker } from "@/components/exam-tracker-picker"
@@ -56,7 +56,6 @@ import {
 } from "@/components/app-navigation"
 import { getViewLabel } from "@/lib/navigation"
 import { useReferenceData } from "@/hooks/use-reference-data"
-import { useFocalAccount } from "@/hooks/use-focal-account"
 import { SharedStudySessions } from "@/components/shared-study-sessions"
 import { finalisePracticeSession, localDate, materialiseTask, type LearningWorkspaceUpdate, type PracticeSession, type StudyGoal } from "@/lib/learning-workspace"
 import { applyMistakeAutofills, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeFieldMergePlan } from "@/lib/mistake-autofill"
@@ -127,7 +126,6 @@ export default function App() {
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const sync = useSupabaseSync(data, setData)
-  const focal = useFocalAccount()
   const examSaveStatus = sync.status === "synced"
     ? "Saved to your account. Open ExamTrack on another device and sign in to the same account to continue."
     : sync.status === "syncing" ? "Saving to your account. Wait for confirmation before switching devices."
@@ -175,13 +173,13 @@ export default function App() {
   useEffect(() => {
     // The link travels with the exam, so another device can retry a paused
     // Focal update even when the original device went offline before sending.
-    if (!focal.user || !data.activeExamTimer?.focal) return
+    if (!sync.user || !data.activeExamTimer?.focal) return
     void publishFocalTimer(data.activeExamTimer.focal, "in-progress", new Date(data.activeExamTimerUpdatedAt))
-  }, [focal.user, data.activeExamTimer, data.activeExamTimerUpdatedAt])
+  }, [sync.user, data.activeExamTimer, data.activeExamTimerUpdatedAt])
   useEffect(() => {
-    const userId = focal.user?.id
-    const supabase = focalSupabase
-    if (!userId || !supabase) return
+    const userId = sync.user?.id
+    const shared = supabase
+    if (!userId || !shared) return
     let cancelled = false
     let reading = false
     const reconcile = async () => {
@@ -239,7 +237,7 @@ export default function App() {
       }
     }
     void reconcile()
-    const channel = supabase.channel(`examtrack-session-control-${userId}`)
+    const channel = shared.channel(`examtrack-session-control-${userId}`)
       // sync_changes is a view over the log since protocol v3, and Realtime replicates
       // tables only, so this listens to the log itself. The row shape is unchanged.
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sync_log", filter: `user_id=eq.${userId}` }, (event) => {
@@ -252,11 +250,11 @@ export default function App() {
     return () => {
       cancelled = true
       window.clearInterval(interval)
-      void supabase.removeChannel(channel)
+      void shared.removeChannel(channel)
     }
-  }, [focal.user?.id, data.activeExamTimer, data.activeSacTimer])
+  }, [sync.user?.id, data.activeExamTimer, data.activeSacTimer])
   useEffect(() => {
-    if (!focal.user) return
+    if (!sync.user) return
     const flush = () => void flushFocalTimerOutbox()
     flush()
     window.addEventListener("online", flush)
@@ -265,7 +263,7 @@ export default function App() {
       window.removeEventListener("online", flush)
       window.clearInterval(interval)
     }
-  }, [focal.user])
+  }, [sync.user])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => {
     const openCommandMenu = (event: KeyboardEvent) => {
@@ -634,7 +632,7 @@ export default function App() {
           </div>
         </header>
         <main id="main-content" className="w-full min-w-0 p-4 md:p-6 lg:p-8">
-          <SharedStudySessions />
+          <SharedStudySessions userId={sync.user?.id} />
           {data.activeExamTimer && view !== "timer" ? (
             <Alert className="mb-6">
               <AlertTitle>{data.activeExamTimer.pausedAt !== undefined ? "Saved exam" : "Exam in progress"} · {data.activeExamTimer.title}</AlertTitle>
@@ -682,7 +680,7 @@ export default function App() {
           {view === "timer" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamTimer attempts={data.attempts} progression={data.examProgression} onProgressionChange={saveExamProgression} key={data.activeExamTimer?.focal?.sessionId ?? (timerPreset ? `${timerPreset.subject}-${timerPreset.examYear}-${timerPreset.paper}` : "manual")} references={references} studies={resourceStudies} preferredSubjects={data.subjects} initialExam={timerPreset} activeSession={data.activeExamTimer} saveStatus={examSaveStatus} syncAction={examSyncAction} onLeave={() => setView("dashboard")} onSessionChange={saveActiveExamTimer} onSave={(attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) }} /></Suspense> : null}
           {view === "predictor" ? <>{referencesLoading || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setView("timer") }} /></Suspense>}</> : null}
-          {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} focal={focal} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} /></Suspense> : null}
+          {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} /></Suspense> : null}
         </main>
       </SidebarInset>
       {examOpen ? (

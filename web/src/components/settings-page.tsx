@@ -19,7 +19,6 @@ import {
   type ReasoningEffort,
 } from "@/lib/ai-settings"
 import type { useSupabaseSync } from "@/lib/sync"
-import type { useFocalAccount } from "@/hooks/use-focal-account"
 import { DEFAULT_PROVIDER_DIFFICULTY, MATHEMATICS_PROVIDER_DIFFICULTY, resolveDifficultySettings, type ExamDifficultySettings } from "@/lib/exam-difficulty"
 
 const REASONING_LABELS: Record<ReasoningEffort, string> = {
@@ -37,9 +36,8 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, focal, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
   sync: ReturnType<typeof useSupabaseSync>
-  focal: ReturnType<typeof useFocalAccount>
   subjects: string[]
   selectedSubjects: string[]
   providers: string[]
@@ -52,9 +50,6 @@ export function SettingsPage({ sync, focal, subjects, selectedSubjects, provider
   const [password, setPassword] = useState("")
   const [accountLoading, setAccountLoading] = useState(false)
   const [accountMessage, setAccountMessage] = useState<string | null>(null)
-  const [focalEmail, setFocalEmail] = useState("")
-  const [focalPassword, setFocalPassword] = useState("")
-  const [focalMessage, setFocalMessage] = useState<string | null>(null)
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings())
   const [models, setModels] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
@@ -150,40 +145,6 @@ export function SettingsPage({ sync, focal, subjects, selectedSubjects, provider
               ))}
             </ol>
           ) : <p className="text-sm text-muted-foreground">Add your subjects in priority order.</p>}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Focal timer connection</CardTitle>
-          <CardDescription>Connect your separate Focal account to mirror only exam and SAC timer activity.</CardDescription>
-          {focal.user ? <CardAction><Badge variant="secondary"><CheckCircle2 />Connected</Badge></CardAction> : null}
-        </CardHeader>
-        <CardContent>
-          {!focal.configured ? (
-            <p className="text-sm text-muted-foreground">Add Focal's Supabase URL and publishable key to the ExamTrack deployment. No ExamTrack database migration is required.</p>
-          ) : focal.user ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="font-medium">{focal.user.email}</p><p className="text-sm text-muted-foreground">Authenticated directly with Focal; its row-level security owns every timer write.</p></div>
-              <Button variant="outline" disabled={focal.loading} onClick={() => void focal.signOut()}><LogOut />Disconnect</Button>
-            </div>
-          ) : (
-            <form className="grid max-w-md gap-3" onSubmit={async (event) => {
-              event.preventDefault()
-              setFocalMessage(null)
-              try {
-                await focal.signIn(focalEmail, focalPassword)
-                setFocalPassword("")
-              } catch (error) {
-                setFocalMessage(error instanceof Error ? error.message : "Could not connect Focal.")
-              }
-            }}>
-              <Input type="email" value={focalEmail} onChange={(event) => setFocalEmail(event.target.value)} placeholder="Focal email" aria-label="Focal email address" autoComplete="username" required />
-              <Input type="password" value={focalPassword} onChange={(event) => setFocalPassword(event.target.value)} placeholder="Focal password" aria-label="Focal password" autoComplete="current-password" minLength={8} required />
-              <div><Button type="submit" disabled={focal.loading}><Cloud />{focal.loading ? "Connecting…" : "Connect Focal"}</Button></div>
-            </form>
-          )}
-          {focalMessage ? <p role="status" className="mt-3 text-sm text-muted-foreground">{focalMessage}</p> : null}
         </CardContent>
       </Card>
 

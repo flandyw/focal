@@ -69,38 +69,44 @@ copy, and the merge would appear to work while silently discarding local edits.
 
 ## Repointing the clients
 
-Once the data is in, each app needs one normal Supabase client instead of two. `web/` still
-carries the old arrangement, so this is the code work that remains.
+Done: each app now uses one normal Supabase client. What changed is listed in the two
+commits titled "Point … at the one Supabase client" and "Settle web/ into the Focal
+repository". `FocalTimerLink` and the outbox remain, for the reason in the last section.
 
-**Focal** — `src/lib/examtrack-client.ts` currently builds a second client from
-`VITE_EXAMTRACK_SUPABASE_*`. It is deleted; `src/lib/examtrack.ts` reads `attempts` and
-`mistakes` through the existing client. Drop `VITE_EXAMTRACK_SUPABASE_URL` and
-`VITE_EXAMTRACK_SUPABASE_PUBLABLE_KEY` from `.env.example`. `VITE_EXAMTRACK_URL` stays for
-now: it is the drill-through link, not a database.
+**Focal** — `src/lib/examtrack-client.ts` and the `focal-examtrack-auth-session` credential
+are deleted. `ExamTrackView` takes the account from `App`, the same way `SettingsView`
+does, instead of opening its own auth subscription, and its second sign-in form is now a
+prompt to sign in under Settings. `VITE_EXAMTRACK_SUPABASE_*` is gone from `.env.example`,
+`vite-env.d.ts` and both workflows. `VITE_EXAMTRACK_URL` stays: it is the drill-through
+link, not a database.
 
-**ExamTrack** — `web/src/lib/focal-supabase.ts`, `web/src/lib/focal-timer.ts`,
-`web/src/hooks/use-focal-account.ts` and the `focal:` field in
-`web/src/lib/ongoing-timers.ts` are the mirror layer. `VITE_SUPABASE_URL` /
-`VITE_SUPABASE_PUBLABLE_KEY` point at the Focal project and `VITE_FOCAL_SUPABASE_*` is
-deleted, along with "Connect your Focal account" in settings and its secrets in
-`.github/workflows/verify.yml`. The timer state currently in `user_state`
-(`activeExamTimer`, `activeSacTimer`) keeps working until it is replaced by the canonical
-`study_sessions` row, so this step is safe on its own.
+**ExamTrack** — `web/src/lib/focal-supabase.ts` and `web/src/hooks/use-focal-account.ts`
+are deleted, along with the "Focal timer connection" card in settings.
+`SharedStudySessions` takes a `userId` prop instead of subscribing to a second auth
+session. `focal-timer.ts` publishes through the shared client. The timer state in
+`user_state` (`activeExamTimer`, `activeSacTimer`) is untouched, so this step is safe on
+its own.
 
-**Folio** — `ExamTrackAuthRepository.kt` builds a client from `BuildConfig.EXAMTRACK_SUPABASE_URL`
-for the mistake library, and `FocalStudy.kt` builds another from `BuildConfig.FOCAL_SUPABASE_URL`.
-After the merge both point at the same project and `ExamTrackAuthRepository` can use the
-Focal session. `FocalStudyManager` stays on the compatibility route until the canonical
-session API lands. This one is easy to miss: Folio's mistake library is on ExamTrack's
-project, not Focal's, so it breaks if it is left pointing at the old project.
+**Folio** — still to do. `ExamTrackAuthRepository.kt` builds a client from
+`BuildConfig.EXAMTRACK_SUPABASE_URL` for the mistake library, and `FocalStudy.kt` builds
+another from `BuildConfig.FOCAL_SUPABASE_URL`. After the merge both point at the same
+project and `ExamTrackAuthRepository` can use the Focal session. `FocalStudyManager` stays
+on the compatibility route until the canonical session API lands. This one is easy to
+miss: Folio's mistake library is on ExamTrack's project, not Focal's, so it breaks if it
+is left pointing at the old project.
 
 ## What this does not fix
 
 The `sync_read_changes` predicate at `0007_change_log.sql:417` still forces a snapshot on
-almost every incremental read, in both this project and the old ExamTrack one. It is a
-one-line fix (compare the cursor against the compaction floor only) and it is worth doing
-now rather than after the cutover, but the rewrite makes it moot.
+almost every incremental read. It is a one-line fix (compare the cursor against the
+compaction floor only) and it is worth doing now rather than after the cutover, but the
+rewrite makes it moot.
 
-Nothing here touches the timer. The `FocalTimerLink` mirror, the `activeExamTimerUpdatedAt`
-conflict resolution and the `pauseExamSession(exam, Date.now())` reconstruction all survive
-this merge and are removed when the three apps read one canonical `study_sessions` row.
+The timer is untouched. `FocalTimerLink` is still a second representation of an exam or
+SAC timer alongside the `activeExamTimer` / `activeSacTimer` fields in `user_state`, and
+`pauseExamSession(exam, Date.now())` still reconstructs a remote pause at reception time
+rather than at the moment it happened. Both survive this merge because Focal's
+`public.study_sessions` table was dropped by migration `0004`: the change log is currently
+the only study-session store, so the bridge has somewhere to write and the replacement does
+not exist yet. They are removed when the three apps read one canonical `study_sessions`
+row.

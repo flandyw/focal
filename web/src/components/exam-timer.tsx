@@ -411,7 +411,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
             <p role="status" className="flex-1 text-sm text-muted-foreground">{saveStatus}</p>
             {syncAction ? <Button size="sm" variant="outline" onClick={syncAction.onClick}>{syncAction.label}</Button> : null}
           </div>
-          {session.focal ? <p className="text-xs text-muted-foreground">Focal logging: paused time is excluded. Updates wait here until your Focal account is connected and online.</p> : null}
+          {session.focal ? <p className="text-xs text-muted-foreground">Focal logging: paused time is excluded. Updates wait here until you are signed in and online.</p> : null}
         </CardContent>
       </Card>
 

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pause, Play, Check, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { focalSupabase } from "@/lib/focal-supabase"
-import { useFocalAccount } from "@/hooks/use-focal-account"
+import { supabase } from "@/lib/supabase"
+
 
 type Change = {
   change_id: string
@@ -98,8 +98,8 @@ function changedPayload(session: SharedSession, action: "pause" | "resume" | "fi
   return { ...session.payload, execution, integrations, updated_at: now, deleted_at: null, last_modified_device_id: "examtrack-web" }
 }
 
-export function SharedStudySessions() {
-  const { user } = useFocalAccount()
+export function SharedStudySessions({ userId }: { userId: string | undefined }) {
+  const user = useMemo(() => (userId ? { id: userId } : null), [userId])
   const [sessions, setSessions] = useState<SharedSession[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +109,7 @@ export function SharedStudySessions() {
   const refreshing = useRef(false)
 
   const refresh = useCallback(async () => {
-    if (!user || !focalSupabase) return
+    if (!user || !supabase) return
     if (accountId.current !== user.id) {
       accountId.current = user.id
       revisionCursor.current = 0
@@ -123,7 +123,7 @@ export function SharedStudySessions() {
       let highestRevision = startRevision
       let changed = false
       for (;;) {
-        const { data, error: queryError } = await focalSupabase.from("sync_changes")
+        const { data, error: queryError } = await supabase.from("sync_changes")
           .select("change_id,row_id,operation,payload,revision")
           .eq("user_id", user.id).eq("entity", "study_sessions")
           .gt("revision", startRevision).order("revision", { ascending: true }).range(offset, offset + 499)
@@ -151,7 +151,7 @@ export function SharedStudySessions() {
   }, [user])
 
   useEffect(() => {
-    if (!user || !focalSupabase) {
+    if (!user || !supabase) {
       accountId.current = null
       revisionCursor.current = 0
       latestChanges.current.clear()
@@ -163,7 +163,7 @@ export function SharedStudySessions() {
       if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load shared sessions")
     })
     safeRefresh()
-    const channel = focalSupabase.channel(`examtrack-shared-study-${user.id}`)
+    const channel = supabase.channel(`examtrack-shared-study-${user.id}`)
       // Realtime replicates tables, not views: sync_changes is a view over the log since
       // protocol v3, so the subscription listens to sync_log and the poll below stays as
       // the backstop. The payload shape is the same.
@@ -174,17 +174,17 @@ export function SharedStudySessions() {
     return () => {
       cancelled = true
       window.clearInterval(poll)
-      void focalSupabase?.removeChannel(channel)
+      void supabase?.removeChannel(channel)
     }
   }, [refresh, user])
 
   async function control(session: SharedSession, action: "pause" | "resume" | "finish" | "discard") {
-    if (!user || !focalSupabase) return
+    if (!user || !supabase) return
     setBusyId(session.id)
     setError(null)
     try {
       const now = new Date().toISOString()
-      const { error: writeError } = await focalSupabase.from("sync_changes").insert({
+      const { error: writeError } = await supabase.from("sync_changes").insert({
         user_id: user.id,
         change_id: crypto.randomUUID(),
         device_id: "examtrack-web",

@@ -10,6 +10,9 @@ describe("Focal cursor sync", () => {
 
     expect(isSupersededSync(beforeDelete, afterDelete)).toBe(true)
     expect(isSupersededSync(beforeDelete, beforeDelete)).toBe(false)
+    // The delete is dropped from the projection even when the queue has not yet
+    // persisted it, which is the window an in-flight sync used to slip through.
+    expect(isSupersededSync(beforeDelete, { ...afterDelete })).toBe(true)
   })
 
   test("projects attempts, mistakes and each setting as stable independent rows", () => {

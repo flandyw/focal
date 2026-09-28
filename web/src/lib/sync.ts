@@ -52,6 +52,11 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   const [status, setStatus] = useState<SyncStatus>(supabase ? "signed-out" : "unconfigured")
   const [pendingCount, setPendingCount] = useState(0)
   const previous = useRef(data)
+  // previous only advances once the change is durably queued, which is async. A
+  // projection that started from an older snapshot must compare against the
+  // latest render, or it overwrites the edit made while it was in flight.
+  const latest = useRef(data)
+  latest.current = data
   const activeAccount = useRef<string | null>(null)
   const queueTask = useRef<Promise<void>>(Promise.resolve())
   const queueFailed = useRef(false)
@@ -113,7 +118,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (cancelled) return null
       setPendingCount(health.pending)
       setStatus(health.pending ? "pending" : "synced")
-      if (isSupersededSync(data, previous.current)) return null
+      if (isSupersededSync(data, latest.current)) return null
       previous.current = merged
       setData((current) => shallowEqualAppData(current, merged) ? current : merged)
       return merged

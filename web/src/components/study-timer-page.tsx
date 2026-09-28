@@ -98,8 +98,10 @@ function formatClock(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
 }
 
+/** Real wall-clock endpoints, with the time actually worked called out separately: a block
+ *  that was paused spans a gap, and reading its length as its duration would bill the pause. */
 function blockSummary(block: FocusBlock) {
-  const minutes = Math.max(0, Math.round((block.endedAt - block.startedAt) / 60_000))
+  const minutes = Math.max(0, Math.round(block.activeSeconds / 60))
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 

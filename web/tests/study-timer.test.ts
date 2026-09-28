@@ -155,38 +155,61 @@ describe("study timer settings", () => {
 describe("focus block log", () => {
   const now = new Date("2026-09-11T14:00:00")
 
-  function block(id: string, startedAt: number, endedAt: number): FocusBlock {
-    return { id, cycleNumber: 1, source: "pomodoro", subject: "Chemistry", intent: "", startedAt, endedAt }
+  function block(id: string, startedAt: number, endedAt: number, activeSeconds?: number): FocusBlock {
+    return { id, cycleNumber: 1, source: "pomodoro", subject: "Chemistry", intent: "", startedAt, endedAt,
+      activeSeconds: activeSeconds ?? (endedAt - startedAt) / 1000 }
   }
 
-  test("today's totals ignore yesterday and clip across midnight", () => {
+  test("today's totals count the blocks that ended today, by the time actually worked", () => {
     const dayStart = new Date(now)
     dayStart.setHours(0, 0, 0, 0)
     const start = dayStart.getTime()
     const blocks = [
-      block("yesterday", start - 7_200_000, start - 3_600_000),
-      block("morning", start, start + 1_500_000),
-      // Straddles midnight: it ended 1s into today, so only that second counts.
-      block("midnight", start - 3_600_000, start + 1_000),
+      block("yesterday", start - 7_200_000, start - 3_600_000, 600),
+      block("morning", start, start + 1_500_000, 1_500),
+      // Ended today, so it is today's block: it is counted whole rather than clipped,
+      // because a block has no one boundary to clip to.
+      block("midnight", start - 3_600_000, start + 1_000, 600),
     ]
     expect(countBlocksToday(blocks, now)).toBe(2)
-    expect(getFocusSecondsToday(blocks, now)).toBe(1_500_000 / 1000 + 1)
+    expect(getFocusSecondsToday(blocks, now)).toBe(1_500 + 600)
   })
 
   test("closing a block keeps real time and rejects a backwards clock", () => {
     const open = { cycleNumber: 2, source: "pomodoro" as const, subject: "Physics", intent: "Moles", startedAt: 1_000, pausedSeconds: 0 }
     const [closed] = closeOpenBlock(open, 61_000, [])
     expect(closed.endedAt - closed.startedAt).toBe(60_000)
-    expect(closeOpenBlock(open, 500, [])[0].endedAt).toBe(500)
+    expect(closed.activeSeconds).toBe(60)
+    const backwards = closeOpenBlock(open, 500, [])[0]
+    expect(backwards.endedAt).toBe(500)
+    expect(backwards.startedAt).toBe(500)
+    expect(backwards.activeSeconds).toBe(0)
   })
 
-  test("a block bills running seconds only, matching Supabase's active time", () => {
+  test("a paused block keeps the wall clock it really spanned and bills only the running seconds", () => {
     const open = { cycleNumber: 1, source: "pomodoro" as const, subject: "Physics", intent: "", startedAt: 0, pausedSeconds: 0 }
     // 50s of wall time, 30s of it already banked as paused: 20s of study.
-    expect(closeOpenBlock({ ...open, pausedSeconds: 30 }, 50_000, [])[0].endedAt).toBe(20_000)
+    const banked = closeOpenBlock({ ...open, pausedSeconds: 30 }, 50_000, [])[0]
+    expect(banked.activeSeconds).toBe(20)
+    // The endpoints are the real ones. Pulling the pause out of them would report a
+    // block that finished at 20s, which is a minute that never happened.
+    expect([banked.startedAt, banked.endedAt]).toEqual([0, 50_000])
     // A pause still in progress at close time is billed too.
-    expect(closeOpenBlock({ ...open, pausedAt: 40_000 }, 50_000, [])[0].endedAt).toBe(40_000)
+    expect(closeOpenBlock({ ...open, pausedAt: 40_000 }, 50_000, [])[0].activeSeconds).toBe(40)
     // Pauses longer than the block itself cannot produce a negative duration.
-    expect(closeOpenBlock({ ...open, pausedSeconds: 9_000 }, 50_000, [])[0].endedAt).toBe(0)
+    expect(closeOpenBlock({ ...open, pausedSeconds: 9_000 }, 50_000, [])[0].activeSeconds).toBe(0)
+  })
+
+  test("a block interrupted by a pause still shows the real 10:00 to 10:30, not 10:00 to 10:20", () => {
+    // 10:00 start, 10:10 pause, 10:20 resume, 10:30 finish: twenty minutes of work
+    // inside a thirty minute span.
+    const open = { cycleNumber: 1, source: "pomodoro" as const, subject: "Physics", intent: "",
+      startedAt: Date.parse("2026-09-11T10:00:00"), pausedSeconds: 600, pausedAt: undefined }
+    const [closed] = closeOpenBlock(open, Date.parse("2026-09-11T10:30:00"), [])
+    expect(closed.activeSeconds).toBe(1_200)
+    expect(new Date(closed.startedAt).getHours()).toBe(10)
+    expect(new Date(closed.startedAt).getMinutes()).toBe(0)
+    expect(new Date(closed.endedAt).getHours()).toBe(10)
+    expect(new Date(closed.endedAt).getMinutes()).toBe(30)
   })
 })

@@ -19,6 +19,7 @@ import {
   type TimerState,
 } from "@/lib/study-timer"
 import type { FocusTimerSession } from "@/lib/ongoing-timers"
+import { decideFocusSession } from "@/lib/focus-session"
 import { canonicalNow } from "@/lib/study-session-sync"
 
 const TICK_MS = 1000
@@ -122,10 +123,17 @@ export function useStudyTimer({
     const previous = sessionRef.current
     sessionRef.current = next
     sessionQueue.current = sessionQueue.current.catch(() => {}).then(async () => {
-      const saved = await sinkRef.current?.(previous, next, terminal)
-      // The server's row is the truth: its revision has to come back or the next pause is stale.
-      if (saved && previous) sessionRef.current = saved
-      else if (!terminal) sessionRef.current = next
+      try {
+        const saved = await sinkRef.current?.(previous, next, terminal)
+        if (terminal) return
+        // The server's row is the truth, on the first start as much as any other: the
+        // pre-server object carries no revision, and the next command built on it is stale
+        // the moment the server has handed one back.
+        if (saved) sessionRef.current = saved
+      } catch {
+        // The sink has already told the user the command did not land. Local state is
+        // what they asked for, and the next boundary is built from it.
+      }
     })
   }, [])
 
@@ -166,36 +174,32 @@ export function useStudyTimer({
    *  same minutes the timer shows. */
   const syncSession = useCallback((previous: TimerState, next: TimerState, at: number) => {
     const settingsNow = settingsRef.current
-    const wasWorking = previous.mode === "work" && !previous.studyOvertime
-    const isWorking = next.mode === "work" && !next.studyOvertime
+    const identity = { subject: subject.trim(), title: intent.trim() || `${settingsNow.workMinutes} minute focus block` }
     const open = sessionRef.current
-
-    if (isWorking && !wasWorking) {
-      // The id is minted here, not by the server: one focus block is one canonical session for
-      // its whole start -> pause -> resume -> complete life, on every client.
-      emitSession({
-        id: crypto.randomUUID(),
-        subject: subject.trim(), provider: "Focal", title: intent.trim() || `${settingsNow.workMinutes} minute focus block`,
-        cycleNumber: next.cycles + 1, workMinutes: settingsNow.workMinutes, startedAt: at, pausedSeconds: 0,
-      })
-      return
-    }
-    if (!isWorking && wasWorking && open) {
-      emitSession(undefined, "complete")
-      return
-    }
-    if (isWorking && open) {
-      // A subject or intent corrected mid-block has to reach the server too, or
-      // the session stays filed under whatever was picked when it began.
-      const corrected = { subject: subject.trim(), title: intent.trim() || `${settingsNow.workMinutes} minute focus block` }
-      if (open.subject !== corrected.subject || open.title !== corrected.title) {
-        emitSession({ ...open, ...corrected })
+    const decision = decideFocusSession(previous, next, open, identity, at)
+    if (!decision) return
+    switch (decision.action) {
+      case "start":
+        // The id is minted here, not by the server: one focus block is one canonical session for
+        // its whole start -> pause -> resume -> complete life, on every client.
+        emitSession({
+          id: crypto.randomUUID(), ...identity, provider: "Focal", cycleNumber: next.cycles + 1,
+          workMinutes: settingsNow.workMinutes, startedAt: at, pausedSeconds: 0,
+        })
         return
-      }
-      if (next.running && open.pausedAt !== undefined) {
-        emitSession({ ...open, startedAt: open.startedAt + Math.max(0, at - open.pausedAt), pausedAt: undefined, pausedSeconds: open.pausedSeconds + Math.max(0, at - open.pausedAt) / 1000 })
-      } else if (!next.running && open.pausedAt === undefined) {
-        emitSession({ ...open, pausedAt: at })
+      case "complete":
+        emitSession(undefined, "complete")
+        return
+      case "update":
+        emitSession({ ...open!, ...identity })
+        return
+      case "pause":
+        emitSession({ ...open!, pausedAt: at })
+        return
+      case "resume": {
+        const gap = Math.max(0, at - (open!.pausedAt ?? at))
+        emitSession({ ...open!, startedAt: open!.startedAt + gap, pausedAt: undefined, pausedSeconds: open!.pausedSeconds + gap / 1000 })
+        return
       }
     }
   }, [emitSession, subject, intent])
@@ -221,13 +225,18 @@ export function useStudyTimer({
     if (state.studyOvertime) {
       // Free study is unbilled, so a pause in it costs nothing to record. Plain
       // overtime only ever begins from a break, which already closed its block.
-      if (state.freeStudy) openBlock("free-study", state.cycles, at)
+      if (state.freeStudy) {
+        if (state.running) openBlock("free-study", state.cycles, at)
+        pauseBlock(state.running, at)
+      }
       return
     }
     if (state.mode === "work") {
-      // `openBlock` is a no-op while one is already open, so this doubles as
-      // the resume path that banks the pause.
-      openBlock("pomodoro", state.cycles + 1, at)
+      // A block begins when the timer starts counting, not when the page happens to be
+      // showing a focus timer: opening the screen mid-break must not log a block.
+      // `openBlock` is a no-op while one is already open, so this doubles as the
+      // resume path that banks the pause.
+      if (state.running) openBlock("pomodoro", state.cycles + 1, at)
       pauseBlock(state.running, at)
       return
     }

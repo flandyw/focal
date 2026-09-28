@@ -12,6 +12,7 @@ import {
   type CanonicalStudySession,
   type StudySessionAction,
   type StudySessionCommand,
+  type StudySessionMutationResult,
 } from "../../../src/lib/sync/sessionContract"
 
 const OUTBOX_DB = "examtrack-sync"
@@ -55,6 +56,10 @@ export function saveTimerSessionChange(
  * One lifecycle action, one call, one answer. The server state machine is the only queue:
  * the canonical session comes back in the response, and a failure is reported to the user
  * rather than parked in a local outbox for later replay. Signed out means local-only.
+ *
+ * The result is always what the *server* did. Blending the requested state into the server's
+ * revision would let a rejected command masquerade as an applied one, which is how a timer
+ * ends up reading `paused` in the browser and `running` on the server.
  */
 export async function saveTimerSessionChange(
   previous: TimerSession | undefined,
@@ -67,10 +72,78 @@ export async function saveTimerSessionChange(
   const id = session.id ?? crypto.randomUUID()
   const current = next ? { ...next, id } : session
   const action = terminalAction ?? actionFor(previous, next, kind)
-  const canonical = await publishCommand(await buildCommand(previous, current, kind, action, id))
-  // The server's revision is the only version the next command may build on.
-  if (!next) return undefined
-  return canonical ? { ...current, revision: canonical.revision } : current
+  const command = await buildCommand(previous, current, kind, action, id)
+  const result = await publishCommand(command)
+  // No account, no server, so there is nothing to reconcile against and the local
+  // timer is the whole truth.
+  if (!result) return next ? current : undefined
+  return reconcileSessionResult(result, command, current, next !== undefined, kind)
+}
+
+/**
+ * Turns a server answer into the local session, or throws because the answer refused it.
+ *
+ * Three outcomes, and no fourth:
+ *   - the command was applied          -> the server's row, projected
+ *   - it was not applied, but the row  -> the server's row, projected
+ *     is already in the state asked for
+ *   - neither                         -> the command was refused; report it
+ *
+ * Blending the requested state into the server's revision is what this replaces. That
+ * produced a timer reading `paused` in the browser while the server still counted it as
+ * `running`, and the next cursor pull snapped the readout forward by however long the
+ * disagreement had lasted.
+ */
+export function reconcileSessionResult<T extends TimerSession>(
+  result: StudySessionMutationResult,
+  command: StudySessionCommand,
+  current: T,
+  keepOpen: boolean,
+  kind: TimerKind,
+): T | undefined {
+  const canonical = result.session
+  if (!canonical) throw new Error("The server sent a session response with no session")
+  if (!result.applied && !actionSatisfied(canonical, command)) {
+    throw new Error(`This timer changed on another device (${result.reason ?? "unknown"}).`)
+  }
+  // A closing command has no session left to hand back, and neither has one that somebody
+  // else closed. The cursor pull brings the closed row in either way.
+  if (!keepOpen || canonical.state === "completed" || canonical.state === "cancelled") return undefined
+  return projectTimerSession(canonical, current, kind)
+}
+
+/**
+ * Rebuilds the local timer from the canonical row. The server owns the boundary times,
+ * the revision and the running state; the metadata carries the fields only this client
+ * knows about, so the two are merged rather than one overwriting the other.
+ */
+function projectTimerSession<T extends TimerSession>(canonical: CanonicalStudySession, current: T, kind: TimerKind): T {
+  const stored = isRecord(canonical.metadata.examtrack) ? canonical.metadata.examtrack : {}
+  const now = estimateNow()
+  const subject = canonical.subject_id ?? (typeof stored.subject === "string" ? stored.subject : current.subject)
+  const phase = kind === "exam" && canonical.phase ? { phase: canonical.phase === "writing" ? "writing" : "reading" } : {}
+  return {
+    ...current,
+    ...(stored as object),
+    ...phase,
+    id: canonical.id,
+    revision: canonical.revision,
+    subject,
+    title: canonical.title,
+    startedAt: now - studySessionActiveMilliseconds(canonical, now),
+    pausedAt: canonical.state === "paused" ? now : undefined,
+  } as T
+}
+
+/** Did the command fail only because the session had already been put in the state it wanted? */
+function actionSatisfied(session: CanonicalStudySession, command: StudySessionCommand): boolean {
+  if (command.action === "start" || command.action === "resume") return session.state === "running"
+  if (command.action === "pause") return session.state === "paused"
+  if (command.action === "complete") return session.state === "completed"
+  if (command.action === "cancel") return session.state === "cancelled"
+  if (command.action === "phase_change") return session.phase === command.phase
+  // `create` and `save_progress` carry no lifecycle claim, so there is nothing to contradict.
+  return true
 }
 
 export async function controlSession(
@@ -84,7 +157,10 @@ export async function controlSession(
     title: session.title, subject_id: session.subject_id ?? undefined, metadata: session.metadata,
     ...await captureCommandTiming(accountId, session.id, action),
   }
-  await publishCommand(command)
+  const result = await publishCommand(command)
+  if (result && !result.applied && result.session && !actionSatisfied(result.session, command)) {
+    throw new Error(`This timer changed on another device (${result.reason ?? "unknown"}).`)
+  }
 }
 
 export async function buildCommand(
@@ -113,8 +189,9 @@ export async function buildCommand(
   }
 }
 
-/** The only write path for a session. Throws with a readable message so the UI can say so. */
-async function publishCommand(command: StudySessionCommand): Promise<CanonicalStudySession | null> {
+/** The only write path for a session. Throws with a readable message so the UI can say so.
+ *  Returns null when there is no server to answer, and the full verdict otherwise. */
+async function publishCommand(command: StudySessionCommand): Promise<StudySessionMutationResult | null> {
   const accountId = await commandAccountId()
   if (!supabase || accountId === "guest") return null
   const { data, error } = await supabase.rpc("study_session_mutate", {
@@ -125,10 +202,12 @@ async function publishCommand(command: StudySessionCommand): Promise<CanonicalSt
   if (!result) throw new Error("The server sent an unreadable session response")
   clockAnchor = observeServerClock(result.server_now, performance.now())
   // The boundary is real now, so it may move the local anchor -- but the server's own boundary
-  // is the better anchor, so it wins when there is one.
-  const anchored = result.session ? await rememberCanonicalTiming(accountId, [result.session]) : false
-  if (!anchored) await commitCommandTiming(accountId, command.session_id, command.action)
-  return result.session ?? null
+  // is the better anchor, so it wins when there is one. Only a command the server accepted
+  // moved a real boundary, so a rejected one leaves the anchor where it was.
+  const sessions = result.applied && result.session ? [result.session] : []
+  const anchored = await rememberCanonicalTiming(accountId, sessions)
+  if (!anchored && result.applied) await commitCommandTiming(accountId, command.session_id, command.action)
+  return result
 }
 
 function actionFor(previous: TimerSession | undefined, next: TimerSession | undefined, kind: TimerKind): StudySessionAction {

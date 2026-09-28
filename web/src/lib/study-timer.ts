@@ -84,8 +84,17 @@ export interface FocusBlock {
   source: FocusBlockSource
   subject: string
   intent: string
+  /** When the block first became active. Real wall time, never back-dated. */
   startedAt: number
+  /** When the block was closed, paused or not. Real wall time. */
   endedAt: number
+  /**
+   * Billed study seconds: the wall time between the endpoints minus every pause.
+   * Kept apart from `endedAt - startedAt` because a block that was paused is a
+   * span, not a solid one, and squashing the pause out of the endpoints would
+   * invent a start or end that never happened.
+   */
+  activeSeconds: number
 }
 
 export interface OpenBlock {
@@ -378,9 +387,32 @@ function isFocusBlock(value: unknown): value is FocusBlock {
     Number.isFinite(block.endedAt)
 }
 
+function toFocusBlock(value: unknown): FocusBlock | null {
+  if (!isFocusBlock(value)) return null
+  const block = value as unknown as Record<string, unknown>
+  const startedAt = block.startedAt as number
+  const endedAt = block.endedAt as number
+  // Blocks written before the split carry no active time, and their span was
+  // already the billed span, so the span is the honest reading of them.
+  const activeSeconds = Number.isFinite(block.activeSeconds)
+    ? Math.max(0, Math.round(block.activeSeconds as number))
+    : Math.max(0, Math.round((endedAt - startedAt) / 1000))
+  return {
+    id: block.id as string,
+    cycleNumber: block.cycleNumber as number,
+    source: block.source as FocusBlockSource,
+    subject: block.subject as string,
+    intent: block.intent as string,
+    startedAt,
+    endedAt,
+    activeSeconds,
+  }
+}
+
 export function loadBlocks(): FocusBlock[] {
   const stored = readJson<unknown>(BLOCKS_KEY)
-  return Array.isArray(stored) ? stored.filter(isFocusBlock) : []
+  if (!Array.isArray(stored)) return []
+  return stored.map(toFocusBlock).filter((block): block is FocusBlock => block !== null)
 }
 
 export function saveBlocks(blocks: FocusBlock[]) {
@@ -414,25 +446,27 @@ export function saveOpenBlock(block: OpenBlock | null) {
   }
 }
 
-/** Closes the in-flight block into the log. An open block that ran backwards (a
- *  clock change, a stale tab) is still kept, clamped to a real duration. */
+/** Closes the in-flight block into the log. The endpoints are the real wall clock: the block
+ *  began when it was first started and ends when it was closed, pause or no pause. The billed
+ *  study time is reported separately in `activeSeconds`, so the history shows when the work
+ *  happened and the totals show how long it was. An open block that ran backwards (a clock
+ *  change, a stale tab) is still kept, clamped to a real duration. */
 export function closeOpenBlock(block: OpenBlock, endedAt: number, blocks: FocusBlock[]): FocusBlock[] {
-  // Paused time is not study time, and Supabase's session segments already say
-  // so. Ending the block on its last running second keeps the local record and
-  // the server's `accumulated_active_ms` in agreement.
-  const pausedMs = block.pausedSeconds * 1000 + (block.pausedAt === undefined ? 0 : Math.max(0, endedAt - block.pausedAt))
   const startedAt = Math.min(block.startedAt, endedAt)
-  const ended = Math.max(startedAt, endedAt - pausedMs)
+  // Paused time is not study time, and Supabase's session segments already say so.
+  const pausedMs = block.pausedSeconds * 1000 + (block.pausedAt === undefined ? 0 : Math.max(0, endedAt - block.pausedAt))
+  const activeSeconds = Math.max(0, Math.round((endedAt - startedAt - pausedMs) / 1000))
   return [
     ...blocks,
     {
-      id: typeof crypto === "undefined" ? `${startedAt}-${ended}` : crypto.randomUUID(),
+      id: typeof crypto === "undefined" ? `${startedAt}-${endedAt}` : crypto.randomUUID(),
       cycleNumber: block.cycleNumber,
       source: block.source,
       subject: block.subject,
       intent: block.intent,
       startedAt,
-      endedAt: ended,
+      endedAt,
+      activeSeconds,
     },
   ].slice(-MAX_STORED_BLOCKS)
 }
@@ -445,18 +479,14 @@ export function countBlocksToday(blocks: FocusBlock[], now = new Date()) {
   return blocks.filter((block) => isSameLocalDay(new Date(block.endedAt), now)).length
 }
 
+/** A block is counted on the day it ended, which is the day its last minute of work was
+ *  spent, and contributes the time actually worked. A block still open has not been closed
+ *  yet, so it contributes nothing here; the running clock is the readout's job. */
 export function getFocusSecondsToday(blocks: FocusBlock[], now = new Date()) {
-  const dayStart = new Date(now)
-  dayStart.setHours(0, 0, 0, 0)
-  const dayEnd = new Date(dayStart)
-  dayEnd.setDate(dayEnd.getDate() + 1)
-  const startMs = dayStart.getTime()
-  const endMs = Math.min(dayEnd.getTime(), now.getTime())
-  return blocks.reduce((total, block) => {
-    const from = Math.max(block.startedAt, startMs)
-    const to = Math.min(block.endedAt, endMs)
-    return to > from ? total + (to - from) / 1000 : total
-  }, 0)
+  return blocks.reduce(
+    (total, block) => isSameLocalDay(new Date(block.endedAt), now) ? total + block.activeSeconds : total,
+    0,
+  )
 }
 
 export function formatFocusTime(seconds: number) {

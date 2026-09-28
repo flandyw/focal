@@ -124,7 +124,7 @@ export function StudyScorePredictor({
           <Card>
             <CardHeader>
               <CardTitle>Assumptions</CardTitle>
-              <CardDescription>Adjust what ExamTrack cannot infer from practice exams.</CardDescription>
+              <CardDescription>Adjust what Focal cannot infer from practice exams.</CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup>

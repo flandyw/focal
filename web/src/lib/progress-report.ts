@@ -95,7 +95,7 @@ function buildReportHtml(data: AppData, references: AssessmentReference[], diffi
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>ExamTrack progress report</title>
+<title>Focal progress report</title>
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
@@ -116,7 +116,7 @@ function buildReportHtml(data: AppData, references: AssessmentReference[], diffi
 </style>
 </head>
 <body>
-<h1>ExamTrack progress report</h1>
+<h1>Focal progress report</h1>
 <p class="meta">Generated ${escapeHtml(generatedAt)} · ${data.attempts.length} exam${data.attempts.length === 1 ? "" : "s"} · ${data.mistakes.length} mistake card${data.mistakes.length === 1 ? "" : "s"}</p>
 
 <div class="stats">${statCells}</div>

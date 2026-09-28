@@ -9,7 +9,7 @@ export async function handleMistakesPdf(request: Request) {
   } catch {
     return new Response("Invalid JSON", { status: 400 })
   }
-  if (typeof tex !== "string" || !tex.startsWith("% ExamTrack mistake worksheet\n") || tex.length > 100_000) {
+  if (typeof tex !== "string" || !tex.startsWith("% Focal mistake worksheet\n") || tex.length > 100_000) {
     return new Response("Invalid worksheet", { status: 400 })
   }
 

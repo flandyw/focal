@@ -36,7 +36,7 @@ async function main() {
   const references = []
   for (const report of REPORTS) {
     const response = await fetch(report.url, {
-      headers: { "user-agent": "Mozilla/5.0 ExamTrack scaling importer" },
+      headers: { "user-agent": "Mozilla/5.0 Focal scaling importer" },
     })
     if (!response.ok) throw new Error(`Failed to fetch ${report.url}: ${response.status}`)
     const text = await extractPdfText(await response.arrayBuffer())

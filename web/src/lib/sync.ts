@@ -91,7 +91,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
     }).catch((error: unknown) => {
       queueFailed.current = true
       setStatus("error")
-      console.error("Could not persist ExamTrack sync changes:", error)
+      console.error("Could not persist Focal sync changes:", error)
     })
   }, [data, refresh, user])
 
@@ -115,7 +115,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
     syncTask.current = task
     task.catch((error: unknown) => {
       if (cancelled) return
-      console.error("ExamTrack sync failed:", error)
+      console.error("Focal sync failed:", error)
       setStatus(typeof navigator !== "undefined" && !navigator.onLine ? "pending" : "error")
       void appSyncHealth(user.id).then((health) => setPendingCount(health.pending)).catch(() => {})
     })

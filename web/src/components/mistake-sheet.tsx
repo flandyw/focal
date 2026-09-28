@@ -282,7 +282,7 @@ export function MistakeSheet({
     }
 
     if (saveImages && !storageUserId) {
-      setError("Sign in to ExamTrack sync in Settings to save images with mistakes.")
+      setError("Sign in to Focal sync in Settings to save images with mistakes.")
       return
     }
     setSaving(true)
@@ -330,11 +330,11 @@ export function MistakeSheet({
     const filesToSave = [...questionImages, ...(saveImages ? images : [])]
     const attachmentError = validateSavedMistakeImages(filesToSave, savedAttachments.length, savedAttachments.reduce((total, attachment) => total + attachment.size, 0))
     if (attachmentError) return setError(attachmentError)
-    if (filesToSave.length && !storageUserId) return setError("Sign in to ExamTrack sync in Settings to save images with mistakes.")
+    if (filesToSave.length && !storageUserId) return setError("Sign in to Focal sync in Settings to save images with mistakes.")
     const removedPaths = (initialMistake?.attachments ?? [])
       .filter((attachment) => !savedAttachments.some(({ id }) => id === attachment.id))
       .map(({ storagePath }) => storagePath)
-    if (removedPaths.length && !storageUserId) return setError("Sign in to ExamTrack sync before removing saved images.")
+    if (removedPaths.length && !storageUserId) return setError("Sign in to Focal sync before removing saved images.")
 
     setSaving(true)
     setError(null)
@@ -468,7 +468,7 @@ export function MistakeSheet({
                   {images.length ? (
                     <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
                       <input type="checkbox" className="mt-0.5 size-4" checked={saveImages} disabled={!storageUserId} onChange={(event) => { setSaveImages(event.target.checked); setError(null) }} />
-                      <span><span className="font-medium">Save {importMode === "batch" ? "each image with its mistake" : "these images with the mistake"}</span><br /><span className="text-xs text-muted-foreground">{storageUserId ? "Keeps graphs, annotations, and other context available during review." : "Sign in to ExamTrack sync in Settings to store private image attachments."}</span></span>
+                      <span><span className="font-medium">Save {importMode === "batch" ? "each image with its mistake" : "these images with the mistake"}</span><br /><span className="text-xs text-muted-foreground">{storageUserId ? "Keeps graphs, annotations, and other context available during review." : "Sign in to Focal sync in Settings to store private image attachments."}</span></span>
                     </label>
                   ) : null}
                   {progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
@@ -497,7 +497,7 @@ export function MistakeSheet({
 
                     {auth.status !== "loading" && !auth.isAuthenticated && auth.status !== "pending" ? (
                       <div className="grid gap-3">
-                        <p className="text-sm leading-5 text-muted-foreground">AI requests use your ChatGPT plan. The photo passes through this server; ExamTrack never receives your password, and disconnecting deletes the session.</p>
+                        <p className="text-sm leading-5 text-muted-foreground">AI requests use your ChatGPT plan. The photo passes through this server; Focal never receives your password, and disconnecting deletes the session.</p>
                         <div>
                           <Button type="button" size="sm" variant="outline" disabled={auth.isConnecting} onClick={() => void auth.login({ popup: window.open("about:blank", "_blank") })}>
                             <Sparkles />{auth.isConnecting ? "Connecting…" : "I understand, connect ChatGPT"}
@@ -558,7 +558,7 @@ export function MistakeSheet({
                   if (validation) { setError(validation); return }
                   setQuestionImages(next); setError(null)
                 }} />
-                {!storageUserId ? <FieldDescription>Sign in to ExamTrack sync in Settings to save question images.</FieldDescription> : null}
+                {!storageUserId ? <FieldDescription>Sign in to Focal sync in Settings to save question images.</FieldDescription> : null}
                 {importMode === "batch" ? <FieldDescription>Switch to One mistake to attach multiple images to the same question.</FieldDescription> : null}
                 {questionImages.map((file, index) => <div key={index} className="grid gap-2 rounded-xl border p-3">
                   <div className="flex items-center justify-between gap-2"><span className="truncate text-sm">{index + 1}. {file.name}</span><Button type="button" size="icon-xs" variant="ghost" disabled={saving || analysing} aria-label={"Remove question image " + (index + 1) + ": " + file.name} onClick={() => setQuestionImages((files) => files.filter((_, i) => i !== index))}><X /></Button></div>

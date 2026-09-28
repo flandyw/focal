@@ -1,6 +1,7 @@
 import { chunkItems, latestChanges, retryChange, retryOrBlockChange } from "../src/lib/sync/reduce"
 import { repairDuplicateSessions, sessionDeletionIds } from "../src/lib/sync/sessions"
 import { normalizeStudySession } from "../src/lib/studySessions"
+import { isStudySessionCommand } from "../src/lib/sync/sessionContract"
 import type { RemoteSyncChange, SyncChange } from "../src/lib/sync/types"
 
 interface BunSqliteDatabase {
@@ -231,6 +232,34 @@ assertEqual(
 // fixtures below run against the current schema rather than the one they were written for.
 localDatabase.exec(localChangeLogMigration)
 const persistenceSource = await fetch(new URL("../src/lib/sync/persistence.ts", import.meta.url)).then((response) => response.text())
+const repairSql = /`([^`]+)`/.exec(persistenceSource.slice(persistenceSource.indexOf("export function repairQueuedSessionDeviceIds")))?.[1]
+if (!repairSql) throw new Error("Could not find queued session device repair SQL")
+const pendingCommand = {
+  mutation_id: "11111111-1111-4111-8111-111111111111",
+  session_id: "session-1",
+  expected_revision: 0,
+  action: "start",
+  device_id: "",
+  app: "focal",
+  kind: "focus",
+  phase: "focus",
+  title: "Focus",
+}
+localDatabase.run(
+  `insert into sync_outbox (change_id, account_id, entity, row_id, operation, payload, created_at,
+      last_error, blocked_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  [pendingCommand.mutation_id, "account-a", "study_session_commands", pendingCommand.mutation_id, "put",
+    JSON.stringify(pendingCommand), "2026-09-28T00:00:00.000Z",
+    "validation_failed: malformed queued study session command", "2026-09-28T00:01:00.000Z"],
+)
+localDatabase.run(repairSql.replace(/\$[12]/g, "?"), ["22222222-2222-4222-8222-222222222222", "account-a"])
+const repairedCommand = localDatabase.query(
+  "select payload, last_error, blocked_at from sync_outbox where change_id = '11111111-1111-4111-8111-111111111111'",
+).all() as { payload: string; last_error: string | null; blocked_at: string | null }[]
+assertEqual(isStudySessionCommand(JSON.parse(repairedCommand[0].payload)), true,
+  "queued trigger commands must become valid after the device ID is filled")
+assertEqual([repairedCommand[0].last_error, repairedCommand[0].blocked_at], [null, null],
+  "device ID repair must reopen commands blocked by the malformed-command error")
 const cursorSql = /`([^`]+)`/.exec(persistenceSource.slice(persistenceSource.indexOf("export function writeCursor")))?.[1]
 if (!cursorSql) throw new Error("Could not find production cursor SQL")
 for (const [seq, lamport] of [[10, 20], [5, 15], [11, 18]]) {

@@ -225,7 +225,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
       <Card>
         <CardHeader>
-          <CardTitle>ExamTrack account</CardTitle>
+          <CardTitle>Focal account</CardTitle>
           <CardDescription>Sign in with your email and password to sync exams, SACs, and mistakes across devices.</CardDescription>
           {sync.user ? <CardAction><Badge variant="secondary"><Cloud />{sync.status === "syncing" ? "Syncing" : sync.status === "error" ? "Sync failed" : "Synced"}</Badge></CardAction> : null}
         </CardHeader>
@@ -311,7 +311,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           {auth.status !== "loading" && !auth.isAuthenticated && auth.status !== "pending" ? (
             <div className="grid gap-4">
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Connecting lets ExamTrack spend from your ChatGPT plan for AI requests. Prompts and mistake photos pass through this server; ExamTrack never receives your password. Disconnecting deletes the server session.
+                Connecting lets Focal spend from your ChatGPT plan for AI requests. Prompts and mistake photos pass through this server; Focal never receives your password. Disconnecting deletes the server session.
               </p>
               <div>
                 <Button disabled={auth.isConnecting} onClick={() => void auth.login({ popup: window.open("about:blank", "_blank") })}>

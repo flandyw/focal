@@ -35,7 +35,7 @@ export function AppCommandMenu({
   }
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search ExamTrack" description="Navigate or run an action">
+    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search Focal" description="Navigate or run an action">
       <CommandInput placeholder="Search pages and actions…" autoFocus />
       <CommandList>
         <CommandEmpty>No matching action.</CommandEmpty>

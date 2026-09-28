@@ -35,7 +35,7 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
         <div className="grid gap-2">
           <h1 className="text-lg font-semibold">Something went wrong</h1>
           <p className="max-w-md text-sm text-muted-foreground">
-            ExamTrack hit an unexpected error. Your data is stored locally and is safe — you can export a backup before reloading.
+            Focal hit an unexpected error. Your data is stored locally and is safe — you can export a backup before reloading.
           </p>
           <pre className="max-w-md overflow-auto rounded-md bg-muted p-3 text-left text-xs text-muted-foreground">{this.state.error.message}</pre>
         </div>

@@ -434,7 +434,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Mark and log exam</DialogTitle>
-            <DialogDescription>Enter your result to add this timed attempt to ExamTrack.</DialogDescription>
+            <DialogDescription>Enter your result to add this timed attempt to Focal.</DialogDescription>
           </DialogHeader>
           <form id="timer-marking-form" onSubmit={saveMark}>
             <FieldGroup>

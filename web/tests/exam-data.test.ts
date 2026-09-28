@@ -142,7 +142,7 @@ describe("exam analysis", () => {
   })
 
   test("rejects malformed imports", () => {
-    expect(() => parseAppDataFile('{"schemaVersion":2}')).toThrow("valid ExamTrack")
+    expect(() => parseAppDataFile('{"schemaVersion":2}')).toThrow("valid Focal")
     const data = {
       ...EMPTY_APP_DATA,
       attempts: [attempt],

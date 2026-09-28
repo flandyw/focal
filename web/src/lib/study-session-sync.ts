@@ -145,7 +145,7 @@ function timerMetadata(session: TimerSession, kind: TimerKind, id: string): Reco
   return {
     ...details,
     createdVia: "examtrack",
-    description: `Logged by the ExamTrack ${kind} timer.`,
+    description: `Logged by the Focal ${kind} timer.`,
     topics: [kind === "exam" ? "Exam practice" : "SAC practice"],
     integrations,
     examtrack: details,

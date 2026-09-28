@@ -32,6 +32,7 @@ import {
   readInbox,
   readOutbox,
   readState,
+  repairQueuedSessionDeviceIds,
   replaceOutboxCommand,
   retryOutboxItem,
   removeApplied,
@@ -483,7 +484,11 @@ async function enqueueAllLocalData(accountId = currentSession?.user.id ?? "", ep
   const canonicalSessions = new Set((await readApplied(accountId, ["study_sessions"])).map((row) => row.rowId))
   const queuedCommands = (await readOutbox(accountId))
     .filter((change) => change.entity === "study_session_commands")
-    .flatMap((change) => isStudySessionCommand(change.payload) ? [change.payload.session_id] : [])
+    .flatMap((change) => {
+      const payload = change.payload
+      const normalized = typeof payload === "object" && payload !== null ? { ...payload, device_id: currentDeviceId } : payload
+      return isStudySessionCommand(normalized) ? [normalized.session_id] : []
+    })
   for (const session of sessions) {
     if (epoch !== syncEpoch) return
     if (!canonicalSessions.has(session.id) && !queuedCommands.includes(session.id)
@@ -510,7 +515,7 @@ async function enqueueLocalSessionSeed(accountId: string, rawSession: StudySessi
   const common = {
     session_id: session.id,
     expected_revision: 0,
-    device_id: "",
+    device_id: currentDeviceId ?? await getDeviceId(),
     app,
     kind,
     ...(phase === "reading" || phase === "writing" ? { phase } : {}),
@@ -595,6 +600,7 @@ async function flushQueue(): Promise<void> {
 async function flushQueueInternal(session: Session, deviceId: string, epoch: number): Promise<void> {
   if (!supabase) return
   const startedAt = Date.now()
+  await repairQueuedSessionDeviceIds(session.user.id, deviceId)
   const queue = await readOutbox(session.user.id)
   if (epoch !== syncEpoch) return
   const now = new Date().toISOString()
@@ -763,14 +769,16 @@ async function flushStudySessionCommands(
   for (const original of changes) {
     if (epoch !== syncEpoch) break
     let change = original
-    if (!isStudySessionCommand(change.payload)) {
+    const payload = change.payload
+    const normalized = typeof payload === "object" && payload !== null ? { ...payload, device_id: deviceId } : payload
+    if (!isStudySessionCommand(normalized)) {
       const message = "validation_failed: malformed queued study session command"
       output.retries.push({ ...change, lastError: message, nextAttemptAt: undefined, blockedAt: now })
       output.errors.push(new Error(message))
       continue
     }
 
-    let command = change.payload
+    let command = normalized
     if (!change.attemptedAt) {
       command = { ...command, expected_revision: revisions.get(command.session_id) ?? command.expected_revision }
       await updateOutboxPayload(accountId, change.changeId, command)

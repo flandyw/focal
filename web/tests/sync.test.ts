@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA } from "../src/lib/exam-data"
 import { diffAppData, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
 
-describe("ExamTrack cursor sync", () => {
+describe("Focal cursor sync", () => {
   test("projects attempts, mistakes and each setting as stable independent rows", () => {
     const data = {
       ...EMPTY_APP_DATA,
@@ -38,7 +38,7 @@ describe("ExamTrack cursor sync", () => {
     }
     const local = { ...base, dueAt: "2026-08-02T00:00:00.000Z", intervalDays: 14,
       reviewHistory: [{ id: "review-local", completedAt: "2026-07-18T00:00:00.000Z" }] }
-    const remote = { ...base, questionText: "Edited in ExamTrack", explanation: "New explanation" }
+    const remote = { ...base, questionText: "Edited in Focal", explanation: "New explanation" }
 
     expect(mergeMistakeConflict(base, local, remote)).toEqual({
       ...remote, dueAt: local.dueAt, intervalDays: 14, reviewHistory: local.reviewHistory,

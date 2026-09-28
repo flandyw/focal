@@ -181,7 +181,7 @@ export function buildTimetableCalendar(
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//ExamTrack//VCE Exam Timetable//EN",
+    "PRODID:-//Focal//VCE Exam Timetable//EN",
     "CALSCALE:GREGORIAN",
     "X-WR-TIMEZONE:Australia/Melbourne",
     ...events,

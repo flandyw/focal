@@ -1,8 +1,8 @@
-# ExamTrack
+# Focal
 
 ## One Supabase project
 
-ExamTrack and Focal share Focal's Supabase project. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLABLE_KEY` point at it, and `attempts`, `mistakes` and `user_state` are three of its tables, created by `focal/supabase/migrations/0010_examtrack_data.sql`. Apply the migrations from the repository root, not from here:
+This web app and the Focal desktop app share Focal's Supabase project. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLABLE_KEY` point at it, and `attempts`, `mistakes` and `user_state` are three of its tables, created by `focal/supabase/migrations/0010_examtrack_data.sql`. Apply the migrations from the repository root, not from here:
 
 ```bash
 cd ..
@@ -35,13 +35,13 @@ Attempts, mistakes, review history, question-level results, timing evidence, and
 Mistake cards use a due-card study queue with Again, Hard, Good, and Easy ratings. Scheduling state is stored inside each mistake's synced JSON payload, so the feature does not require an additional database migration.
 
 Student data stays in browser storage. Use the app menu to export or import a validated JSON backup.
-Mistake photos sent to ChatGPT pass through the local server and are not saved by ExamTrack.
+Mistake photos sent to ChatGPT pass through the local server and are not saved by Focal.
 
 For a production build, set a stable `LWC_SECRET`, then run `bun run build` followed by `bun run start`. The default in-memory ChatGPT session store logs users out when the server restarts; configure the SDK's shared `sessionStore` for multi-instance or durable deployments.
 
 ## Vercel
 
-Import the Focal repository into Vercel with the root directory set to `web`, add a stable `LWC_SECRET`, and connect an Upstash Redis database from the Vercel Marketplace. ExamTrack accepts either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL` + writable `KV_REST_API_TOKEN`; Vercel deployments fail fast without durable session storage. Redeploy after adding the variables.
+Import the Focal repository into Vercel with the root directory set to `web`, add a stable `LWC_SECRET`, and connect an Upstash Redis database from the Vercel Marketplace. Focal accepts either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL` + writable `KV_REST_API_TOKEN`; Vercel deployments fail fast without durable session storage. Redeploy after adding the variables.
 
 ## Checks
 

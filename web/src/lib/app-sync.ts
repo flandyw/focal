@@ -61,7 +61,7 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" })
     }
     request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error("Could not open the ExamTrack sync database"))
+    request.onerror = () => reject(request.error ?? new Error("Could not open the Focal sync database"))
   })
   return database
 }

@@ -31,7 +31,7 @@ describe("saved exam sessions", () => {
     expect(resumeExamSession(resumed, start + 3000)).toBe(resumed)
   })
 
-  test("legacy Focal mirror fields are discarded while the ExamTrack timer details survive", () => {
+  test("legacy Focal mirror fields are discarded while the Focal timer details survive", () => {
     const restored = migrateAppData(JSON.parse(JSON.stringify({ ...EMPTY_APP_DATA, activeExamTimer: {
       ...session, focal: { sessionId: "legacy-id", kind: "exam", intervals: [] },
     } })))!

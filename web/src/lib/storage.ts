@@ -1,5 +1,8 @@
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "@/lib/exam-data"
 
+// ponytail: storage keys, IndexedDB names and the `examtrack` app ids in the sync
+// contract keep the old prefix on purpose — renaming them would orphan every
+// existing user's local data and break cross-app sessions with the desktop build.
 const STORAGE_KEY = "examtrack:data:v1"
 
 export function loadAppData(): AppData {
@@ -21,7 +24,7 @@ export function parseAppDataFile(text: string): AppData {
   const parsed: unknown = JSON.parse(text)
   const migrated = migrateAppData(parsed)
   if (!migrated) {
-    throw new Error("This file is not a valid ExamTrack export.")
+    throw new Error("This file is not a valid Focal export.")
   }
   return migrated
 }

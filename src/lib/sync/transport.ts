@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
 import { isOperation, isSyncEntity } from "@/lib/sync/reduce"
-import { isStudySessionCommand, parseStudySessionMutationResult, type StudySessionCommand, type StudySessionMutationResult } from "@/lib/sync/sessionContract"
+import { isStudySessionCommand, parseStudySessionMutationResult, type StudySessionMutationResult } from "@/lib/sync/sessionContract"
 import type { RemoteSyncChange, SyncChange, SyncRowState } from "@/lib/sync/types"
 
 const PAGE_SIZE = 500
@@ -58,8 +58,8 @@ export async function applyStudySessionCommand(
   deviceId: string,
 ): Promise<StudySessionMutationResult> {
   if (!supabase) throw new Error("Supabase is not configured")
-  if (!isStudySessionCommand(rawCommand)) throw new Error("validation_failed: malformed session command")
-  const command: StudySessionCommand = { ...rawCommand, device_id: deviceId }
+  const command = typeof rawCommand === "object" && rawCommand !== null ? { ...rawCommand, device_id: deviceId } : rawCommand
+  if (!isStudySessionCommand(command)) throw new Error("validation_failed: malformed session command")
   const response = await supabase.rpc("study_session_mutate", { p_command: command })
   if (response.error) throw response.error
   const result = parseStudySessionMutationResult(response.data)

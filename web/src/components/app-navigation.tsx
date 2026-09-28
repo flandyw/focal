@@ -50,7 +50,7 @@ export function AppSidebar({
           onClick={() => navigate("dashboard")}
         >
           <GraduationCap className="size-5 shrink-0" aria-hidden />
-          <span className="font-semibold group-data-[collapsible=icon]:hidden">ExamTrack</span>
+          <span className="font-semibold group-data-[collapsible=icon]:hidden">Focal</span>
         </button>
       </SidebarHeader>
       <SidebarContent className="gap-1 px-1">

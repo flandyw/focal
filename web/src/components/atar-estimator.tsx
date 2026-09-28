@@ -106,7 +106,7 @@ export function AtarEstimator({
     <section className="grid gap-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">ATAR estimator</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Enter at least four Unit 3/4 studies including an English-group study. ExamTrack predictions are used when available, but every score can be entered manually.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Enter at least four Unit 3/4 studies including an English-group study. Focal predictions are used when available, but every score can be entered manually.</p>
       </div>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
@@ -136,9 +136,9 @@ export function AtarEstimator({
                   </label>
                   <label className="grid gap-1.5 text-sm font-medium">Source
                     <Select value={usePrediction ? "prediction" : "manual"} onValueChange={(value) => updateRow(row.id, { usePrediction: value === "prediction" })}>
-                      <SelectTrigger><SelectValue>{usePrediction ? "ExamTrack" : "Manual"}</SelectValue></SelectTrigger>
+                      <SelectTrigger><SelectValue>{usePrediction ? "Focal" : "Manual"}</SelectValue></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="prediction" disabled={prediction === undefined}>ExamTrack{prediction === undefined ? " unavailable" : ""}</SelectItem>
+                        <SelectItem value="prediction" disabled={prediction === undefined}>Focal{prediction === undefined ? " unavailable" : ""}</SelectItem>
                         <SelectItem value="manual">Manual</SelectItem>
                       </SelectContent>
                     </Select>

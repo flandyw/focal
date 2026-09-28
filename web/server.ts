@@ -20,4 +20,4 @@ const server = Bun.serve({
   },
 })
 
-console.log(`ExamTrack running at ${server.url}`)
+console.log(`Focal running at ${server.url}`)

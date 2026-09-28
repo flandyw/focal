@@ -121,7 +121,7 @@ export default function App() {
   const sync = useSupabaseSync(data, setData)
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const examSaveStatus = sync.status === "synced"
-    ? "Saved to your account. Open ExamTrack on another device and sign in to the same account to continue."
+    ? "Saved to your account. Open Focal on another device and sign in to the same account to continue."
     : sync.status === "syncing" ? "Saving to your account. Wait for confirmation before switching devices."
     : sync.status === "error" ? "Saved on this device. Cloud sync failed; reconnect before switching devices."
     : sync.status === "unconfigured" ? "Saved on this device. Cloud sync is not configured."
@@ -497,7 +497,7 @@ export default function App() {
       const imported = parseAppDataFile(await file.text())
       if (!window.confirm(`Replace current data with ${imported.attempts.length} exams, ${imported.sacRecords.length} SACs, and ${imported.mistakes.length} mistakes?`)) return
       setData(imported)
-      toast.success("ExamTrack data imported")
+      toast.success("Focal data imported")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not import this file.")
     }

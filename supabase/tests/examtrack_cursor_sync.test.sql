@@ -1,6 +1,8 @@
 begin;
 
-select plan(9);
+-- 10 assertions: the two projection checks at the end replaced one read of the dropped table
+-- with a feed read plus the two objects 0016 removes, so the count goes up by one.
+select plan(10);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -87,18 +89,22 @@ select public.sync_apply_changes(jsonb_build_array(jsonb_build_object(
   'payload', jsonb_build_object('value', jsonb_build_array('exam-a'), 'updated_at', '2026-09-28T00:00:00Z')
 )));
 
+-- The user_state projection table is gone (0016). The keyed write above is still valid and is
+-- now only observable through the ordered feed, so assert the post-migration contract: the log
+-- row exists, and neither the table nor its timer-state helper is left to read.
+
 select is(
-  (select payload -> 'trackedExamIds' ->> 0 from public.user_state where user_id = auth.uid()),
+  (select payload -> 'value' ->> 0 from public.sync_log
+    where user_id = auth.uid() and entity = 'user_state' and row_id = 'trackedExamIds'),
   'exam-a',
-  'keyed setting writes update the legacy user_state read projection'
+  'keyed setting writes are readable from the ordered feed'
 );
 
-update public.user_state set payload = payload || '{"activeExamTimer":{"startedAt":"2000-01-01"}}'::jsonb
- where user_id = auth.uid();
-select ok(
-  not ((select payload from public.user_state where user_id = auth.uid()) ? 'activeExamTimer'),
-  'timer state cannot be written back into user_state'
-);
+select is(to_regclass('public.user_state')::text, null,
+  'the legacy user_state read projection is gone');
+
+select is(to_regprocedure('public.strip_examtrack_timer_state()')::text, null,
+  'the timer-state projection helper is gone with its table');
 
 select * from finish();
 rollback;

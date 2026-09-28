@@ -23,11 +23,11 @@ Folio and ExamTrack timer changes reach Focal through the existing Supabase Real
 | `docs/examtrack-merge.md` | Moving ExamTrack's data and second client into this project |
 
 ExamTrack used to be a separate repository with its own Supabase project. Both now live
-here. `attempts`, `mistakes` and `user_state` are tables in this project's database
-(`0010_examtrack_data.sql`), so there is one account, one sign-in and no cross-project
-session. The `FocalTimerLink` mirror and the second Supabase client in each app are the last
-remnants of the old arrangement and go away with the canonical session rewrite. `VITE_EXAMTRACK_URL`
-stays: it is the drill-through link to the hosted app, not a database.
+here. `attempts`, `mistakes` and `user_state` are in this project's database, and all clients
+share one account. Study sessions use the canonical `study_sessions`/`study_session_segments`
+records and lifecycle mutation RPC; timer durations use server-clock estimates and monotonic
+elapsed deltas. `VITE_EXAMTRACK_URL` remains the drill-through link to the hosted app, not a
+database.
 
 
 **A fast, minimal desktop study organiser for VCE students.**
@@ -145,7 +145,7 @@ Focal works locally without signing in. To enable multi-device sync:
 1. Create a Supabase project.
 2. Apply every file in `supabase/migrations/` in numeric order (or run them with the Supabase CLI).
 3. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-4. Confirm `sync_log` is in the `supabase_realtime` publication. Migration `0004` rebuilds the old per-table schema; `0005` removes the legacy helpers and verifies RLS, grants, triggers, and Realtime membership; `0007` is sync protocol v3 — an append-only `sync_log` with a materialized `sync_state`, a compaction floor, idempotent receipts, and the `sync_apply_changes` / `sync_read_changes` RPCs. `sync_changes` becomes a view over the log, so pre-v3 clients (Focal Android, ExamTrack web, Folio Android) keep working unchanged while they migrate.
+4. Confirm `sync_log` is in the `supabase_realtime` publication. Migrations `0011`–`0013` install canonical study sessions, cursor-based ExamTrack sync, and offline session timing on top of the append-only feed. Clients publish session lifecycle commands only through `study_session_mutate`; `sync_read_changes` is their cursor API. See [`docs/sync-protocol.md`](docs/sync-protocol.md) for the shared contract.
 5. Run `bun run dev` or `bun run tauri dev`, then sign in from Settings → Account.
 
 The protocol itself — the rules, the per-entity merge policy, the latency budget, and the conformance vectors both clients run — is written down in [`docs/sync-protocol.md`](docs/sync-protocol.md).

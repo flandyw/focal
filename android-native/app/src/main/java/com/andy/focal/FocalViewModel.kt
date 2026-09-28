@@ -50,7 +50,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 delay(1000)
                 now = System.currentTimeMillis()
-                if (timer.deadline != null && timer.seconds(now) == 0L) finishExpiredTimer()
+                if (timer.deadline != null && timer.seconds() == 0L) finishExpiredTimer()
             }
         }
         viewModelScope.launch {
@@ -72,7 +72,12 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
         }
         cloudConflicts = db.conflicts(account)
         notionConflicts = db.notionConflicts(account)
-        timer = TimerState.parse(db.meta(account, "timer"))
+        timer = TimerState.parse(db.meta(account, "timer"), app)
+        if (timer.bootChanged) {
+            timer.sessionId?.let { db.recoverSessionAfterReboot(account, it) }
+            timer = timer.copy(bootChanged = false)
+            db.setMeta(account, "timer", timer.json())
+        }
     }
     fun clearMessage() { message = null }
     private fun launchAction(block: suspend () -> Unit) = viewModelScope.launch {
@@ -188,7 +193,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
         if (sessionId != null) {
             val ownSession = db.row(account, "study_sessions", sessionId)?.data
             val execution = ownSession?.optJSONObject("execution")
-            if (ownSession == null || execution == null || execution.optString("state") == "completed") {
+            if (ownSession == null || execution == null || execution.optString("state") in setOf("completed", "cancelled")) {
                 persistTimer(TimerState())
                 TimerAlarm.cancel(app, account)
             } else {
@@ -198,36 +203,15 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
                 val ownIntegrations = ownSession.optJSONObject("integrations")
                 val phase = (ownIntegrations?.optJSONObject("examtrack") ?: ownIntegrations?.optJSONObject("folio"))?.optString("phase")
                 val remoteRunning = phase == "reading" || (phase != "paused" && open)
-                val otherRunning = sessions.any { row ->
-                    if (row.id == sessionId) false else {
-                        val data = row.data
-                        val state = data.optJSONObject("execution")
-                        val rowIntervals = state?.optJSONArray("intervals")
-                        val rowLast = rowIntervals?.optJSONObject((rowIntervals.length() - 1).coerceAtLeast(0))
-                        val rowOpen = rowIntervals != null && rowIntervals.length() > 0 && rowLast != null && !rowLast.has("end")
-                        val rowIntegrations = data.optJSONObject("integrations")
-                        val rowPhase = (rowIntegrations?.optJSONObject("examtrack") ?: rowIntegrations?.optJSONObject("folio"))?.optString("phase")
-                        state?.optString("state") == "in-progress" && rowPhase != "paused" && (rowOpen || rowPhase == "reading")
-                    }
-                }
                 when {
                     !remoteRunning && current.deadline != null -> {
                         persistTimer(current.paused())
                         TimerAlarm.cancel(app, account)
                     }
                     remoteRunning && current.deadline == null -> {
-                        persistTimer(current.resumed())
-                        timer.deadline?.let { TimerAlarm.schedule(app, account, it) }
+                        persistTimer(current.resumed(currentBootCount = TimerState.currentBootCount(app)))
+                        timer.deadlineElapsed?.let { TimerAlarm.schedule(app, account, it) }
                     }
-                }
-                if (otherRunning && timer.deadline != null) {
-                    timer.sessionId?.let { id -> db.row(account, "study_sessions", id)?.data?.let { session ->
-                        FocalJson.closeInterval(session, Instant.now())
-                        withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
-                    } }
-                    persistTimer(timer.paused())
-                    TimerAlarm.cancel(app, account)
-                    reload()
                 }
             }
         }
@@ -278,7 +262,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
                 if (timer.sessionId == id) {
                     when (action) {
                         "pause" -> { persistTimer(timer.paused()); TimerAlarm.cancel(app, account) }
-                        "resume" -> { persistTimer(timer.resumed()); timer.deadline?.let { TimerAlarm.schedule(app, account, it) } }
+                        "resume" -> { persistTimer(timer.resumed(currentBootCount = TimerState.currentBootCount(app))); timer.deadlineElapsed?.let { TimerAlarm.schedule(app, account, it) } }
                         "finish" -> { persistTimer(TimerState()); TimerAlarm.cancel(app, account) }
                     }
                 }
@@ -300,15 +284,15 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
                 if (current.sessionId == null) {
                     val session = FocalJson.session(subjectId, current.minutes, instant, subjects.firstOrNull { it.id == subjectId }?.name)
                     withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
-                    persistTimer(current.copy(sessionId = session.getString("id")).resumed())
+                    persistTimer(current.copy(sessionId = session.getString("id")).resumed(currentBootCount = TimerState.currentBootCount(app)))
                 } else {
                     val session = db.row(account, "study_sessions", current.sessionId)?.data ?: error("Study session is missing")
                     FocalJson.reopenInterval(session, instant)
                     withContext(Dispatchers.IO) { db.saveLocal(account, "study_sessions", session) }
-                    persistTimer(current.resumed())
+                    persistTimer(current.resumed(currentBootCount = TimerState.currentBootCount(app)))
                 }
-            } else persistTimer(current.resumed())
-            timer.deadline?.let { TimerAlarm.schedule(app, account, it) }
+            } else persistTimer(current.resumed(currentBootCount = TimerState.currentBootCount(app)))
+            timer.deadlineElapsed?.let { TimerAlarm.schedule(app, account, it) }
             reload()
         }
         syncAll()
@@ -368,7 +352,7 @@ class FocalViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun onResume() = launchAction {
         now = System.currentTimeMillis()
-        if (timer.deadline != null && timer.seconds(now) == 0L) finishExpiredTimer()
+        if (timer.deadline != null && timer.seconds() == 0L) finishExpiredTimer()
         viewModelScope.launch { checkUpdates(false) }
         syncAll()
     }

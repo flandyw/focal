@@ -653,7 +653,7 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   for (const batch of chunkItems(genericChanges, PUSH_BATCH_SIZE)) {
     if (epoch !== syncEpoch) break
     try {
-      const { receipts } = await applyChanges(batch, deviceId)
+      const { receipts } = await applyChanges(batch, deviceId, session.user.id)
       for (const receipt of receipts) {
         const change = batch.find((candidate) => candidate.changeId === receipt.changeId)
         if (change) {
@@ -676,7 +676,7 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
         const midpoint = Math.ceil(batch.length / 2)
         for (const half of [batch.slice(0, midpoint), batch.slice(midpoint)]) {
           try {
-            const { receipts } = await applyChanges(half, deviceId)
+            const { receipts } = await applyChanges(half, deviceId, session.user.id)
             for (const receipt of receipts) {
               const change = half.find((candidate) => candidate.changeId === receipt.changeId)
               if (change) {
@@ -788,7 +788,7 @@ async function flushStudySessionCommands(
     let staleRetries = 0
     while (true) {
       try {
-        const result = await applyStudySessionCommand(command, deviceId)
+        const result = await applyStudySessionCommand(command, deviceId, accountId)
         if (result.session) {
           const previous = byId.get(result.session.id)
           const row: SyncRowState = {
@@ -919,7 +919,7 @@ async function pullRemoteChangesInternal(session: Session, epoch: number): Promi
 
   try {
     const cursor = await readCursor(accountId)
-    const result = await readChanges(cursor.seq)
+    const result = await readChanges(cursor.seq, accountId)
     if (epoch !== syncEpoch) return
 
     const queue = await readOutbox(accountId)
@@ -1043,7 +1043,7 @@ async function enqueueMissingRemoteDeletes(): Promise<void> {
   const epoch = syncEpoch
   if (!session || !supabase) return
   const cursor = await readCursor(session.user.id)
-  const result = await readChanges(cursor.seq)
+  const result = await readChanges(cursor.seq, session.user.id)
   if (epoch !== syncEpoch) return
   for (const change of latestChanges(result.changes)) {
     // The log may carry entities this app does not store. Skipping them is not a loss: a

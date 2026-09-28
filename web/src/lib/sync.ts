@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { User } from "@supabase/supabase-js"
 import { EMPTY_APP_DATA, type AppData } from "@/lib/exam-data"
 import { supabase } from "@/lib/supabase"
-import { appSyncHealth, diffAppData, queueAppChanges, recordLocalChanges, syncAppData } from "@/lib/app-sync"
+import { appSyncHealth, associateAppSyncAccount, diffAppData, queueAppChanges, recordLocalChanges, syncAppData } from "@/lib/app-sync"
 
 const OWNER_KEY = "examtrack:sync:owner:v1"
 
@@ -40,6 +40,11 @@ function shallowEqualAppData(first: AppData, second: AppData) {
     return b.every((item) => ids.has(item.id))
   }
   return sameIds(first.attempts, second.attempts) && sameIds(first.mistakes, second.mistakes)
+}
+
+/** A projection started from an older snapshot must not overwrite a local edit queued while it ran. */
+export function isSupersededSync(startedFrom: AppData, queuedLatest: AppData): boolean {
+  return queuedLatest !== startedFrom
 }
 
 export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<AppData>>) {
@@ -104,12 +109,13 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (queueFailed.current) throw new Error("Local sync changes could not be saved")
       if (cancelled) return null
       const merged = await syncAppData(data, user.id)
-      if (cancelled) return null
-      previous.current = merged
       const health = await appSyncHealth(user.id)
+      if (cancelled) return null
       setPendingCount(health.pending)
-      setData((current) => shallowEqualAppData(current, merged) ? current : merged)
       setStatus(health.pending ? "pending" : "synced")
+      if (isSupersededSync(data, previous.current)) return null
+      previous.current = merged
+      setData((current) => shallowEqualAppData(current, merged) ? current : merged)
       return merged
     })
     syncTask.current = task
@@ -124,13 +130,18 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
 
   useEffect(() => {
     if (!supabase) return
+    let accountEpoch = 0
     const acceptUser = (current: User | null) => {
+      const epoch = ++accountEpoch
       activeAccount.current = current?.id ?? null
-      if (current) {
-        const owner = localStorage.getItem(OWNER_KEY)
-        if (owner && owner !== current.id) {
+      if (!current) { setUser(null); return }
+      void (async () => {
+        const localOwner = localStorage.getItem(OWNER_KEY)
+        const priorOwner = await associateAppSyncAccount(current.id, localOwner)
+        if (epoch !== accountEpoch) return
+        if (priorOwner && priorOwner !== current.id) {
           try {
-            localStorage.setItem(ownerBackupKey(owner), JSON.stringify(previous.current))
+            localStorage.setItem(ownerBackupKey(priorOwner), JSON.stringify(previous.current))
           } catch {
             // Storage full or unavailable; account-scoped IndexedDB queues stay isolated.
           }
@@ -140,8 +151,13 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
         }
         localStorage.setItem(OWNER_KEY, current.id)
         void appSyncHealth(current.id).then((health) => setPendingCount(health.pending)).catch(() => {})
-      }
-      setUser(current)
+        setUser(current)
+      })().catch((error: unknown) => {
+        if (epoch === accountEpoch) {
+          console.error("Could not associate Focal sync data with this account:", error)
+          setStatus("error")
+        }
+      })
     }
     supabase.auth.getUser()
       .then(({ data: { user: current } }) => acceptUser(current))

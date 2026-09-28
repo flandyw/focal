@@ -15,24 +15,24 @@ select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-0000000
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
   $session$::jsonb)->>'ok'),
   'true', 'start creates a canonical session'
 );
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
   $session$::jsonb)->'session'->>'started_at'),
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
   $session$::jsonb)->>'server_now'),
   'the server timestamp, not the supplied client clock, defines start'
 );
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000001","session_id":"session-clock","expected_revision":0,"action":"start","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"exam","phase":"reading","title":"Clock skew test","subject_id":"Chemistry","client_now":"2000-01-01T00:00:00Z"}
   $session$::jsonb)->>'change_seq'),
   (select seq::text from public.sync_log where user_id = auth.uid() and change_id = '20000000-0000-4000-8000-000000000001'),
   'replaying a lost response returns the original receipt and feed event'
@@ -40,14 +40,14 @@ select is(
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000002","session_id":"session-clock","expected_revision":1,"action":"pause","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000002","session_id":"session-clock","expected_revision":1,"action":"pause","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack"}
   $session$::jsonb)->'session'->>'state'),
   'paused', 'pause closes the active segment'
 );
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000003","session_id":"session-clock","expected_revision":1,"action":"pause","device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000003","session_id":"session-clock","expected_revision":1,"action":"pause","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
   $session$::jsonb)->>'reason'),
   'already_paused', 'a concurrent repeated pause is a no-op success'
 );
@@ -60,21 +60,21 @@ select is(
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000004","session_id":"session-clock","expected_revision":1,"action":"resume","device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000004","session_id":"session-clock","expected_revision":1,"action":"resume","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
   $session$::jsonb)->>'reason'),
   'stale_revision', 'pause and resume racing at one revision returns canonical state'
 );
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000005","session_id":"session-clock","expected_revision":2,"action":"cancel","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000005","session_id":"session-clock","expected_revision":2,"action":"cancel","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack"}
   $session$::jsonb)->'session'->>'state'),
   'cancelled', 'cancel keeps a terminal canonical row'
 );
 
 select is(
   (public.study_session_mutate($session$
-    {"mutation_id":"20000000-0000-4000-8000-000000000006","session_id":"session-clock","expected_revision":2,"action":"resume","device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
+    {"mutation_id":"20000000-0000-4000-8000-000000000006","session_id":"session-clock","expected_revision":2,"action":"resume","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000002","app":"folio"}
   $session$::jsonb)->>'reason'),
   'session_terminal', 'a stale resume cannot reopen a cancelled session'
 );
@@ -92,7 +92,7 @@ select is(
 );
 
 select public.study_session_mutate($session$
-  {"mutation_id":"20000000-0000-4000-8000-000000000007","session_id":"session-next","expected_revision":0,"action":"start","device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"sac","phase":"focus","title":"SAC"}
+  {"mutation_id":"20000000-0000-4000-8000-000000000007","session_id":"session-next","expected_revision":0,"action":"start","elapsed_since_previous_ms":0,"device_id":"30000000-0000-4000-8000-000000000001","app":"examtrack","kind":"sac","phase":"focus","title":"SAC"}
 $session$::jsonb);
 select is(
   (public.sync_read_changes((select seq from test_sync_cursor), 500)->>'mode'),

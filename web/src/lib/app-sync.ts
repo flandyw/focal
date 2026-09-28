@@ -5,7 +5,6 @@ import { isExamProgression } from "@/lib/exam-progression"
 import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "@/lib/learning-workspace"
 import { migrateSacRecords } from "@/lib/sac"
 import { supabase } from "@/lib/supabase"
-import { saveAppData } from "@/lib/storage"
 
 const DB_NAME = "examtrack-app-sync"
 const DB_VERSION = 1
@@ -14,6 +13,7 @@ const ROWS = "rows"
 const META = "meta"
 const APP_ENTITIES = new Set(["attempts", "mistakes", "user_state"])
 const EPOCH = "1970-01-01T00:00:00.000Z"
+const OWNER_META_KEY = "owner"
 
 type Entity = "attempts" | "mistakes" | "user_state"
 type Operation = "put" | "delete"
@@ -29,6 +29,7 @@ type PendingRow = AppRow & {
   queuedAt: number
 }
 type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean }
+type OwnerMeta = { key: string; accountId: string }
 type VersionedChange = {
   seq: number; change_id: string; client_id: string; entity: Entity; row_id: string
   operation: Operation; payload: unknown; lamport: number; updated_at: string
@@ -81,6 +82,19 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 }
 
 const accountMetaKey = (accountId: string) => `account:${accountId}`
+
+/** IDB survives localStorage clearing, so an account switch cannot expose the prior app snapshot. */
+export async function associateAppSyncAccount(accountId: string, legacyOwner: string | null): Promise<string | null> {
+  const db = await openDatabase()
+  const transaction = db.transaction(META, "readwrite")
+  const store = transaction.objectStore(META)
+  const saved = await requestResult(store.get(OWNER_META_KEY) as IDBRequest<OwnerMeta | undefined>)
+  const previous = saved?.accountId ?? legacyOwner
+  store.put({ key: OWNER_META_KEY, accountId } satisfies OwnerMeta)
+  await transactionDone(transaction)
+  return previous
+}
+
 const rowKey = (accountId: string, entity: string, rowId: string) => `${accountId}\u0000${entity}\u0000${rowId}`
 const logicalKey = (entity: string, rowId: string) => `${entity}:${rowId}`
 
@@ -211,9 +225,8 @@ async function synchronize(data: AppData, userId: string, deviceId: string): Pro
     await flush(pending, userId, deviceId)
   }
   await pull(userId)
-  const projected = await projectAppRows(data, userId)
-  saveAppData(projected)
-  return projected
+  // ponytail: no localStorage write here; the caller owns persistence, and a late projection must not clobber newer state.
+  return projectAppRows(data, userId)
 }
 
 async function pull(userId: string): Promise<void> {
@@ -221,7 +234,9 @@ async function pull(userId: string): Promise<void> {
   let meta = await readMeta(userId)
   let cursor = meta.cursor
   for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
-    const { data, error } = await supabase.rpc("sync_read_changes", { p_after: cursor, p_limit: 500 })
+    const { data, error } = await supabase.rpc("sync_read_changes", {
+      p_after: cursor, p_limit: 500, p_expected_user_id: userId,
+    })
     if (error) throw error
     if (!isRecord(data) || !Array.isArray(data.rows) || typeof data.head !== "number" || (data.mode !== "changes" && data.mode !== "snapshot"))
       throw new Error("Malformed sync_read_changes response")
@@ -336,6 +351,7 @@ async function flush(changes: PendingRow[], accountId: string, deviceId: string)
   for (const change of changes) store.put({ ...change, attempted: true })
   await transactionDone(transaction)
   const { data, error } = await supabase.rpc("sync_apply_changes", {
+    p_expected_user_id: accountId,
     p_changes: changes.map((change) => ({
       change_id: change.changeId, client_id: deviceId, entity: change.entity, row_id: change.rowId,
       operation: change.operation, payload: change.payload, expected_seq: change.expectedSeq,

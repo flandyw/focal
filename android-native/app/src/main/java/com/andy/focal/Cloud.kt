@@ -53,6 +53,8 @@ class FocalCloud(private val context: Context, private val db: FocalDb, private 
     var session: AccountSession? = restore()
         private set
 
+    init { db.setDeviceId(deviceId) }
+
     private fun restore(): AccountSession? = try {
         secrets.get("account")?.let { JSONObject(it) }?.let {
             AccountSession(it.getString("userId"), it.getString("accessToken"), it.getString("refreshToken"), it.getLong("expiresAt"))
@@ -95,44 +97,145 @@ class FocalCloud(private val context: Context, private val db: FocalDb, private 
 
     suspend fun sync(): Int = withContext(Dispatchers.IO) {
         val account = freshSession().userId
-        // Pull before importing guest edits so a fresh install never publishes empty defaults.
         pull(account)
         db.mergeGuest(account)
+        db.migrateLegacySessionOutbox(account, deviceId)
+        flushSessionCommands(account)
         val conflicting = db.conflicts(account).map { it.entity to it.rowId }.toSet()
         for (change in db.pending(account)) {
-            if ((change.entity to change.rowId) in conflicting) continue
-            val token = freshSession().accessToken
-            val body = JSONObject().put("user_id", account).put("change_id", change.id).put("device_id", deviceId)
+            if (change.entity == "study_sessions" || (change.entity to change.rowId) in conflicting) continue
+            val item = JSONObject().put("change_id", change.id).put("client_id", deviceId)
                 .put("entity", change.entity).put("row_id", change.rowId).put("operation", change.operation)
                 .put("payload", change.payload ?: JSONObject.NULL)
-            request("POST", "$base/rest/v1/sync_changes", body, authHeaders(token) + ("Prefer" to "return=minimal"))
-            db.acknowledge(change.id)
+            val response = rpc("sync_apply_changes", JSONObject().put("p_changes", JSONArray().put(item))
+                .put("p_expected_user_id", account))
+            val receipts = response.optJSONArray("receipts") ?: JSONArray()
+            val received = (0 until receipts.length()).mapNotNull { receipts.optJSONObject(it)?.optString("change_id") }.toSet()
+            if (change.id in received) db.acknowledge(change.id)
+            val stale = response.optJSONArray("stale") ?: JSONArray()
+            for (index in 0 until stale.length()) {
+                val itemStale = stale.optJSONObject(index) ?: continue
+                if (itemStale.optString("change_id") != change.id) continue
+                val remote = itemStale.optJSONObject("current")
+                db.recordStale(account, change.entity, change.rowId, remote?.optJSONObject("payload"))
+            }
         }
         pull(account)
-        db.pending(account).size
+        db.pending(account).size + db.pendingSessionCommands(account).size
+    }
+
+    private fun flushSessionCommands(account: String) {
+        for (pending in db.pendingSessionCommands(account)) {
+            var command = JSONObject(pending.payload.toString())
+            var storedMutationId = pending.mutationId
+            var rebases = 0
+            while (true) {
+                val result = rpc("study_session_mutate", JSONObject().put("p_command",
+                    JSONObject(command.toString()).put("expected_user_id", account)))
+                result.optString("server_now").takeIf { it.isNotBlank() }?.let(db::setServerClock)
+                val reason = result.optString("reason").takeIf { it.isNotBlank() }
+                val canonical = result.optJSONObject("session")
+                if (reason == "stale_revision" && canonical != null) {
+                    val state = canonical.optString("state")
+                    val phase = canonical.optString("phase")
+                    if (mutationSatisfied(command.optString("action"), state, phase, command.optString("phase"))) {
+                        db.finishSessionCommand(account, command.optString("mutation_id"), canonical, result.optLong("change_seq"))
+                        break
+                    }
+                    if (state in setOf("completed", "cancelled")) {
+                        db.finishTerminalSessionCommands(account, pending.sessionId, canonical, result.optLong("change_seq"))
+                        break
+                    }
+                    if (!mutationCanRebase(command, state, phase)) {
+                        db.finishSessionCommand(account, command.optString("mutation_id"), canonical, result.optLong("change_seq"))
+                        break
+                    }
+                    if (rebases++ >= 2) error("Study session changed repeatedly; retry sync to rebase the command")
+                    command.put("mutation_id", UUID.randomUUID().toString()).put("expected_revision", canonical.optLong("revision"))
+                    storedMutationId = db.rebaseSessionCommand(account, storedMutationId, command)
+                    continue
+                }
+                if (reason == "session_terminal") {
+                    db.finishTerminalSessionCommands(account, pending.sessionId, canonical, result.optLong("change_seq"))
+                    break
+                }
+                if (reason == "invalid_transition" || reason == "not_found") {
+                    db.finishSessionCommand(account, command.optString("mutation_id"), canonical, result.optLong("change_seq"))
+                    break
+                }
+                if (!result.optBoolean("ok") && reason != "already_exists") error("study_session_mutate failed: ${reason ?: "server error"}")
+                db.finishSessionCommand(account, command.optString("mutation_id"), canonical, result.optLong("change_seq"))
+                break
+            }
+        }
+    }
+
+    private fun mutationSatisfied(action: String, state: String, phase: String, requestedPhase: String): Boolean = when (action) {
+        "start", "resume" -> state == "running"
+        "pause" -> state == "paused"
+        "complete" -> state == "completed"
+        "cancel" -> state == "cancelled"
+        "phase_change" -> phase == requestedPhase
+        else -> false
+    }
+
+    private fun mutationCanRebase(command: JSONObject, state: String, phase: String): Boolean = when (command.optString("action")) {
+        "pause" -> state == "running"
+        "resume" -> state == "paused"
+        "start" -> state == "planned"
+        "complete", "cancel" -> state in setOf("planned", "running", "paused")
+        "phase_change" -> state in setOf("running", "paused") && phase != command.optString("phase")
+        "save_progress" -> state !in setOf("completed", "cancelled")
+        else -> false
     }
 
     private fun pull(account: String) {
-        var cursor = db.meta(account, "revision")?.toLongOrNull() ?: 0L
+        var cursor = db.meta(account, "cursor")?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
         while (true) {
-            val token = freshSession().accessToken
-            val response = requestArray("GET", "$base/rest/v1/sync_changes?select=change_id,entity,row_id,operation,payload,revision,device_id&revision=gt.$cursor&order=revision.asc&limit=1000", authHeaders(token))
-            val pendingIds = db.pending(account).map { it.id }.toSet()
-            for (i in 0 until response.length()) {
-                val change = response.getJSONObject(i)
-                if (change.optString("change_id") in pendingIds) db.acknowledge(change.getString("change_id"))
-                val revision = change.getLong("revision")
-                val entity = change.getString("entity")
-                if (entity in setOf("events", "study_sessions", "projects", "custom_subjects", "hidden_subjects", "timetable_config", "user_settings")) {
-                    val payload = if (entity == "hidden_subjects" && change.opt("payload") is String)
-                        JSONObject().put("id", change.getString("payload")) else change.optJSONObject("payload")
-                    db.applyRemote(account, entity, change.getString("row_id"), change.getString("operation"), payload, revision)
-                }
-                cursor = maxOf(cursor, revision)
-                db.setMeta(account, "revision", cursor.toString())
+            val response = rpc("sync_read_changes", JSONObject().put("p_after", cursor).put("p_limit", 500)
+                .put("p_expected_user_id", account))
+            response.optString("server_now").takeIf { it.isNotBlank() }?.let(db::setServerClock)
+            val head = response.optLong("head")
+            val rows = response.optJSONArray("rows") ?: JSONArray()
+            if (response.optString("mode") == "snapshot") {
+                val snapshot = (0 until rows.length()).mapNotNull { index -> remoteRow(rows.optJSONObject(index), snapshot = true) }
+                db.applySnapshot(account, snapshot, head)
+                cursor = head
+                db.setMeta(account, "cursor", cursor.toString())
+                break
             }
-            if (response.length() < 1000) break
+            for (index in 0 until rows.length()) {
+                val raw = rows.optJSONObject(index) ?: continue
+                val row = remoteRow(raw, snapshot = false) ?: continue
+                val changeId = raw.optString("change_id")
+                if (changeId.isNotBlank() && db.pending(account).any { it.id == changeId }) db.acknowledge(changeId)
+                if (row.entity == "study_sessions") db.applyCanonicalSession(account, row.rowId, row.payload ?: continue, row.seq)
+                else db.applyRemote(account, row.entity, row.rowId, row.operation, row.payload, row.seq)
+                cursor = maxOf(cursor, row.seq)
+            }
+            db.setMeta(account, "cursor", cursor.toString())
+            if (rows.length() < 500 || cursor >= head) break
         }
+    }
+
+    private fun remoteRow(raw: JSONObject?, snapshot: Boolean): NativeRemoteRow? {
+        if (raw == null) return null
+        val entity = raw.optString("entity")
+        val rowId = raw.optString("row_id")
+        val operation = raw.optString("operation", "put")
+        if (entity !in setOf("events", "study_sessions", "projects", "custom_subjects", "hidden_subjects", "timetable_config", "user_settings") || rowId.isBlank()) return null
+        val value = raw.opt("payload")
+        val payload = when {
+            value is JSONObject -> value
+            entity == "hidden_subjects" && value is String -> JSONObject().put("id", value)
+            else -> null
+        }
+        return NativeRemoteRow(entity, rowId, operation, payload, raw.optLong("seq", if (snapshot) raw.optLong("lamport") else 0L))
+    }
+
+    private fun rpc(function: String, body: JSONObject): JSONObject {
+        val token = freshSession().accessToken
+        return request("POST", "$base/rest/v1/rpc/$function", body, authHeaders(token))
     }
 }
 

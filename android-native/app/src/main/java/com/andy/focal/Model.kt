@@ -74,23 +74,3 @@ object FocalJson {
         session.put("status", "completed").put("completedAt", end.toString())
     }
 }
-
-data class TimerState(val phase: String = "focus", val minutes: Int = 25, val remaining: Long = 1500,
-    val deadline: Long? = null, val sessionId: String? = null) {
-    fun seconds(now: Long = System.currentTimeMillis()): Long = deadline?.let { ((it - now + 999) / 1000).coerceAtLeast(0) } ?: remaining
-    fun paused(now: Long = System.currentTimeMillis()) = copy(remaining = seconds(now), deadline = null)
-    fun resumed(now: Long = System.currentTimeMillis()) = copy(deadline = now + remaining * 1000)
-    fun json() = JSONObject().put("phase", phase).put("minutes", minutes).put("remaining", remaining)
-        .put("deadline", deadline ?: JSONObject.NULL).put("sessionId", sessionId ?: JSONObject.NULL).toString()
-    companion object {
-        fun parse(value: String?): TimerState = try {
-            if (value == null) TimerState() else JSONObject(value).let { o ->
-                val minutes = o.getInt("minutes").coerceIn(1, 180)
-                TimerState(o.optString("phase").takeIf { it in listOf("focus", "break") } ?: "focus", minutes,
-                    o.optLong("remaining", minutes * 60L).coerceIn(0, 10800),
-                    if (o.isNull("deadline")) null else o.optLong("deadline").takeIf { it > 0 },
-                    o.optString("sessionId").takeIf { it.isNotBlank() })
-            }
-        } catch (_: Exception) { TimerState() }
-    }
-}

@@ -713,7 +713,7 @@ private fun FocusScreen(vm: FocalViewModel, modifier: Modifier = Modifier) {
         if (timer.deadline != null) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
-    val seconds = timer.seconds(vm.now)
+    val seconds = timer.seconds()
     val total = if (timer.phase == "focus") (timer.minutes * 60L).coerceAtLeast(1) else 300L
     val progress = (1f - seconds.toFloat() / total).coerceIn(0f, 1f)
     // ponytail: the picker stays on screen while paused so the subject can change

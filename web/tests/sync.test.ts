@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA } from "../src/lib/exam-data"
 import { diffAppData, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
+import { isSupersededSync } from "../src/lib/sync"
 
 describe("Focal cursor sync", () => {
+  test("drops a projection that would resurrect a locally deleted attempt", () => {
+    const beforeDelete = { ...EMPTY_APP_DATA, attempts: [{ id: "attempt-1" } as never] }
+    const afterDelete = { ...EMPTY_APP_DATA, attempts: [] }
+
+    expect(isSupersededSync(beforeDelete, afterDelete)).toBe(true)
+    expect(isSupersededSync(beforeDelete, beforeDelete)).toBe(false)
+  })
+
   test("projects attempts, mistakes and each setting as stable independent rows", () => {
     const data = {
       ...EMPTY_APP_DATA,

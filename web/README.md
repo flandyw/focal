@@ -11,7 +11,7 @@ supabase db push
 
 There is no second project and no second sign-in. The second Supabase client, the separate-account settings card and the `VITE_FOCAL_SUPABASE_*` variables are gone; `web/` writes with the same client as the rest of the app.
 
-What remains is the *protocol*, not the project boundary. `focal-timer.ts` still keeps a `FocalTimerLink` beside each running exam or SAC and publishes it into the shared `study_sessions` entity of the change log, because that log is currently the only study-session store: migration `0004` dropped Focal's `public.study_sessions` table, so there is no canonical row to write instead. Deleting the link today would silently empty Focal's study history for exam and SAC timers. It goes when the canonical `study_sessions` command protocol replaces it.
+Study sessions now use the canonical `study_sessions` and `study_session_segments` tables through `study_session_mutate` and `sync_read_changes`. Timer lifecycle commands are durably queued in account-scoped IndexedDB, retain their order, and carry monotonic elapsed deltas plus a server-clock estimate when available. Ordinary ExamTrack records continue through the generic cursor/change protocol.
 
 A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recharts, and KaTeX.
 

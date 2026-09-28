@@ -32,6 +32,7 @@ export interface CanonicalStudySession {
   cancelled_at: string | null
   accumulated_active_ms: number
   segment_started_at: string | null
+  timing_at?: string | null
   metadata: Record<string, unknown>
   segments: StudySessionSegment[]
 }
@@ -48,6 +49,10 @@ export interface StudySessionCommand {
   title?: string
   subject_id?: string | null
   metadata?: Record<string, unknown>
+  /** Server-clock estimate captured from a server anchor and monotonic time, never Date.now(). */
+  occurred_at?: string | null
+  /** Monotonic milliseconds since this session's previous lifecycle boundary. */
+  elapsed_since_previous_ms?: number
 }
 
 export type StudySessionMutationReason =
@@ -129,6 +134,7 @@ export function parseCanonicalStudySession(value: unknown): CanonicalStudySessio
     cancelled_at: value.cancelled_at,
     accumulated_active_ms: value.accumulated_active_ms as number,
     segment_started_at: value.segment_started_at,
+    ...(nullableString(value.timing_at) ? { timing_at: value.timing_at } : {}),
     metadata: value.metadata,
     segments,
   }
@@ -170,7 +176,9 @@ export function isStudySessionCommand(value: unknown): value is StudySessionComm
     (value.phase === undefined || SESSION_PHASES.has(value.phase)) &&
     (value.title === undefined || typeof value.title === "string" && value.title.length <= 512) &&
     (value.subject_id === undefined || value.subject_id === null || typeof value.subject_id === "string") &&
-    (value.metadata === undefined || isRecord(value.metadata))
+    (value.metadata === undefined || isRecord(value.metadata)) &&
+    (value.occurred_at === undefined || value.occurred_at === null || typeof value.occurred_at === "string" && Number.isFinite(Date.parse(value.occurred_at))) &&
+    (value.elapsed_since_previous_ms === undefined || Number.isSafeInteger(value.elapsed_since_previous_ms) && (value.elapsed_since_previous_ms as number) >= 0 && (value.elapsed_since_previous_ms as number) <= 604_800_000)
 }
 
 export function parseStudySessionMutationResult(value: unknown): StudySessionMutationResult | null {

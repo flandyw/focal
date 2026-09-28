@@ -24,12 +24,13 @@ export interface ReadResult {
  * Publish a batch and get a receipt per change. The receipt's `seq` is what the change
  * was assigned by the log, which is also the version this device now holds for that row.
  */
-export async function applyChanges(changes: readonly SyncChange[], clientId: string): Promise<{
+export async function applyChanges(changes: readonly SyncChange[], clientId: string, expectedUserId: string): Promise<{
   receipts: ApplyReceipt[]
   head: number
 }> {
   if (!supabase) throw new Error("Supabase is not configured")
   const response = await supabase.rpc("sync_apply_changes", {
+    p_expected_user_id: expectedUserId,
     p_changes: changes.map((change) => ({
       change_id: change.changeId,
       client_id: clientId,
@@ -56,11 +57,14 @@ export async function applyChanges(changes: readonly SyncChange[], clientId: str
 export async function applyStudySessionCommand(
   rawCommand: unknown,
   deviceId: string,
+  expectedUserId: string,
 ): Promise<StudySessionMutationResult> {
   if (!supabase) throw new Error("Supabase is not configured")
   const command = typeof rawCommand === "object" && rawCommand !== null ? { ...rawCommand, device_id: deviceId } : rawCommand
   if (!isStudySessionCommand(command)) throw new Error("validation_failed: malformed session command")
-  const response = await supabase.rpc("study_session_mutate", { p_command: command })
+  const response = await supabase.rpc("study_session_mutate", {
+    p_command: { ...command, expected_user_id: expectedUserId },
+  })
   if (response.error) throw response.error
   const result = parseStudySessionMutationResult(response.data)
   if (!result) throw new Error("retryable_server_error: malformed study_session_mutate response")
@@ -71,9 +75,11 @@ export async function applyStudySessionCommand(
  * Read forward from a cursor. The server answers with either more log rows or the whole
  * materialized state, depending on whether the cursor is still tailable.
  */
-export async function readChanges(cursor: number, limit = PAGE_SIZE): Promise<ReadResult> {
+export async function readChanges(cursor: number, expectedUserId: string, limit = PAGE_SIZE): Promise<ReadResult> {
   if (!supabase) throw new Error("Supabase is not configured")
-  const response = await supabase.rpc("sync_read_changes", { p_after: cursor, p_limit: limit })
+  const response = await supabase.rpc("sync_read_changes", {
+    p_after: cursor, p_limit: limit, p_expected_user_id: expectedUserId,
+  })
   if (response.error) throw response.error
   const result = isObject(response.data) ? response.data : {}
   const rawRows = Array.isArray(result.rows) ? result.rows : []

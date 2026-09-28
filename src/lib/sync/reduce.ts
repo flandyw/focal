@@ -43,9 +43,20 @@ export function decide(
   ownClientId: string,
 ): SyncDecision {
   if (change.clientId === ownClientId) return "own"
+  if (change.entity === "study_sessions" && state) {
+    const currentRevision = sessionRevision(state.payload)
+    const incomingRevision = sessionRevision(change.payload)
+    if (currentRevision !== null && incomingRevision !== null && incomingRevision <= currentRevision) return "stale"
+  }
   if (state && compareOrder(state.lamport, state.clientId, change.lamport, change.clientId) >= 0) return "stale"
   if (pending.has(rowKey(change.entity, change.rowId))) return "defer"
   return "apply"
+}
+
+function sessionRevision(payload: unknown): number | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return null
+  const revision = (payload as Record<string, unknown>).revision
+  return Number.isSafeInteger(revision) && (revision as number) >= 0 ? revision as number : null
 }
 
 /** Total order on versions: lamport first, client id as the tiebreak. Never a clock. */

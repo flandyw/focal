@@ -11,6 +11,7 @@ import type {
   StudyTimeRange,
 } from "@/lib/types"
 import { VCE_SUBJECTS } from "@/lib/types"
+import { parseCanonicalStudySession } from "@/lib/sync/sessionContract"
 
 export const STUDY_SESSION_SCHEMA_VERSION = 2 as const
 
@@ -167,6 +168,7 @@ function canonicalSession(session: StudySession): Record<string, unknown> {
   return {
     schemaVersion: STUDY_SESSION_SCHEMA_VERSION,
     id: session.id,
+    revision: session.revision,
     projectId: session.projectId,
     subjectIds: session.subjectIds,
     title: session.title,
@@ -329,6 +331,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
   return attachCompatibilityView({
     schemaVersion: STUDY_SESSION_SCHEMA_VERSION,
     id: optionalString(value.id) ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    revision: Number.isSafeInteger(value.revision) && (value.revision as number) >= 0 ? value.revision as number : undefined,
     projectId: optionalString(value.projectId),
     subjectIds: integratedSubjectId ? [integratedSubjectId] : rawSubjectIds,
     title: optionalString(value.title) ?? "Study Session",
@@ -346,6 +349,62 @@ export function normalizeStudySession(raw: unknown): StudySession {
       ? value.last_modified_device_id
       : null,
   } as StudySession)
+}
+
+/** Projects the server row into Focal's existing planner/history shape. */
+export function studySessionFromCanonical(value: unknown): StudySession | null {
+  const session = parseCanonicalStudySession(value)
+  if (!session) return null
+  const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
+  const legacy = isRecord(nested) ? nested : {}
+  const legacyIntegrations = isRecord(legacy.integrations) ? legacy.integrations : {}
+  const subjectIds = stringArray(legacy.subjectIds)
+  if (session.subject_id && subjectIds.length === 0) subjectIds.push(session.subject_id)
+  const scheduleValue = isRecord(legacy.schedule) ? legacy.schedule : undefined
+  const scheduleBlocks = timeRanges(scheduleValue?.blocks)
+  const start = session.started_at ?? session.created_at
+  const schedule = scheduleBlocks.length > 0
+    ? { blocks: scheduleBlocks }
+    : { blocks: [validRange(start, new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString())] }
+  const intervals = session.segments.map((segment) => ({
+    start: segment.started_at,
+    ...(segment.ended_at ? { end: segment.ended_at } : {}),
+    source: "imported" as const,
+  }))
+  const cancelled = session.state === "cancelled"
+  const execution: StudySessionExecution = session.state === "planned" || cancelled
+    ? { state: "planned", intervals: [] }
+    : session.state === "completed"
+      ? { state: "completed", intervals, completedAt: session.completed_at ?? session.updated_at ?? session.created_at }
+      : { state: "in-progress", intervals }
+  const integrations: Record<string, unknown> = { ...legacyIntegrations }
+  if (session.originating_app === "examtrack" && (session.kind === "exam" || session.kind === "sac")) {
+    integrations.examtrack = {
+      ...(isRecord(legacyIntegrations.examtrack) ? legacyIntegrations.examtrack : {}),
+      type: "examtrack", id: session.id, kind: session.kind, subject: session.subject_id ?? "Exam",
+      ...(session.phase ? { phase: session.phase } : {}),
+    }
+  } else if (session.originating_app === "folio") {
+    integrations.folio = {
+      ...(isRecord(legacyIntegrations.folio) ? legacyIntegrations.folio : {}),
+      type: "folio", id: session.id, kind: session.kind === "exam" || session.kind === "sac" ? "exam" : "study",
+      subject: session.subject_id, ...(session.phase ? { phase: session.phase } : {}),
+    }
+  }
+  return normalizeStudySession({
+    ...legacy,
+    id: session.id,
+    revision: session.revision,
+    subjectIds,
+    title: session.title,
+    schedule,
+    execution,
+    integrations,
+    createdVia: session.originating_app === "examtrack" ? "examtrack" : legacy.createdVia,
+    created_at: session.created_at,
+    updated_at: session.updated_at ?? session.created_at,
+    deleted_at: cancelled ? session.cancelled_at ?? session.updated_at ?? session.created_at : null,
+  })
 }
 
 export function createStudySession(id: string, input: CreateStudySessionInput, now = new Date().toISOString()): StudySession {

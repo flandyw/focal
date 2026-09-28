@@ -1,8 +1,20 @@
 import ReactMarkdown from "react-markdown"
 import rehypeKatex from "rehype-katex"
 import remarkMath from "remark-math"
-import "katex/dist/katex.min.css"
 import { cn } from "@/lib/utils"
+
+// \[...\] is display maths in LaTeX, but only when it owns its lines. Mid-paragraph
+// it has to stay inline, otherwise remark-math opens a block node inside a
+// paragraph and the sentence around it is swallowed.
+function normaliseMathDelimiters(source: string, forceInline = false) {
+  const markdown = source
+    .replace(/^[ \t]*\\\[([\s\S]*?)\\\][ \t]*$/gm, (_match, math: string) => `$$\n${math.trim()}\n$$`)
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_match, math: string) => `$$${math}$$`)
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_match, math: string) => `$${math}$`)
+  // Inline contexts render inside a <span>, where a block-level .katex-display
+  // would break the line box.
+  return forceInline ? markdown.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math: string) => `$${math}$`) : markdown
+}
 
 export function MarkdownPreview({ children, inline = false, unframed = false, className }: {
   children: string
@@ -10,9 +22,7 @@ export function MarkdownPreview({ children, inline = false, unframed = false, cl
   unframed?: boolean
   className?: string
 }) {
-  const markdown = children
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `$$\n${math}\n$$`)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math}$`)
+  const markdown = normaliseMathDelimiters(children, inline)
 
   if (inline) {
     return (

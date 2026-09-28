@@ -3,7 +3,7 @@ import { ImageIcon } from "lucide-react"
 import type { MistakeAttachment } from "@/lib/exam-data"
 import { createMistakeAttachmentUrls } from "@/lib/mistake-attachments"
 
-export function MistakeAttachments({ attachments, compact = false }: { attachments?: MistakeAttachment[]; compact?: boolean }) {
+export function MistakeAttachments({ attachments }: { attachments?: MistakeAttachment[] }) {
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [failed, setFailed] = useState(false)
   const pathKey = attachments?.map(({ storagePath }) => storagePath).join("\u0000") ?? ""
@@ -30,13 +30,13 @@ export function MistakeAttachments({ attachments, compact = false }: { attachmen
   if (failed) return <p className="text-xs text-muted-foreground">Saved images could not be loaded.</p>
 
   return (
-    <div aria-label="Question images" className={`my-3 grid gap-3 ${compact ? "grid-cols-3" : "grid-cols-1"}`}>
+    <div aria-label="Question images" className="my-3 grid grid-cols-1 gap-3">
       {attachments.map((attachment) => urls[attachment.storagePath] ? (
         <a key={attachment.id} href={urls[attachment.storagePath]} target="_blank" rel="noopener noreferrer" className="overflow-hidden rounded-lg border bg-muted/30" title={attachment.name}>
-          <img src={urls[attachment.storagePath]} alt={attachment.name || "Question image"} className={`${compact ? "h-20" : "h-auto max-h-[70vh]"} w-full object-contain`} />
+          <img src={urls[attachment.storagePath]} alt={attachment.name || "Question image"} className="h-auto max-h-[70vh] w-full object-contain" />
         </a>
       ) : (
-        <div key={attachment.id} className={`${compact ? "h-20" : "h-32"} flex items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground`}><ImageIcon className="size-5" /></div>
+        <div key={attachment.id} className="flex h-32 items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon className="size-5" /></div>
       ))}
     </div>
   )

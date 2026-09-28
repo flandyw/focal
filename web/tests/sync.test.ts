@@ -1,97 +1,59 @@
 import { describe, expect, test } from "bun:test"
-import { mergeAlternativeMistakeDeck, mergeAtarEstimates, mergeCollection, mergeMistakeInsights, mergeSacState, mergeTrackedState } from "../src/lib/sync"
-import { mergeTimerSession } from "../src/lib/ongoing-timers"
+import { EMPTY_APP_DATA } from "../src/lib/exam-data"
+import { diffAppData, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
 
-type Item = { id: string; updatedAt: string; value: string }
-
-describe("sync merge", () => {
-  test("keeps the newest edit and applies newer deletions", () => {
-    const local: Item[] = [
-      { id: "local-wins", updatedAt: "2026-07-12T02:00:00.000Z", value: "local" },
-      { id: "deleted", updatedAt: "2026-07-12T01:00:00.000Z", value: "old" },
-    ]
-    const remote = [
-      { id: "local-wins", payload: { id: "local-wins", updatedAt: "2026-07-12T01:00:00.000Z", value: "remote" }, updated_at: "2026-07-12T01:00:00.000Z", deleted_at: null },
-      { id: "deleted", payload: null, updated_at: "2026-07-12T03:00:00.000Z", deleted_at: "2026-07-12T03:00:00.000Z" },
-      { id: "remote-wins", payload: { id: "remote-wins", updatedAt: "2026-07-12T04:00:00.000Z", value: "remote" }, updated_at: "2026-07-12T04:00:00.000Z", deleted_at: null },
-    ]
-    const tombstones: Record<string, string> = {}
-
-    expect(mergeCollection(local, remote, tombstones)).toEqual([
-      local[0],
-      remote[2].payload,
-    ])
-    expect(tombstones.deleted).toBe("2026-07-12T03:00:00.000Z")
-  })
-
-  test("does not resurrect a locally deleted item from an older remote copy", () => {
-    const tombstones = { deleted: "2026-07-12T03:00:00.000Z" }
-    const remote = [{
-      id: "deleted",
-      payload: { id: "deleted", updatedAt: "2026-07-12T01:00:00.000Z", value: "old" },
-      updated_at: "2026-07-12T01:00:00.000Z",
-      deleted_at: null,
-    }]
-
-    expect(mergeCollection<Item>([], remote, tombstones)).toEqual([])
-  })
-
-  test("preserves question text and review scheduling in a synced mistake payload", () => {
-    const payload = {
-      id: "mistake-1",
-      updatedAt: "2026-07-12T04:00:00.000Z",
-      questionText: "Differentiate $e^{2x}$.",
-      reviewState: "review",
-      intervalDays: 20,
-      easeFactor: 2.5,
-      dueAt: "2026-08-01T04:00:00.000Z",
+describe("ExamTrack cursor sync", () => {
+  test("projects attempts, mistakes and each setting as stable independent rows", () => {
+    const data = {
+      ...EMPTY_APP_DATA,
+      attempts: [{ id: "attempt-1", subject: "Chemistry", updatedAt: "2026-07-15T01:00:00.000Z" } as never],
+      mistakes: [{ id: "mistake-1", question: "Explain", updatedAt: "2026-07-15T02:00:00.000Z" } as never],
+      trackedExamIds: ["exam-1"],
+      trackedExamIdsUpdatedAt: "2026-07-15T03:00:00.000Z",
+      activeExamTimer: { id: "timer-1" } as never,
     }
 
-    expect(mergeCollection([], [{ id: payload.id, payload, updated_at: payload.updatedAt, deleted_at: null }], {}))
-      .toEqual([payload])
+    expect(rowsFromAppData(data).map(({ entity, rowId }) => `${entity}:${rowId}`)).toEqual([
+      "attempts:attempt-1", "mistakes:mistake-1", "user_state:trackedExamIds",
+    ])
   })
 
-  test("keeps the newest tracked-exam state across devices", () => {
-    expect(mergeTrackedState(["local"], "2026-07-15T01:00:00.000Z", ["remote"], "2026-07-15T02:00:00.000Z"))
-      .toEqual({ trackedExamIds: ["remote"], trackedExamIdsUpdatedAt: "2026-07-15T02:00:00.000Z" })
+  test("queues a stable row update and tombstone instead of rewriting a collection", () => {
+    const previous = {
+      ...EMPTY_APP_DATA,
+      attempts: [{ id: "attempt-1", updatedAt: "2026-07-15T01:00:00.000Z", comment: "old" } as never,
+        { id: "attempt-2", updatedAt: "2026-07-15T01:00:00.000Z" } as never],
+    }
+    const next = { ...previous, attempts: [{ ...previous.attempts[0], comment: "new", updatedAt: "2026-07-15T02:00:00.000Z" }] }
+    expect(diffAppData(previous, next)).toEqual([
+      { entity: "attempts", rowId: "attempt-1", operation: "put", payload: next.attempts[0] },
+      { entity: "attempts", rowId: "attempt-2", operation: "delete", payload: null },
+    ])
   })
 
-  test("keeps the newest SAC collection across devices", () => {
-    const local = [{ id: "local" }] as never[]
-    const remote = [{ id: "remote" }] as never[]
-    expect(mergeSacState(local, "2026-07-15T01:00:00.000Z", remote, "2026-07-15T02:00:00.000Z"))
-      .toEqual({ sacRecords: remote, sacRecordsUpdatedAt: "2026-07-15T02:00:00.000Z" })
+  test("rebases a Folio scheduling edit without dropping concurrent question content", () => {
+    const base = {
+      id: "mistake-1", questionText: "Original question", explanation: "Original explanation",
+      dueAt: "2026-07-20T00:00:00.000Z", reviewHistory: [], intervalDays: 1,
+    }
+    const local = { ...base, dueAt: "2026-08-02T00:00:00.000Z", intervalDays: 14,
+      reviewHistory: [{ id: "review-local", completedAt: "2026-07-18T00:00:00.000Z" }] }
+    const remote = { ...base, questionText: "Edited in ExamTrack", explanation: "New explanation" }
+
+    expect(mergeMistakeConflict(base, local, remote)).toEqual({
+      ...remote, dueAt: local.dueAt, intervalDays: 14, reviewHistory: local.reviewHistory,
+    })
   })
 
-  test("keeps the newest ongoing timer snapshot and its deletion", () => {
-    const local = { title: "Local timer" }
-    const remote = { title: "Remote timer" }
-    expect(mergeTimerSession(local, "2026-07-15T01:00:00.000Z", remote, "2026-07-15T02:00:00.000Z"))
-      .toEqual({ session: remote, updatedAt: "2026-07-15T02:00:00.000Z" })
-    expect(mergeTimerSession(remote, "2026-07-15T02:00:00.000Z", undefined, "2026-07-15T03:00:00.000Z"))
-      .toEqual({ session: undefined, updatedAt: "2026-07-15T03:00:00.000Z" })
+  test("unions concurrent mistake review history by stable review id", () => {
+    const base = { id: "m", reviewHistory: [] as { id: string }[] }
+    const local = { id: "m", reviewHistory: [{ id: "local" }] }
+    const remote = { id: "m", reviewHistory: [{ id: "remote" }] }
+    expect(mergeMistakeConflict(base, local, remote)).toEqual({ id: "m", reviewHistory: [{ id: "remote" }, { id: "local" }] })
   })
 
-  test("keeps the newest saved mistake insights", () => {
-    const older = { summary: "Old", biggestErrors: [], otherInsights: [], nextStep: "Old", generatedAt: "2026-07-15T01:00:00.000Z" }
-    const newer = { ...older, summary: "New", generatedAt: "2026-07-15T02:00:00.000Z" }
-    expect(mergeMistakeInsights(older, newer)).toEqual(newer)
-    expect(mergeMistakeInsights(newer, older)).toEqual(newer)
-    const withQuestions = { ...older, practiceQuestions: "Questions", questionsGeneratedAt: "2026-07-15T03:00:00.000Z" }
-    expect(mergeMistakeInsights(newer, withQuestions)).toEqual(withQuestions)
-  })
-
-  test("keeps the newest alternative mistake deck", () => {
-    const older = { cards: [], updatedAt: "2026-07-15T01:00:00.000Z" }
-    const newer = { cards: [], updatedAt: "2026-07-15T02:00:00.000Z" }
-    expect(mergeAlternativeMistakeDeck(older, newer)).toEqual(newer)
-    expect(mergeAlternativeMistakeDeck(newer, older)).toEqual(newer)
-  })
-
-  test("keeps the newest saved ATAR scenarios", () => {
-    const local = [{ id: "local", year: 2025, rows: [], atarLabel: "90.00", aggregate: 180, savedAt: "2026-07-15T01:00:00.000Z" }]
-    const remote = [{ id: "remote", year: 2025, rows: [], atarLabel: "95.00", aggregate: 190, savedAt: "2026-07-15T02:00:00.000Z" }]
-    expect(mergeAtarEstimates(local, "2026-07-15T01:00:00.000Z", remote, "2026-07-15T02:00:00.000Z"))
-      .toEqual({ atarEstimates: remote, atarEstimatesUpdatedAt: "2026-07-15T02:00:00.000Z" })
+  test("compares nested payloads structurally without timestamp conflict ordering", () => {
+    expect(sameValue({ a: [1, { b: true }] }, { a: [1, { b: true }] })).toBe(true)
+    expect(sameValue({ a: [1, { b: true }] }, { a: [1, { b: false }] })).toBe(false)
   })
 })

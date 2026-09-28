@@ -29,11 +29,6 @@ import { formatExamTitle, formatReferenceName, validateAttempt, validateQuestion
 import { buildCompanyExamSuggestions, buildExamSuggestions, findLatestAttempt, type ExamSuggestion } from "@/lib/exam-suggestions"
 import { getKnownExamConditions } from "@/lib/exam-conditions"
 import { formatTimer, getExamTimerState } from "@/lib/exam-timer"
-import {
-  createFocalTimerLink,
-  publishFocalTimer,
-  setFocalTimerPhase,
-} from "@/lib/focal-timer"
 import { loadAppData } from "@/lib/storage"
 import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "@/lib/performance-context"
@@ -52,7 +47,7 @@ type ExamTimerProps = ExamProgressionProps & {
   saveStatus: string
   syncAction?: { label: string; onClick: () => void }
   onLeave: () => void
-  onSessionChange: (session: ExamTimerSession | undefined) => void
+  onSessionChange: (session: ExamTimerSession | undefined, action?: "cancel" | "complete") => void
   onSave: (attempt: ExamAttempt) => void
 }
 
@@ -128,8 +123,8 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
     setRawMax(conditions.marks)
   }, [paper, session, subject])
 
-  function saveSession(next: ExamTimerSession | undefined) {
-    onSessionChange(next)
+  function saveSession(next: ExamTimerSession | undefined, action?: "cancel" | "complete") {
+    onSessionChange(next, action)
   }
 
   const subjects = useMemo(() => prioritiseSubjects(references.map((item) => item.studyName), preferredSubjects), [preferredSubjects, references])
@@ -142,16 +137,12 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
   const timer = useMemo(() => session
     ? getExamTimerState(session.pausedAt ?? now.getTime(), session.startedAt, session.readingMinutes, session.writingMinutes, session.marks)
     : null, [now, session])
+  const timerPhase = timer ? timer.phase === "reading" ? "reading" : "writing" : null
 
   useEffect(() => {
-    if (!session?.focal || !timer || session.pausedAt !== undefined) return
-    const phase = timer.phase === "reading" ? "reading" : "writing"
-    if (session.focal.phase === phase) return
-    const focal = setFocalTimerPhase(session.focal, phase, now)
-    const next = { ...session, focal }
-    saveSession(next)
-    void publishFocalTimer(focal, "in-progress", now)
-  }, [session, timer?.phase, now])
+    if (!session || !timerPhase || session.pausedAt !== undefined || session.phase === timerPhase) return
+    onSessionChange({ ...session, phase: timerPhase })
+  }, [session, timerPhase, onSessionChange])
 
   function applySuggestion(suggestion: ExamSuggestion) {
     const conditions = getKnownExamConditions(suggestion.subject, suggestion.paper)
@@ -169,26 +160,17 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
 
   function start(event: FormEvent) {
     event.preventDefault()
-    const focal = createFocalTimerLink(
-      "exam",
-      subject,
-      formatExamTitle(provider, examYear, subject),
-      (readingMinutes + writingMinutes) * 60,
-      new Date(),
-      readingMinutes * 60,
-    )
     const next = {
       subject: subject.trim(), provider: provider.trim(), title: formatExamTitle(provider, examYear, subject), examYear, paper: paper.trim(),
-      readingMinutes, writingMinutes, marks, startedAt: Date.now(), pausedSeconds: 0, focal, workspaceItems: [],
+      id: crypto.randomUUID(), phase: readingMinutes > 0 ? "reading" as const : "writing" as const,
+      readingMinutes, writingMinutes, marks, startedAt: now.getTime(), pausedSeconds: 0, workspaceItems: [],
     }
     saveSession(next)
     setRawMax(marks)
-    void publishFocalTimer(focal, "in-progress")
   }
 
   function reset() {
-    if (session?.focal) void publishFocalTimer(session.focal, "delete")
-    saveSession(undefined)
+    saveSession(undefined, "cancel")
     setMarkingOpen(false)
     setDiscardOpen(false)
     setQuestionResults([])
@@ -199,29 +181,20 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
 
   function skipReading() {
     if (!session || !timer) return
-    const now = new Date()
-    const focal = session.focal
-      ? session.pausedAt !== undefined
-        ? { ...session.focal, readingSeconds: 0, phase: "paused" as const, phaseBeforePause: "writing" as const }
-        : setFocalTimerPhase({ ...session.focal, readingSeconds: 0 }, "writing", now)
-      : undefined
-    const next = { ...session, startedAt: (session.pausedAt ?? now.getTime()) - session.readingMinutes * 60_000, focal }
+    const next = { ...session, startedAt: (session.pausedAt ?? now.getTime()) - session.readingMinutes * 60_000, phase: "writing" as const }
     saveSession(next)
-    if (focal) void publishFocalTimer(focal, "in-progress", now)
   }
 
   function pause() {
     if (!session || session.pausedAt !== undefined) return
-    const next = pauseExamSession(session)
+    const next = pauseExamSession(session, now.getTime())
     saveSession(next)
-    if (next.focal) void publishFocalTimer(next.focal, "in-progress")
   }
 
   function resume() {
     if (!session || session.pausedAt === undefined) return
-    const next = resumeExamSession(session)
+    const next = resumeExamSession(session, now.getTime())
     saveSession(next)
-    if (next.focal) void publishFocalTimer(next.focal, "in-progress")
   }
 
   function openMarking() {
@@ -286,8 +259,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
       createdAt: timestamp,
       updatedAt: timestamp,
     })
-    if (session.focal) void publishFocalTimer(session.focal, "completed")
-    saveSession(undefined)
+    saveSession(undefined, "complete")
     setMarkingOpen(false)
   }
 
@@ -411,7 +383,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
             <p role="status" className="flex-1 text-sm text-muted-foreground">{saveStatus}</p>
             {syncAction ? <Button size="sm" variant="outline" onClick={syncAction.onClick}>{syncAction.label}</Button> : null}
           </div>
-          {session.focal ? <p className="text-xs text-muted-foreground">Focal logging: paused time is excluded. Updates wait here until you are signed in and online.</p> : null}
+          {session.id ? <p className="text-xs text-muted-foreground">This timer is shared with Focal when you sign in to the same account.</p> : null}
         </CardContent>
       </Card>
 
@@ -448,14 +420,13 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
       <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={() => setDiscardOpen(true)}><Trash2 />Discard exam</Button></div>
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Discard this exam?</DialogTitle><DialogDescription>This removes your timer, question progress, and linked Focal study session. Pause and save to keep your work for later.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Discard this exam?</DialogTitle><DialogDescription>This removes your timer, question progress, and shared study session. Pause and save to keep your work for later.</DialogDescription></DialogHeader>
           <DialogFooter><Button variant="outline" onClick={() => setDiscardOpen(false)}>Keep exam</Button><Button variant="destructive" onClick={reset}>Discard exam</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       {conditionsOpen ? <ExamConditionsDialog session={session} now={now.getTime()} onClose={() => setConditionsOpen(false)} onSave={(next) => {
         saveSession(next)
         setRawMax(next.marks)
-        if (next.focal) void publishFocalTimer(next.focal, "in-progress")
         toast.success("Exam conditions updated")
       }} /> : null}
 

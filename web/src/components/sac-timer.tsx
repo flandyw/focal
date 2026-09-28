@@ -12,14 +12,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { SubjectCombobox } from "@/components/subject-combobox"
 import { PerformanceContextFields } from "@/components/performance-context-fields"
 import { useTickingNow } from "@/hooks/use-ticking-now"
+import { canonicalNow } from "@/lib/study-session-sync"
 import { formatTimer } from "@/lib/exam-timer"
 import { getSacTimerState, SAC_UNITS, validateSac, type SacRecord, type SacUnit } from "@/lib/sac"
-import {
-  createFocalTimerLink,
-  pauseFocalTimer,
-  publishFocalTimer,
-  resumeFocalTimer,
-} from "@/lib/focal-timer"
 import { prioritiseSubjects } from "@/lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "@/lib/performance-context"
 import { isSacTimerSession, type SacTimerSession } from "@/lib/ongoing-timers"
@@ -30,7 +25,7 @@ type SacTimerProps = {
   preferredSubjects: string[]
   initialRecord?: SacRecord | null
   activeSession?: SacTimerSession
-  onSessionChange: (session: SacTimerSession | undefined) => void
+  onSessionChange: (session: SacTimerSession | undefined, action?: "cancel" | "complete") => void
   onSave: (record: SacRecord) => void
 }
 
@@ -77,10 +72,10 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
     else sessionStorage.removeItem(STORAGE_KEY)
   }, [activeSession, onSessionChange])
 
-  function saveSession(next: SacTimerSession | undefined) {
+  function saveSession(next: SacTimerSession | undefined, action?: "cancel" | "complete") {
     if (next) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     else sessionStorage.removeItem(STORAGE_KEY)
-    onSessionChange(next)
+    onSessionChange(next, action)
   }
   const timer = useMemo(() => session
     ? getSacTimerState(session.pausedAt ?? now.getTime(), session.startedAt, session.durationMinutes)
@@ -92,8 +87,8 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
     const validationError = validateSac({ subject, provider, title, unit, scheduledAt, durationMinutes, maxScore: undefined, score: undefined, weighting: initialRecord?.weighting }) ??
       (!Number.isFinite(maxScore) || maxScore <= 0 ? "Total marks must be greater than zero." : null)
     if (validationError) return setError(validationError)
-    const focal = createFocalTimerLink("sac", subject, title, durationMinutes * 60)
     const next: SacTimerSession = {
+      id: crypto.randomUUID(),
       recordId: initialRecord?.id,
       subject: subject.trim(),
       provider: provider.trim(),
@@ -107,42 +102,34 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
       weighting: initialRecord?.weighting,
       notes: initialRecord?.notes,
       createdAt: initialRecord?.createdAt,
-      startedAt: Date.now(),
+      startedAt: canonicalNow().getTime(),
       pausedSeconds: 0,
-      focal,
     }
     saveSession(next)
     setError(null)
-    void publishFocalTimer(focal, "in-progress")
   }
 
   function pause() {
     if (!session || session.pausedAt) return
-    const focal = session.focal ? pauseFocalTimer(session.focal) : undefined
-    const next = { ...session, pausedAt: Date.now(), focal }
+    const next = { ...session, pausedAt: now.getTime() }
     saveSession(next)
-    if (focal) void publishFocalTimer(focal, "in-progress")
   }
 
   function resume() {
     if (!session?.pausedAt) return
-    const pauseDuration = Date.now() - session.pausedAt
-    const focal = session.focal ? resumeFocalTimer(session.focal) : undefined
+    const pauseDuration = now.getTime() - session.pausedAt
     const next = {
       ...session,
       startedAt: session.startedAt + pauseDuration,
       pausedAt: undefined,
       pausedSeconds: session.pausedSeconds + Math.floor(pauseDuration / 1000),
-      focal,
     }
     saveSession(next)
-    if (focal) void publishFocalTimer(focal, "in-progress")
   }
 
   function discard() {
     if (!window.confirm("Discard this timed SAC and return to setup?")) return
-    if (session?.focal) void publishFocalTimer(session.focal, "delete")
-    saveSession(undefined)
+    saveSession(undefined, "cancel")
     setMarkingOpen(false)
   }
 
@@ -199,8 +186,7 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
       createdAt: existing?.createdAt ?? session.createdAt ?? timestamp,
       updatedAt: timestamp,
     })
-    if (session.focal) void publishFocalTimer(session.focal, "completed")
-    saveSession(undefined)
+    saveSession(undefined, "complete")
     setMarkingOpen(false)
   }
 
@@ -245,7 +231,7 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
         <div><h2 className="text-xl font-semibold">{session.title}</h2><p className="text-sm text-muted-foreground">{session.subject} · {session.provider}{session.sacNumber ? ` · SAC ${session.sacNumber}` : ""} · Unit {session.unit} · {session.durationMinutes} min · {session.maxScore} marks</p></div>
         <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={discard}><RotateCcw />Discard</Button><Button variant="outline" onClick={session.pausedAt ? resume : pause}>{session.pausedAt ? <Play /> : <Pause />}{session.pausedAt ? "Resume" : "Pause"}</Button><Button onClick={openMarking}><Check />Finish & mark</Button></div>
       </div>
-      {session.focal ? <Alert><Clock3 /><AlertTitle>Focal study logging active</AlertTitle><AlertDescription>Timer changes are queued and published to your Focal account as soon as it is online.</AlertDescription></Alert> : null}
+      {session.id ? <Alert><Clock3 /><AlertTitle>Shared study session</AlertTitle><AlertDescription>Timer changes sync with Focal when you sign in to the same account.</AlertDescription></Alert> : null}
       <section className="grid gap-6 py-8 text-center">
         <div><p className={overtime ? "text-sm font-medium text-destructive" : "text-sm font-medium text-muted-foreground"}>{overtime ? "Overtime" : session.pausedAt ? "Paused" : "Time remaining"}</p><p role="timer" className={overtime ? "mt-2 text-7xl font-semibold tracking-tight text-destructive tabular-nums sm:text-8xl" : "mt-2 text-7xl font-semibold tracking-tight tabular-nums sm:text-8xl"}>{overtime ? `+${formatTimer(timer.overtimeSeconds)}` : formatTimer(timer.remainingSeconds)}</p></div>
         <Progress value={timer.progress} className="mx-auto w-full max-w-2xl"><ProgressLabel>{overtime ? "Time elapsed" : "SAC progress"}</ProgressLabel><span className="ml-auto text-sm text-muted-foreground tabular-nums">{Math.round(timer.progress)}%</span></Progress>

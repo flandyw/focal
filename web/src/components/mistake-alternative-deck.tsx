@@ -122,11 +122,11 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
         {generationProgress && generating ? <p role="status" aria-live="polite" className="text-xs text-muted-foreground tabular-nums">{formatChatGPTProgress(generationProgress)}</p> : null}
       </div>
 
-      <Card className="mx-auto w-full max-w-4xl" aria-live="polite">
+      <Card className="w-full min-w-0" aria-live="polite">
         <CardHeader className="border-b">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <CardTitle>{current.skill}</CardTitle>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-balance">{current.skill}</CardTitle>
               <CardDescription>Alternative to {source.question}</CardDescription>
             </div>
             <div className="flex flex-wrap justify-end gap-1.5">
@@ -137,15 +137,15 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
           </div>
         </CardHeader>
         <CardContent className="grid min-h-80 content-start gap-6">
-          <section>
+          <section className="min-w-0">
             <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Question</p>
-            <MarkdownPreview>{current.question}</MarkdownPreview>
+            <MarkdownPreview unframed>{current.question}</MarkdownPreview>
           </section>
           {revealed ? <>
             <Separator />
-            <section>
+            <section className="min-w-0">
               <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Worked answer</p>
-              <MarkdownPreview>{current.answer}</MarkdownPreview>
+              <MarkdownPreview unframed>{current.answer}</MarkdownPreview>
             </section>
           </> : null}
         </CardContent>

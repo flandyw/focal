@@ -78,7 +78,7 @@ export async function recordRemoteNotionDeleteIntent(
 ): Promise<void> {
   if (!isSyncTable(change.entity)) return
   const payload = getNotionDeleteMetadata(change.payload)
-    ?? getNotionDeleteMetadata(notionDeletePayload(change.entity, change.rowId, localValue as unknown as LocalRecord))
+    ?? getNotionDeleteMetadata(notionDeletePayload(change.entity, change.rowId, localValue))
   if (!payload) return
   await enqueueNotionArchive(payload.dataSourceId, payload.kind, change.rowId, payload.pageId, new Date().toISOString())
 }

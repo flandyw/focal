@@ -2,18 +2,14 @@
 --
 -- ExamTrack only has its own Supabase project because the study timer had to cross a
 -- project boundary. With one project, `attempts`, `mistakes` and `user_state` become
--- plain tables here and the second Supabase client in both apps goes away.
+-- compatibility tables here and the second Supabase client in both apps goes away.
 --
--- Column shapes are copied verbatim from ExamTrack's migrations so the web and Android
--- clients need no data-layer change - only env vars pointing at this project.
+-- The table shapes start verbatim from ExamTrack's migrations. Migration 0012 replaces
+-- the web whole-table client with cursor sync and retains these shapes as Folio projections.
 --
--- ponytail: in ExamTrack's project these three tables feed the change log, because Folio
--- used to read mistakes through the log. Both clients actually read the tables directly
--- (`ExamTrackSyncService` in Folio, `syncAppData` in ExamTrack), so the log projection is
--- deliberately not ported: porting it would append a lamport-ordered LWW copy of every
--- write to a database that no longer has two projects to reconcile. The upgrade path is
--- the canonical `study_sessions` command protocol, which replaces log-projected rows for
--- every entity rather than extending this one.
+-- ExamTrack initially used these direct tables. Migration 0012 moves their durable feed
+-- and cursor path into sync_log while retaining table projections for Folio's mistake
+-- compare-and-set client. Study-session lifecycle stays on its own command RPC.
 
 begin;
 

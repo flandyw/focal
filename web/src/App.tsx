@@ -35,15 +35,8 @@ import {
   type SavedAtarEstimate,
 } from "@/lib/exam-data"
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/lib/storage"
-import { supabase } from "@/lib/supabase"
 import { useSupabaseSync } from "@/lib/sync"
-import {
-  flushFocalTimerOutbox,
-  parseSharedFocalTimerState,
-  publishFocalTimer,
-  readSharedFocalSessionChange,
-} from "@/lib/focal-timer"
-import { pauseExamSession, resumeExamSession } from "@/lib/ongoing-timers"
+import { queueTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
 import { ExamTrackerPicker } from "@/components/exam-tracker-picker"
 import type { ExamTimerPreset } from "@/components/exam-timer"
@@ -126,6 +119,7 @@ export default function App() {
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const sync = useSupabaseSync(data, setData)
+  const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const examSaveStatus = sync.status === "synced"
     ? "Saved to your account. Open ExamTrack on another device and sign in to the same account to continue."
     : sync.status === "syncing" ? "Saving to your account. Wait for confirmation before switching devices."
@@ -170,100 +164,6 @@ export default function App() {
     const id = window.setTimeout(() => saveAppData(data), 400)
     return () => window.clearTimeout(id)
   }, [data])
-  useEffect(() => {
-    // The link travels with the exam, so another device can retry a paused
-    // Focal update even when the original device went offline before sending.
-    if (!sync.user || !data.activeExamTimer?.focal) return
-    void publishFocalTimer(data.activeExamTimer.focal, "in-progress", new Date(data.activeExamTimerUpdatedAt))
-  }, [sync.user, data.activeExamTimer, data.activeExamTimerUpdatedAt])
-  useEffect(() => {
-    const userId = sync.user?.id
-    const shared = supabase
-    if (!userId || !shared) return
-    let cancelled = false
-    let reading = false
-    const reconcile = async () => {
-      if (reading || cancelled) return
-      reading = true
-      try {
-        for (const kind of ["exam", "sac"] as const) {
-          const session = kind === "exam" ? data.activeExamTimer : data.activeSacTimer
-          const sessionId = session?.focal?.sessionId
-          if (!session || !sessionId) continue
-          const change = await readSharedFocalSessionChange(userId, sessionId)
-          if (cancelled || !change) continue
-          const remote = parseSharedFocalTimerState(change)
-          if (!remote) continue
-          if (remote.status === "deleted" || remote.status === "completed") {
-            if (kind === "exam") saveActiveExamTimer(undefined)
-            else saveActiveSacTimer(undefined)
-            toast("Session ended from another app")
-            continue
-          }
-          const now = Date.now()
-          const intervals = remote.intervals
-          const phase = remote.phase ?? (remote.status === "paused" ? "paused" : session.focal?.phase ?? "writing")
-          const focalLink = {
-            ...session.focal,
-            intervals,
-            ...(phase ? { phase } : {}),
-            ...(remote.phaseBeforePause ? { phaseBeforePause: remote.phaseBeforePause } : { phaseBeforePause: undefined }),
-          }
-          let next = session
-          if (kind === "exam") {
-            const exam = session as NonNullable<AppData["activeExamTimer"]>
-            next = remote.status === "paused"
-              ? exam.pausedAt === undefined ? pauseExamSession(exam, now) : exam
-              : exam.pausedAt !== undefined ? resumeExamSession(exam, now) : exam
-          } else {
-            const sac = session as NonNullable<AppData["activeSacTimer"]>
-            if (remote.status === "paused" && sac.pausedAt === undefined) {
-              next = { ...sac, pausedAt: now }
-            } else if (remote.status === "running" && sac.pausedAt !== undefined) {
-              const duration = Math.max(0, now - sac.pausedAt)
-              next = { ...sac, startedAt: sac.startedAt + duration, pausedAt: undefined,
-                pausedSeconds: sac.pausedSeconds + Math.floor(duration / 1000) }
-            }
-          }
-          const updated = { ...next, focal: focalLink }
-          if (JSON.stringify(updated) === JSON.stringify(session)) continue
-          if (kind === "exam") saveActiveExamTimer(updated as AppData["activeExamTimer"])
-          else saveActiveSacTimer(updated as AppData["activeSacTimer"])
-        }
-      } catch (error) {
-        console.error("Could not receive a shared Focal timer action:", error)
-      } finally {
-        reading = false
-      }
-    }
-    void reconcile()
-    const channel = shared.channel(`examtrack-session-control-${userId}`)
-      // sync_changes is a view over the log since protocol v3, and Realtime replicates
-      // tables only, so this listens to the log itself. The row shape is unchanged.
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "sync_log", filter: `user_id=eq.${userId}` }, (event) => {
-        const row = event.new as { entity?: string; row_id?: string }
-        const ids = [data.activeExamTimer?.focal?.sessionId, data.activeSacTimer?.focal?.sessionId]
-        if (row.entity === "study_sessions" && ids.includes(row.row_id)) void reconcile()
-      })
-      .subscribe()
-    const interval = window.setInterval(() => void reconcile(), 5_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-      void shared.removeChannel(channel)
-    }
-  }, [sync.user?.id, data.activeExamTimer, data.activeSacTimer])
-  useEffect(() => {
-    if (!sync.user) return
-    const flush = () => void flushFocalTimerOutbox()
-    flush()
-    window.addEventListener("online", flush)
-    const interval = window.setInterval(flush, 30_000)
-    return () => {
-      window.removeEventListener("online", flush)
-      window.clearInterval(interval)
-    }
-  }, [sync.user])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => {
     const openCommandMenu = (event: KeyboardEvent) => {
@@ -399,12 +299,16 @@ export default function App() {
     setData((current) => ({ ...current, examProgression }))
   }
 
-  function saveActiveExamTimer(activeExamTimer: AppData["activeExamTimer"]) {
-    setData((current) => ({ ...current, activeExamTimer, activeExamTimerUpdatedAt: new Date().toISOString() }))
+  async function saveActiveExamTimer(activeExamTimer: AppData["activeExamTimer"], action?: "cancel" | "complete") {
+    const saved = await queueTimerSessionChange(data.activeExamTimer, activeExamTimer, "exam", action)
+    saveAppData({ ...data, activeExamTimer: saved })
+    setData((current) => ({ ...current, activeExamTimer: saved }))
   }
 
-  function saveActiveSacTimer(activeSacTimer: AppData["activeSacTimer"]) {
-    setData((current) => ({ ...current, activeSacTimer, activeSacTimerUpdatedAt: new Date().toISOString() }))
+  async function saveActiveSacTimer(activeSacTimer: AppData["activeSacTimer"], action?: "cancel" | "complete") {
+    const saved = await queueTimerSessionChange(data.activeSacTimer, activeSacTimer, "sac", action)
+    saveAppData({ ...data, activeSacTimer: saved })
+    setData((current) => ({ ...current, activeSacTimer: saved }))
   }
 
   function toggleCompletedExam(id: string) {
@@ -632,7 +536,7 @@ export default function App() {
           </div>
         </header>
         <main id="main-content" className="w-full min-w-0 p-4 md:p-6 lg:p-8">
-          <SharedStudySessions userId={sync.user?.id} />
+          <SharedStudySessions userId={sync.user?.id} sessions={studySessionSync.sessions} onControl={studySessionSync.control} />
           {data.activeExamTimer && view !== "timer" ? (
             <Alert className="mb-6">
               <AlertTitle>{data.activeExamTimer.pausedAt !== undefined ? "Saved exam" : "Exam in progress"} · {data.activeExamTimer.title}</AlertTitle>
@@ -677,7 +581,7 @@ export default function App() {
           {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={data.sacRecords} subjects={references.map((reference) => reference.studyName)} preferredSubjects={data.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
           {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setView("timer") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
-          {view === "timer" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamTimer attempts={data.attempts} progression={data.examProgression} onProgressionChange={saveExamProgression} key={data.activeExamTimer?.focal?.sessionId ?? (timerPreset ? `${timerPreset.subject}-${timerPreset.examYear}-${timerPreset.paper}` : "manual")} references={references} studies={resourceStudies} preferredSubjects={data.subjects} initialExam={timerPreset} activeSession={data.activeExamTimer} saveStatus={examSaveStatus} syncAction={examSyncAction} onLeave={() => setView("dashboard")} onSessionChange={saveActiveExamTimer} onSave={(attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) }} /></Suspense> : null}
+          {view === "timer" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamTimer attempts={data.attempts} progression={data.examProgression} onProgressionChange={saveExamProgression} key={data.activeExamTimer?.id ?? (timerPreset ? `${timerPreset.subject}-${timerPreset.examYear}-${timerPreset.paper}` : "manual")} references={references} studies={resourceStudies} preferredSubjects={data.subjects} initialExam={timerPreset} activeSession={data.activeExamTimer} saveStatus={examSaveStatus} syncAction={examSyncAction} onLeave={() => setView("dashboard")} onSessionChange={saveActiveExamTimer} onSave={(attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) }} /></Suspense> : null}
           {view === "predictor" ? <>{referencesLoading || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setView("timer") }} /></Suspense>}</> : null}
           {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} /></Suspense> : null}

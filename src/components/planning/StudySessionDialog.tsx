@@ -100,6 +100,7 @@ export function StudySessionDialog({
  const [isDeleting, setIsDeleting] = useState(false)
  const [restDuration, setRestDuration] = useState("5")
  const [segments, setSegments] = useState<{ start: string; end: string }[]>(() => [{ start:"14:00", end:"15:00" }])
+ const initializedSessionIdRef = useRef<string | null>(null)
  const hasSegments = segments.length > 0
  const computedSegmentStart = hasSegments ? segments[0].start : null
  const computedSegmentEnd = hasSegments ? segments[segments.length - 1].end : null
@@ -145,6 +146,9 @@ export function StudySessionDialog({
 
  useEffect(() => {
  if (session) {
+ // Keep unsaved edits when a sync refreshes the project or session props.
+ if (initializedSessionIdRef.current === session.id) return
+ initializedSessionIdRef.current = session.id
  const project = projects.find((p) => p.id === session.projectId)
  // eslint-disable-next-line react-hooks/set-state-in-effect
  setProjectId(session.projectId ??"")
@@ -164,7 +168,7 @@ export function StudySessionDialog({
  // Initialize editable segments from activeDurations
  if (session.activeDurations && session.activeDurations.length > 0) {
  setSegments(
- session.activeDurations
+ [...session.activeDurations]
  .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
  .map((d) => ({
  start: format(parseISO(d.start),"HH:mm"),

@@ -1,7 +1,8 @@
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react"
+import { memo, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react"
 import { ArrowRight, BookOpenCheck, FileDown, FileJson, Merge, MoreHorizontal, NotebookPen, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
+import { useMinWidth } from "@/hooks/use-mobile"
 import { filterMistakeLibrary, type BrowserFilter } from "@/lib/mistake-library"
 import { MistakePractice } from "@/components/mistake-practice"
 import { MarkdownPreview } from "@/components/markdown-preview"
@@ -73,6 +74,33 @@ const RATING_OPTIONS: { rating: ReviewRating; label: string; shortcut: string; v
   { rating: "easy", label: "Easy", shortcut: "4", variant: "default" },
 ]
 
+// Two columns start at the same 1024px the workspace grid does, so the reading
+// pane and the list never disagree about which layout is on screen.
+const WORKSPACE_MIN_WIDTH = 1024
+
+type ReviewRecord = NonNullable<Mistake["reviewHistory"]>[number]
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{children}</p>
+}
+
+function ProseField({ label, value }: { label: string; value?: string }) {
+  return (
+    <section className="min-w-0">
+      <SectionLabel>{label}</SectionLabel>
+      {value?.trim() ? <MarkdownPreview unframed>{value}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Not recorded yet.</p>}
+    </section>
+  )
+}
+
+function reviewLine(review: ReviewRecord) {
+  return [
+    new Date(review.completedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
+    review.result,
+    review.intervalDays === undefined ? null : `${review.intervalDays}d interval`,
+  ].filter(Boolean).join(" · ")
+}
+
 function stateLabel(state: MistakeReviewState, mature: boolean) {
   if (mature) return "Mature"
   if (state === "new") return "New"
@@ -99,7 +127,7 @@ function ExamContext({ mistake, attempt, studies }: { mistake: Mistake; attempt?
   )
 }
 
-function ReviewCard({ mistake, attempt, studies, onRate }: { mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void }) {
+function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onToggleSuspend }: { mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void; onEdit: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
   const [revealed, setRevealed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const schedule = getMistakeSchedule(mistake)
@@ -132,33 +160,41 @@ function ReviewCard({ mistake, attempt, studies, onRate }: { mistake: Mistake; a
   }, [onRate, revealed, submitting])
 
   return (
-    <Card className="mx-auto w-full max-w-4xl" aria-live="polite">
+    <Card className="w-full min-w-0" aria-live="polite">
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle>{mistake.question}</CardTitle>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-balance">{mistake.question}</CardTitle>
             <ExamContext mistake={mistake} attempt={attempt} studies={studies} />
           </div>
-          <div className="flex flex-wrap justify-end gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
             <Badge variant="outline">{mistake.category}</Badge>
             {mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`More actions for ${mistake.question}`} />}><MoreHorizontal /></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(mistake)}>Edit this card</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onToggleSuspend(mistake)}>{mistake.suspended ? "Resume reviews" : "Pause reviews"}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </CardHeader>
       <CardContent className="grid min-h-80 content-start gap-6">
         <section>
-          <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">Question</p>
-          <MarkdownPreview>{mistake.questionText?.trim() || mistake.question}</MarkdownPreview>
+          <SectionLabel>Question</SectionLabel>
+          <MarkdownPreview unframed>{mistake.questionText?.trim() || mistake.question}</MarkdownPreview>
           <MistakeAttachments attachments={mistake.attachments} />
         </section>
         {revealed ? <>
           <Separator />
-          <section className="grid gap-5">
-            <div><p className="mb-2 text-sm font-medium">What went wrong</p><MarkdownPreview>{mistake.explanation}</MarkdownPreview></div>
-            <div><p className="mb-2 text-sm font-medium">Improved response or method</p><MarkdownPreview>{mistake.correction}</MarkdownPreview></div>
-            {mistake.criterion ? <div><p className="mb-2 text-sm font-medium">Assessment criterion</p><MarkdownPreview>{mistake.criterion}</MarkdownPreview></div> : null}
-          </section>
+          {/* Landscape desktop has the width to read the diagnosis and the fix as a pair. */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ProseField label="What went wrong" value={mistake.explanation} />
+            <ProseField label="Improved response or method" value={mistake.correction} />
+            {mistake.criterion ? <div className="lg:col-span-2"><ProseField label="Assessment criterion" value={mistake.criterion} /></div> : null}
+          </div>
         </> : null}
       </CardContent>
       <CardFooter className="block">
@@ -249,11 +285,11 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
 
   return (
     <div className="grid gap-4">
-      <div className="mx-auto grid w-full max-w-4xl gap-2">
+      <div className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm">
             <span className="font-medium">Study session</span>
-            <span className="ml-2 text-muted-foreground">{reviewed} reviewed · {due.length} remaining</span>
+            <span className="ml-2 text-muted-foreground tabular-nums">{reviewed} reviewed · {due.length} remaining</span>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={onBrowse}>End session</Button>
@@ -268,57 +304,98 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
           <span><span className="font-medium text-foreground tabular-nums">{counts.review}</span> review</span>
         </div>
       </div>
-      <div className="mx-auto flex w-full max-w-4xl flex-wrap justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => onEdit(current)}>Edit this card</Button><Button size="sm" variant="ghost" onClick={() => onToggleSuspend(current)}>Pause this card</Button></div>
-      <ReviewCard key={current.id + current.updatedAt} mistake={current} attempt={attemptMap.get(current.attemptId)} studies={studies} onRate={rate} />
+      <ReviewCard key={current.id + current.updatedAt} mistake={current} attempt={attemptMap.get(current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onToggleSuspend={onToggleSuspend} />
     </div>
   )
 }
 
-function BrowseCardInner({ mistake, attempt, studies, onEdit, onToggleSuspend, onDelete, selected, onSelect, onPractice }: { selected: boolean; onSelect: () => void; onPractice: () => void; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onEdit: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; onDelete: (mistake: Mistake) => void }) {
+type MistakeActions = {
+  mistake: Mistake
+  attempt?: ExamAttempt
+  studies: VcaaStudyResources[]
+  onEdit: (mistake: Mistake) => void
+  onToggleSuspend: (mistake: Mistake) => void
+  onDelete: (mistake: Mistake) => void
+  onPractice: (mistake: Mistake) => void
+}
+
+// The reading surface. Maths needs a measured column, not a card in a stack, so
+// this is the one place a mistake's content is rendered on the library tab.
+function MistakeDetail({ mistake, attempt, studies, onEdit, onToggleSuspend, onDelete, onPractice }: MistakeActions) {
   const schedule = getMistakeSchedule(mistake)
-  const isDue = !mistake.suspended && new Date(schedule.dueAt).getTime() <= Date.now()
   return (
-    <article className={"min-w-0 rounded-xl border bg-card p-4 transition-colors sm:p-5 " + (selected ? "border-primary bg-primary/5" : "hover:border-foreground/20")}>
-      <div className="flex items-start gap-3">
-        <input type="checkbox" checked={selected} onChange={onSelect} aria-label={"Select " + mistake.question} className="mt-1 size-4 shrink-0 accent-primary" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0"><h3 className="font-medium leading-snug"><button type="button" className="text-left hover:underline focus-visible:outline-2 focus-visible:outline-ring" onClick={() => onEdit(mistake)}>{mistake.question}</button></h3><ExamContext mistake={mistake} attempt={attempt} studies={studies} /></div>
-            <span className={"shrink-0 rounded-full px-2 py-0.5 text-xs font-medium " + (isDue ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>{mistake.suspended ? "Paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}</span>
-          </div>
-          <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{mistake.questionText?.trim() || mistake.explanation || mistake.question}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span>{mistake.category}</span>{mistake.areaOfStudy ? <span>{mistake.areaOfStudy}</span> : null}<span>{stateLabel(schedule.state, schedule.resolved)}</span></div>
-          <MistakeAttachments attachments={mistake.attachments} compact />
-          <div className="mt-3"><MistakeAnswerDetails mistake={mistake} /></div>
-          <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={onPractice}><Play />Practise</Button><Button size="sm" variant="ghost" onClick={() => onEdit(mistake)}>Edit</Button><DropdownMenu><DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`More actions for ${mistake.question}`} />}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onToggleSuspend(mistake)}>{mistake.suspended ? "Resume reviews" : "Pause reviews"}</DropdownMenuItem><DropdownMenuItem variant="destructive" onClick={() => onDelete(mistake)}>Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+    <article className="grid min-w-0 gap-6 rounded-xl border bg-card p-4 sm:p-5 lg:p-6">
+      <header className="grid gap-2">
+        <h2 className="text-lg leading-snug font-semibold text-balance">{mistake.question}</h2>
+        <ExamContext mistake={mistake} attempt={attempt} studies={studies} />
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
+          <Badge variant="outline">{mistake.category}</Badge>
+          {mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}
         </div>
+      </header>
+      <section className="min-w-0">
+        <SectionLabel>Question</SectionLabel>
+        <MarkdownPreview unframed>{mistake.questionText?.trim() || mistake.question}</MarkdownPreview>
+        <MistakeAttachments attachments={mistake.attachments} />
+      </section>
+      <div className="grid gap-6 border-t pt-5 lg:grid-cols-2">
+        <ProseField label="What went wrong" value={mistake.explanation} />
+        <ProseField label="Improved response or method" value={mistake.correction} />
+        {mistake.criterion ? <div className="lg:col-span-2"><ProseField label="Assessment criterion" value={mistake.criterion} /></div> : null}
       </div>
+      {mistake.reviewHistory?.length ? (
+        <section className="grid gap-2 border-t pt-5">
+          <SectionLabel>Recent reviews</SectionLabel>
+          <ul className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+            {mistake.reviewHistory.toReversed().slice(0, 6).map((review) => <li key={review.id} className="tabular-nums">{reviewLine(review)}</li>)}
+          </ul>
+        </section>
+      ) : null}
+      <footer className="flex flex-wrap items-center gap-2 border-t pt-5">
+        <Button size="sm" onClick={() => onPractice(mistake)}><Play />Practise</Button>
+        <Button size="sm" variant="outline" onClick={() => onEdit(mistake)}>Edit</Button>
+        <Button size="sm" variant="ghost" onClick={() => onToggleSuspend(mistake)}>{mistake.suspended ? "Resume reviews" : "Pause reviews"}</Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" className="ml-auto" aria-label={`More actions for ${mistake.question}`} />}><MoreHorizontal /></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><DropdownMenuItem variant="destructive" onClick={() => onDelete(mistake)}>Delete</DropdownMenuItem></DropdownMenuContent>
+        </DropdownMenu>
+      </footer>
     </article>
   )
 }
 
-const BrowseCard = memo(BrowseCardInner)
-
-// KaTeX + markdown parsing is the single most expensive synchronous cost on
-// this page. Only pay it when the user expands a card's answer section.
-function MistakeAnswerDetails({ mistake }: { mistake: Mistake }) {
-  const [open, setOpen] = useState(false)
+// A row, not a card. Scanning forty mistakes beats scrolling past four.
+function BrowseRowInner({ mistake, active, selected, onOpen, onSelect }: {
+  mistake: Mistake
+  active: boolean
+  selected: boolean
+  onOpen: () => void
+  onSelect: () => void
+}) {
+  const schedule = getMistakeSchedule(mistake)
+  const isDue = !mistake.suspended && new Date(schedule.dueAt).getTime() <= Date.now()
   return (
-    <details className="rounded-lg border" onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}>
-      <summary className="cursor-pointer px-3 py-2 text-sm font-medium select-none">Answer and review history</summary>
-      <div className="grid gap-4 border-t p-3">
-        <div><p className="mb-2 text-sm font-medium">What went wrong</p>{open ? <MarkdownPreview>{mistake.explanation}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Expand to render formatting and maths.</p>}</div>
-        <div><p className="mb-2 text-sm font-medium">Improved response or method</p>{open ? <MarkdownPreview>{mistake.correction}</MarkdownPreview> : null}</div>
-        {mistake.reviewHistory?.length ? <div>
-          <p className="mb-2 text-sm font-medium">Recent reviews</p>
-          <ul className="grid gap-1 text-xs text-muted-foreground">
-            {mistake.reviewHistory.toReversed().slice(0, 5).map((review) => <li key={review.id}>{new Date(review.completedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · {review.result}{review.intervalDays === undefined ? "" : ` · ${review.intervalDays}d interval`}</li>)}
-          </ul>
-        </div> : null}
+    <li className={"rounded-lg transition-colors motion-reduce:transition-none " + (active ? "bg-accent" : "hover:bg-accent/60")}>
+      <div className="flex items-start gap-3 px-2 py-1.5">
+        <input type="checkbox" checked={selected} onChange={onSelect} aria-label={"Select " + mistake.question} className="mt-1.5 size-4 shrink-0 accent-primary" />
+        <button type="button" onClick={onOpen} aria-expanded={active} className="min-w-0 flex-1 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="block truncate text-sm font-medium">{mistake.question}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <span className="truncate">{mistake.category}</span>
+            {mistake.areaOfStudy ? <><span aria-hidden="true">·</span><span className="truncate">{mistake.areaOfStudy}</span></> : null}
+            {mistake.marksLost !== undefined && mistake.totalMarks !== undefined ? <><span aria-hidden="true">·</span><span className="tabular-nums">{mistake.marksLost}/{mistake.totalMarks} lost</span></> : null}
+          </span>
+        </button>
+        <span className={"shrink-0 pt-0.5 text-xs whitespace-nowrap tabular-nums " + (isDue ? "font-medium text-primary" : "text-muted-foreground")}>
+          {mistake.suspended ? "Paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}
+        </span>
       </div>
-    </details>
+    </li>
   )
 }
+
+const BrowseRow = memo(BrowseRowInner)
 
 const MERGE_FIELD_LABELS: Record<MistakeMergeField, string> = {
   areaOfStudy: "Topic / Area of Study",
@@ -439,6 +516,8 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [sort, setSort] = useState("due")
   const [showFilters, setShowFilters] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const isWorkspace = useMinWidth(WORKSPACE_MIN_WIDTH)
   const [practice, setPractice] = useState<Mistake[] | null>(null)
   const [exporting, setExporting] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -467,10 +546,15 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
     return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort })
   }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort])
   const selectedMistakes = browsedMistakes.filter((mistake) => selected.has(mistake.id))
+  // ponytail: the library renders at most this many rows; raise it when the list
+  // pane gains virtualisation.
+  const shownMistakes = browsedMistakes.slice(0, 48)
+  const activeMistake = shownMistakes.find((mistake) => mistake.id === activeId) ?? null
   const worksheetMistakes = selectedMistakes.length ? selectedMistakes : browsedMistakes
   const categories = [...new Set(visibleMistakes.map((mistake) => mistake.category))].sort()
   const topics = [...new Set(visibleMistakes.flatMap((mistake) => mistake.areaOfStudy ? [mistake.areaOfStudy] : []))].sort()
-  function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setSelected(new Set()) }
+  function clearSelection() { setSelected(new Set()); setActiveId(null) }
+  function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); clearSelection() }
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
     const startOfToday = new Date()
@@ -539,7 +623,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   }
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6">
+    <div className="grid min-w-0 gap-5 lg:gap-6">
       <PageHeader title="Mistakes" description="Review and practise missed questions.">
         <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!data.attempts.length}><FileJson />Import from chatbot</Button>
         <Button onClick={onLog} disabled={!data.attempts.length}><Plus />Add mistake</Button>
@@ -554,7 +638,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
       </PageHeader>
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{counts.due ? `${counts.due} ${counts.due === 1 ? "mistake" : "mistakes"} ready to review` : "You're caught up"}</p><p className="text-sm text-muted-foreground">{visibleMistakes.length} saved · {progress.matureCards} mastered</p></div></div>
+        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{counts.due ? `${counts.due} ${counts.due === 1 ? "mistake" : "mistakes"} ready to review` : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{visibleMistakes.length} saved · {progress.matureCards} mastered</p></div></div>
         <Button variant={counts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section>
       {subjects.length > 1 || showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span>{subjects.length > 1 ? <Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : null}{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div> : null}
@@ -567,23 +651,25 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>
         <TabsContent value="insights" className="mt-4 grid gap-4">
-          <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-4"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4"><div><p className="text-2xl font-semibold">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
+          <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
           <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} />
         </TabsContent>
         <TabsContent value="study" className="mt-4"><StudyQueue key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4">
           {scheduleGroups.length ? (
-            <div className="grid gap-6">
+            <div className="grid gap-4">
               <p className="text-sm text-muted-foreground">{dueThisWeekCount
                 ? `${dueThisWeekCount} card${dueThisWeekCount === 1 ? "" : "s"} to review in the next 7 days.`
                 : "Nothing scheduled for the next week — log mistakes after your next timed paper."}</p>
+              {/* Overdue, today and tomorrow read as three columns on a landscape screen. */}
+              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
               {scheduleGroups.map((group) => (
-                <section key={group.key} className="grid gap-2" aria-label={`Reviews due ${group.label.toLowerCase()}`}>
+                <section key={group.key} className="grid content-start gap-2" aria-label={`Reviews due ${group.label.toLowerCase()}`}>
                   <div className="flex items-center gap-2">
                     <h3 className={group.overdue ? "text-sm font-semibold text-destructive" : "text-sm font-semibold"}>{group.label}</h3>
                     <Badge variant={group.overdue ? "destructive" : "secondary"}>{group.items.length}</Badge>
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-1.5">
                     {group.items.map(({ mistake }) => {
                       const attempt = attemptMap.get(mistake.attemptId)
                       return (
@@ -603,6 +689,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
                   </div>
                 </section>
               ))}
+              </div>
             </div>
           ) : (
             <Empty className="min-h-64 border"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>No reviews scheduled</EmptyTitle><EmptyDescription>Cards appear here once mistakes are logged and reviewed.</EmptyDescription></EmptyHeader></Empty>
@@ -610,10 +697,10 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         </TabsContent>
         <TabsContent value="alternative" className="mt-4"><MistakeAlternativeDeck key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} allMistakes={data.mistakes} attempts={data.attempts} deck={data.alternativeMistakeDeck} onSave={onSaveAlternativeDeck} /></TabsContent>
         <TabsContent value="browse" className="mt-4">
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); setSelected(new Set()) }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
-              <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); setSelected(new Set()) }}>
+              <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
+              <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); clearSelection() }}>
                 <SelectTrigger aria-label="Filter mistake cards by schedule"><SelectValue>{({ all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Paused" } as Record<BrowserFilter, string>)[browserFilter]}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All cards</SelectItem><SelectItem value="due">Due now</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="learning">Learning</SelectItem><SelectItem value="review">Review</SelectItem><SelectItem value="mature">Mature</SelectItem><SelectItem value="suspended">Reviews paused</SelectItem>
@@ -622,18 +709,35 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
               <Button variant="ghost" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters</Button>
             </div>
             {showFilters ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3">
-              <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); setSelected(new Set()) }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select value={topic} onValueChange={(value) => { setTopic(value ?? "all"); setSelected(new Set()) }}><SelectTrigger aria-label="Filter by topic"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All topics</SelectItem>{topics.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+              <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+              <Select value={topic} onValueChange={(value) => { setTopic(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by topic"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All topics</SelectItem>{topics.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
               <Select value={sort} onValueChange={(value) => setSort(value ?? "due")}><SelectTrigger aria-label="Sort mistakes"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="due">Due date</SelectItem><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="marks">Most marks lost</SelectItem><SelectItem value="question">Question order</SelectItem></SelectContent></Select>
               {search || category !== "all" || topic !== "all" || browserFilter !== "all" ? <Button size="sm" variant="ghost" onClick={resetFilters}><X />Clear filters</Button> : null}
             </div> : null}
+            {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}</span>
+              <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · showing the first ${shownMistakes.length}` : ""}</span>
               <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" disabled={!browsedMistakes.length} checked={browsedMistakes.length > 0 && selectedMistakes.length === browsedMistakes.length} ref={(node) => { if (node) node.indeterminate = selectedMistakes.length > 0 && selectedMistakes.length < browsedMistakes.length }} onChange={(event) => setSelected(event.target.checked ? new Set(browsedMistakes.map((mistake) => mistake.id)) : new Set())} />Select all</label><Button size="sm" variant="outline" disabled={!browsedMistakes.length} onClick={() => setPractice(worksheetMistakes)}><Play />{selectedMistakes.length ? `Practise selected (${selectedMistakes.length})` : "Practise"}</Button></div>
             </div>
-            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" disabled={exporting} onClick={() => void exportWorksheet()}><FileDown />{exporting ? "Exporting…" : "Export selected"}</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
-            {browsedMistakes.length ? <div className="grid gap-2">{browsedMistakes.slice(0, 48).map((mistake) => <BrowseCard key={mistake.id} mistake={mistake} attempt={attemptMap.get(mistake.attemptId)} studies={studies} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onDelete={onDelete} selected={selected.has(mistake.id)} onSelect={() => toggleSelected(mistake.id)} onPractice={() => setPractice([mistake])} />)}</div> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : data.attempts.length ? "Save a missed question here to review it later." : "Add an exam first, then save the questions you want to improve."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={() => { resetFilters(); setSubject("all"); setMathsExamFilter("all") }}>Clear filters</Button> : <Button onClick={onLog} disabled={!data.attempts.length}><Plus />Add mistake</Button>}</Empty>}
-            {browsedMistakes.length > 48 ? <p className="text-center text-xs text-muted-foreground">Showing 48 of {browsedMistakes.length} cards — refine the search to narrow the list.</p> : null}
+            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" disabled={exporting} onClick={() => void exportWorksheet()}><FileDown />{exporting ? "Exporting…" : "Export selected"}</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
+            <div className="grid items-start gap-4 lg:grid-cols-[21rem_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
+              {/* The list scrolls inside its own sticky pane so the reading pane keeps
+                  its own vertical rhythm instead of inheriting forty rows of scroll. */}
+              <ol className="grid min-w-0 content-start gap-0.5 lg:sticky lg:top-6 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto lg:pr-1">
+                {shownMistakes.map((mistake) => <BrowseRow key={mistake.id} mistake={mistake} active={mistake.id === activeId} selected={selected.has(mistake.id)} onOpen={() => setActiveId(mistake.id === activeId ? null : mistake.id)} onSelect={() => toggleSelected(mistake.id)} />)}
+                {!isWorkspace && activeMistake ? <li className="mt-2"><MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} /></li> : null}
+              </ol>
+              {isWorkspace ? (activeMistake
+                ? <MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} />
+                : <div className="grid min-h-[26rem] place-items-center rounded-xl border border-dashed p-10">
+                    <div className="grid max-w-sm justify-items-center gap-2 text-center">
+                      <NotebookPen className="size-6 text-muted-foreground" />
+                      <p className="text-sm font-medium">Select a card to read it here</p>
+                      <p className="text-sm text-pretty text-muted-foreground">The question, what went wrong and the improved method open beside the list, with your maths typeset as you wrote it.</p>
+                    </div>
+                  </div>) : null}
+            </div>
+            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : data.attempts.length ? "Save a missed question here to review it later." : "Add an exam first, then save the questions you want to improve."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={() => { resetFilters(); setSubject("all"); setMathsExamFilter("all") }}>Clear filters</Button> : <Button onClick={onLog} disabled={!data.attempts.length}><Plus />Add mistake</Button>}</Empty>}
           </div>
         </TabsContent>
       </Tabs>

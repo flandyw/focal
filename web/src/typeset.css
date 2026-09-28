@@ -16,6 +16,8 @@
     --typeset-size: 0.9375rem;
     --typeset-leading: 1.6;
     --typeset-flow: 1em;
+    /* Cards go full-bleed on a landscape desktop; the prose measure does not. */
+    max-width: 68ch;
   }
 
   .typeset :where(h1, h2, h3, h4) {
@@ -33,5 +35,8 @@
   .typeset :where(code) { font-family: var(--typeset-font-mono); font-size: 0.9em; }
   .typeset :where(a) { color: var(--foreground); text-decoration: underline; text-underline-offset: 0.2em; }
   .typeset :where(blockquote) { border-inline-start: 1px solid var(--border); padding-inline-start: 1em; color: var(--muted-foreground); }
-  .typeset :where(.katex-display) { overflow-x: auto; overflow-y: hidden; padding-block: 0.25rem; }
+  /* Display maths is a wide, nowrap block inside a 68ch measure, so it needs its
+     own scroll. overflow-y is left unset: forcing it to hidden clips tall
+     fractions, and auto costs nothing because the box grows with its content. */
+  .typeset :where(.katex-display) { overflow-x: auto; padding-block: 0.25rem; }
 }

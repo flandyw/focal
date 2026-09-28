@@ -14,7 +14,7 @@ import { getTimetableConfig } from "@/lib/settings"
 import { enqueueNotionArchive } from "@/lib/notion/outbox"
 import { supabase } from "@/lib/supabase/client"
 import { applyRemoteEntries, collectUserSettings, readCurrentLocalValue } from "@/lib/sync/applier"
-import { withWriteLock, mutatePersistedArray } from "@/lib/storage/database"
+import { openFocalDatabase, withWriteLock, mutatePersistedArray } from "@/lib/storage/database"
 import { getDeviceId } from "@/lib/sync/device"
 import {
   emitLocalDataChanged,
@@ -32,12 +32,15 @@ import {
   readInbox,
   readOutbox,
   readState,
+  replaceOutboxCommand,
+  retryOutboxItem,
   removeApplied,
   removeInboxChanges,
   removeOutboxChange,
   writeApplied,
   writeCursor,
   writeState,
+  updateOutboxPayload,
 } from "@/lib/sync/persistence"
 import {
   chunkItems,
@@ -55,6 +58,7 @@ import { getNotionDeleteMetadata, notionDeletePayload, recordNotionUpsertIntent 
 import { repairDuplicateSessions } from "@/lib/sync/sessions"
 import {
   applyChanges,
+  applyStudySessionCommand,
   describeSyncError,
   errorMessage,
   isNetworkError,
@@ -62,6 +66,11 @@ import {
   readChanges,
   subscribeWakeup,
 } from "@/lib/sync/transport"
+import {
+  isStudySessionCommand,
+  type CanonicalStudySession,
+  type StudySessionCommand,
+} from "@/lib/sync/sessionContract"
 import {
   EMPTY_METRICS,
   type LocalRecord,
@@ -71,6 +80,7 @@ import {
   type SyncRowState,
   type SyncStatusSnapshot,
   type SyncTable,
+  type SyncConflictItem,
 } from "@/lib/sync/types"
 import { normalizeStudySession } from "@/lib/studySessions"
 import type { CalendarEvent, Project, StudySession, Subject } from "@/lib/types"
@@ -263,7 +273,9 @@ export async function recordLocalUpsert(
   accountId = currentSession?.user.id ?? "",
 ): Promise<void> {
   const rowId = localRowId(table, payload)
-  const queue = await enqueueChange(accountId, table, rowId, "put", sanitizePayload(table, payload))
+  const queue = table === "study_sessions"
+    ? await readOutbox(accountId)
+    : await enqueueChange(accountId, table, rowId, "put", sanitizePayload(table, payload))
   await recordNotionUpsertIntent(table, rowId, payload)
   markLocalChange()
   emitQueuedStatus(queue, `${table.replace(/_/g, " ")} saved locally`)
@@ -283,7 +295,14 @@ export async function recordLocalSoftDelete(
 async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: string): Promise<void> {
   const current = await readCurrentLocalValue(table, rowId)
   const deletePayload = notionDeletePayload(table, rowId, current)
-  const queue = await enqueueChange(accountId, table, rowId, "delete", deletePayload)
+  let queue: SyncChange[]
+  if (table === "study_sessions") {
+    // The SQLite delete trigger writes a cancel command in the same statement.
+    await (await openFocalDatabase()).execute("delete from records where kind = 'study_sessions' and id = $1", [rowId])
+    queue = await readOutbox(accountId)
+  } else {
+    queue = await enqueueChange(accountId, table, rowId, "delete", deletePayload)
+  }
   const notion = getNotionDeleteMetadata(deletePayload)
   if (notion) {
     await enqueueNotionArchive(
@@ -361,6 +380,12 @@ export function clearFailedItems(): void {
 }
 
 export async function retryFailedItem(table: SyncTable, rowId: string): Promise<void> {
+  if (table === "study_session_commands") {
+    const accountId = currentSession?.user.id ?? ""
+    await retryOutboxItem(accountId, table, rowId)
+    if (currentSession) await flushQueue()
+    return
+  }
   const value = await readCurrentLocalValue(table, rowId)
   if (value === undefined) await recordLocalSoftDelete(table, rowId)
   else await recordLocalUpsert(table, value)
@@ -455,16 +480,63 @@ async function enqueueAllLocalData(accountId = currentSession?.user.id ?? "", ep
     if (epoch !== syncEpoch) return
     if (!pendingDeletes.has(rowKey("events", event.id))) await recordLocalUpsert("events", event, accountId)
   }
+  const canonicalSessions = new Set((await readApplied(accountId, ["study_sessions"])).map((row) => row.rowId))
+  const queuedCommands = (await readOutbox(accountId))
+    .filter((change) => change.entity === "study_session_commands")
+    .flatMap((change) => isStudySessionCommand(change.payload) ? [change.payload.session_id] : [])
   for (const session of sessions) {
     if (epoch !== syncEpoch) return
-    if (!pendingDeletes.has(rowKey("study_sessions", session.id))) {
-      await recordLocalUpsert("study_sessions", normalizeStudySession(session), accountId)
+    if (!canonicalSessions.has(session.id) && !queuedCommands.includes(session.id)
+      && !pendingDeletes.has(rowKey("study_sessions", session.id))) {
+      await enqueueLocalSessionSeed(accountId, normalizeStudySession(session))
     }
   }
   for (const subject of readLocalStorageArray<Subject>("focal-custom-subjects")) await recordLocalUpsert("custom_subjects", subject, accountId)
   for (const subjectId of readLocalStorageArray<string>("focal-hidden-subjects")) await recordLocalUpsert("hidden_subjects", subjectId, accountId)
   await recordLocalUpsert("timetable_config", getTimetableConfig(), accountId)
   await recordLocalUpsert("user_settings", collectUserSettings(), accountId)
+}
+
+async function enqueueLocalSessionSeed(accountId: string, rawSession: StudySession): Promise<void> {
+  const session = normalizeStudySession(rawSession)
+  const integrations = session.integrations
+  const kind = integrations?.examtrack?.kind ?? (integrations?.folio?.kind === "exam" ? "exam" : "focus")
+  const app = session.createdVia === "examtrack" ? "examtrack" : integrations?.folio ? "folio" : "focal"
+  const phase = integrations?.examtrack?.phase ?? integrations?.folio?.phase
+  const metadata = JSON.parse(JSON.stringify(session)) as Record<string, unknown>
+  for (const field of ["execution", "status", "deleted_at", "activeDurations", "activeMillis", "startedAt", "pausedAt", "completedAt", "revision", "last_modified_device_id"]) {
+    delete metadata[field]
+  }
+  const common = {
+    session_id: session.id,
+    expected_revision: 0,
+    device_id: "",
+    app,
+    kind,
+    ...(phase === "reading" || phase === "writing" ? { phase } : {}),
+    title: session.title,
+    subject_id: session.subjectIds[0] ?? null,
+    metadata,
+  } satisfies Omit<StudySessionCommand, "mutation_id" | "action">
+  const queue = async (action: StudySessionCommand["action"], expectedRevision = 0) => {
+    const mutationId = crypto.randomUUID()
+    await enqueueChange(accountId, "study_session_commands", mutationId, "put", {
+      ...common, mutation_id: mutationId, expected_revision: expectedRevision, action,
+    } satisfies StudySessionCommand)
+  }
+  if (session.deleted_at) {
+    await queue("create")
+    await queue("cancel", 1)
+  } else if (session.execution.state === "planned") {
+    await queue("create")
+  } else if (session.execution.state === "completed") {
+    await queue("create")
+    await queue("complete", 1)
+  } else {
+    const lastInterval = session.execution.intervals[session.execution.intervals.length - 1]
+    await queue("start")
+    if (lastInterval?.end) await queue("pause", 1)
+  }
 }
 
 async function repairLocalSessionDuplicates(accountId = currentSession?.user.id ?? ""): Promise<void> {
@@ -557,17 +629,31 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   })
 
   const published = new Map<string, { change: SyncChange; seq: number }>()
+  const processedIds: string[] = []
   const retries: SyncChange[] = []
   const errors: unknown[] = []
+  const reconciliations: SyncConflictItem[] = []
   emitMetrics({ pushAttempts: snapshot.metrics.pushAttempts + 1 })
 
-  for (const batch of chunkItems(due, PUSH_BATCH_SIZE)) {
+  const sessionCommandChanges = due.filter((change) => change.entity === "study_session_commands")
+  const genericChanges = due.filter((change) => change.entity !== "study_session_commands")
+  const commandResult = await flushStudySessionCommands(session.user.id, deviceId, sessionCommandChanges, now, epoch)
+  for (const id of commandResult.processedIds) processedIds.push(id)
+  for (const entry of commandResult.published) published.set(entry.change.changeId, entry)
+  retries.push(...commandResult.retries)
+  errors.push(...commandResult.errors)
+  reconciliations.push(...commandResult.reconciliations)
+
+  for (const batch of chunkItems(genericChanges, PUSH_BATCH_SIZE)) {
     if (epoch !== syncEpoch) break
     try {
       const { receipts } = await applyChanges(batch, deviceId)
       for (const receipt of receipts) {
         const change = batch.find((candidate) => candidate.changeId === receipt.changeId)
-        if (change) published.set(receipt.changeId, { change, seq: receipt.seq })
+        if (change) {
+          published.set(receipt.changeId, { change, seq: receipt.seq })
+          processedIds.push(receipt.changeId)
+        }
       }
       for (const change of batch) {
         if (receipts.some((receipt) => receipt.changeId === change.changeId)) continue
@@ -587,7 +673,10 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
             const { receipts } = await applyChanges(half, deviceId)
             for (const receipt of receipts) {
               const change = half.find((candidate) => candidate.changeId === receipt.changeId)
-              if (change) published.set(receipt.changeId, { change, seq: receipt.seq })
+              if (change) {
+                published.set(receipt.changeId, { change, seq: receipt.seq })
+                processedIds.push(receipt.changeId)
+              }
             }
           } catch (splitError) {
             errors.push(splitError)
@@ -600,10 +689,10 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
     }
   }
 
-  const next = await finishFlush(session.user.id, [...published.keys()], retries)
+  const next = await finishFlush(session.user.id, processedIds, retries)
   // A published change is now the newest version this device knows for that row. Recording
   // the receipt's sequence is what stops an older remote change from overwriting it later.
-  await writeApplied(session.user.id, [...published.values()].map(({ change, seq }) => ({
+  await writeApplied(session.user.id, [...published.values()].filter(({ change }) => change.entity !== "study_session_commands").map(({ change, seq }) => ({
     entity: change.entity,
     rowId: change.rowId,
     operation: change.operation,
@@ -632,6 +721,7 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
         rowId: change.rowId,
         error: change.lastError ?? "Sync failed",
       })),
+      conflicts: reconciliations.length > 0 ? [...(snapshot.conflicts ?? []), ...reconciliations] : snapshot.conflicts,
       isOnline: !errors.some((error) => error instanceof TypeError),
     })
     return
@@ -645,8 +735,135 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
     details: `Synced ${published.size} change${published.size === 1 ? "" : "s"}`,
     tableStats: statsFor([...published.values()].map((entry) => entry.change), "pushed"),
     failedItems: null,
+    conflicts: reconciliations.length > 0 ? [...(snapshot.conflicts ?? []), ...reconciliations] : snapshot.conflicts,
     isOnline: true,
   })
+}
+
+interface SessionCommandFlushResult {
+  processedIds: string[]
+  published: { change: SyncChange; seq: number }[]
+  retries: SyncChange[]
+  errors: unknown[]
+  reconciliations: SyncConflictItem[]
+}
+
+async function flushStudySessionCommands(
+  accountId: string,
+  deviceId: string,
+  changes: readonly SyncChange[],
+  now: string,
+  epoch: number,
+): Promise<SessionCommandFlushResult> {
+  const output: SessionCommandFlushResult = { processedIds: [], published: [], retries: [], errors: [], reconciliations: [] }
+  const states = await readApplied(accountId, ["study_sessions"])
+  const byId = new Map(states.map((row) => [row.rowId, row]))
+  const revisions = new Map(states.map((row) => [row.rowId, canonicalRevision(row.payload)]))
+
+  for (const original of changes) {
+    if (epoch !== syncEpoch) break
+    let change = original
+    if (!isStudySessionCommand(change.payload)) {
+      const message = "validation_failed: malformed queued study session command"
+      output.retries.push({ ...change, lastError: message, nextAttemptAt: undefined, blockedAt: now })
+      output.errors.push(new Error(message))
+      continue
+    }
+
+    let command = change.payload
+    if (!change.attemptedAt) {
+      command = { ...command, expected_revision: revisions.get(command.session_id) ?? command.expected_revision }
+      await updateOutboxPayload(accountId, change.changeId, command)
+      change = { ...change, payload: command, attemptedAt: new Date().toISOString() }
+    }
+
+    let staleRetries = 0
+    while (true) {
+      try {
+        const result = await applyStudySessionCommand(command, deviceId)
+        if (result.session) {
+          const previous = byId.get(result.session.id)
+          const row: SyncRowState = {
+            entity: "study_sessions",
+            rowId: result.session.id,
+            operation: "put",
+            payload: result.session,
+            lamport: result.session.revision,
+            clientId: deviceId,
+            seq: result.change_seq ?? previous?.seq ?? 0,
+          }
+          byId.set(row.rowId, row)
+          revisions.set(row.rowId, result.session.revision)
+          await applyRemoteEntries([row], stopWakeup !== null)
+          await writeApplied(accountId, [row])
+        }
+
+        if (result.reason === "stale_revision" && result.session && !sessionActionSatisfied(command, result.session)) {
+          if (staleRetries < 2) {
+            const nextCommand: StudySessionCommand = {
+              ...command,
+              mutation_id: crypto.randomUUID(),
+              expected_revision: result.session.revision,
+            }
+            const nextChangeId = await replaceOutboxCommand(accountId, change.changeId, nextCommand)
+            change = { ...change, changeId: nextChangeId, payload: nextCommand, attemptedAt: undefined, retryCount: 0 }
+            command = nextCommand
+            staleRetries += 1
+            continue
+          }
+          const nextCommand: StudySessionCommand = {
+            ...command,
+            mutation_id: crypto.randomUUID(),
+            expected_revision: result.session.revision,
+          }
+          await replaceOutboxCommand(accountId, change.changeId, nextCommand)
+          setTimeout(() => void flushQueue(), 1_000)
+          break
+        }
+
+        if (!result.ok) {
+          output.reconciliations.push({
+            table: "study_sessions",
+            rowId: command.session_id,
+            localUpdatedAt: null,
+            remoteUpdatedAt: result.server_now,
+            remoteDeviceId: "server",
+            label: result.reason === "session_terminal"
+              ? "This session finished on another device"
+              : `Session command: ${result.reason ?? "could not be applied"}`,
+          })
+        }
+        output.processedIds.push(change.changeId)
+        output.published.push({ change, seq: result.change_seq ?? byId.get(command.session_id)?.seq ?? 0 })
+        break
+      } catch (error) {
+        output.errors.push(error)
+        output.retries.push(retryOrBlockChange(change, describeSyncError(error), now, MAX_RETRIES))
+        break
+      }
+    }
+  }
+
+  return output
+}
+
+function canonicalRevision(value: unknown): number | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
+  const revision = (value as Record<string, unknown>).revision
+  return Number.isSafeInteger(revision) && (revision as number) >= 0 ? revision as number : undefined
+}
+
+function sessionActionSatisfied(command: StudySessionCommand, session: CanonicalStudySession): boolean {
+  switch (command.action) {
+    case "start":
+    case "resume": return session.state === "running"
+    case "pause": return session.state === "paused"
+    case "complete": return session.state === "completed"
+    case "cancel": return session.state === "cancelled"
+    case "phase_change": return session.phase === command.phase
+    case "create": return true
+    case "save_progress": return false
+  }
 }
 
 // ---------------------------------------------------------------------------

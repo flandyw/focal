@@ -167,5 +167,21 @@ for (const testCase of vectors.cases) {
 }
 
 checkMigrationStructure(readFileSync(new URL("../supabase/migrations/0007_change_log.sql", import.meta.url), "utf8"))
+const canonicalMigration = readFileSync(new URL("../supabase/migrations/0011_canonical_study_sessions.sql", import.meta.url), "utf8")
+checkMigrationStructure(canonicalMigration)
+if (!/if\s+p_after\s*<\s*0\s+or\s+p_after\s*<\s*v_floor/i.test(canonicalMigration)) {
+  throw new Error("Canonical sync_read_changes must snapshot only for negative or below-floor cursors")
+}
+if (/exists\s*\([\s\S]{0,300}?seq\s*<=\s*p_after/i.test(canonicalMigration)) {
+  throw new Error("A normal cursor must not trigger a snapshot because older feed rows exist")
+}
+for (const required of ["study_session_segments", "study_session_mutation_receipts", "study_session_mutate", "auth.uid()", "for update", "server_now"]) {
+  if (!canonicalMigration.toLowerCase().includes(required.toLowerCase())) {
+    throw new Error(`Canonical study-session migration is missing ${required}`)
+  }
+}
+if (!readFileSync(new URL("../supabase/tests/study_session_commands.test.sql", import.meta.url), "utf8").includes("select plan(15)")) {
+  throw new Error("Canonical session database failure/race tests are missing")
+}
 
 console.warn(`Sync conformance passed (${vectors.cases.length} vectors, digest ${digest.slice(0, 12)})`)

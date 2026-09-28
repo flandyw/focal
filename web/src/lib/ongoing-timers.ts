@@ -1,7 +1,8 @@
-import { isFocalTimerLink, pauseFocalTimer, resumeFocalTimer, type FocalTimerLink } from "@/lib/focal-timer"
 import { isSacUnit, type SacUnit } from "@/lib/sac"
 
 export type ExamTimerSession = {
+  id?: string
+  revision?: number
   subject: string
   provider: string
   title: string
@@ -13,7 +14,7 @@ export type ExamTimerSession = {
   startedAt: number
   pausedAt?: number
   pausedSeconds: number
-  focal?: FocalTimerLink
+  phase?: "reading" | "writing"
   workspaceItems?: ExamWorkspaceItem[]
 }
 
@@ -39,13 +40,12 @@ export function updateExamSessionConditions(session: ExamTimerSession, condition
     writingMinutes,
     marks,
     startedAt: writingStarted ? session.startedAt + (session.readingMinutes - readingMinutes) * 60_000 : session.startedAt,
-    focal: session.focal ? { ...session.focal, plannedSeconds: Math.round((readingMinutes + writingMinutes) * 60) } : undefined,
   }
 }
 
 export function pauseExamSession(session: ExamTimerSession, now = Date.now()): ExamTimerSession {
   if (session.pausedAt !== undefined) return session
-  return { ...session, pausedAt: now, focal: session.focal ? pauseFocalTimer(session.focal, new Date(now)) : undefined }
+  return { ...session, pausedAt: now }
 }
 
 export function resumeExamSession(session: ExamTimerSession, now = Date.now()): ExamTimerSession {
@@ -56,7 +56,6 @@ export function resumeExamSession(session: ExamTimerSession, now = Date.now()): 
     startedAt: session.startedAt + pauseDuration,
     pausedAt: undefined,
     pausedSeconds: session.pausedSeconds + pauseDuration / 1000,
-    focal: session.focal ? resumeFocalTimer(session.focal, new Date(now)) : undefined,
   }
 }
 
@@ -70,6 +69,8 @@ export type ExamWorkspaceItem = {
 }
 
 export type SacTimerSession = {
+  id?: string
+  revision?: number
   recordId?: string
   subject: string
   provider: string
@@ -86,7 +87,6 @@ export type SacTimerSession = {
   startedAt: number
   pausedAt?: number
   pausedSeconds: number
-  focal?: FocalTimerLink
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -108,7 +108,8 @@ function hasValidSharedTimerState(value: Record<string, unknown>) {
     typeof value.startedAt === "number" && Number.isFinite(value.startedAt) &&
     typeof value.pausedSeconds === "number" && Number.isFinite(value.pausedSeconds) && value.pausedSeconds >= 0 &&
     isOptionalNumber(value.pausedAt) &&
-    (value.focal === undefined || isFocalTimerLink(value.focal))
+    (value.id === undefined || typeof value.id === "string") &&
+    (value.revision === undefined || typeof value.revision === "number" && Number.isSafeInteger(value.revision) && value.revision >= 0)
 }
 
 export function isExamTimerSession(value: unknown): value is ExamTimerSession {
@@ -137,15 +138,4 @@ export function isSacTimerSession(value: unknown): value is SacTimerSession {
     isOptionalNumber(value.weighting) &&
     isOptionalString(value.notes) &&
     isOptionalString(value.createdAt)
-}
-
-export function mergeTimerSession<T>(
-  local: T | undefined,
-  localUpdatedAt: string,
-  remote: T | undefined,
-  remoteUpdatedAt: string,
-) {
-  return remoteUpdatedAt > localUpdatedAt
-    ? { session: remote, updatedAt: remoteUpdatedAt }
-    : { session: local, updatedAt: localUpdatedAt }
 }

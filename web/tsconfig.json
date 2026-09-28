@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    /* Vercel compiles api/ + server/ with this file, so node types must be here */
+    "types": ["node", "vite/client"],
     "paths": {
       "@/*": ["./src/*"]
     }

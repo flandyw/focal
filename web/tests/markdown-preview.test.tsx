@@ -16,9 +16,42 @@ test("renders LaTeX parenthesis and bracket delimiters", () => {
   )
 
   expect(markup).toContain("katex")
-  expect(markup).toContain("katex-display")
   expect(markup).not.toContain("\\(f(x)")
   expect(markup).not.toContain("\\[x^2")
+  expect(markup).not.toContain("$$")
+})
+
+test("keeps a mid-sentence bracket expression inline and inside its paragraph", () => {
+  const markup = renderToStaticMarkup(
+    <MarkdownPreview>{"Rearrange to \\[x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}\\] then substitute."}</MarkdownPreview>,
+  )
+
+  expect(markup).not.toContain("katex-display")
+  expect(markup).toContain("mfrac")
+  expect(markup).toContain("Rearrange to")
+  expect(markup).toContain("then substitute.")
+  // A block node here would have split the sentence into two paragraphs.
+  expect(markup.match(/<p[ >]/g)?.length).toBe(1)
+})
+
+test("typesets a block display expression on its own line", () => {
+  const markup = renderToStaticMarkup(
+    <MarkdownPreview>{"Working:\n\n\\[ \\int_0^1 x^2\\,dx = \\frac{1}{3} \\]"}</MarkdownPreview>,
+  )
+
+  expect(markup).toContain("katex-display")
+  expect(markup).toContain("msubsup")
+  expect(markup).toContain("mfrac")
+})
+
+test("never leaves a display block inside an inline span", () => {
+  const markup = renderToStaticMarkup(
+    <MarkdownPreview inline>{"As shown \\[x^2+1\\] and $y = 2$."}</MarkdownPreview>,
+  )
+
+  expect(markup).toContain("katex")
+  expect(markup).not.toContain("katex-display")
+  expect(markup).not.toContain("$$")
 })
 
 test("renders inline assessment criteria without the preview card", () => {

@@ -40,7 +40,7 @@ import { recordNotionUpsertIntent, recordRemoteNotionDeleteIntent } from "@/lib/
 import type { LocalRecord, SyncRowState, SyncTable } from "@/lib/sync/types"
 import type { StudySession, Subject, TimetableConfig, UserSettings } from "@/lib/types"
 import { mutatePersistedArray } from "@/lib/storage/database"
-import { normalizeStudySession } from "@/lib/studySessions"
+import { normalizeStudySession, studySessionFromCanonical } from "@/lib/studySessions"
 import { sharedTimerNotice, type SharedTimerNotice } from "@/lib/sync/sessions"
 import { bustSubjectCache } from "@/lib/utils"
 
@@ -94,6 +94,12 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
       const pending = new Set((await readOutbox()).filter((change) => change.entity === table).map((change) => change.rowId))
       for (const entry of entries) {
         if (pending.has(entry.rowId)) continue
+        if (table === "study_sessions" && entry.operation === "put" && isObject(entry.payload)) {
+          const incomingRevision = entry.payload.revision
+          const currentRevision = normalizeStudySession(byId.get(entry.rowId)).revision
+          if (typeof incomingRevision === "number" && Number.isSafeInteger(incomingRevision)
+            && typeof currentRevision === "number" && incomingRevision <= currentRevision) continue
+        }
         const previous = notifySharedTimers && table === "study_sessions" && byId.has(entry.rowId)
           ? normalizeStudySession(byId.get(entry.rowId)) : undefined
         if (entry.operation === "delete") {
@@ -108,8 +114,9 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
           }
         } else if (isObject(entry.payload)) {
           const rawPayload = { ...entry.payload, id: entry.rowId }
+          const parsedCanonical = table === "study_sessions" ? studySessionFromCanonical(rawPayload) : null
           const payload = table === "study_sessions"
-            ? normalizeStudySession(rawPayload) as unknown as Record<string, unknown>
+            ? (parsedCanonical ?? normalizeStudySession(rawPayload)) as unknown as Record<string, unknown>
             : rawPayload
           byId.set(entry.rowId, payload)
           putRecords.push({ entity: table, rowId: entry.rowId, payload })

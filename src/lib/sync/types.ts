@@ -4,6 +4,7 @@ export const SYNC_TABLES = [
   "projects",
   "events",
   "study_sessions",
+  "study_session_commands",
   "custom_subjects",
   "hidden_subjects",
   "timetable_config",
@@ -18,7 +19,13 @@ export type SyncTable = (typeof SYNC_TABLES)[number]
  * lets one log carry Focal, ExamTrack and Folio data side by side.
  */
 export const SYNC_ENTITIES = [
-  ...SYNC_TABLES,
+  "projects",
+  "events",
+  "study_sessions",
+  "custom_subjects",
+  "hidden_subjects",
+  "timetable_config",
+  "user_settings",
   "mistakes",
   "attempts",
   "user_state",
@@ -30,7 +37,7 @@ export type SyncOperation = "put" | "delete"
 export type SyncStatus = "signed-out" | "syncing" | "synced" | "pending" | "error"
 
 /** Any locally stored record, in any of the shapes the seven entities take. */
-export type LocalRecord = Project | CalendarEvent | StudySession | Subject | string | TimetableConfig | UserSettings
+export type LocalRecord = Project | CalendarEvent | StudySession | Subject | string | TimetableConfig | UserSettings | Record<string, unknown>
 
 /** A change waiting to be published. `lamport` orders it against other devices. */
 export interface SyncChange {
@@ -45,6 +52,8 @@ export interface SyncChange {
   lastError?: string
   nextAttemptAt?: string
   blockedAt?: string
+  /** Commands keep the exact first attempted request so a lost response is safe to replay. */
+  attemptedAt?: string
 }
 
 /** A change as the log stores it. `seq` is the only ordering authority. */

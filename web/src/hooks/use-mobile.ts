@@ -17,3 +17,21 @@ export function useIsMobile() {
 
   return !!isMobile
 }
+
+// Reads the viewport synchronously on first render so wide-screen layouts never
+// paint the narrow one first.
+export function useMinWidth(breakpoint: number) {
+  const [matches, setMatches] = React.useState(
+    () => typeof window !== "undefined" && window.matchMedia(`(min-width: ${breakpoint}px)`).matches,
+  )
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(`(min-width: ${breakpoint}px)`)
+    const onChange = () => setMatches(mql.matches)
+    onChange()
+    mql.addEventListener("change", onChange)
+    return () => mql.removeEventListener("change", onChange)
+  }, [breakpoint])
+
+  return matches
+}

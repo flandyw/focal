@@ -17,6 +17,7 @@ interface OutboxRow {
   last_error: string | null
   next_attempt_at: string | null
   blocked_at: string | null
+  attempted_at: string | null
 }
 
 interface InboxRow {
@@ -84,7 +85,10 @@ export function enqueueChange(
   payload: unknown,
 ): Promise<SyncChange[]> {
   return serialized(async () => {
-    const changeId = crypto.randomUUID()
+    const mutationId = entity === "study_session_commands" && typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>).mutation_id
+      : undefined
+    const changeId = typeof mutationId === "string" ? mutationId : crypto.randomUUID()
     const createdAt = nowIso()
     const database = await openFocalDatabase()
     const ownerAccountId = accountId || (await readContextAccountId(database))
@@ -103,7 +107,8 @@ export function enqueueChange(
          retry_count = 0,
          last_error = null,
          next_attempt_at = null,
-         blocked_at = null`,
+         blocked_at = null,
+         attempted_at = null`,
       [changeId, ownerAccountId, entity, rowId, operation, payload === null ? null : JSON.stringify(payload), createdAt, lamport],
     )
     return readOutboxUnlocked(database, ownerAccountId)
@@ -113,13 +118,39 @@ export function enqueueChange(
 async function readOutboxUnlocked(database: Database, accountId?: string): Promise<SyncChange[]> {
   const rows = await database.select<OutboxRow[]>(
     `select change_id, account_id, entity, row_id, operation, payload, created_at, lamport,
-            retry_count, last_error, next_attempt_at, blocked_at
+            retry_count, last_error, next_attempt_at, blocked_at, attempted_at
        from sync_outbox
       ${accountId === undefined ? "" : "where account_id = $1"}
-      order by created_at asc`,
+      order by lamport asc, created_at asc`,
     accountId === undefined ? [] : [accountId],
   )
   return rows.flatMap(parseOutboxRow)
+}
+
+export function updateOutboxPayload(accountId: string, changeId: string, payload: unknown): Promise<void> {
+  return serialized(async () => {
+    await (await openFocalDatabase()).execute(
+      `update sync_outbox set payload = $3, attempted_at = coalesce(attempted_at, $4)
+        where account_id = $1 and change_id = $2 and attempted_at is null`,
+      [accountId, changeId, JSON.stringify(payload), nowIso()],
+    )
+  })
+}
+
+export function replaceOutboxCommand(accountId: string, changeId: string, payload: unknown): Promise<string> {
+  return serialized(async () => {
+    const mutationId = typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>).mutation_id : null
+    if (typeof mutationId !== "string") throw new Error("Session command is missing its mutation id")
+    await (await openFocalDatabase()).execute(
+      `update sync_outbox
+          set change_id = $3, payload = $4, attempted_at = null,
+              retry_count = 0, last_error = null, next_attempt_at = null, blocked_at = null
+        where account_id = $1 and change_id = $2`,
+      [accountId, changeId, mutationId, JSON.stringify(payload)],
+    )
+    return mutationId
+  })
 }
 
 function parseOutboxRow(row: OutboxRow): SyncChange[] {
@@ -138,6 +169,7 @@ function parseOutboxRow(row: OutboxRow): SyncChange[] {
       lastError: row.last_error ?? undefined,
       nextAttemptAt: row.next_attempt_at ?? undefined,
       blockedAt: row.blocked_at ?? undefined,
+      attemptedAt: row.attempted_at ?? undefined,
     }]
   } catch {
     return []
@@ -223,6 +255,17 @@ export function removeOutboxChange(accountId: string, entity: SyncTable, rowId: 
   return serialized(async () => {
     await (await openFocalDatabase()).execute(
       "delete from sync_outbox where account_id = $1 and entity = $2 and row_id = $3",
+      [accountId, entity, rowId],
+    )
+  })
+}
+
+export function retryOutboxItem(accountId: string, entity: SyncTable, rowId: string): Promise<void> {
+  return serialized(async () => {
+    await (await openFocalDatabase()).execute(
+      `update sync_outbox
+          set retry_count = 0, last_error = null, next_attempt_at = null, blocked_at = null
+        where account_id = $1 and entity = $2 and row_id = $3`,
       [accountId, entity, rowId],
     )
   })
@@ -430,7 +473,10 @@ export function writeApplied(accountId: string, rows: readonly SyncRowState[]): 
            lamport = excluded.lamport,
            client_id = excluded.client_id,
            seq = excluded.seq,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at
+         where excluded.entity <> 'study_sessions'
+            or coalesce(cast(json_extract(excluded.payload, '$.revision') as integer), -1)
+               >= coalesce(cast(json_extract(sync_applied.payload, '$.revision') as integer), -1)`,
         [
           accountId,
           row.entity,

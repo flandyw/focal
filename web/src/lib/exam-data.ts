@@ -202,9 +202,7 @@ export type AppData = {
   completedExamIds: string[]
   completedExamIdsUpdatedAt: string
   activeExamTimer?: ExamTimerSession
-  activeExamTimerUpdatedAt: string
   activeSacTimer?: SacTimerSession
-  activeSacTimerUpdatedAt: string
   mistakeInsights?: MistakeInsights
   alternativeMistakeDeck?: AlternativeMistakeDeck
   examDifficulty?: ExamDifficultySettings
@@ -225,8 +223,6 @@ export const EMPTY_APP_DATA: AppData = {
   trackedExamIdsUpdatedAt: "1970-01-01T00:00:00.000Z",
   completedExamIds: [],
   completedExamIdsUpdatedAt: "1970-01-01T00:00:00.000Z",
-  activeExamTimerUpdatedAt: "1970-01-01T00:00:00.000Z",
-  activeSacTimerUpdatedAt: "1970-01-01T00:00:00.000Z",
   atarEstimates: [],
   atarEstimatesUpdatedAt: "1970-01-01T00:00:00.000Z",
   learning: EMPTY_LEARNING_WORKSPACE,
@@ -934,9 +930,7 @@ export function isAppData(value: unknown): value is AppData {
     completedExamIdsValid &&
     typeof data.completedExamIdsUpdatedAt === "string" &&
     (data.activeExamTimer === undefined || isExamTimerSession(data.activeExamTimer)) &&
-    typeof data.activeExamTimerUpdatedAt === "string" &&
     (data.activeSacTimer === undefined || isSacTimerSession(data.activeSacTimer)) &&
-    typeof data.activeSacTimerUpdatedAt === "string" &&
     (data.mistakeInsights === undefined || isMistakeInsights(data.mistakeInsights)) &&
     (data.alternativeMistakeDeck === undefined || isAlternativeMistakeDeck(data.alternativeMistakeDeck)) &&
     (data.examDifficulty === undefined || isExamDifficultySettings(data.examDifficulty)) &&
@@ -1022,6 +1016,16 @@ export function migrateAppData(value: unknown): AppData | null {
   if (!Array.isArray(data.attempts) || !Array.isArray(data.mistakes)) return null
   const sacRecords = data.sacRecords === undefined ? [] : migrateSacRecords(data.sacRecords)
   if (sacRecords === null) return null
+  const legacyTimerId = (value: unknown) => {
+    if (!isRecord(value) || !isRecord(value.focal) || typeof value.focal.sessionId !== "string") return undefined
+    return value.focal.sessionId
+  }
+  const activeExamTimer = isExamTimerSession(data.activeExamTimer)
+    ? (() => { const { focal: _focal, ...timer } = data.activeExamTimer as ExamTimerSession & { focal?: unknown }; return { ...timer, id: timer.id ?? legacyTimerId(data.activeExamTimer) } })()
+    : undefined
+  const activeSacTimer = isSacTimerSession(data.activeSacTimer)
+    ? (() => { const { focal: _focal, ...timer } = data.activeSacTimer as SacTimerSession & { focal?: unknown }; return { ...timer, id: timer.id ?? legacyTimerId(data.activeSacTimer) } })()
+    : undefined
   const migrated = {
     ...data,
     schemaVersion: 5 as const,
@@ -1031,10 +1035,8 @@ export function migrateAppData(value: unknown): AppData | null {
     trackedExamIdsUpdatedAt: typeof data.trackedExamIdsUpdatedAt === "string" ? data.trackedExamIdsUpdatedAt : "1970-01-01T00:00:00.000Z",
     completedExamIds: Array.isArray(data.completedExamIds) ? data.completedExamIds : [],
     completedExamIdsUpdatedAt: typeof data.completedExamIdsUpdatedAt === "string" ? data.completedExamIdsUpdatedAt : "1970-01-01T00:00:00.000Z",
-    activeExamTimer: isExamTimerSession(data.activeExamTimer) ? data.activeExamTimer : undefined,
-    activeExamTimerUpdatedAt: typeof data.activeExamTimerUpdatedAt === "string" ? data.activeExamTimerUpdatedAt : "1970-01-01T00:00:00.000Z",
-    activeSacTimer: isSacTimerSession(data.activeSacTimer) ? data.activeSacTimer : undefined,
-    activeSacTimerUpdatedAt: typeof data.activeSacTimerUpdatedAt === "string" ? data.activeSacTimerUpdatedAt : "1970-01-01T00:00:00.000Z",
+    activeExamTimer,
+    activeSacTimer,
     sacRecords,
     sacRecordsUpdatedAt: typeof data.sacRecordsUpdatedAt === "string" ? data.sacRecordsUpdatedAt : "1970-01-01T00:00:00.000Z",
     atarEstimates: Array.isArray(data.atarEstimates) ? data.atarEstimates : [],

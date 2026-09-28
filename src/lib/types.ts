@@ -86,6 +86,8 @@ export interface VcaaSource {
 export interface StudySession {
   schemaVersion: 2;
   id: string;
+  /** Server revision for the canonical session row; absent for unsynced local records. */
+  revision?: number;
   projectId?: string;
   subjectIds: string[];
   title: string;

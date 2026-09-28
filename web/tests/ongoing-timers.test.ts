@@ -1,32 +1,25 @@
 import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA, migrateAppData } from "../src/lib/exam-data"
-import { createFocalTimerLink } from "../src/lib/focal-timer"
 import { getExamTimerState } from "../src/lib/exam-timer"
-import { pauseExamSession, resumeExamSession, mergeTimerSession, updateExamSessionConditions, type ExamTimerSession } from "../src/lib/ongoing-timers"
+import { pauseExamSession, resumeExamSession, updateExamSessionConditions, type ExamTimerSession } from "../src/lib/ongoing-timers"
 
 const start = Date.parse("2026-09-11T00:00:00Z")
 const session: ExamTimerSession = {
   subject: "Chemistry", provider: "VCAA", title: "Chemistry practice", examYear: 2025, paper: "Exam",
   readingMinutes: 15, writingMinutes: 120, marks: 100, startedAt: start, pausedSeconds: 0,
-  focal: createFocalTimerLink("exam", "Chemistry", "Chemistry practice", 8100, new Date(start)),
+  id: "session-1", revision: 1,
   workspaceItems: [{ id: "q1", label: "Question 1", marks: 5, status: "flagged", confidence: "low", note: "Revisit calculation" }],
 }
 
 describe("saved exam sessions", () => {
   test("restores a paused workspace on another device and excludes an overnight break", () => {
     const paused = pauseExamSession(session, start + 20 * 60_000)
-    const updatedAt = new Date(paused.pausedAt!).toISOString()
-    const restored = migrateAppData(JSON.parse(JSON.stringify({ ...EMPTY_APP_DATA, activeExamTimer: paused, activeExamTimerUpdatedAt: updatedAt })))!
-    const remote = mergeTimerSession(undefined, "", restored.activeExamTimer, updatedAt).session!
+    const restored = migrateAppData(JSON.parse(JSON.stringify({ ...EMPTY_APP_DATA, activeExamTimer: paused })))!
+    const remote = restored.activeExamTimer!
     expect(remote.workspaceItems).toEqual(session.workspaceItems)
     const now = start + 24 * 60 * 60_000
     const resumed = resumeExamSession(remote, now)
     expect(getExamTimerState(now, resumed.startedAt, 15, 120, 100).writingElapsedSeconds).toBe(300)
-    expect(resumed.focal?.sessionId).toBe(session.focal?.sessionId)
-    expect(resumed.focal?.intervals).toEqual([
-      { start: new Date(start).toISOString(), end: updatedAt },
-      { start: new Date(now).toISOString() },
-    ])
     expect(resumed.pausedSeconds).toBe((now - paused.pausedAt!) / 1000)
   })
 
@@ -38,8 +31,13 @@ describe("saved exam sessions", () => {
     expect(resumeExamSession(resumed, start + 3000)).toBe(resumed)
   })
 
-  test("completion on another device removes a stale saved session", () => {
-    expect(mergeTimerSession(session, "2026-09-11T00:00:00Z", undefined, "2026-09-12T00:00:00Z").session).toBeUndefined()
+  test("legacy Focal mirror fields are discarded while the ExamTrack timer details survive", () => {
+    const restored = migrateAppData(JSON.parse(JSON.stringify({ ...EMPTY_APP_DATA, activeExamTimer: {
+      ...session, focal: { sessionId: "legacy-id", kind: "exam", intervals: [] },
+    } })))!
+    expect(restored.activeExamTimer?.id).toBe(session.id)
+    expect("focal" in (restored.activeExamTimer ?? {})).toBe(false)
+    expect(restored.activeExamTimer?.workspaceItems).toEqual(session.workspaceItems)
   })
 })
 
@@ -53,9 +51,6 @@ describe("editing exam conditions", () => {
     expect(timerFor(next, now).writingElapsedSeconds).toBe(20 * 60)
     expect(timerFor(next, now).remainingSeconds).toBe(130 * 60)
     expect(next.pausedAt).toBeUndefined()
-    expect(next.focal?.plannedSeconds).toBe(180 * 60)
-    expect(next.focal?.sessionId).toBe(session.focal?.sessionId)
-    expect(next.focal?.intervals).toEqual(session.focal?.intervals)
     expect(next.workspaceItems).toEqual(session.workspaceItems)
   })
 
@@ -67,7 +62,7 @@ describe("editing exam conditions", () => {
     expect(restored.pausedAt).toBe(paused.pausedAt)
     expect(timerFor(restored, tomorrow).remainingSeconds).toBe(40 * 60)
     expect(timerFor(resumeExamSession(restored, tomorrow), tomorrow).remainingSeconds).toBe(40 * 60)
-    expect(restored.focal?.intervals).toEqual(paused.focal?.intervals)
+    expect(restored.id).toBe(session.id)
   })
 
   test("can extend and shorten reading before writing starts", () => {

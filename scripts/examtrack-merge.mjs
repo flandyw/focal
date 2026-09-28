@@ -23,7 +23,7 @@
 import { copyFileSync, rmSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, extname } from "node:path"
 import process from "node:process"
 
 const TABLES = ["attempts", "mistakes"]
@@ -238,6 +238,23 @@ export async function tokenFromFocalDatabase(path) {
   return session.access_token
 }
 
+// A Buffer arrives with no type, and supabase-js then guesses text/plain, which the
+// bucket's allowed_mime_types rejects. The bucket only takes these four.
+const MIME_TYPES = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+}
+
+function contentTypeFor(path) {
+  const extension = extname(path).toLowerCase()
+  const type = MIME_TYPES[extension]
+  assert(type, `no content type for ${path}; the bucket accepts ${Object.keys(MIME_TYPES).join(", ")}`)
+  return type
+}
+
 async function runExport(args) {
   const url = args.url ?? process.env.EXAMTRACK_SOURCE_URL
   const key = args.key ?? process.env.EXAMTRACK_SOURCE_PUBLISHABLE_KEY
@@ -329,7 +346,9 @@ async function runImport(args) {
 
   for (const attachment of plan.attachments) {
     const body = await readFile(join(inDir, attachment.localPath))
-    const { error } = await client.storage.from(BUCKET).upload(attachment.to, body, { upsert: true })
+    const { error } = await client.storage
+      .from(BUCKET)
+      .upload(attachment.to, body, { upsert: true, contentType: contentTypeFor(attachment.to) })
     if (error) throw new Error(`upload ${attachment.to}: ${error.message}`)
   }
   console.log(`files      ${plan.attachments.length}`)
@@ -353,7 +372,11 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
     if (!token.startsWith("--")) args._.push(token)
-    else args[token.slice(2)] = argv[++i]
+    else {
+      // --focal-db becomes args.focalDb, so callers never index a hyphenated key.
+      const key = token.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+      args[key] = argv[++i]
+    }
   }
   return args
 }

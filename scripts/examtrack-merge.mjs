@@ -193,16 +193,27 @@ async function listObjects(client, prefix) {
   return found
 }
 
+// The access token is not an API key. PostgREST and Storage authenticate the caller from
+// the Authorization header, so the client is keyed with the project's publishable key and
+// the user's JWT rides along as a bearer token on every request.
+async function makeClient(url, key, token) {
+  const createClient = await loadSupabase()
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  })
+}
+
 async function runExport(args) {
   const url = args.url ?? process.env.EXAMTRACK_SOURCE_URL
+  const key = args.key ?? process.env.EXAMTRACK_SOURCE_PUBLISHABLE_KEY
   const token = args.token ?? process.env.EXAMTRACK_SOURCE_ACCESS_TOKEN
   const out = args.out ?? "./examtrack-export"
-  assert(url && token, "export needs --url and --token (or EXAMTRACK_SOURCE_URL / EXAMTRACK_SOURCE_ACCESS_TOKEN)")
+  assert(url && key && token, "export needs --url, --key and --token")
 
-  const createClient = await loadSupabase()
-  const client = createClient(url, token, { auth: { persistSession: false } })
+  const client = await makeClient(url, key, token)
 
-  const { data: userData, error: userError } = await client.auth.getUser()
+  const { data: userData, error: userError } = await client.auth.getUser(token)
   if (userError) throw new Error(`the export token was rejected: ${userError.message}`)
   const sourceUserId = userData.user.id
   console.log(`source project ${url} user ${sourceUserId}`)
@@ -247,14 +258,14 @@ async function runExport(args) {
 
 async function runImport(args) {
   const inDir = args.in ?? "./examtrack-export"
-  const url = args.url ?? process.env.VITE_SUPABASE_URL ?? process.env.FOCAL_TARGET_URL
+  const url = args.url ?? process.env.FOCAL_TARGET_URL
+  const key = args.key ?? process.env.FOCAL_TARGET_PUBLISHABLE_KEY
   const token = args.token ?? process.env.FOCAL_TARGET_ACCESS_TOKEN
-  assert(url && token, "import needs --url and --token (or VITE_SUPABASE_URL / FOCAL_TARGET_ACCESS_TOKEN)")
+  assert(url && key && token, "import needs --url, --key and --token")
 
-  const createClient = await loadSupabase()
-  const client = createClient(url, token, { auth: { persistSession: false } })
+  const client = await makeClient(url, key, token)
 
-  const { data: userData, error: userError } = await client.auth.getUser()
+  const { data: userData, error: userError } = await client.auth.getUser(token)
   if (userError) throw new Error(`the import token was rejected: ${userError.message}`)
   // The signed-in account is the target, so --to-user is only a way to assert it.
   const toUser = args.toUser ?? userData.user.id
@@ -318,8 +329,8 @@ const usage = () =>
     [
       "usage:",
       "  node scripts/examtrack-merge.mjs selftest",
-      "  node scripts/examtrack-merge.mjs export --out ../examtrack-export --url <examtrack url> --token <access token>",
-      "  node scripts/examtrack-merge.mjs import --in ../examtrack-export --url <focal url> --token <access token>",
+      "  node scripts/examtrack-merge.mjs export --out ../examtrack-report --url <examtrack url> --key <publishable key> --token <access token>",
+      "  node scripts/examtrack-merge.mjs import --in ../examtrack-report --url <focal url> --key <publishable key> --token <access token>",
     ].join("\n"),
   )
 

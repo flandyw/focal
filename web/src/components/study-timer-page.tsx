@@ -115,13 +115,16 @@ function FocusBlocks({ subjects, onSessionChange }: {
   const { state, settings, blocks, blocksToday, focusSecondsToday, progress, updateSettings, ...actions } =
     useStudyTimer({ subject, intent, onSessionChange })
 
-  const displayMode = state.studyOvertime ? (state.freeStudy ? "Free study" : "Overtime") : MODE_LABEL[state.mode]
-  const elapsedSeconds = state.studyOvertime && state.freeStudy
-    ? state.totalSeconds - state.secondsLeft + state.breakSeconds
-    : 0
-  const readout = state.studyOvertime
-    ? `+${formatTimer(state.freeStudy ? elapsedSeconds : state.overtimeSeconds)}`
-    : formatTimer(state.secondsLeft)
+  // Free study repurposes the break window rather than counting it down, so
+  // `secondsLeft` stays frozen and the elapsed time lands in `overtimeSeconds`.
+  // While paused it is held in `breakSeconds` instead.
+  const isFreeStudy = state.studyOvertime && state.freeStudy
+  const displayMode = state.studyOvertime ? (isFreeStudy ? (state.running ? "Free study" : "Break") : "Overtime") : MODE_LABEL[state.mode]
+  const readout = !state.studyOvertime
+    ? formatTimer(state.secondsLeft)
+    : isFreeStudy && !state.running
+      ? formatTimer(state.breakSeconds)
+      : `${isFreeStudy ? "" : "+"}${formatTimer(state.overtimeSeconds)}`
   const onBreak = !state.studyOvertime && state.mode !== "work"
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
@@ -153,8 +156,10 @@ function FocusBlocks({ subjects, onSessionChange }: {
   }
 
   const caption = state.studyOvertime
-    ? state.freeStudy
-      ? "Free study has no end. Stop whenever you are done."
+    ? isFreeStudy
+      ? state.running
+        ? "Free study has no end. Stop whenever you are done."
+        : "Free study is held. Your time is safe until you continue."
       : "Break time is being logged as study time."
     : onBreak
       ? "Rest properly. The next focus block starts itself if you left auto-start on."

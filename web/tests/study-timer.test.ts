@@ -79,6 +79,24 @@ describe("study timer state machine", () => {
     expect(timerReducer(free, { type: "RETURN_TO_BREAK" }).studyOvertime).toBe(false)
   })
 
+  test("free study counts up in overtimeSeconds, because secondsLeft stays frozen", () => {
+    // The regression: free study repurposes the break window instead of
+    // counting it down, so elapsed time lands in overtimeSeconds while
+    // secondsLeft stays at total. Reading the elapsed time as
+    // total - secondsLeft is therefore permanently zero.
+    const free = timerReducer(freshState(), { type: "START_FREE_STUDY", settings })
+    expect(free.secondsLeft).toBe(free.totalSeconds)
+
+    const later = advanceTimer(free, settings, 125)
+    expect(later.overtimeSeconds).toBe(125)
+    expect(later.totalSeconds - later.secondsLeft).toBe(0)
+
+    // Paused, the held time moves to breakSeconds instead of accruing.
+    const held = advanceTimer({ ...later, running: false }, settings, 30)
+    expect(held.breakSeconds).toBe(30)
+    expect(held.overtimeSeconds).toBe(125)
+  })
+
   test("added time extends the block but never past the maximum", () => {
     const added = timerReducer(freshState(), { type: "ADD_TIME", minutes: 5 })
     expect(added.secondsLeft).toBe(1500 + 300)

@@ -13,6 +13,42 @@ async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
   return response.json() as Promise<T>
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function text(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+/**
+ * The fetched JSON is a trust boundary. Every consumer calls `.toLowerCase()`
+ * on these names, and a render that throws is not a degraded page, it is a
+ * white screen — so a row missing a name is dropped here, once, rather than
+ * guarded at each of its dozen call sites.
+ */
+function usableReferences(value: unknown): AssessmentReference[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is AssessmentReference =>
+    isRecord(entry) &&
+    text(entry.id) && text(entry.studyName) && text(entry.name) &&
+    typeof entry.year === "number" && typeof entry.maxScore === "number" &&
+    Array.isArray(entry.gradeBands))
+}
+
+function usableStudies(value: unknown): VcaaStudyResources[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is VcaaStudyResources =>
+    isRecord(entry) && text(entry.studyName) && Array.isArray(entry.resources))
+}
+
+function usableScaling(value: unknown): ScalingReference[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is ScalingReference =>
+    isRecord(entry) &&
+    text(entry.id) && text(entry.studyName) && typeof entry.year === "number")
+}
+
 async function loadTimetableWithStatus(signal: AbortSignal): Promise<Timetable | null> {
   if (typeof fetch === "undefined") return null
   return fetch("/vce-2026-timetable.json", { signal })
@@ -59,7 +95,7 @@ export function useReferenceData() {
       controller.signal,
     ).then((result) => {
       if (!active) return
-      setReferences(Array.isArray(result.assessments) ? result.assessments : [])
+      setReferences(usableReferences(result.assessments))
       setReferencesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
       setReferencesStatus("ready")
     }).catch(() => {
@@ -73,7 +109,7 @@ export function useReferenceData() {
         controller.signal,
       ).then((result) => {
         if (!active) return
-        setResourceStudies(Array.isArray(result.studies) ? result.studies : [])
+        setResourceStudies(usableStudies(result.studies))
         setResourcesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
         setStudiesStatus("ready")
       }).catch(() => {
@@ -90,7 +126,7 @@ export function useReferenceData() {
           controller.signal,
         ).then((result) => {
           if (!active) return
-          setScalingReferences(Array.isArray(result.references) ? result.references : [])
+          setScalingReferences(usableScaling(result.references))
           setScalingStatus("ready")
         }).catch(() => {
           if (active) setScalingStatus("error")

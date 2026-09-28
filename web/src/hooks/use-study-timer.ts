@@ -235,13 +235,13 @@ export function useStudyTimer({
   const blocksToday = useMemo(() => countBlocksToday(blocks, new Date(now)), [blocks, now])
   const focusSecondsToday = useMemo(() => getFocusSecondsToday(blocks, new Date(now)), [blocks, now])
 
-  const progress = state.studyOvertime && state.freeStudy
-    ? 1
-    : state.studyOvertime
-      ? 1
-      : state.totalSeconds > 0
-        ? Math.min(100, Math.max(0, ((state.totalSeconds - state.secondsLeft) / state.totalSeconds) * 100))
-        : 0
+  // Free study has no defined length, so it draws an empty meter; plain
+  // overtime is past its line and draws a full one.
+  const progress = state.studyOvertime
+    ? state.freeStudy ? 0 : 1
+    : state.totalSeconds > 0
+      ? Math.min(100, Math.max(0, ((state.totalSeconds - state.secondsLeft) / state.totalSeconds) * 100))
+      : 0
 
   return {
     state,

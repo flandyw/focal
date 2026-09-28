@@ -36,6 +36,11 @@ Memorable moment: the marks strip filling, one mark per completed block or phase
 
 ## Unresolved
 
+- **Free study does not count down.** `START_FREE_STUDY` repurposes the break window:
+  `secondsLeft` stays frozen at `totalSeconds` and elapsed time accrues in
+  `overtimeSeconds` (`breakSeconds` while paused). Deriving an elapsed time as
+  `totalSeconds - secondsLeft` is therefore permanently zero. This shipped as
+  "free study is stuck on 0" before `tests/study-timer.test.ts` pinned the shape.
 - The block log is device-local. A future revision should read today's blocks from the
   canonical `focus` sessions so the page agrees across devices.
 - `kind: "focus"` and `kind: "exam"` now share one outbox alongside `sac`. The exam path
@@ -43,6 +48,9 @@ Memorable moment: the marks strip filling, one mark per completed block or phase
   the study timer's nav entry.
 - Base UI Tabs renders no panel when `mode` matches neither tab, so `mode` must stay a
   valid `StudyTimerMode` at every call site.
+- The VCAA JSON is a trust boundary and is now filtered in `use-reference-data.ts`.
+  Every consumer calls `.toLowerCase()` on these names unguarded, so a row missing one
+  is a white screen, not a degraded row. Keep new reference sources behind a validator.
 
 ## Build path
 

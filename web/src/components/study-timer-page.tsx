@@ -110,7 +110,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
     terminal?: "complete" | "cancel",
-  ) => void
+  ) => Promise<FocusTimerSession | undefined> | void
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
 }) {

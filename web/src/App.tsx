@@ -319,11 +319,12 @@ export default function App() {
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
     action?: "cancel" | "complete",
-  ) {
+  ): Promise<FocusTimerSession | undefined> {
     try {
-      await saveTimerSessionChange(previous, next, "focus", action)
+      return await saveTimerSessionChange(previous, next, "focus", action)
     } catch (error) {
       reportSessionFailure(action ?? "save", error)
+      return undefined
     }
   }
 

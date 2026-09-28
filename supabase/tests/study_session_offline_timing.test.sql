@@ -1,5 +1,5 @@
 begin;
-select plan(21);
+select plan(23);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -28,8 +28,8 @@ select throws_ok(
   'generic outbox writes cannot cross authenticated accounts'
 );
 
--- Pre-upgrade queued lifecycle commands have no timing fields. Accept them with a
--- conservative zero delta so existing outboxes remain replayable without trusting wall time.
+-- A command with no timing fields is a client without a monotonic model, not a claim of zero
+-- elapsed time. It is still accepted, and its boundary lands on server receipt time.
 create temporary table legacy_command_result as
 select public.study_session_mutate(jsonb_build_object(
   'mutation_id','22000000-0000-4000-8000-000000000014','session_id','legacy-no-timing',
@@ -37,7 +37,7 @@ select public.study_session_mutate(jsonb_build_object(
   'app','focal','kind','focus','phase','focus'
 )) as result;
 select is((select result->'session'->>'state' from legacy_command_result),'running',
-  'legacy queued lifecycle command defaults missing timing to zero');
+  'a legacy command with no timing fields is still accepted');
 select is(public.study_session_mutate(jsonb_build_object(
   'mutation_id','22000000-0000-4000-8000-000000000014','session_id','legacy-no-timing',
   'expected_revision',0,'action','start','device_id','32000000-0000-4000-8000-000000000001',
@@ -145,6 +145,30 @@ select public.study_session_mutate(jsonb_build_object(
   'expected_revision',1,'action','cancel','elapsed_since_previous_ms',0,'occurred_at',null,
   'device_id','32000000-0000-4000-8000-000000000001','app','focal'
 ));
+-- A client that reports no timing at all gets receipt time, not "0 ms since the previous
+-- boundary". Ageing the canonical start by 30 minutes makes the difference unambiguous: the
+-- old rule recorded zero active time here, which is a real sitting reported as no study at all.
+select public.study_session_mutate(jsonb_build_object(
+  'mutation_id','22000000-0000-4000-8000-000000000021','session_id','untimed-direct-pause',
+  'expected_revision',0,'action','start','device_id','32000000-0000-4000-8000-000000000001',
+  'app','focal','kind','focus','phase','focus'
+));
+update public.study_sessions
+   set started_at = clock_timestamp() - interval '30 minutes',
+       segment_started_at = clock_timestamp() - interval '30 minutes',
+       timing_at = clock_timestamp() - interval '30 minutes'
+ where id = 'untimed-direct-pause';
+create temporary table untimed_pause as
+select public.study_session_mutate(jsonb_build_object(
+  'mutation_id','22000000-0000-4000-8000-000000000022','session_id','untimed-direct-pause',
+  'expected_revision',1,'action','pause','device_id','32000000-0000-4000-8000-000000000001',
+  'app','focal','kind','focus','phase','focus'
+)) as result;
+select is((result->'session'->>'state') from untimed_pause,'paused','an untimed pause is applied');
+select is((result->'session'->>'accumulated_active_ms')::bigint > 1700000,true,
+  'an untimed pause records the elapsed run at server receipt time, not zero')
+  from untimed_pause;
+
 select is((select state from public.study_sessions where id='offline-cancel'),'cancelled','offline cancel remains terminal');
 select is((select accumulated_active_ms from public.study_sessions where id='offline-cancel'),1::bigint,'restart recovery adds at most the one-millisecond positive-segment floor');
 select is((select count(*)::integer from public.study_session_segments where session_id='offline-cancel' and ended_at is null),0,'cancel closes the only open segment');

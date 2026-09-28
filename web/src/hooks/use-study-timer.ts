@@ -27,11 +27,12 @@ const TICK_MS = 1000
  *  which is what makes a logged block's duration trustworthy. */
 const serverNow = () => canonicalNow().getTime()
 
+/** Returns the session the server acknowledged, so its id and revision stay ours. */
 type SessionSink = (
   previous: FocusTimerSession | undefined,
   next: FocusTimerSession | undefined,
   terminal?: "complete" | "cancel",
-) => void
+) => Promise<FocusTimerSession | undefined> | void
 
 export interface StudyTimerEngine {
   state: TimerState
@@ -115,10 +116,17 @@ export function useStudyTimer({
 
   const previousState = useRef(state)
 
+  // The sink is a network call, so these are serialised: a pause must never overtake its start.
+  const sessionQueue = useRef<Promise<unknown>>(Promise.resolve())
   const emitSession = useCallback((next: FocusTimerSession | undefined, terminal?: "complete" | "cancel") => {
     const previous = sessionRef.current
     sessionRef.current = next
-    sinkRef.current?.(previous, next, terminal)
+    sessionQueue.current = sessionQueue.current.catch(() => {}).then(async () => {
+      const saved = await sinkRef.current?.(previous, next, terminal)
+      // The server's row is the truth: its revision has to come back or the next pause is stale.
+      if (saved && previous) sessionRef.current = saved
+      else if (!terminal) sessionRef.current = next
+    })
   }, [])
 
   const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number, at: number) => {
@@ -163,7 +171,10 @@ export function useStudyTimer({
     const open = sessionRef.current
 
     if (isWorking && !wasWorking) {
+      // The id is minted here, not by the server: one focus block is one canonical session for
+      // its whole start -> pause -> resume -> complete life, on every client.
       emitSession({
+        id: crypto.randomUUID(),
         subject: subject.trim(), provider: "Focal", title: intent.trim() || `${settingsNow.workMinutes} minute focus block`,
         cycleNumber: next.cycles + 1, workMinutes: settingsNow.workMinutes, startedAt: at, pausedSeconds: 0,
       })

@@ -335,8 +335,10 @@ async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: str
   const deletePayload = notionDeletePayload(table, rowId, current)
   let queue: SyncChange[]
   if (table === "study_sessions") {
-    // The SQLite delete trigger writes a cancel command in the same statement.
+    // Nothing queues a cancel any more (migration 0006), so say it to the server directly.
+    // If this fails, the next sync pass still knows: the record is gone, the applied row is not.
     await (await openFocalDatabase()).execute("delete from records where kind = 'study_sessions' and id = $1", [rowId])
+    if (currentSession) void publishSession(rowId, accountId, currentDeviceId ?? await getDeviceId())
     queue = await readOutbox(accountId)
   } else {
     queue = await pushOrQueue(accountId, table, rowId, "delete", deletePayload)
@@ -692,12 +694,23 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   const due = coalesceChanges(queue.filter((change) => isDue(change, now)))
   const blocked = queue.filter((change) => Boolean(change.blockedAt))
 
+  // Sessions are published directly and leave no queue entry behind, so an empty outbox is the
+  // normal case -- and exactly the case where a failed direct publish would never be retried.
+  let sessionError: unknown = null
+  try {
+    await publishAllSessions(session.user.id, deviceId, epoch)
+  } catch (error) {
+    sessionError = error
+  }
+
   if (due.length === 0) {
     emitStatus({
-      status: blocked.length > 0 ? "error" : queue.length === 0 ? "synced" : "pending",
+      status: sessionError || blocked.length > 0 ? "error" : queue.length === 0 ? "synced" : "pending",
       pendingCount: queue.length,
-      error: blocked[0]?.lastError ?? null,
-      details: blocked.length > 0
+      error: sessionError ? describeSyncError(sessionError) : blocked[0]?.lastError ?? null,
+      details: sessionError
+        ? "A study session could not be sent. It stays saved on this device and is retried automatically."
+        : blocked.length > 0
         ? `${blocked.length} change${blocked.length === 1 ? "" : "s"} need attention`
         : queue.length === 0
           ? "All changes synced"
@@ -718,20 +731,14 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
     details: `Pushing ${due.length} change${due.length === 1 ? "" : "s"}…`,
   })
 
+
   const published = new Map<string, { change: SyncChange; seq: number }>()
   const processedIds: string[] = []
   const retries: SyncChange[] = []
-  const errors: unknown[] = []
+  const errors: unknown[] = sessionError ? [sessionError] : []
   const reconciliations: SyncConflictItem[] = []
   emitMetrics({ pushAttempts: snapshot.metrics.pushAttempts + 1 })
 
-  // Sessions first: they are published directly, and this is the pass that picks up anything
-  // an earlier failure left behind, because the local record is the whole truth.
-  try {
-    await publishAllSessions(session.user.id, deviceId, epoch)
-  } catch (error) {
-    errors.push(error)
-  }
   const genericChanges = due.filter((change) => change.entity !== "study_session_commands")
 
   for (const batch of chunkItems(genericChanges, PUSH_BATCH_SIZE)) {

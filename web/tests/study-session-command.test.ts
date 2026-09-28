@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { ExamTimerSession } from "../src/lib/ongoing-timers"
-import { buildCommand } from "../src/lib/study-session-sync"
+import { buildCommand, elapsedSinceBoundary } from "../src/lib/study-session-sync"
 
 // The command builder only needs a device id and an indexed timing store.
 const store = new Map<string, string>()
@@ -55,5 +55,29 @@ describe("study session commands", () => {
     for (const key of ["id", "revision", "startedAt", "pausedAt", "pausedSeconds", "phase"]) {
       expect(Object.hasOwn(command.metadata as object, key)).toBe(false)
     }
+  })
+})
+
+// The anchor arithmetic is pure, so it is testable without IndexedDB. The rule that it is
+// written only after the server accepts a command is structural: capture reads, commit writes,
+// and only publishCommand calls commit.
+describe("study session timing", () => {
+  const boundary = (elapsedMs: number, monotonicAt: number, timeOrigin = 1) => ({ elapsedMs, monotonicAt, timeOrigin })
+
+  test("measures from the last accepted boundary within this page's clock", () => {
+    expect(elapsedSinceBoundary(boundary(600_000, 1_000), 1_000 + 1_800_000, 1)).toBe(2_400_000)
+  })
+
+  test("a clock that restarted contributes nothing rather than a negative or huge delta", () => {
+    expect(elapsedSinceBoundary(boundary(600_000, 1_000), 0, 2)).toBe(600_000)
+    expect(elapsedSinceBoundary(boundary(600_000, 1_000), 0, 2)).not.toBeLessThan(0)
+  })
+
+  test("no prior boundary means no elapsed time is claimed", () => {
+    expect(elapsedSinceBoundary(undefined, 5_000, 1)).toBe(0)
+  })
+
+  test("elapsed time is capped at the seven days the server accepts", () => {
+    expect(elapsedSinceBoundary(boundary(0, 0), 30 * 24 * 3_600_000, 1)).toBe(604_800_000)
   })
 })

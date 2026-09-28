@@ -124,7 +124,10 @@ async function publishCommand(command: StudySessionCommand): Promise<CanonicalSt
   const result = parseStudySessionMutationResult(data)
   if (!result) throw new Error("The server sent an unreadable session response")
   clockAnchor = observeServerClock(result.server_now, performance.now())
-  if (result.session) await rememberCanonicalTiming(accountId, [result.session])
+  // The boundary is real now, so it may move the local anchor -- but the server's own boundary
+  // is the better anchor, so it wins when there is one.
+  const anchored = result.session ? await rememberCanonicalTiming(accountId, [result.session]) : false
+  if (!anchored) await commitCommandTiming(accountId, command.session_id, command.action)
   return result.session ?? null
 }
 
@@ -209,23 +212,53 @@ async function commandAccountId(): Promise<string> {
   return data.session?.user.id ?? "guest"
 }
 
+/** Elapsed milliseconds since the last accepted boundary, capped at seven days. */
+export function elapsedSinceBoundary(
+  prior: Pick<SessionTiming, "elapsedMs" | "monotonicAt" | "timeOrigin"> | undefined,
+  monotonicAt: number,
+  timeOrigin: number,
+): number {
+  const continuous = prior !== undefined && prior.timeOrigin === timeOrigin
+  return Math.max(0, Math.min(604_800_000, Math.round((prior?.elapsedMs ?? 0) +
+    (continuous ? Math.max(0, monotonicAt - prior!.monotonicAt) : 0))))
+}
+
+/**
+ * Measure the boundary. This only reads the anchor: it is committed by `commitCommandTiming`
+ * once the server has accepted the command, because a command that never left the device must
+ * not move the anchor -- otherwise a retry five seconds later would report five seconds of a
+ * thirty-minute run.
+ */
 async function captureCommandTiming(accountId: string, sessionId: string, action: StudySessionAction): Promise<Pick<StudySessionCommand, "occurred_at" | "elapsed_since_previous_ms">> {
   if (!( ["start", "pause", "resume", "phase_change", "complete", "cancel"] as StudySessionAction[]).includes(action)) return {}
   if (typeof performance === "undefined" || typeof indexedDB === "undefined") return {}
-  const monotonicAt = typeof performance === "undefined" ? 0 : performance.now()
-  const timeOrigin = typeof performance === "undefined" ? 0 : performance.timeOrigin
+  const prior = await readCommandTiming(accountId, sessionId)
+  const monotonicAt = performance.now()
+  const timeOrigin = performance.timeOrigin
+  const elapsed = elapsedSinceBoundary(prior, monotonicAt, timeOrigin)
+  const occurredAt = clockAnchor ? new Date(estimateServerNow(clockAnchor, monotonicAt)).toISOString() : null
+  return { occurred_at: occurredAt, elapsed_since_previous_ms: elapsed }
+}
+
+/** Called only after study_session_mutate accepted the command. */
+async function commitCommandTiming(accountId: string, sessionId: string, action: StudySessionAction): Promise<void> {
+  if (!( ["start", "pause", "resume", "phase_change", "complete", "cancel"] as StudySessionAction[]).includes(action)) return
+  if (typeof performance === "undefined" || typeof indexedDB === "undefined") return
   const key = timingKey(accountId, sessionId)
   const database = await openOutboxDatabase()
   const transaction = database.transaction(TIMING_STORE, "readwrite")
-  const store = transaction.objectStore(TIMING_STORE)
-  const prior = await requestResult(store.get(key) as IDBRequest<SessionTiming | undefined>)
-  const elapsed = Math.max(0, Math.min(604_800_000, Math.round((prior?.elapsedMs ?? 0) +
-    (prior?.timeOrigin === timeOrigin ? monotonicAt - prior.monotonicAt : 0))))
-  const occurredAt = clockAnchor && typeof performance !== "undefined"
-    ? new Date(estimateServerNow(clockAnchor, monotonicAt)).toISOString() : null
-  store.put({ key, accountId, sessionId, monotonicAt, timeOrigin, elapsedMs: 0 } satisfies SessionTiming)
+  transaction.objectStore(TIMING_STORE).put({ key, accountId, sessionId, monotonicAt: performance.now(),
+    timeOrigin: performance.timeOrigin, elapsedMs: 0 } satisfies SessionTiming)
   await transactionDone(transaction)
-  return { occurred_at: occurredAt, elapsed_since_previous_ms: elapsed }
+}
+
+async function readCommandTiming(accountId: string, sessionId: string): Promise<SessionTiming | undefined> {
+  if (typeof indexedDB === "undefined") return undefined
+  const database = await openOutboxDatabase()
+  const transaction = database.transaction(TIMING_STORE, "readonly")
+  const stored = await requestResult(transaction.objectStore(TIMING_STORE).get(timingKey(accountId, sessionId)) as IDBRequest<SessionTiming | undefined>)
+  await transactionDone(transaction)
+  return stored
 }
 
 async function checkpointSessionTiming(accountId: string, sessionId: string): Promise<void> {
@@ -242,8 +275,9 @@ async function checkpointSessionTiming(accountId: string, sessionId: string): Pr
   await transactionDone(transaction)
 }
 
-async function rememberCanonicalTiming(accountId: string, sessions: readonly CanonicalStudySession[]): Promise<void> {
-  if (!clockAnchor || typeof performance === "undefined" || sessions.length === 0) return
+/** Anchors the local clock to the server's boundary. Returns true when it wrote one. */
+async function rememberCanonicalTiming(accountId: string, sessions: readonly CanonicalStudySession[]): Promise<boolean> {
+  if (!clockAnchor || typeof performance === "undefined" || sessions.length === 0) return false
   const nowMono = performance.now()
   const timeOrigin = performance.timeOrigin
   const database = await openOutboxDatabase()
@@ -256,6 +290,7 @@ async function rememberCanonicalTiming(accountId: string, sessions: readonly Can
       monotonicAt: nowMono - elapsed, timeOrigin, elapsedMs: 0 } satisfies SessionTiming)
   }
   await transactionDone(transaction)
+  return true
 }
 
 function openOutboxDatabase(): Promise<IDBDatabase> {

@@ -35,6 +35,7 @@ import {
   type SavedAtarEstimate,
 } from "@/lib/exam-data"
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/lib/storage"
+import { deleteRowNow } from "@/lib/app-sync"
 import { useSupabaseSync } from "@/lib/sync"
 import { queueTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
@@ -395,6 +396,15 @@ export default function App() {
 
   function deleteAttempt(attempt: ExamAttempt) {
     const related = data.mistakes.filter((mistake) => mistake.attemptId === attempt.id)
+    const accountId = sync.user?.id
+    // Local first so the row is gone on the next paint, then straight at the server: the
+    // queue/projection pipeline is the thing that kept resurrecting deletes, so skip it.
+    if (accountId) {
+      void Promise.all([
+        deleteRowNow(accountId, "attempts", attempt.id),
+        ...related.map((mistake) => deleteRowNow(accountId, "mistakes", mistake.id)),
+      ]).catch((error: unknown) => console.error("Could not delete the exam from the server:", error))
+    }
     setData((current) => removeAttempt(current, attempt.id))
     toast("Exam deleted", {
       action: {

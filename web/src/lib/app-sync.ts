@@ -14,6 +14,7 @@ const META = "meta"
 const APP_ENTITIES = new Set(["attempts", "mistakes", "user_state"])
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const OWNER_META_KEY = "owner"
+const TOMBSTONE_KEY = "examtrack:sync:tombstones:v1"
 
 type Entity = "attempts" | "mistakes" | "user_state"
 type Operation = "put" | "delete"
@@ -296,8 +297,7 @@ function compareVersion(left: Pick<AppliedRow, "lamport" | "clientId">, right: P
   return left.clientId < right.client_id ? -1 : 1
 }
 
-async function bootstrap(data: AppData, accountId: string): Promise<void> {
-  const db = await openDatabase()
+async function bootstrap(data: AppData, accountId: string): Promise<void> {  const db = await openDatabase()
   const read = db.transaction([ROWS], "readonly")
   const rows = await requestResult(read.objectStore(ROWS).getAll() as IDBRequest<AppliedRow[]>)
   await transactionDone(read)
@@ -324,16 +324,47 @@ async function bootstrap(data: AppData, accountId: string): Promise<void> {
     }
   }
   await queueAppChanges(accountId, toQueue)
-  localStorage.removeItem("examtrack:sync:tombstones:v1")
   const meta = await readMeta(accountId)
   await writeMeta({ ...meta, bootstrapped: true })
 }
 
 function readLegacyTombstones(): Record<string, Record<string, string>> {
   try {
-    const value = JSON.parse(localStorage.getItem("examtrack:sync:tombstones:v1") ?? "{}") as unknown
+    const value = JSON.parse(localStorage.getItem(TOMBSTONE_KEY) ?? "{}") as unknown
     return isRecord(value) ? value as Record<string, Record<string, string>> : {}
   } catch { return {} }
+}
+
+/**
+ * A delete is final until something newer than it lands. The projection drops any row the
+ * user deleted on this device, so no stale server copy or late sync page can bring it back;
+ * an undo elsewhere (a remote write stamped after the delete) still wins.
+ */
+export function isTombstoned(entity: Entity, rowId: string, rowUpdatedAt: string, tombstones: Record<string, Record<string, string>>): boolean {
+  const deletedAt = tombstones[entity]?.[rowId]
+  return typeof deletedAt === "string" && deletedAt > rowUpdatedAt
+}
+
+/** Deletes straight from the click: one RPC, no queue, no projection round trip. */
+export async function deleteRowNow(accountId: string, entity: Entity, rowId: string): Promise<void> {
+  if (!supabase || !accountId) return
+  const db = await openDatabase()
+  const read = db.transaction([ROWS], "readonly")
+  const rows = await requestResult(read.objectStore(ROWS).getAll() as IDBRequest<AppliedRow[]>)
+  await transactionDone(read)
+  const current = rows.find((row) => row.accountId === accountId && logicalKey(row.entity, row.rowId) === logicalKey(entity, rowId))
+  const deviceId = appSyncDeviceId()
+  const { error } = await supabase.rpc("sync_apply_changes", {
+    p_expected_user_id: accountId,
+    p_changes: [{ change_id: crypto.randomUUID(), client_id: deviceId, entity, row_id: rowId,
+      operation: "delete", payload: null, expected_seq: current?.seq ?? 0 }],
+  })
+  if (error) throw error
+  const write = db.transaction([ROWS], "readwrite")
+  write.objectStore(ROWS).put({ key: rowKey(accountId, entity, rowId), accountId, entity, rowId,
+    operation: "delete", payload: null, seq: (current?.seq ?? 0) + 1,
+    lamport: Math.max(0, current?.lamport ?? 0) + 1, clientId: deviceId, updatedAt: new Date().toISOString() } satisfies AppliedRow)
+  await transactionDone(write)
 }
 
 function legacyStamp(row: AppRow | AppliedRow): string {
@@ -497,10 +528,12 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
   ])
   await transactionDone(transaction)
   const pendingKeys = new Set(allPending.filter((entry) => entry.accountId === accountId).map((entry) => logicalKey(entry.entity, entry.rowId)))
+  const tombstones = readLegacyTombstones()
   const rows = allRows.filter((row) => row.accountId === accountId && !pendingKeys.has(logicalKey(row.entity, row.rowId)))
   const byEntity = (entity: Entity) => rows.filter((row) => row.entity === entity)
-  const remoteAttempts = byEntity("attempts").filter((row) => row.operation === "put").map((row) => row.payload)
-  const remoteMistakes = byEntity("mistakes").filter((row) => row.operation === "put").map((row) => row.payload)
+  const live = (entity: Entity) => (row: AppliedRow) => row.operation === "put" && !isTombstoned(entity, row.rowId, row.updatedAt, tombstones)
+  const remoteAttempts = byEntity("attempts").filter(live("attempts")).map((row) => row.payload)
+  const remoteMistakes = byEntity("mistakes").filter(live("mistakes")).map((row) => row.payload)
   const localPending = rowsFromAppData(data).filter((row) => pendingKeys.has(logicalKey(row.entity, row.rowId)))
   const attempts = [
     ...remoteAttempts,
@@ -576,7 +609,7 @@ function stringArray(value: unknown): string[] {
 
 export function recordLocalChanges(previous: AppData, next: AppData, now = new Date().toISOString()): void {
   try {
-    const raw = localStorage.getItem("examtrack:sync:tombstones:v1")
+    const raw = localStorage.getItem(TOMBSTONE_KEY)
     const tombstones = (raw ? JSON.parse(raw) : { attempts: {}, mistakes: {} }) as Record<string, Record<string, string>>
     for (const entity of ["attempts", "mistakes"] as const) {
       const previousIds = new Set(previous[entity].map((item) => item.id))

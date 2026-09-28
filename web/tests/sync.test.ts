@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA } from "../src/lib/exam-data"
-import { diffAppData, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
+import { diffAppData, isTombstoned, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
 import { isSupersededSync } from "../src/lib/sync"
 
 describe("Focal cursor sync", () => {
@@ -41,6 +41,16 @@ describe("Focal cursor sync", () => {
       { entity: "attempts", rowId: "attempt-1", operation: "put", payload: next.attempts[0] },
       { entity: "attempts", rowId: "attempt-2", operation: "delete", payload: null },
     ])
+  })
+
+  test("keeps a locally deleted attempt out of every later projection", () => {
+    const tombstones = { attempts: { "attempt-1": "2026-07-15T02:00:00.000Z" }, mistakes: {} }
+
+    // The stale server copy the sync feed keeps replaying.
+    expect(isTombstoned("attempts", "attempt-1", "2026-07-15T01:00:00.000Z", tombstones)).toBe(true)
+    // An undo from another device is stamped after the delete, so it still wins.
+    expect(isTombstoned("attempts", "attempt-1", "2026-07-15T03:00:00.000Z", tombstones)).toBe(false)
+    expect(isTombstoned("mistakes", "attempt-1", "2026-07-15T01:00:00.000Z", tombstones)).toBe(false)
   })
 
   test("rebases a Folio scheduling edit without dropping concurrent question content", () => {

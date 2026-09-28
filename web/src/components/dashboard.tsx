@@ -11,6 +11,7 @@ import {
   Plus,
   Target,
   type LucideIcon,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -250,9 +251,27 @@ function computeSubjectBreakdown(data: AppData, references: AssessmentReference[
     .toSorted((first, second) => second.average - first.average)
 }
 
+// ponytail: dismissal is per-action-title and local-only, so a new next action still
+// surfaces. Upgrade path: sync it with the account if a phone should inherit the snooze.
+const DISMISS_KEY = "examtrack:next-action-dismissed:v1"
+const DISMISS_MS = 24 * 60 * 60 * 1000
+
+type Dismissal = { title: string; until: number }
+
+function readDismissal(title: string): Dismissal {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "null") as Partial<Dismissal> | null
+    return saved?.title === title && typeof saved.until === "number" ? { title, until: saved.until } : { title: "", until: 0 }
+  } catch {
+    return { title: "", until: 0 }
+  }
+}
+
 function NextActionNotice({ action }: { action: NextAction | null }) {
+  const [dismissed, setDismissed] = useState<Dismissal>(() => (action ? readDismissal(action.title) : { title: "", until: 0 }))
   if (!action) return null
   const Icon = action.icon
+  if (dismissed.title === action.title && dismissed.until > Date.now()) return null
   return (
     // ponytail: one-liner by design — the description is decorative context, so it truncates
     // instead of wrapping. Upgrade path: a "details" popover if the text ever matters more than the CTA.
@@ -270,6 +289,23 @@ function NextActionNotice({ action }: { action: NextAction | null }) {
       <Button onClick={action.onClick} size="sm" className="ml-auto shrink-0 sm:ml-0">
         {action.cta}
         <ArrowRight aria-hidden />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="shrink-0 text-muted-foreground"
+        aria-label="Hide this suggestion for 24 hours"
+        onClick={() => {
+          const next = { title: action.title, until: Date.now() + DISMISS_MS }
+          try {
+            localStorage.setItem(DISMISS_KEY, JSON.stringify(next))
+          } catch {
+            // Storage unavailable: the snooze just lasts this session.
+          }
+          setDismissed(next)
+        }}
+      >
+        <X aria-hidden />
       </Button>
     </section>
   )
@@ -648,13 +684,11 @@ export function Dashboard(props: DashboardProps) {
         <TabsContent value="overview" className="mt-4">
           {section === "overview" ? (
             <div className="grid gap-6">
-              {/* Stat row first: the headline numbers are the reason to open the dashboard.
-                  The single next action then sits beside the deadlines it competes with. */}
+              {/* The next action leads: one card, full width, above the numbers and the
+                  deadlines it competes with. */}
+              <NextActionNotice action={nextAction} />
               <StatRow data={data} />
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
-                <NextActionNotice action={nextAction} />
-                {deadlineSection}
-              </div>
+              {deadlineSection}
               <div className="grid gap-6 lg:grid-cols-3">
                 <div className="min-w-0 lg:col-span-2">
                   <RecentExams data={data} references={references} comparisonYear={comparisonYear} onLogExam={onLogExam} />

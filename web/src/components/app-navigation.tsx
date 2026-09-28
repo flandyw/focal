@@ -72,7 +72,7 @@ export function AppSidebar({
                   {item.id === "mistakes" && dueMistakes > 0 ? (
                     <SidebarMenuBadge aria-label={`${dueMistakes} mistakes due`}>{dueMistakes}</SidebarMenuBadge>
                   ) : null}
-                  {item.id === "planner" && plannedTasks > 0 ? (
+                  {item.id === "calendar" && plannedTasks > 0 ? (
                     <SidebarMenuBadge aria-label={`${plannedTasks} study tasks due`}>{plannedTasks}</SidebarMenuBadge>
                   ) : null}
                 </SidebarMenuItem>

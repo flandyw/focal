@@ -3,9 +3,7 @@ export const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
 export const APP_VIEWS = [
   "dashboard",
   "calendar",
-  "planner",
   "focus",
-  "practice",
   "mistakes",
   "sacs",
   "library",

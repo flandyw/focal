@@ -91,8 +91,8 @@ function pickNextAction(
     onLogExam: () => void
     onLogMistakeForLatest: () => void
     onOpenMistakes: () => void
+    onOpenCalendar: () => void
     onOpenLibrary: () => void
-    onOpenPlanner: () => void
   },
 ): NextAction | null {
   const nextTask = data.learning.tasks
@@ -103,8 +103,8 @@ function pickNextAction(
       icon: CalendarCheck2,
       title: nextTask.title,
       description: `${nextTask.durationMinutes} minute planned session${nextTask.subject ? ` · ${nextTask.subject}` : ""}${nextTask.plannedFor < localDate(new Date()) ? " · overdue" : ""}.`,
-      cta: "Open planner",
-      onClick: handlers.onOpenPlanner,
+      cta: "Open day plan",
+      onClick: handlers.onOpenCalendar,
     }
   }
   if (data.attempts.length === 0) {
@@ -254,18 +254,20 @@ function NextActionNotice({ action }: { action: NextAction | null }) {
   if (!action) return null
   const Icon = action.icon
   return (
+    // ponytail: one-liner by design — the description is decorative context, so it truncates
+    // instead of wrapping. Upgrade path: a "details" popover if the text ever matters more than the CTA.
     <section
       aria-label="Next study action"
-      className="flex flex-wrap items-start gap-4 rounded-lg border border-dashed bg-accent/40 px-5 py-4 sm:flex-nowrap sm:items-center"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed bg-accent/40 px-4 py-2.5"
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background ring-1 ring-foreground/10">
-        <Icon className="size-4 text-foreground" aria-hidden />
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background ring-1 ring-foreground/10">
+        <Icon className="size-3.5 text-foreground" aria-hidden />
       </div>
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-sm font-medium leading-snug text-balance">{action.title}</p>
-        <p className="text-sm text-muted-foreground leading-snug text-pretty">{action.description}</p>
-      </div>
-      <Button onClick={action.onClick} className="shrink-0 sm:ml-auto">
+      <p className="text-sm font-medium leading-snug">{action.title}</p>
+      <p className="hidden min-w-0 flex-1 truncate text-sm text-muted-foreground leading-snug sm:block">
+        {action.description}
+      </p>
+      <Button onClick={action.onClick} size="sm" className="ml-auto shrink-0 sm:ml-0">
         {action.cta}
         <ArrowRight aria-hidden />
       </Button>
@@ -281,8 +283,11 @@ function StatRow({ data }: { data: AppData }) {
   const completion = total ? (mature / total) * 100 : 0
 
   return (
-    <div className="grid grid-cols-2 gap-y-6 rounded-lg border bg-card px-5 py-5 lg:grid-cols-4 lg:gap-y-0">
-      <div className="flex min-w-0 flex-col gap-1.5 pr-4 sm:pr-6">
+    // ponytail: cell borders come from each cell's own border-r/b plus a container border-t/l,
+    // so the rules stay on the exact column/row boundaries at every breakpoint. (The old
+    // per-breakpoint border-l/border-t mix drifted by one padding step on some columns.)
+    <div className="grid grid-cols-2 overflow-hidden rounded-lg border bg-card lg:grid-cols-4">
+      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Practice exams</p>
         <p className="text-3xl font-semibold tabular-nums leading-none">{stats.count}</p>
         <p className="text-xs text-muted-foreground">
@@ -292,7 +297,7 @@ function StatRow({ data }: { data: AppData }) {
           {stats.lastDate ? ` · last ${formatDate(stats.lastDate)}` : null}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-l pl-4 sm:pl-6">
+      <div className="flex min-w-0 flex-col gap-1.5 border-b border-r p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">VCAA-aligned average</p>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-semibold tabular-nums leading-none">
@@ -320,12 +325,12 @@ function StatRow({ data }: { data: AppData }) {
                 : "Dropping vs your earlier half"}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-l border-t pt-6 pl-4 lg:px-6 lg:pt-0">
+      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Best mark</p>
         <p className="text-3xl font-semibold tabular-nums leading-none">{stats.best.toFixed(1)}%</p>
         <p className="text-xs text-muted-foreground">Your strongest recorded practice result</p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-t border-l pt-6 pl-4 sm:pl-6 lg:pt-0">
+      <div className="flex min-w-0 flex-col gap-1.5 border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Mistake cards</p>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-semibold tabular-nums leading-none">{total === 0 ? "—" : due}</p>
@@ -535,8 +540,8 @@ export type DashboardProps = {
   onLogExam: () => void
   onLogMistakeForLatest: () => void
   onOpenMistakes: () => void
+  onOpenCalendar: () => void
   onOpenLibrary: () => void
-  onOpenPlanner: () => void
   onOpenTracker: () => void
   onEditExam: (attempt: ExamAttempt) => void
   onAddMistake: (attemptId: string) => void
@@ -553,8 +558,8 @@ export function Dashboard(props: DashboardProps) {
     onLogExam,
     onLogMistakeForLatest,
     onOpenMistakes,
+    onOpenCalendar,
     onOpenLibrary,
-    onOpenPlanner,
     onOpenTracker,
     onEditExam,
     onAddMistake,
@@ -562,8 +567,8 @@ export function Dashboard(props: DashboardProps) {
   } = props
   const [section, setSection] = useState<"overview" | "insights">("overview")
   const nextAction = useMemo(
-    () => pickNextAction(data, { onLogExam, onLogMistakeForLatest, onOpenMistakes, onOpenLibrary, onOpenPlanner }),
-    [data, onLogExam, onLogMistakeForLatest, onOpenMistakes, onOpenLibrary, onOpenPlanner],
+    () => pickNextAction(data, { onLogExam, onLogMistakeForLatest, onOpenMistakes, onOpenLibrary, onOpenCalendar }),
+    [data, onLogExam, onLogMistakeForLatest, onOpenMistakes, onOpenLibrary, onOpenCalendar],
   )
 
   function exportReport() {
@@ -643,13 +648,13 @@ export function Dashboard(props: DashboardProps) {
         <TabsContent value="overview" className="mt-4">
           {section === "overview" ? (
             <div className="grid gap-6">
-              {/* Lead band: the single next action sits beside the deadlines it competes with,
-                  so the first screen answers "what do I do now" before any statistic does. */}
+              {/* Stat row first: the headline numbers are the reason to open the dashboard.
+                  The single next action then sits beside the deadlines it competes with. */}
+              <StatRow data={data} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] xl:items-start">
                 <NextActionNotice action={nextAction} />
                 {deadlineSection}
               </div>
-              <StatRow data={data} />
               <div className="grid gap-6 lg:grid-cols-3">
                 <div className="min-w-0 lg:col-span-2">
                   <RecentExams data={data} references={references} comparisonYear={comparisonYear} onLogExam={onLogExam} />

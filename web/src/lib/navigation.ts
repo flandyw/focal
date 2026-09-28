@@ -2,14 +2,12 @@ import {
   BookOpenText,
   Calculator,
   CalendarDays,
-  CalendarRange,
   ChartNoAxesCombined,
   ClipboardCheck,
   LibraryBig,
   Map,
   NotebookPen,
   Target,
-  WandSparkles,
   Settings2,
   Timer,
 } from "lucide-react"
@@ -22,9 +20,7 @@ type NavigationItem = { id: AppView; label: string; description: string; icon: L
 const ACTION_NAVIGATION: NavigationItem[] = [
   { id: "dashboard" as const, label: "Dashboard", description: "Overview and exam results", icon: ChartNoAxesCombined },
   { id: "calendar" as const, label: "Calendar", description: "Day plan for any date", icon: CalendarDays },
-  { id: "planner" as const, label: "Revision planner", description: "Plan the next study actions", icon: CalendarRange },
   { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers", icon: Timer },
-  { id: "practice" as const, label: "Practice studio", description: "Build targeted practice sessions", icon: WandSparkles },
   { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue", icon: NotebookPen },
 ]
 

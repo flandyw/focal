@@ -69,7 +69,7 @@ export function CalendarPage({
 }: {
   data: DayPlanSource
   onChange: (update: LearningWorkspaceUpdate) => void
-  onNavigate: (view: "planner" | "mistakes" | "sacs" | "focus") => void
+  onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string) => void
   timetable: Timetable | null
 }) {
@@ -202,7 +202,7 @@ export function CalendarPage({
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
                     <EmptyTitle>Nothing planned</EmptyTitle>
-                    <EmptyDescription>Add a task below, or let the revision planner fill the week.</EmptyDescription>
+                    <EmptyDescription>Add a task below to plan this day.</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
@@ -264,7 +264,6 @@ export function CalendarPage({
           id="calendar-month-title"
           title={`This month in ${monthLabel}`}
           description="Load across the whole month, so you can see where the study is actually going."
-          action={<Button onClick={() => onNavigate("planner")} size="sm" variant="outline">Open revision planner</Button>}
         />
         <MonthLoad days={days} />
       </section>
@@ -283,7 +282,7 @@ function DayItemRow({
   item: DayItem
   onArchive: (id: string) => void
   onMove: (id: string, date: string) => void
-  onNavigate: (view: "planner" | "mistakes" | "sacs" | "focus") => void
+  onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string) => void
   onStatus: (id: string, status: "completed" | "skipped" | "planned") => void
 }) {

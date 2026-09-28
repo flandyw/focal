@@ -21,11 +21,10 @@ function masteryLabel(value: number | null) {
   return "Priority"
 }
 
-export function MasteryPage({ data, subjects, onChange, onOpenPractice }: {
+export function MasteryPage({ data, subjects, onChange }: {
   data: AppData
   subjects: string[]
   onChange: (learning: LearningWorkspaceUpdate) => void
-  onOpenPractice: (subject: string) => void
 }) {
   const [subject, setSubject] = useState(data.subjects[0] ?? subjects[0] ?? "")
   const [name, setName] = useState("")
@@ -94,7 +93,7 @@ export function MasteryPage({ data, subjects, onChange, onOpenPractice }: {
 
       {visibleAreas.length ? [...grouped.entries()].map(([subjectName, subjectAreas]) => (
         <section key={subjectName} className="grid gap-4" aria-labelledby={`mastery-${subjectName}`}>
-          <SectionHeading id={`mastery-${subjectName}`} title={subjectName} description={`${subjectAreas.length} mapped area${subjectAreas.length === 1 ? "" : "s"}`} action={<Button size="sm" variant="outline" onClick={() => onOpenPractice(subjectName)}>Practise priorities</Button>} />
+          <SectionHeading id={`mastery-${subjectName}`} title={subjectName} description={`${subjectAreas.length} mapped area${subjectAreas.length === 1 ? "" : "s"}`} />
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{subjectAreas.map((area) => {
             const manual = data.learning.curriculumAreas.some((item) => !item.archivedAt && item.subject === area.subject && item.name === area.name)
             return <Card key={area.key}>

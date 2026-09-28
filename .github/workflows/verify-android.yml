@@ -1,0 +1,39 @@
+name: verify android
+
+on:
+  pull_request:
+    paths:
+      - "android-native/**"
+      - ".github/workflows/verify-android.yml"
+  push:
+    branches: [main]
+    paths:
+      - "android-native/**"
+      - ".github/workflows/verify-android.yml"
+
+concurrency:
+  group: verify-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - run: node android-native/scripts/release-manifest.mjs --self-check
+      - name: Build native Android app
+        working-directory: android-native
+        run: bash ./gradlew :app:assembleDebug --no-daemon

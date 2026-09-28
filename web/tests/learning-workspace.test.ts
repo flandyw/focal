@@ -2,20 +2,12 @@ import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA, type AppData } from "../src/lib/exam-data"
 import {
   buildMasteryAreas,
-  buildPlannerSuggestions,
-  createPracticeSession,
-  deletePracticeSession,
   EMPTY_LEARNING_WORKSPACE,
-  finalisePracticeSession,
   getGoalProgress,
-  getPracticeSessionPlan,
-  getPracticeSessionTimerState,
+  isLearningWorkspace,
   materialiseTask,
   mergeLearningWorkspace,
   migrateLearningWorkspace,
-  pausePracticeSession,
-  resumePracticeSession,
-  type PracticeSession,
 } from "../src/lib/learning-workspace"
 
 const attempt = {
@@ -53,25 +45,6 @@ function appData(): AppData {
 }
 
 describe("learning workspace", () => {
-  test("builds actionable planner recommendations and materialises a task", () => {
-    const suggestions = buildPlannerSuggestions(appData(), null, new Date("2026-08-23T00:00:00.000Z"))
-    expect(suggestions.some((item) => item.kind === "mistake-review" && item.subject === "Biology")).toBe(true)
-    const task = materialiseTask(suggestions[0], new Date("2026-08-23T01:00:00.000Z"))
-    expect(task.status).toBe("planned")
-    expect(task.updatedAt).toBe("2026-08-23T01:00:00.000Z")
-  })
-
-  test("places recommendations on the next day when today's study capacity is full", () => {
-    const data = appData()
-    data.learning = {
-      ...EMPTY_LEARNING_WORKSPACE,
-      preferences: { dailyMinutes: 30, studyDays: [0, 1, 2, 3, 4, 5, 6] },
-      tasks: [{ id: "task-1", kind: "custom", title: "Existing", detail: "", durationMinutes: 30, plannedFor: "2026-08-23", status: "planned", createdAt: "2026-08-22T00:00:00.000Z", updatedAt: "2026-08-22T00:00:00.000Z" }],
-    }
-    const review = buildPlannerSuggestions(data, null, new Date("2026-08-23T00:00:00.000Z")).find((item) => item.kind === "mistake-review")
-    expect(review?.plannedFor).toBe("2026-08-24")
-  })
-
   test("turns question and mistake evidence into a conservative mastery score", () => {
     const [area] = buildMasteryAreas(appData())
     expect(area.name).toBe("Genetics")
@@ -79,48 +52,14 @@ describe("learning workspace", () => {
     expect(area.mastery).toBe(35)
   })
 
-  test("creates a targeted session and prefers an available alternative question", () => {
-    const data = appData()
-    data.alternativeMistakeDeck = { updatedAt: "2026-08-23T00:00:00.000Z", cards: [{ sourceMistakeId: mistake.id, skill: "Punnett squares", question: "Cross Aa with aa.", answer: "Half Aa, half aa.", marks: 2, generatedAt: "2026-08-23T00:00:00.000Z" }] }
-    const session = createPracticeSession("Biology", data, { limit: 6 }, new Date("2026-08-23T00:00:00.000Z"))
-    expect(session?.questions[0]).toMatchObject({ question: "Cross Aa with aa.", rating: "unattempted", marks: 2 })
-    expect(session).toMatchObject({ timerStartedAt: "2026-08-23T00:00:00.000Z", elapsedSeconds: 0 })
-    expect(getPracticeSessionPlan("Biology", data, { limit: 6 })).toEqual({ availableQuestions: 1, selectedQuestions: 1, totalMarks: 2, durationMinutes: 15 })
-  })
-
-  test("runs, pauses, resumes, and finalises a practice timer without counting paused time", () => {
-    const session: PracticeSession = {
-      id: "session-1",
-      title: "Biology targeted practice",
-      subject: "Biology",
-      durationMinutes: 15,
-      questions: [{ id: "question-1", skill: "Genetics", question: "Question", answer: "Answer", marks: 1, rating: "correct" }],
-      createdAt: "2026-08-23T00:00:00.000Z",
-      updatedAt: "2026-08-23T00:00:00.000Z",
-      startedAt: "2026-08-23T00:00:00.000Z",
-      timerStartedAt: "2026-08-23T00:00:00.000Z",
-      elapsedSeconds: 10,
-    }
-
-    expect(getPracticeSessionTimerState(session, new Date("2026-08-23T00:00:05.000Z"))).toMatchObject({ elapsedSeconds: 15, isRunning: true, isPaused: false })
-    const paused = pausePracticeSession(session, new Date("2026-08-23T00:00:05.000Z"))
-    expect(getPracticeSessionTimerState(paused, new Date("2026-08-23T00:00:20.000Z"))).toMatchObject({ elapsedSeconds: 15, isRunning: false, isPaused: true })
-    const resumed = resumePracticeSession(paused, new Date("2026-08-23T00:00:20.000Z"))
-    expect(getPracticeSessionTimerState(resumed, new Date("2026-08-23T00:00:25.000Z"))).toMatchObject({ elapsedSeconds: 20, isRunning: true })
-    const completed = finalisePracticeSession(resumed, new Date("2026-08-23T00:00:25.000Z"))
-    expect(getPracticeSessionTimerState(completed, new Date("2026-08-23T01:00:00.000Z"))).toMatchObject({ elapsedSeconds: 20, isRunning: false, isPaused: false })
-
-    const [migratedLegacy] = migrateLearningWorkspace({
-      ...EMPTY_LEARNING_WORKSPACE,
-      practiceSessions: [{ ...session, timerStartedAt: undefined, elapsedSeconds: undefined }],
-    }).practiceSessions
-    expect(migratedLegacy).toMatchObject({ elapsedSeconds: 0, timerPausedAt: session.updatedAt })
-    expect(getPracticeSessionTimerState(migratedLegacy, new Date("2026-08-24T00:00:00.000Z"))).toMatchObject({ elapsedSeconds: 0, isPaused: true })
+  test("materialises a planned task from a draft", () => {
+    const task = materialiseTask({ kind: "custom", title: "Redo genetics", detail: "", durationMinutes: 30, plannedFor: "2026-08-23" }, new Date("2026-08-23T01:00:00.000Z"))
+    expect(task.status).toBe("planned")
+    expect(task.updatedAt).toBe("2026-08-23T01:00:00.000Z")
   })
 
   test("calculates an exam-average goal gap from recorded evidence", () => {
-    const data = appData()
-    const progress = getGoalProgress({ id: "goal-1", kind: "exam-percentage", subject: "Biology", target: 80, deadline: "2026-10-01", createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }, data, [])
+    const progress = getGoalProgress({ id: "goal-1", kind: "exam-percentage", subject: "Biology", target: 80, deadline: "2026-10-01", createdAt: "2026-08-23T00:00:00.000Z", updatedAt: "2026-08-23T00:00:00.000Z" }, appData(), [])
     expect(progress.current).toBe(70)
     expect(progress.gap).toBe(10)
   })
@@ -146,24 +85,13 @@ describe("learning workspace", () => {
     expect(merged.preferences.dailyMinutes).toBe(90)
   })
 
-  test("keeps practice-session deletions across sync without retaining session content", () => {
-    const session: PracticeSession = {
-      id: "session-to-delete",
-      title: "Sensitive session content",
-      subject: "Biology",
-      durationMinutes: 15,
-      questions: [{ id: "question-1", skill: "Genetics", question: "Question", answer: "Answer", marks: 1, rating: "unattempted" }],
-      createdAt: "2026-08-23T00:00:00.000Z",
-      updatedAt: "2026-08-23T01:00:00.000Z",
-    }
-    const original = { ...EMPTY_LEARNING_WORKSPACE, practiceSessions: [session], updatedAt: session.updatedAt }
-    const deleted = deletePracticeSession(original, session.id, new Date("2026-08-23T03:00:00.000Z"))
-    expect(deleted.practiceSessions).toEqual([])
-    expect(JSON.stringify(deleted)).not.toContain("Sensitive session content")
-
-    const remote = { ...EMPTY_LEARNING_WORKSPACE, practiceSessions: [session], updatedAt: "2026-08-23T02:00:00.000Z" }
-    const merged = mergeLearningWorkspace(deleted, remote)
-    expect(merged.practiceSessions).toEqual([])
-    expect(merged.practiceSessionTombstones?.[session.id]).toBe("2026-08-23T03:00:00.000Z")
+  // Saved data written before the practice studio was removed still has a practiceSessions
+  // blob. It must load, keep the real records, and stop carrying the dead key.
+  test("legacy saved workspaces with practice sessions still migrate", () => {
+    const legacy = { ...EMPTY_LEARNING_WORKSPACE, practiceSessions: [{ id: "session-1" }], practiceSessionTombstones: { "session-1": "2026-08-23T00:00:00.000Z" } }
+    expect(isLearningWorkspace(legacy)).toBe(true)
+    const migrated = migrateLearningWorkspace(legacy)
+    expect(migrated.tasks).toEqual([])
+    expect("practiceSessions" in migrated).toBe(false)
   })
 })

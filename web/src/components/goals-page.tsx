@@ -86,12 +86,11 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   )
 }
 
-export function GoalsPage({ data, references, subjects, onChange, onOpenPlanner, onPlanGoal }: {
+export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: {
   data: AppData
   references: AssessmentReference[]
   subjects: string[]
   onChange: (learning: LearningWorkspaceUpdate) => void
-  onOpenPlanner: () => void
   onPlanGoal: (goal: StudyGoal) => void
 }) {
   const [kind, setKind] = useState<StudyGoalKind>("exam-percentage")
@@ -135,9 +134,7 @@ export function GoalsPage({ data, references, subjects, onChange, onOpenPlanner,
 
   return (
     <WorkspacePage>
-      <PageHeader title="Score goals" description="Set an outcome, measure the gap from current evidence, and turn it into a revision pathway.">
-        <Button variant="outline" onClick={onOpenPlanner}>Open revision plan</Button>
-      </PageHeader>
+      <PageHeader title="Score goals" description="Set an outcome, measure the gap from current evidence, and turn it into a revision pathway." />
       <Card className="gap-5">
         <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription>Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end">

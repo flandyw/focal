@@ -8,6 +8,8 @@ describe("app view preferences", () => {
     expect(isAppView("mistakes")).toBeTrue()
     expect(isAppView("reports")).toBeFalse()
     expect(isAppView(null)).toBeFalse()
+    // The timed paper is a mode of the study timer, not a view of its own.
+    expect(isAppView("timer")).toBeFalse()
   })
 
   test("keeps every view discoverable in navigation", () => {
@@ -20,7 +22,7 @@ describe("app view preferences", () => {
     expect(loadAppView({ getItem: () => "removed-view" })).toBe("dashboard")
     expect(loadAppView({ getItem: () => { throw new Error("blocked") } })).toBe("dashboard")
     expect(loadAppView(null)).toBe("dashboard")
-    expect(loadAppView(null, "?timer=exam")).toBe("timer")
+    expect(loadAppView(null, "?timer=exam")).toBe("focus")
     expect(loadAppView(null, "?timer=sac")).toBe("sacs")
   })
 
@@ -28,6 +30,6 @@ describe("app view preferences", () => {
     let entry: [string, string] | undefined
     saveAppView({ setItem: (key, value) => { entry = [key, value] } }, "sacs")
     expect(entry).toEqual([APP_VIEW_STORAGE_KEY, "sacs"])
-    expect(() => saveAppView({ setItem: () => { throw new Error("full") } }, "timer")).not.toThrow()
+    expect(() => saveAppView({ setItem: () => { throw new Error("full") } }, "focus")).not.toThrow()
   })
 })

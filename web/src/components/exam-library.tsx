@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SubjectCombobox } from "@/components/subject-combobox"
 import { PageHeader } from "@/components/page-header"
 import { analyseAttempt, formatOrdinal, normaliseComparisonName, type AssessmentReference, type ExamAttempt } from "@/lib/exam-data"
-import type { ExamTimerPreset } from "@/components/exam-timer"
+import type { ExamTimerPreset } from "@/components/exam-timer-mode"
 import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
 import { getKnownExamConditions } from "@/lib/exam-conditions"
 import {

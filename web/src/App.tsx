@@ -39,9 +39,11 @@ import { useSupabaseSync } from "@/lib/sync"
 import { queueTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
 import { ExamTrackerPicker } from "@/components/exam-tracker-picker"
-import type { ExamTimerPreset } from "@/components/exam-timer"
+import type { ExamTimerPreset } from "@/components/exam-timer-mode"
+import type { StudyTimerMode } from "@/components/study-timer-page"
 import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
 import type { SacRecord } from "@/lib/sac"
+import type { FocusTimerSession } from "@/lib/ongoing-timers"
 import { loadAppView, saveAppView, type AppView } from "@/lib/app-view"
 import {
   AppSidebar,
@@ -66,9 +68,6 @@ const Dashboard = lazy(() =>
 const VcaaExplorer = lazy(() =>
   import("@/components/vcaa-explorer").then((module) => ({ default: module.VcaaExplorer })),
 )
-const ExamTimer = lazy(() =>
-  import("@/components/exam-timer").then((module) => ({ default: module.ExamTimer })),
-)
 const SettingsPage = lazy(() =>
   import("@/components/settings-page").then((module) => ({ default: module.SettingsPage })),
 )
@@ -90,6 +89,9 @@ const AppCommandMenu = lazy(() =>
 const PlannerPage = lazy(() =>
   import("@/components/planner-page").then((module) => ({ default: module.PlannerPage })),
 )
+const StudyTimerPage = lazy(() =>
+  import("@/components/study-timer-page").then((module) => ({ default: module.StudyTimerPage })),
+)
 const MasteryPage = lazy(() =>
   import("@/components/mastery-page").then((module) => ({ default: module.MasteryPage })),
 )
@@ -107,6 +109,12 @@ export default function App() {
   ))
   const [data, setData] = useState<AppData>(() => (typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
   const [timerPreset, setTimerPreset] = useState<ExamTimerPreset | null>(null)
+  // A timed paper is a mode of the study timer, so the mode is app state: the
+  // library, the VCAA explorer, and ?timer=exam all land in the same place.
+  const [timerMode, setTimerMode] = useState<StudyTimerMode>(() =>
+    typeof location !== "undefined" && new URLSearchParams(location.search).get("timer") === "exam"
+      ? "exam"
+      : "focus")
   const [comparisonYear, setComparisonYear] = useState(2025)
   const [examOpen, setExamOpen] = useState(false)
   const [editingAttempt, setEditingAttempt] = useState<ExamAttempt | null>(null)
@@ -309,6 +317,16 @@ export default function App() {
     const saved = await queueTimerSessionChange(data.activeSacTimer, activeSacTimer, "sac", action)
     saveAppData({ ...data, activeSacTimer: saved })
     setData((current) => ({ ...current, activeSacTimer: saved }))
+  }
+
+  // A focus block is the timer's own record, so the canonical session is the
+  // only place it is written: it reaches Focal analytics through the outbox.
+  async function queueFocusSession(
+    previous: FocusTimerSession | undefined,
+    next: FocusTimerSession | undefined,
+    action?: "cancel" | "complete",
+  ) {
+    await queueTimerSessionChange(previous, next, "focus", action)
   }
 
   function toggleCompletedExam(id: string) {
@@ -537,11 +555,11 @@ export default function App() {
         </header>
         <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
           <SharedStudySessions userId={sync.user?.id} sessions={studySessionSync.sessions} onControl={studySessionSync.control} />
-          {data.activeExamTimer && view !== "timer" ? (
+          {data.activeExamTimer && view !== "focus" ? (
             <Alert className="mb-6">
               <AlertTitle>{data.activeExamTimer.pausedAt !== undefined ? "Saved exam" : "Exam in progress"} · {data.activeExamTimer.title}</AlertTitle>
               <AlertDescription><span>{data.activeExamTimer.paper || data.activeExamTimer.subject} · {data.activeExamTimer.workspaceItems?.filter((item) => item.status === "done").length ?? 0} questions done · {data.activeExamTimer.marks} marks</span><span role="status">{examSaveStatus}</span></AlertDescription>
-              <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setView("timer")}>{data.activeExamTimer.pausedAt !== undefined ? "Open saved exam" : "Return to exam"}</Button>{examSyncAction ? <Button size="sm" variant="outline" onClick={examSyncAction.onClick}>{examSyncAction.label}</Button> : null}</div>
+              <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => { setTimerMode("exam"); setView("focus") }}>{data.activeExamTimer.pausedAt !== undefined ? "Open saved exam" : "Return to exam"}</Button>{examSyncAction ? <Button size="sm" variant="outline" onClick={examSyncAction.onClick}>{examSyncAction.label}</Button> : null}</div>
             </Alert>
           ) : null}
           {referenceLoadFailed ? (
@@ -575,15 +593,15 @@ export default function App() {
             </Suspense>
           ) : null}
           {view === "planner" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><PlannerPage data={data} timetable={timetable} onChange={saveLearning} onNavigate={setView} /></Suspense> : null}
+          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage subjects={[...new Set(references.map((reference) => reference.studyName))]} mode={timerMode} onModeChange={setTimerMode} onFocusSessionChange={queueFocusSession} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onOpenPractice={(subject) => { setPracticeSubject(subject); setView("practice") }} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onOpenPlanner={() => setView("planner")} onPlanGoal={planGoal} /></Suspense> : null}
           {view === "practice" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><PracticeStudio key={practiceSubject ?? "practice"} data={data} initialSubject={practiceSubject} onChange={saveLearning} onComplete={completePracticeSession} onOpenMistakes={() => setView("mistakes")} /></Suspense> : null}
           {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={data.sacRecords} subjects={references.map((reference) => reference.studyName)} preferredSubjects={data.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
-          {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setView("timer") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
-          {view === "timer" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamTimer attempts={data.attempts} progression={data.examProgression} onProgressionChange={saveExamProgression} key={data.activeExamTimer?.id ?? (timerPreset ? `${timerPreset.subject}-${timerPreset.examYear}-${timerPreset.paper}` : "manual")} references={references} studies={resourceStudies} preferredSubjects={data.subjects} initialExam={timerPreset} activeSession={data.activeExamTimer} saveStatus={examSaveStatus} syncAction={examSyncAction} onLeave={() => setView("dashboard")} onSessionChange={saveActiveExamTimer} onSave={(attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) }} /></Suspense> : null}
+          {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
           {view === "predictor" ? <>{referencesLoading || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
-          {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setView("timer") }} /></Suspense>}</> : null}
+          {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} /></Suspense> : null}
         </main>
       </SidebarInset>

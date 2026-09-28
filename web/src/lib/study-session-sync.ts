@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { AppData } from "@/lib/exam-data"
 import { saveAppData } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
-import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "@/lib/ongoing-timers"
+import { isExamTimerSession, isFocusTimerSession, isSacTimerSession, type ExamTimerSession, type FocusTimerSession, type SacTimerSession } from "@/lib/ongoing-timers"
 import {
   estimateServerNow,
   isStudySessionCommand,
@@ -24,8 +24,8 @@ const CURSOR_KEY = "examtrack:study-session-cursor:v1"
 const REVISION_KEY = "examtrack:study-session-revisions:v1"
 const LEGACY_FOCAL_OUTBOX_KEY = "examtrack.focal-timer-outbox:v1"
 
-type TimerKind = "exam" | "sac"
-type TimerSession = ExamTimerSession | SacTimerSession
+type TimerKind = "exam" | "sac" | "focus"
+type TimerSession = ExamTimerSession | SacTimerSession | FocusTimerSession
 type PendingCommand = {
   queueId: string
   accountId: string
@@ -58,6 +58,12 @@ export function queueTimerSessionChange(
   kind: "sac",
   terminalAction?: "cancel" | "complete",
 ): Promise<SacTimerSession | undefined>
+export function queueTimerSessionChange(
+  previous: FocusTimerSession | undefined,
+  next: FocusTimerSession | undefined,
+  kind: "focus",
+  terminalAction?: "cancel" | "complete",
+): Promise<FocusTimerSession | undefined>
 export async function queueTimerSessionChange(
   previous: TimerSession | undefined,
   next: TimerSession | undefined,
@@ -129,7 +135,6 @@ function phaseFor(session: TimerSession, kind: TimerKind): "focus" | "reading" |
   if (kind === "exam") return (session as ExamTimerSession).phase ?? "reading"
   return "focus"
 }
-
 function timerMetadata(session: TimerSession, kind: TimerKind, id: string): Record<string, unknown> {
   const details: Record<string, unknown> = { ...session }
   for (const key of ["id", "revision", "startedAt", "pausedAt", "pausedSeconds", "phase"]) delete details[key]
@@ -146,7 +151,7 @@ function timerMetadata(session: TimerSession, kind: TimerKind, id: string): Reco
     ...details,
     createdVia: "examtrack",
     description: `Logged by the Focal ${kind} timer.`,
-    topics: [kind === "exam" ? "Exam practice" : "SAC practice"],
+    topics: [kind === "exam" ? "Exam practice" : kind === "sac" ? "SAC practice" : "Study block"],
     integrations,
     examtrack: details,
   }
@@ -175,7 +180,7 @@ function openOutboxDatabase(): Promise<IDBDatabase> {
 function isPendingCommand(entry: unknown): entry is PendingCommand {
   return isRecord(entry) && typeof entry.queueId === "string" && typeof entry.accountId === "string" &&
     isStudySessionCommand(entry.command) && typeof entry.attempted === "boolean" && Number.isFinite(entry.queuedAt) &&
-    (entry.localTimer === undefined || isExamTimerSession(entry.localTimer) || isSacTimerSession(entry.localTimer))
+    (entry.localTimer === undefined || isExamTimerSession(entry.localTimer) || isSacTimerSession(entry.localTimer) || isFocusTimerSession(entry.localTimer))
 }
 
 async function readOutbox(): Promise<PendingCommand[]> {

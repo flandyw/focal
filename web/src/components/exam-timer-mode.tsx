@@ -18,12 +18,12 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Progress, ProgressLabel } from "@/components/ui/progress"
 import { PageHeader } from "@/components/page-header"
 import { MetricCard, MetricGrid, WorkspacePage } from "@/components/workspace-layout"
 import { QuestionResultsEditor } from "@/components/question-results-editor"
 import { PerformanceContextFields } from "@/components/performance-context-fields"
 import { ExamWorkspace } from "@/components/exam-workspace"
+import { TimerReadout } from "@/components/timer-readout"
 import { useTickingNow } from "@/hooks/use-ticking-now"
 import { formatExamTitle, formatReferenceName, validateAttempt, validateQuestionResults, type AssessmentReference, type ExamAttempt, type QuestionResult } from "@/lib/exam-data"
 import { buildCompanyExamSuggestions, buildExamSuggestions, findLatestAttempt, type ExamSuggestion } from "@/lib/exam-suggestions"
@@ -37,7 +37,7 @@ import { pauseExamSession, resumeExamSession, type ExamTimerSession } from "@/li
 
 export type ExamTimerPreset = Pick<ExamTimerSession, "subject" | "provider" | "examYear" | "paper" | "marks"> & Partial<Pick<ExamTimerSession, "readingMinutes" | "writingMinutes">>
 
-type ExamTimerProps = ExamProgressionProps & {
+export type ExamTimerModeProps = ExamProgressionProps & {
   attempts: ExamAttempt[]
   references: AssessmentReference[]
   studies: VcaaStudyResources[]
@@ -75,7 +75,7 @@ function SuggestionButton({ suggestion, onClick, showProvider = false }: {
   )
 }
 
-export function ExamTimer({ progression, onProgressionChange, attempts, references, studies, preferredSubjects, initialExam, activeSession, saveStatus, syncAction, onLeave, onSessionChange, onSave }: ExamTimerProps) {
+export function ExamTimerMode({ progression, onProgressionChange, attempts, references, studies, preferredSubjects, initialExam, activeSession, saveStatus, syncAction, onLeave, onSessionChange, onSave }: ExamTimerModeProps) {
   const session = activeSession ?? null
   const [subject, setSubject] = useState(initialExam?.subject ?? firstPreferredSubject(references.map((item) => item.studyName), preferredSubjects))
   const [provider, setProvider] = useState(initialExam?.provider ?? "VCAA")
@@ -187,14 +187,12 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
 
   function pause() {
     if (!session || session.pausedAt !== undefined) return
-    const next = pauseExamSession(session, now.getTime())
-    saveSession(next)
+    saveSession(pauseExamSession(session, now.getTime()))
   }
 
   function resume() {
     if (!session || session.pausedAt === undefined) return
-    const next = resumeExamSession(session, now.getTime())
-    saveSession(next)
+    saveSession(resumeExamSession(session, now.getTime()))
   }
 
   function openMarking() {
@@ -213,10 +211,6 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
     }
     setMarkingError(null)
     setMarkingOpen(true)
-  }
-
-  function closeMarking() {
-    setMarkingOpen(false)
   }
 
   function saveMark(event: FormEvent) {
@@ -266,39 +260,37 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
   if (!session || !timer) {
     return (
       <WorkspacePage>
-        <PageHeader title="Exam timer" description="Choose an exam, set the conditions, then begin when your paper is ready." />
-        {(
-          <Card className="w-full gap-5">
-            <CardHeader>
-              <CardTitle>Suggested next exams</CardTitle>
-              <CardDescription>
-                {latestAttempt
-                  ? `Based on your latest logged paper: ${latestAttempt.examYear} ${latestAttempt.subject} · ${latestAttempt.paper}.`
-                  : "Based on your preferred subjects and the available VCAA references."}
-                {" "}Choose one to fill the setup form.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5">
-              <ExamProgressionPanel progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
-              {suggestions.length ? <section className="grid gap-2" aria-labelledby="official-suggestions-title">
-                <div><h3 id="official-suggestions-title" className="text-sm font-medium">Official VCAA papers</h3><p className="text-xs text-muted-foreground">Continue through available papers and years for your current subject.</p></div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-                  {suggestions.map((suggestion) => (
-                    <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} />
-                  ))}
-                </div>
-              </section> : null}
-              {companySuggestions.length ? <section className="grid gap-2" aria-labelledby="company-suggestions-title">
-                <div><h3 id="company-suggestions-title" className="text-sm font-medium">Company exam progression</h3><p className="text-xs text-muted-foreground">Finish this provider&apos;s paper set, then progress from easier companies towards harder ones.</p></div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-                  {companySuggestions.map((suggestion) => (
-                    <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} showProvider />
-                  ))}
-                </div>
-              </section> : null}
-            </CardContent>
-          </Card>
-        )}
+        <PageHeader title="Run a timed paper" description="Choose an exam, set the conditions, then begin when your paper is ready." />
+        <Card className="w-full gap-5">
+          <CardHeader>
+            <CardTitle>Suggested next exams</CardTitle>
+            <CardDescription>
+              {latestAttempt
+                ? `Based on your latest logged paper: ${latestAttempt.examYear} ${latestAttempt.subject} · ${latestAttempt.paper}.`
+                : "Based on your preferred subjects and the available VCAA references."}
+              {" "}Choose one to fill the setup form.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <ExamProgressionPanel progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
+            {suggestions.length ? <section className="grid gap-2" aria-labelledby="official-suggestions-title">
+              <div><h3 id="official-suggestions-title" className="text-sm font-medium">Official VCAA papers</h3><p className="text-xs text-muted-foreground">Continue through available papers and years for your current subject.</p></div>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+                {suggestions.map((suggestion) => (
+                  <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} />
+                ))}
+              </div>
+            </section> : null}
+            {companySuggestions.length ? <section className="grid gap-2" aria-labelledby="company-suggestions-title">
+              <div><h3 id="company-suggestions-title" className="text-sm font-medium">Company exam progression</h3><p className="text-xs text-muted-foreground">Finish this provider&apos;s paper set, then progress from easier companies towards harder ones.</p></div>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+                {companySuggestions.map((suggestion) => (
+                  <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} showProvider />
+                ))}
+              </div>
+            </section> : null}
+          </CardContent>
+        </Card>
         <Card className="w-full gap-5">
           <CardHeader>
             <CardTitle>Set up your exam</CardTitle>
@@ -309,21 +301,21 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
               <FieldGroup className="gap-6">
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12">
                   <Field className="xl:col-span-4">
-                    <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
-                    <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="timer-subject" allowCustom required placeholder="Search or enter a subject" />
+                    <FieldLabel htmlFor="exam-mode-subject">Subject</FieldLabel>
+                    <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="exam-mode-subject" allowCustom required placeholder="Search or enter a subject" />
                   </Field>
                   <Field className="xl:col-span-3">
-                    <FieldLabel htmlFor="timer-provider">Provider</FieldLabel>
-                    <Input id="timer-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />
+                    <FieldLabel htmlFor="exam-mode-provider">Provider</FieldLabel>
+                    <Input id="exam-mode-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />
                   </Field>
                   <Field className="xl:col-span-2">
-                    <FieldLabel htmlFor="timer-year">Exam year</FieldLabel>
-                    <Input id="timer-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
+                    <FieldLabel htmlFor="exam-mode-year">Exam year</FieldLabel>
+                    <Input id="exam-mode-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                   </Field>
                   <Field className="xl:col-span-3">
-                    <FieldLabel htmlFor="timer-paper">Paper</FieldLabel>
-                    <Input id="timer-paper" list="timer-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="Exam, paper, or assessment name" />
-                    <datalist id="timer-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
+                    <FieldLabel htmlFor="exam-mode-paper">Paper</FieldLabel>
+                    <Input id="exam-mode-paper" list="exam-mode-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="Exam, paper, or assessment name" />
+                    <datalist id="exam-mode-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
                   </Field>
                 </div>
 
@@ -331,16 +323,16 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
                   <p className="mb-4 text-sm font-medium">Timed conditions</p>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <Field>
-                      <FieldLabel htmlFor="reading-time">Reading (min)</FieldLabel>
-                      <Input id="reading-time" type="number" min="0" max="180" value={readingMinutes} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
+                      <FieldLabel htmlFor="exam-mode-reading">Reading (min)</FieldLabel>
+                      <Input id="exam-mode-reading" type="number" min="0" max="180" value={readingMinutes} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="writing-time">Writing (min)</FieldLabel>
-                      <Input id="writing-time" type="number" min="1" max="360" value={writingMinutes} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
+                      <FieldLabel htmlFor="exam-mode-writing">Writing (min)</FieldLabel>
+                      <Input id="exam-mode-writing" type="number" min="1" max="360" value={writingMinutes} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="exam-marks">Total marks</FieldLabel>
-                      <Input id="exam-marks" type="number" min="1" max="500" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
+                      <FieldLabel htmlFor="exam-mode-marks">Total marks</FieldLabel>
+                      <Input id="exam-mode-marks" type="number" min="1" max="500" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
                     </Field>
                   </div>
                 </div>
@@ -362,6 +354,12 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
 
   const phaseLabel = timer.phase === "reading" ? "Reading time" : timer.phase === "writing" ? "Writing time" : "Overtime"
   const overtime = timer.phase === "overtime"
+  const phaseCaption = timer.phase === "reading"
+    ? "Reading time. The clock moves to writing on its own, and you can skip ahead if the paper is already open."
+    : timer.phase === "writing"
+      ? "Writing time. Pace yourself against the expected mark progress below."
+      : "Writing time has ended. The clock is recording overtime until you finish and mark."
+
   return (
     <WorkspacePage>
       <PageHeader title={session.title} description={`${session.subject} · ${session.readingMinutes} min reading · ${session.writingMinutes} min writing · ${session.marks} marks`}>
@@ -377,7 +375,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
               <p className="font-medium">{session.pausedAt !== undefined ? "Paused · ready when you are" : "Exam in progress"}</p>
               <p className="mt-1 text-sm text-muted-foreground">{session.pausedAt !== undefined ? `Paused ${new Date(session.pausedAt).toLocaleString()}. Your remaining time is frozen.` : "Pause before leaving to stop the clock."}</p>
             </div>
-            <Button variant="outline" onClick={() => { pause(); onLeave() }}>{session.pausedAt !== undefined ? "Back to dashboard" : "Pause, save & exit"}</Button>
+            <Button variant="outline" onClick={() => { pause(); onLeave() }}>{session.pausedAt !== undefined ? "Back to focus blocks" : "Pause, save & exit"}</Button>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t pt-3">
             <p role="status" className="flex-1 text-sm text-muted-foreground">{saveStatus}</p>
@@ -387,18 +385,27 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
         </CardContent>
       </Card>
 
-      <section className="grid gap-6 py-6 text-center">
-        <div>
-          <p className={overtime ? "text-sm font-medium text-destructive" : "text-sm font-medium text-muted-foreground"}>{session.pausedAt !== undefined ? "Paused · " : ""}{phaseLabel}</p>
-          <p role="timer" className={overtime ? "mt-2 text-7xl font-semibold tracking-tight text-destructive tabular-nums sm:text-8xl" : "mt-2 text-7xl font-semibold tracking-tight tabular-nums sm:text-8xl"}>
-            {overtime ? `+${formatTimer(timer.overtimeSeconds)}` : formatTimer(timer.remainingSeconds)}
-          </p>
-        </div>
-        <Progress value={timer.progress} className="mx-auto w-full max-w-2xl">
-          <ProgressLabel>{phaseLabel}</ProgressLabel>
-          <span className="ml-auto text-sm text-muted-foreground tabular-nums">{Math.round(timer.progress)}%</span>
-        </Progress>
-        {timer.phase === "reading" ? <Button className="mx-auto" variant="outline" onClick={skipReading}>Skip to writing time</Button> : null}
+      <section className="grid gap-6 py-6">
+        <TimerReadout
+          animationKey={`${phaseLabel}:${session.startedAt}`}
+          caption={phaseCaption}
+          display={overtime ? `+${formatTimer(timer.overtimeSeconds)}` : formatTimer(timer.remainingSeconds)}
+          marks={{
+            total: 2,
+            filled: timer.phase === "reading" ? 0 : timer.phase === "writing" ? 1 : 2,
+            label: timer.phase === "reading" ? "Reading next, then writing" : timer.phase === "writing" ? "Reading done, writing next" : "Both phases complete",
+          }}
+          mode={phaseLabel}
+          onCaption={`${phaseLabel} ${overtime ? "overtime" : "started"}.`}
+          overtime={overtime}
+          progress={timer.progress}
+          status={session.pausedAt !== undefined ? "Paused" : overtime ? "Recording overtime" : "Running"}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {timer.phase === "reading" ? <Button variant="outline" onClick={skipReading}>Skip to writing time</Button> : null}
+            <Button variant="ghost" size="sm" onClick={() => setDiscardOpen(true)}><Trash2 />Discard exam</Button>
+          </div>
+        </TimerReadout>
       </section>
 
       <MetricGrid className="grid-cols-1 sm:grid-cols-2">
@@ -417,10 +424,9 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
 
       {overtime ? <Alert variant="destructive"><Clock3 /><AlertTitle>Writing time has ended</AlertTitle><AlertDescription>{session.pausedAt !== undefined ? "Overtime is paused. Resume to continue, adjust conditions, or finish and mark." : "The timer is now recording overtime. Finish and mark when you put your pen down."}</AlertDescription></Alert> : null}
 
-      <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={() => setDiscardOpen(true)}><Trash2 />Discard exam</Button></div>
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
         <DialogContent>
-        <DialogHeader><DialogTitle>Discard this exam?</DialogTitle><DialogDescription>This removes your timer, question progress, and shared study session. Pause and save to keep your work for later.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Discard this exam?</DialogTitle><DialogDescription>This removes your timer, question progress, and shared study session. Pause and save to keep your work for later.</DialogDescription></DialogHeader>
           <DialogFooter><Button variant="outline" onClick={() => setDiscardOpen(false)}>Keep exam</Button><Button variant="destructive" onClick={reset}>Discard exam</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -430,7 +436,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
         toast.success("Exam conditions updated")
       }} /> : null}
 
-      <Dialog open={markingOpen} onOpenChange={(open) => open ? setMarkingOpen(true) : closeMarking()}>
+      <Dialog open={markingOpen} onOpenChange={(open) => open ? setMarkingOpen(true) : setMarkingOpen(false)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Mark and log exam</DialogTitle>
@@ -467,7 +473,7 @@ export function ExamTimer({ progression, onProgressionChange, attempts, referenc
             </FieldGroup>
           </form>
           <DialogFooter>
-            <Button variant="outline" onClick={closeMarking}>Back to paused exam</Button>
+            <Button variant="outline" onClick={() => setMarkingOpen(false)}>Back to paused exam</Button>
             <Button type="submit" form="timer-marking-form">Log exam attempt</Button>
           </DialogFooter>
         </DialogContent>

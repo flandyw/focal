@@ -20,7 +20,7 @@ import {
   type ExamAttempt,
 } from "@/lib/exam-data"
 import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
-import type { ExamTimerPreset } from "@/components/exam-timer"
+import type { ExamTimerPreset } from "@/components/exam-timer-mode"
 import { getKnownExamConditions } from "@/lib/exam-conditions"
 import { getCachedVcaaExams, getVcaaExamCompanions, getVcaaExamPaper, getVcaaExamProvider, type VcaaStudyResources } from "@/lib/vcaa-resources"
 

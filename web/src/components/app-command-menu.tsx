@@ -48,9 +48,9 @@ export function AppCommandMenu({
             <NotebookPen />
             Log mistake
           </CommandItem>
-          <CommandItem value="start exam timer timed practice" onSelect={() => run(() => onViewChange("timer"))}>
+          <CommandItem value="start exam timer timed practice" onSelect={() => run(() => onViewChange("focus"))}>
             <Clock3 />
-            Start exam timer
+            Start timed paper
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />

@@ -6,6 +6,7 @@
  */
 import { normalizeStudySession } from "@/lib/studySessions"
 import type { StudySession } from "@/lib/types"
+import type { StudySessionCommand } from "@/lib/sync/sessionContract"
 
 export interface SharedTimerNotice { title: string; body: string }
 
@@ -135,4 +136,103 @@ function executionQuality(session: StudySession): number {
 function sessionSortKey(session: StudySession): string {
   const localRank = session.createdVia === "notion" ? "1" : "0"
   return `${localRank}:${session.updated_at ?? session.created_at}:${session.created_at}`
+}
+
+/**
+ * The commands implied by the difference between the server's last canonical row for a
+ * session and the local record. This is a pure diff, not a queue: an empty list means the
+ * server is already there, and sending the same commands twice is harmless, so an edit made
+ * offline is published by the next sync pass with nothing to keep in step.
+ */
+export function sessionCommands(
+  raw: StudySession,
+  applied: { operation: string; payload: unknown; lamport: number } | undefined,
+  deviceId: string,
+): StudySessionCommand[] {
+  const canonical = typeof applied?.payload === "object" && applied.payload !== null
+    ? applied.payload as Record<string, unknown> : undefined
+  if (applied?.operation === "delete") return []
+  const session = normalizeStudySession(raw)
+  const metadata = sessionMetadata(session)
+  const desired = desiredState(session)
+  const remoteState = canonicalState(canonical)
+  const phase = phaseOf(session)
+  const remotePhase = typeof canonical?.phase === "string" ? canonical.phase : undefined
+  const revision = typeof canonical?.revision === "number" ? canonical.revision : applied?.lamport ?? 0
+  const commands: StudySessionCommand[] = []
+  let expected = revision
+  const append = (action: StudySessionCommand["action"]) => {
+    commands.push({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: expected++,
+      action, device_id: deviceId, app: appOf(session), kind: kindOf(session), phase, title: session.title,
+      subject_id: session.subjectIds[0] ?? null, metadata: metadata() })
+  }
+  // A session the server has never seen needs its whole history, because the state machine
+  // cannot invent the segments a local record already contains.
+  if (!remoteState) {
+    if (desired === "cancelled") { append("create"); append("cancel"); return commands }
+    if (desired === "planned") { append("create"); return commands }
+    if (desired === "completed") {
+      if (measuredMillis(session) > 0) append("start")
+      else append("create")
+      append("complete")
+      return commands
+    }
+    append("start")
+    if (desired === "paused") append("pause")
+    return commands
+  }
+  if (remoteState === "completed" || remoteState === "cancelled") return commands
+  if (desired === "cancelled") append("cancel")
+  else if (desired === "completed" && remoteState !== "completed") append("complete")
+  else if (desired === "running" && remoteState === "planned") append("start")
+  else if (desired === "running" && remoteState === "paused") append("resume")
+  else if (desired === "paused" && remoteState === "planned") { append("start"); append("pause") }
+  else if (desired === "paused" && remoteState === "running") append("pause")
+  // Only a known, different phase is worth a call: a row without one must not loop.
+  else if (desired === remoteState && remotePhase !== undefined && remotePhase !== phase) append("phase_change")
+  return commands
+}
+
+function desiredState(session: StudySession): "planned" | "running" | "paused" | "completed" | "cancelled" {
+  if (session.deleted_at) return "cancelled"
+  if (session.execution.state === "completed") return "completed"
+  if (session.execution.state !== "in-progress") return "planned"
+  // An open last segment is the timer running; a closed one is where it was last paused.
+  const last = lastInterval(session)
+  return last && !last.end ? "running" : "paused"
+}
+
+function canonicalState(canonical: Record<string, unknown> | undefined): string | undefined {
+  return typeof canonical?.state === "string" ? canonical.state : undefined
+}
+
+function lastInterval(session: StudySession): { start: string; end?: string } | undefined {
+  return session.execution.intervals[session.execution.intervals.length - 1]
+}
+
+function measuredMillis(session: StudySession): number {
+  return session.execution.intervals.reduce((total, interval) =>
+    total + Math.max(0, (new Date(interval.end ?? interval.start).getTime() - new Date(interval.start).getTime())), 0)
+}
+
+function phaseOf(session: StudySession): "focus" | "reading" | "writing" {
+  const phase = session.integrations?.examtrack?.phase ?? session.integrations?.folio?.phase
+  return phase === "reading" || phase === "writing" ? phase : "focus"
+}
+
+function appOf(session: StudySession): StudySessionCommand["app"] {
+  return session.createdVia === "examtrack" ? "examtrack" : session.integrations?.folio ? "folio" : "focal"
+}
+
+function kindOf(session: StudySession): StudySessionCommand["kind"] {
+  const kind = session.integrations?.examtrack?.kind ?? (session.integrations?.folio?.kind === "exam" ? "exam" : "focus")
+  return kind === "exam" || kind === "sac" ? kind : "focus"
+}
+
+/** Everything the client owns, minus the fields the server derives from the commands. */
+function sessionMetadata(session: StudySession): () => Record<string, unknown> {
+  const raw = JSON.parse(JSON.stringify(session)) as Record<string, unknown>
+  for (const field of ["execution", "status", "deleted_at", "activeDurations", "activeMillis", "startedAt",
+    "pausedAt", "completedAt", "revision", "last_modified_device_id", "id"]) delete raw[field]
+  return () => raw
 }

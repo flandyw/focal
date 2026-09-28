@@ -1,7 +1,6 @@
-import { chunkItems, latestChanges, retryChange, retryOrBlockChange } from "../src/lib/sync/reduce"
-import { repairDuplicateSessions, sessionDeletionIds } from "../src/lib/sync/sessions"
+import { chunkItems, isDue, latestChanges, retryChange, retryOrBlockChange } from "../src/lib/sync/reduce"
+import { repairDuplicateSessions, sessionCommands, sessionDeletionIds } from "../src/lib/sync/sessions"
 import { normalizeStudySession } from "../src/lib/studySessions"
-import { isStudySessionCommand } from "../src/lib/sync/sessionContract"
 import type { RemoteSyncChange, SyncChange } from "../src/lib/sync/types"
 
 interface BunSqliteDatabase {
@@ -67,6 +66,42 @@ assertEqual(
   "2026-07-20T00:00:00.000Z",
   "deterministic poison rows must stop retrying after the configured ceiling",
 )
+// SIMPLEST IS LAW: a blocked change is a UI flag, not a parking spot. It keeps retrying on
+// the backoff schedule, so the outbox drains once the server recovers instead of sticking.
+const blocked = retryOrBlockChange({ ...queued, retryCount: 7 }, "network down", "2026-07-20T00:00:00.000Z", 8)
+assertEqual(
+  [isDue(blocked, "2026-07-20T00:00:00.000Z"), isDue(blocked, "2026-07-20T01:00:00.000Z")],
+  [false, true],
+  "a blocked change must become due again once its backoff elapses",
+)
+
+// A session is published by diffing the local record against the last canonical row, so the
+// same record twice must produce the same commands and nothing at all when they agree.
+const device = "11111111-1111-4111-8111-111111111111"
+const sitting = normalizeStudySession({
+  id: "session-1", title: "Focus", createdVia: "focal", subjectIds: ["mm"],
+  created_at: "2026-07-20T00:00:00.000Z", updated_at: "2026-07-20T00:10:00.000Z",
+  execution: { state: "in-progress", intervals: [{ start: "2026-07-20T00:00:00.000Z" }] },
+})
+const applied = (payload: Record<string, unknown>, revision: number) =>
+  ({ operation: "put", payload: { ...payload, revision }, lamport: revision })
+const actions = (row?: { operation: string; payload: unknown; lamport: number }) =>
+  sessionCommands(sitting, row, device).map((command) => command.action)
+assertEqual(actions(undefined), ["start"], "a session the server has never seen must start")
+assertEqual(actions(applied({ state: "planned" }, 0)), ["start"],
+  "a planned session becomes a start, not a second create")
+assertEqual(actions(applied({ state: "running", phase: "focus" }, 3)), [],
+  "a session the server already has running needs no command")
+assertEqual(actions(applied({ state: "running", phase: "focus" }, 3)).length, 0,
+  "an unchanged session must not produce a call at all")
+const pausedSitting = normalizeStudySession({
+  ...sitting, execution: { state: "in-progress", intervals: [{ start: "2026-07-20T00:00:00.000Z", end: "2026-07-20T00:05:00.000Z" }] },
+})
+assertEqual(sessionCommands(pausedSitting, { operation: "put", payload: { state: "running", phase: "focus", revision: 4 }, lamport: 4 } , device)
+  .map((command) => [command.action, command.expected_revision]), [["pause", 4]],
+  "a local pause against a running server row is one pause at the server revision")
+assertEqual(sessionCommands(sitting, { operation: "put", payload: { state: "completed", revision: 9 }, lamport: 9 } , device), [],
+  "a terminal server row is never re-published")
 
 const duplicateBase = {
   schemaVersion: 2 as const,
@@ -231,35 +266,53 @@ assertEqual(
 // v3 renames the log vocabulary and rebuilds the enqueue triggers, so the durable-behaviour
 // fixtures below run against the current schema rather than the one they were written for.
 localDatabase.exec(localChangeLogMigration)
-const persistenceSource = await fetch(new URL("../src/lib/sync/persistence.ts", import.meta.url)).then((response) => response.text())
-const repairSql = /`([^`]+)`/.exec(persistenceSource.slice(persistenceSource.indexOf("export function repairQueuedSessionDeviceIds")))?.[1]
-if (!repairSql) throw new Error("Could not find queued session device repair SQL")
-const pendingCommand = {
-  mutation_id: "11111111-1111-4111-8111-111111111111",
-  session_id: "session-1",
-  expected_revision: 0,
-  action: "start",
-  device_id: "",
-  app: "focal",
-  kind: "focus",
-  phase: "focus",
-  title: "Focus",
-}
+// v6 drops the SQLite command triggers: a session is published straight to the server state
+// machine, and the parked commands they wrote are dropped rather than replayed.
+const sessionCommandMigration = await fetch(new URL("../src-tauri/migrations/0005_study_session_commands.sql", import.meta.url)).then((response) => response.text())
+localDatabase.exec(sessionCommandMigration)
 localDatabase.run(
-  `insert into sync_outbox (change_id, account_id, entity, row_id, operation, payload, created_at,
-      last_error, blocked_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  [pendingCommand.mutation_id, "account-a", "study_session_commands", pendingCommand.mutation_id, "put",
-    JSON.stringify(pendingCommand), "2026-09-28T00:00:00.000Z",
-    "validation_failed: malformed queued study session command", "2026-09-28T00:01:00.000Z"],
+  `insert into records (kind, id, payload, position) values (?, ?, ?, ?)`,
+  ["study_sessions", "session-with-trigger", JSON.stringify({ id: "session-with-trigger", execution: { state: "in-progress", intervals: [] } }), 0],
 )
-localDatabase.run(repairSql.replace(/\$[12]/g, "?"), ["22222222-2222-4222-8222-222222222222", "account-a"])
-const repairedCommand = localDatabase.query(
-  "select payload, last_error, blocked_at from sync_outbox where change_id = '11111111-1111-4111-8111-111111111111'",
-).all() as { payload: string; last_error: string | null; blocked_at: string | null }[]
-assertEqual(isStudySessionCommand(JSON.parse(repairedCommand[0].payload)), true,
-  "queued trigger commands must become valid after the device ID is filled")
-assertEqual([repairedCommand[0].last_error, repairedCommand[0].blocked_at], [null, null],
-  "device ID repair must reopen commands blocked by the malformed-command error")
+assertEqual(
+  localDatabase.query("select count(*) as count from sync_outbox where entity = 'study_session_commands'").all(),
+  [{ count: 1 }],
+  "the v5 triggers must queue a session command: the migration below is what removes that")
+localDatabase.run("delete from records where id = ?", ["session-with-trigger"])
+// A migration file that is not registered in database_migrations() never runs, so assert it.
+const tauriSource = await fetch(new URL("../src-tauri/src/lib.rs", import.meta.url)).then((response) => response.text())
+if (!/version: 6,[\s\S]{0,160}0006_direct_session_publish\.sql/.test(tauriSource)) {
+  throw new Error("0006_direct_session_publish.sql is not registered in database_migrations()")
+}
+const directPublishMigration = await fetch(new URL("../src-tauri/migrations/0006_direct_session_publish.sql", import.meta.url)).then((response) => response.text())
+localDatabase.run(
+  `insert into sync_outbox (change_id, account_id, entity, row_id, operation, payload, created_at, last_error)
+     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ["33333333-3333-4333-8333-333333333333", "account-a", "study_session_commands", "session-legacy",
+    "put", JSON.stringify({ session_id: "session-legacy", action: "pause" }), "2026-09-28T00:00:00.000Z", null],
+)
+localDatabase.exec(directPublishMigration)
+assertEqual(
+  localDatabase.query("select count(*) as count from sync_outbox where entity = 'study_session_commands'").all(),
+  [{ count: 0 }],
+  "the direct-publish migration must drop every parked session command")
+localDatabase.run(
+  `insert into records (kind, id, payload, position) values (?, ?, ?, ?)`,
+  ["study_sessions", "session-direct", JSON.stringify({ id: "session-direct", execution: { state: "in-progress", intervals: [] } }), 0],
+)
+assertEqual(
+  localDatabase.query("select count(*) as count from sync_outbox where row_id = 'session-direct'").all(),
+  [{ count: 0 }],
+  "a session write must no longer create a command outbox row")
+localDatabase.run(
+  `insert into records (kind, id, payload, position) values (?, ?, ?, ?)`,
+  ["events", "still-queued", JSON.stringify({ id: "still-queued", title: "Still queued" }), 0],
+)
+assertEqual(
+  localDatabase.query("select count(*) as count from sync_outbox where row_id = 'still-queued'").all(),
+  [{ count: 1 }],
+  "ordinary records must keep their durable outbox row: that queue is the offline path")
+const persistenceSource = await fetch(new URL("../src/lib/sync/persistence.ts", import.meta.url)).then((response) => response.text())
 const cursorSql = /`([^`]+)`/.exec(persistenceSource.slice(persistenceSource.indexOf("export function writeCursor")))?.[1]
 if (!cursorSql) throw new Error("Could not find production cursor SQL")
 for (const [seq, lamport] of [[10, 20], [5, 15], [11, 18]]) {

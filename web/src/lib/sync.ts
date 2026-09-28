@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { User } from "@supabase/supabase-js"
 import { EMPTY_APP_DATA, type AppData } from "@/lib/exam-data"
 import { supabase } from "@/lib/supabase"
-import { appSyncHealth, associateAppSyncAccount, diffAppData, queueAppChanges, recordLocalChanges, syncAppData } from "@/lib/app-sync"
+import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, syncAppData } from "@/lib/app-sync"
 
 const OWNER_KEY = "examtrack:sync:owner:v1"
 
@@ -56,7 +56,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   // projection that started from an older snapshot must compare against the
   // latest render, or it overwrites the edit made while it was in flight.
   const latest = useRef(data)
-  latest.current = data
+  useEffect(() => { latest.current = data })
   const activeAccount = useRef<string | null>(null)
   const queueTask = useRef<Promise<void>>(Promise.resolve())
   const queueFailed = useRef(false)
@@ -90,7 +90,9 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (activeAccount.current !== accountId) return
       recordLocalChanges(old, data)
       if (!accountId) return
-      await queueAppChanges(accountId, diffAppData(old, data))
+      // Push first; only what the server refuses lands in the queue. Keeps every keystroke
+      // off the retry loop and deletes immediate.
+      await pushAppChanges(accountId, diffAppData(old, data))
       if (activeAccount.current !== accountId) return
       previous.current = data
       queueFailed.current = false

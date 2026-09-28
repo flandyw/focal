@@ -72,29 +72,39 @@ export async function readOutbox(accountId?: string): Promise<SyncChange[]> {
   return readOutboxUnlocked(database, accountId)
 }
 
-export function repairQueuedSessionDeviceIds(accountId: string, deviceId: string): Promise<void> {
-  return serialized(async () => {
-    // ponytail: SQLite cannot know the install ID when its record trigger queues a command.
-    // Fill it at push time and reopen only rows blocked by this exact validation failure.
-    await (await openFocalDatabase()).execute(
-      `update sync_outbox
-          set payload = json_set(payload, '$.device_id', $2),
-              blocked_at = case when last_error = 'validation_failed: malformed queued study session command' then null else blocked_at end,
-              last_error = case when last_error = 'validation_failed: malformed queued study session command' then null else last_error end,
-              retry_count = case when last_error = 'validation_failed: malformed queued study session command' then 0 else retry_count end,
-              next_attempt_at = case when last_error = 'validation_failed: malformed queued study session command' then null else next_attempt_at end
-        where account_id = $1 and entity = 'study_session_commands'
-          and case when json_valid(payload) then coalesce(json_extract(payload, '$.device_id'), '') = '' else 0 end`,
-      [accountId, deviceId],
-    )
-  })
-}
-
 /**
  * The commit is the event: this is called from the same write path that saves the record,
  * so a local edit is durable and queued before the UI is told anything. The lamport comes
  * from the same durable counter, so a crash cannot reuse a version number.
  */
+/**
+ * A change the caller is about to push directly. Identical to what `enqueueChange` would
+ * have written, so the queue fallback after a failed push is just `enqueueChange` again.
+ */
+export function stageChange(
+  accountId: string,
+  entity: SyncTable,
+  rowId: string,
+  operation: SyncOperation,
+  payload: unknown,
+): Promise<SyncChange> {
+  return serialized(async () => {
+    const database = await openFocalDatabase()
+    const ownerAccountId = accountId || (await readContextAccountId(database))
+    const createdAt = nowIso()
+    return {
+      changeId: crypto.randomUUID(),
+      entity,
+      rowId,
+      operation,
+      payload,
+      createdAt,
+      lamport: ownerAccountId ? await nextLamportUnlocked(database, ownerAccountId, createdAt) : 0,
+      retryCount: 0,
+    }
+  })
+}
+
 export function enqueueChange(
   accountId: string,
   entity: SyncTable,
@@ -145,32 +155,6 @@ async function readOutboxUnlocked(database: Database, accountId?: string): Promi
   return rows.flatMap(parseOutboxRow)
 }
 
-export function updateOutboxPayload(accountId: string, changeId: string, payload: unknown): Promise<void> {
-  return serialized(async () => {
-    await (await openFocalDatabase()).execute(
-      `update sync_outbox set payload = $3, attempted_at = coalesce(attempted_at, $4)
-        where account_id = $1 and change_id = $2 and attempted_at is null`,
-      [accountId, changeId, JSON.stringify(payload), nowIso()],
-    )
-  })
-}
-
-export function replaceOutboxCommand(accountId: string, changeId: string, payload: unknown): Promise<string> {
-  return serialized(async () => {
-    const mutationId = typeof payload === "object" && payload !== null
-      ? (payload as Record<string, unknown>).mutation_id : null
-    if (typeof mutationId !== "string") throw new Error("Session command is missing its mutation id")
-    await (await openFocalDatabase()).execute(
-      `update sync_outbox
-          set change_id = $3, payload = $4, attempted_at = null,
-              retry_count = 0, last_error = null, next_attempt_at = null, blocked_at = null
-        where account_id = $1 and change_id = $2`,
-      [accountId, changeId, mutationId, JSON.stringify(payload)],
-    )
-    return mutationId
-  })
-}
-
 function parseOutboxRow(row: OutboxRow): SyncChange[] {
   if (!isSyncTable(row.entity)) return []
   if (row.operation !== "put" && row.operation !== "delete") return []
@@ -194,10 +178,6 @@ function parseOutboxRow(row: OutboxRow): SyncChange[] {
   }
 }
 
-/**
- * Claims changes made while signed out. Rows are only adopted when the previous owner is
- * the same account, so a shared machine cannot leak one account's queue into another's.
- */
 export function activateOutboxAccount(accountId: string): Promise<void> {
   return serialized(async () => {
     const database = await openFocalDatabase()
@@ -278,22 +258,6 @@ export function removeOutboxChange(accountId: string, entity: SyncTable, rowId: 
   })
 }
 
-export function retryOutboxItem(accountId: string, entity: SyncTable, rowId: string): Promise<void> {
-  return serialized(async () => {
-    await (await openFocalDatabase()).execute(
-      `update sync_outbox
-          set retry_count = 0, last_error = null, next_attempt_at = null, blocked_at = null
-        where account_id = $1 and entity = $2 and row_id = $3`,
-      [accountId, entity, rowId],
-    )
-  })
-}
-
-/**
- * Applying a remote change writes the local record, and a remote write must not queue
- * itself. These two markers are deleted in the same statement that saves the record, so
- * the suppression can never outlive the write it was protecting.
- */
 export function suppressRecordOutbox(
   records: { entity: "projects" | "events" | "study_sessions"; rowId: string; payload: unknown }[],
 ): Promise<void> {

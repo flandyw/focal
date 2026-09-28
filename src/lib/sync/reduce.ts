@@ -165,7 +165,10 @@ export function retryDelayMs(attempts: number): number {
 }
 
 export function isDue(change: Pick<SyncChange, "nextAttemptAt" | "blockedAt">, now: string): boolean {
-  return !change.blockedAt && (!change.nextAttemptAt || change.nextAttemptAt <= now)
+  // SIMPLEST IS LAW: `blockedAt` is a UI flag ("this one needs attention"), never a parking
+  // spot. A blocked change keeps its backoff slot, so a recovered server drains the outbox
+  // instead of leaving it stuck at whatever count the outage produced.
+  return !change.nextAttemptAt || change.nextAttemptAt <= now
 }
 
 export function retryChange(change: SyncChange, error: string, now: string): SyncChange {
@@ -186,7 +189,7 @@ export function retryOrBlockChange(
 ): SyncChange {
   const retried = retryChange(change, error, now)
   return retried.retryCount >= maxRetries
-    ? { ...retried, nextAttemptAt: undefined, blockedAt: now }
+    ? { ...retried, blockedAt: now }
     : retried
 }
 

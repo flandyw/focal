@@ -345,25 +345,52 @@ export function isTombstoned(entity: Entity, rowId: string, rowUpdatedAt: string
   return typeof deletedAt === "string" && deletedAt > rowUpdatedAt
 }
 
-/** Deletes straight from the click: one RPC, no queue, no projection round trip. */
-export async function deleteRowNow(accountId: string, entity: Entity, rowId: string): Promise<void> {
-  if (!supabase || !accountId) return
+/**
+ * SIMPLEST IS LAW: the outbox is a failure log, not a holding pen. Every change goes to the
+ * server immediately; only what the server refuses is queued for the retry loop. This is why
+ * a delete can never be overtaken by a stale projection — the row is gone server-side and
+ * gone from the applied-rows store in the same call.
+ */
+export async function pushAppChanges(accountId: string, changes: readonly AppRow[]): Promise<void> {
+  if (!changes.length) return
+  if (!supabase) return queueAppChanges(accountId, changes)
+  const failed: AppRow[] = []
+  for (const change of changes) {
+    try {
+      await pushRowNow(accountId, change)
+    } catch {
+      failed.push(change)
+    }
+  }
+  await queueAppChanges(accountId, failed)
+}
+
+/** Publish one change and record it as applied. Throws when the server will not take it. */
+async function pushRowNow(accountId: string, change: AppRow): Promise<void> {
+  if (!supabase) throw new Error("Supabase is not configured")
   const db = await openDatabase()
   const read = db.transaction([ROWS], "readonly")
   const rows = await requestResult(read.objectStore(ROWS).getAll() as IDBRequest<AppliedRow[]>)
   await transactionDone(read)
-  const current = rows.find((row) => row.accountId === accountId && logicalKey(row.entity, row.rowId) === logicalKey(entity, rowId))
+  const current = rows.find((row) => row.accountId === accountId &&
+    logicalKey(row.entity, row.rowId) === logicalKey(change.entity, change.rowId))
   const deviceId = appSyncDeviceId()
-  const { error } = await supabase.rpc("sync_apply_changes", {
+  const changeId = crypto.randomUUID()
+  const { data, error } = await supabase.rpc("sync_apply_changes", {
     p_expected_user_id: accountId,
-    p_changes: [{ change_id: crypto.randomUUID(), client_id: deviceId, entity, row_id: rowId,
-      operation: "delete", payload: null, expected_seq: current?.seq ?? 0 }],
+    p_changes: [{ change_id: changeId, client_id: deviceId, entity: change.entity, row_id: change.rowId,
+      operation: change.operation, payload: change.operation === "put" ? change.payload : null,
+      expected_seq: current?.seq ?? 0 }],
   })
   if (error) throw error
+  const receipt = isRecord(data) && Array.isArray(data.receipts)
+    ? data.receipts.find((item) => isRecord(item) && item.change_id === changeId) : undefined
+  const seq = isRecord(receipt) && typeof receipt.seq === "number" ? receipt.seq : (current?.seq ?? 0) + 1
   const write = db.transaction([ROWS], "readwrite")
-  write.objectStore(ROWS).put({ key: rowKey(accountId, entity, rowId), accountId, entity, rowId,
-    operation: "delete", payload: null, seq: (current?.seq ?? 0) + 1,
-    lamport: Math.max(0, current?.lamport ?? 0) + 1, clientId: deviceId, updatedAt: new Date().toISOString() } satisfies AppliedRow)
+  write.objectStore(ROWS).put({ key: rowKey(accountId, change.entity, change.rowId), accountId,
+    entity: change.entity, rowId: change.rowId, operation: change.operation, payload: change.payload,
+    seq, lamport: Math.max(0, current?.lamport ?? 0) + 1, clientId: deviceId,
+    updatedAt: new Date().toISOString() } satisfies AppliedRow)
   await transactionDone(write)
 }
 

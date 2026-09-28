@@ -35,9 +35,8 @@ import {
   type SavedAtarEstimate,
 } from "@/lib/exam-data"
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/lib/storage"
-import { deleteRowNow } from "@/lib/app-sync"
 import { useSupabaseSync } from "@/lib/sync"
-import { queueTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
+import { saveTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
 import { ExamTrackerPicker } from "@/components/exam-tracker-picker"
 import type { ExamTimerPreset } from "@/components/exam-timer-mode"
@@ -285,26 +284,47 @@ export default function App() {
     setData((current) => ({ ...current, examProgression }))
   }
 
+  // A timer action is one call to the server state machine. If it cannot be published there
+  // is nothing to replay later, so say so plainly and leave the timer on screen to retry.
+  function reportSessionFailure(action: string, error: unknown) {
+    console.error(`Could not ${action} the study session:`, error)
+    toast.error(`Couldn't ${action}`, {
+      description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
+    })
+  }
+
   async function saveActiveExamTimer(activeExamTimer: AppData["activeExamTimer"], action?: "cancel" | "complete") {
-    const saved = await queueTimerSessionChange(data.activeExamTimer, activeExamTimer, "exam", action)
-    saveAppData({ ...data, activeExamTimer: saved })
-    setData((current) => ({ ...current, activeExamTimer: saved }))
+    try {
+      const saved = await saveTimerSessionChange(data.activeExamTimer, activeExamTimer, "exam", action)
+      saveAppData({ ...data, activeExamTimer: saved })
+      setData((current) => ({ ...current, activeExamTimer: saved }))
+    } catch (error) {
+      reportSessionFailure(action ?? "save", error)
+    }
   }
 
   async function saveActiveSacTimer(activeSacTimer: AppData["activeSacTimer"], action?: "cancel" | "complete") {
-    const saved = await queueTimerSessionChange(data.activeSacTimer, activeSacTimer, "sac", action)
-    saveAppData({ ...data, activeSacTimer: saved })
-    setData((current) => ({ ...current, activeSacTimer: saved }))
+    try {
+      const saved = await saveTimerSessionChange(data.activeSacTimer, activeSacTimer, "sac", action)
+      saveAppData({ ...data, activeSacTimer: saved })
+      setData((current) => ({ ...current, activeSacTimer: saved }))
+    } catch (error) {
+      reportSessionFailure(action ?? "save", error)
+    }
   }
 
   // A focus block is the timer's own record, so the canonical session is the
-  // only place it is written: it reaches Focal analytics through the outbox.
+  // only place it is written: it reaches Focal analytics through the server.
   async function queueFocusSession(
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
     action?: "cancel" | "complete",
   ) {
-    await queueTimerSessionChange(previous, next, "focus", action)
+    try {
+      await saveTimerSessionChange(previous, next, "focus", action)
+    } catch (error) {
+      reportSessionFailure(action ?? "save", error)
+    }
   }
 
   function toggleCompletedExam(id: string) {
@@ -396,15 +416,8 @@ export default function App() {
 
   function deleteAttempt(attempt: ExamAttempt) {
     const related = data.mistakes.filter((mistake) => mistake.attemptId === attempt.id)
-    const accountId = sync.user?.id
-    // Local first so the row is gone on the next paint, then straight at the server: the
-    // queue/projection pipeline is the thing that kept resurrecting deletes, so skip it.
-    if (accountId) {
-      void Promise.all([
-        deleteRowNow(accountId, "attempts", attempt.id),
-        ...related.map((mistake) => deleteRowNow(accountId, "mistakes", mistake.id)),
-      ]).catch((error: unknown) => console.error("Could not delete the exam from the server:", error))
-    }
+    // Local first, so it is gone on the next paint. The sync effect then pushes the delete
+    // straight to the server (see pushAppChanges) — nothing waits on the retry loop.
     setData((current) => removeAttempt(current, attempt.id))
     toast("Exam deleted", {
       action: {

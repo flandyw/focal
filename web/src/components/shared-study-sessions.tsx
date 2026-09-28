@@ -32,7 +32,7 @@ export function SharedStudySessions({
     }
   }
 
-  if (!userId) return null
+  if (!userId || active.length === 0) return null
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -40,7 +40,7 @@ export function SharedStudySessions({
         <CardDescription>Control sessions running in Focal or Folio. Actions are queued locally before they are sent.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {active.length === 0 ? <p className="text-sm text-muted-foreground">No active shared sessions.</p> : active.map((session) => (
+        {active.map((session) => (
           <div key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
             <div className="min-w-48 flex-1">
               <p className="font-medium">{session.title}</p>

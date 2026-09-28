@@ -23,6 +23,7 @@ import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MetricCard, MetricGrid, SectionHeading, WorkspacePage } from "@/components/workspace-layout"
+import { SubjectCombobox } from "@/components/subject-combobox"
 import { TimerReadout } from "@/components/timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
 import { StudyPlanCard } from "@/components/study-plan-card"
@@ -102,8 +103,9 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, onSessionChange, preset }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
   subjects: string[]
+  preferredSubjects: string[]
   onSessionChange?: (
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
@@ -130,6 +132,9 @@ function FocusBlocks({ subjects, onSessionChange, preset }: {
       ? formatTimer(state.breakSeconds)
       : `${isFreeStudy ? "" : "+"}${formatTimer(state.overtimeSeconds)}`
   const onBreak = !state.studyOvertime && state.mode !== "work"
+  // Every block lands in the study record under a subject, so there is nothing
+  // to start until one is chosen.
+  const subjectChosen = subject.trim() !== ""
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {
@@ -199,7 +204,7 @@ function FocusBlocks({ subjects, onSessionChange, preset }: {
               status={state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Button className="min-w-32" onClick={actions.toggle} size="lg">
+                <Button className="min-w-32" disabled={!state.running && !subjectChosen} onClick={actions.toggle} size="lg">
                   {state.running ? <><Pause />Pause</> : <><Play />Start</>}
                 </Button>
                 <Button onClick={actions.reset} size="lg" variant="outline"><RotateCcw />Reset</Button>
@@ -216,9 +221,9 @@ function FocusBlocks({ subjects, onSessionChange, preset }: {
                 {state.studyOvertime ? (
                   <Button onClick={actions.returnToBreak} size="sm" variant="outline"><Coffee />Back to break</Button>
                 ) : onBreak ? (
-                  <Button onClick={actions.startOvertime} size="sm" variant="outline"><Coffee />Keep studying</Button>
+                  <Button disabled={!subjectChosen} onClick={actions.startOvertime} size="sm" variant="outline"><Coffee />Keep studying</Button>
                 ) : (
-                  <Button onClick={actions.startFreeStudy} size="sm" variant="outline"><TimerIcon />Start free study</Button>
+                  <Button disabled={!subjectChosen} onClick={actions.startFreeStudy} size="sm" variant="outline"><TimerIcon />Start free study</Button>
                 )}
                 <p className="text-sm text-pretty text-muted-foreground">
                   {state.studyOvertime
@@ -244,21 +249,26 @@ function FocusBlocks({ subjects, onSessionChange, preset }: {
         <Card>
           <CardHeader>
             <CardTitle>What you are working on</CardTitle>
-            <CardDescription className="max-w-[68ch]">Naming the block makes the record worth reading later. Both are optional.</CardDescription>
+            <CardDescription className="max-w-[68ch]">
+              A subject is required: every block is filed under one, and that is what the study record is read back by.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
-              <Input
+              <SubjectCombobox
+                allowCustom
                 id="timer-subject"
-                list="study-timer-subjects"
-                onChange={(event) => setSubject(event.target.value)}
-                placeholder="Chemistry"
+                onValueChange={setSubject}
+                placeholder="Search or type a subject"
+                preferredSubjects={preferredSubjects}
+                required
+                subjects={subjects}
                 value={subject}
               />
-              <datalist id="study-timer-subjects">
-                {subjects.map((option) => <option key={option} value={option} />)}
-              </datalist>
+              <FieldDescription>
+                {subjectChosen ? "Your subjects come first." : "Pick one to unlock the timer."}
+              </FieldDescription>
             </Field>
             <Field>
               <FieldLabel htmlFor="timer-intent">Intent</FieldLabel>
@@ -453,6 +463,7 @@ function FocusBlocks({ subjects, onSessionChange, preset }: {
 
 export function StudyTimerPage({
   subjects,
+  preferredSubjects,
   mode,
   focusPreset,
   onModeChange,
@@ -460,6 +471,8 @@ export function StudyTimerPage({
   exam,
 }: {
   subjects: string[]
+  /** The student's own subjects, floated to the top of the picker. */
+  preferredSubjects: string[]
   mode: StudyTimerMode
   focusPreset?: { subject?: string; intent: string }
   onModeChange: (mode: StudyTimerMode) => void
@@ -488,7 +501,7 @@ export function StudyTimerPage({
         </div>
 
         <TabsContent className="mt-0" value="focus">
-          <FocusBlocks subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} />
         </TabsContent>
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

@@ -1,5 +1,5 @@
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
-import { generateText, jsonSchema, Output } from "ai"
+import { jsonSchema, Output, streamText } from "ai"
 
 import { pickPlannerModel } from "@/lib/ai-settings"
 import { clampLongBreakInterval, clampMinutes, formatFocusTime, type TimerSettings } from "@/lib/study-timer"
@@ -178,7 +178,7 @@ export async function planStudySession(
   let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const result = await generateText({
+      const result = streamText({
         model: chatgpt(model),
         output: Output.object({ schema: SCHEMA, name: "study_plan" }),
         maxOutputTokens: 600,

@@ -88,7 +88,17 @@ export interface FocusBlock {
   endedAt: number
 }
 
-export type OpenBlock = Omit<FocusBlock, "id" | "endedAt">
+export interface OpenBlock {
+  cycleNumber: number
+  source: FocusBlockSource
+  subject: string
+  intent: string
+  startedAt: number
+  /** Wall time already spent paused, in seconds. Never counts as study time. */
+  pausedSeconds: number
+  /** When the pause in progress began, if the block is paused right now. */
+  pausedAt?: number
+}
 
 /* ------------------------------------------------------------------ */
 /* storage                                                             */
@@ -388,6 +398,8 @@ export function loadOpenBlock(): OpenBlock | null {
     subject: typeof stored.subject === "string" ? stored.subject : "",
     intent: typeof stored.intent === "string" ? stored.intent : "",
     startedAt: stored.startedAt as number,
+    pausedSeconds: safeNonNegativeInteger(stored.pausedSeconds),
+    ...(Number.isFinite(stored.pausedAt) ? { pausedAt: stored.pausedAt as number } : {}),
   }
 }
 
@@ -405,17 +417,22 @@ export function saveOpenBlock(block: OpenBlock | null) {
 /** Closes the in-flight block into the log. An open block that ran backwards (a
  *  clock change, a stale tab) is still kept, clamped to a real duration. */
 export function closeOpenBlock(block: OpenBlock, endedAt: number, blocks: FocusBlock[]): FocusBlock[] {
+  // Paused time is not study time, and Supabase's session segments already say
+  // so. Ending the block on its last running second keeps the local record and
+  // the server's `accumulated_active_ms` in agreement.
+  const pausedMs = block.pausedSeconds * 1000 + (block.pausedAt === undefined ? 0 : Math.max(0, endedAt - block.pausedAt))
   const startedAt = Math.min(block.startedAt, endedAt)
+  const ended = Math.max(startedAt, endedAt - pausedMs)
   return [
     ...blocks,
     {
-      id: typeof crypto === "undefined" ? `${startedAt}-${endedAt}` : crypto.randomUUID(),
+      id: typeof crypto === "undefined" ? `${startedAt}-${ended}` : crypto.randomUUID(),
       cycleNumber: block.cycleNumber,
       source: block.source,
       subject: block.subject,
       intent: block.intent,
       startedAt,
-      endedAt,
+      endedAt: ended,
     },
   ].slice(-MAX_STORED_BLOCKS)
 }

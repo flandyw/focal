@@ -19,8 +19,13 @@ import {
   type TimerState,
 } from "@/lib/study-timer"
 import type { FocusTimerSession } from "@/lib/ongoing-timers"
+import { canonicalNow } from "@/lib/study-session-sync"
 
 const TICK_MS = 1000
+
+/** Server-anchored epoch ms. Immune to a device clock that is minutes out,
+ *  which is what makes a logged block's duration trustworthy. */
+const serverNow = () => canonicalNow().getTime()
 
 type SessionSink = (
   previous: FocusTimerSession | undefined,
@@ -116,24 +121,37 @@ export function useStudyTimer({
     sinkRef.current?.(previous, next, terminal)
   }, [])
 
-  const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number) => {
+  const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number, at: number) => {
     if (openBlockRef.current) return
-    const block: OpenBlock = { cycleNumber, source, subject: subject.trim(), intent: intent.trim(), startedAt: Date.now() }
+    const block: OpenBlock = { cycleNumber, source, subject: subject.trim(), intent: intent.trim(), startedAt: at, pausedSeconds: 0 }
     openBlockRef.current = block
     saveOpenBlock(block)
   }, [subject, intent, openBlockRef])
 
-  const closeBlock = useCallback((discard = false) => {
+  const closeBlock = useCallback((at: number, discard = false) => {
     const block = openBlockRef.current
     if (!block) return
     openBlockRef.current = null
     saveOpenBlock(null)
     if (discard) return
     setBlocks((current) => {
-      const next = closeOpenBlock(block, Date.now(), current)
+      const next = closeOpenBlock(block, at, current)
       saveBlocks(next)
       return next
     })
+  }, [openBlockRef])
+
+  /** Pausing must not inflate the block: the log and Supabase's session
+   *  segments both bill running seconds only. */
+  const pauseBlock = useCallback((running: boolean, at: number) => {
+    const block = openBlockRef.current
+    if (!block) return
+    const next = running
+      ? { ...block, pausedSeconds: block.pausedSeconds + Math.max(0, at - (block.pausedAt ?? at)) / 1000, pausedAt: undefined }
+      : block.pausedAt === undefined ? { ...block, pausedAt: at } : block
+    if (next === block) return
+    openBlockRef.current = next
+    saveOpenBlock(next)
   }, [openBlockRef])
 
   /** The focus session mirrors one work block, so Focal's analytics count the
@@ -156,6 +174,13 @@ export function useStudyTimer({
       return
     }
     if (isWorking && open) {
+      // A subject or intent corrected mid-block has to reach the server too, or
+      // the session stays filed under whatever was picked when it began.
+      const corrected = { subject: subject.trim(), title: intent.trim() || `${settingsNow.workMinutes} minute focus block` }
+      if (open.subject !== corrected.subject || open.title !== corrected.title) {
+        emitSession({ ...open, ...corrected })
+        return
+      }
       if (next.running && open.pausedAt !== undefined) {
         emitSession({ ...open, startedAt: open.startedAt + Math.max(0, at - open.pausedAt), pausedAt: undefined, pausedSeconds: open.pausedSeconds + Math.max(0, at - open.pausedAt) / 1000 })
       } else if (!next.running && open.pausedAt === undefined) {
@@ -177,22 +202,30 @@ export function useStudyTimer({
   }, [state.running])
 
   // Mode changes are the timer's only real events: they open a block, close
-  // one, and hand the mirrored session its lifecycle change.
+  // one, and hand the mirrored session its lifecycle change. Every stamp comes
+  // from the server clock, so a device with the wrong time still logs real
+  // durations.
   useEffect(() => {
+    const at = serverNow()
     if (state.studyOvertime) {
-      if (state.freeStudy) openBlock("free-study", state.cycles)
+      // Free study is unbilled, so a pause in it costs nothing to record. Plain
+      // overtime only ever begins from a break, which already closed its block.
+      if (state.freeStudy) openBlock("free-study", state.cycles, at)
       return
     }
     if (state.mode === "work") {
-      if (state.running) openBlock("pomodoro", state.cycles + 1)
+      // `openBlock` is a no-op while one is already open, so this doubles as
+      // the resume path that banks the pause.
+      openBlock("pomodoro", state.cycles + 1, at)
+      pauseBlock(state.running, at)
       return
     }
-    closeBlock()
-  }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock])
+    closeBlock(at)
+  }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock])
 
   useEffect(() => {
     if (state.studyOvertime) return
-    syncSession(previousState.current, state, Date.now())
+    syncSession(previousState.current, state, serverNow())
     previousState.current = state
   }, [state, syncSession])
 
@@ -253,7 +286,7 @@ export function useStudyTimer({
     updateSettings,
     toggle: () => dispatch({ type: "TOGGLE" }),
     reset: () => {
-      closeBlock(true)
+      closeBlock(serverNow(), true)
       emitSession(undefined, "cancel")
       dispatch({ type: "RESET", settings: settingsRef.current })
     },

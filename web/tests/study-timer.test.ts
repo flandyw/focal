@@ -174,9 +174,19 @@ describe("focus block log", () => {
   })
 
   test("closing a block keeps real time and rejects a backwards clock", () => {
-    const open = { cycleNumber: 2, source: "pomodoro" as const, subject: "Physics", intent: "Moles", startedAt: 1_000 }
+    const open = { cycleNumber: 2, source: "pomodoro" as const, subject: "Physics", intent: "Moles", startedAt: 1_000, pausedSeconds: 0 }
     const [closed] = closeOpenBlock(open, 61_000, [])
     expect(closed.endedAt - closed.startedAt).toBe(60_000)
     expect(closeOpenBlock(open, 500, [])[0].endedAt).toBe(500)
+  })
+
+  test("a block bills running seconds only, matching Supabase's active time", () => {
+    const open = { cycleNumber: 1, source: "pomodoro" as const, subject: "Physics", intent: "", startedAt: 0, pausedSeconds: 0 }
+    // 50s of wall time, 30s of it already banked as paused: 20s of study.
+    expect(closeOpenBlock({ ...open, pausedSeconds: 30 }, 50_000, [])[0].endedAt).toBe(20_000)
+    // A pause still in progress at close time is billed too.
+    expect(closeOpenBlock({ ...open, pausedAt: 40_000 }, 50_000, [])[0].endedAt).toBe(40_000)
+    // Pauses longer than the block itself cannot produce a negative duration.
+    expect(closeOpenBlock({ ...open, pausedSeconds: 9_000 }, 50_000, [])[0].endedAt).toBe(0)
   })
 })

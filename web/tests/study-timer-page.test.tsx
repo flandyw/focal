@@ -19,16 +19,24 @@ const exam: ExamTimerModeProps = {
   onSave: noop,
 }
 
-function render(mode: "focus" | "exam" = "focus") {
+function render(mode: "focus" | "exam" = "focus", subject = "") {
   return renderToStaticMarkup(
     <StudyTimerPage
       subjects={["Chemistry", "Physics"]}
+      preferredSubjects={["Physics"]}
       mode={mode}
       onModeChange={noop}
       onFocusSessionChange={noop}
       exam={exam}
+      focusPreset={subject ? { subject, intent: "" } : undefined}
     />,
   )
+}
+
+/** The markup up to a control's closing tag, so a control can be asserted on
+ *  without a query engine. */
+function buttonEnding(markup: string, label: string) {
+  return markup.split("</button>").find((chunk) => chunk.trimEnd().endsWith(`>${label}`)) ?? ""
 }
 
 test("the study timer is one surface with a focus block and a timed paper mode", () => {
@@ -61,8 +69,27 @@ test("the focus mode leads with a labelled readout, its controls, and the block'
 
   expect(markup).toContain('id="timer-subject"')
   expect(markup).toContain('id="timer-intent"')
-  // Subjects the student already uses are offered without a picker to open.
-  expect(markup).toContain('value="Chemistry"')
+  // The subject is a searchable combobox the student can also type into.
+  expect(markup).toContain('role="combobox"')
+  expect(markup).toContain("Search or type a subject")
+})
+
+test("no block starts without a subject, and the timer says why", () => {
+  const withoutSubject = render("focus")
+
+  // Every control that starts study is inert, and the field explains the hold.
+  expect(withoutSubject).toContain("Pick one to unlock the timer.")
+  expect(withoutSubject).toContain("A subject is required")
+  for (const label of ["Start", "Start free study"]) {
+    expect(buttonEnding(withoutSubject, label)).toContain('disabled=""')
+  }
+
+  // A subject handed over by the day plan unlocks the timer immediately.
+  const withSubject = render("focus", "Chemistry")
+  expect(withSubject).not.toContain("Pick one to unlock the timer.")
+  for (const label of ["Start", "Start free study"]) {
+    expect(buttonEnding(withSubject, label)).not.toContain('disabled=""')
+  }
 })
 
 test("an empty day explains itself instead of showing a bare list", () => {

@@ -61,4 +61,3 @@ function createSessionStorage(credentialKey: string): SupportedStorage {
 }
 
 export const supabaseSessionStorage = createSessionStorage("focal-supabase-auth-session")
-export const examTrackSessionStorage = createSessionStorage("focal-examtrack-auth-session")

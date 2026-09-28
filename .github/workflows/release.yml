@@ -11,8 +11,6 @@ concurrency:
 
 env:
   VITE_EXAMTRACK_URL: https://vcetracker.vercel.app/
-  VITE_EXAMTRACK_SUPABASE_URL: ${{ secrets.VITE_EXAMTRACK_SUPABASE_URL }}
-  VITE_EXAMTRACK_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_EXAMTRACK_SUPABASE_PUBLISHABLE_KEY }}
 
 jobs:
   verify:

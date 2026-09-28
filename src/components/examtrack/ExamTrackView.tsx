@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { openUrl } from "@tauri-apps/plugin-opener"
-import type { Session } from "@supabase/supabase-js"
 import {
   AlertCircle,
   ArrowRight,
@@ -8,8 +7,6 @@ import {
   ExternalLink,
   GraduationCap,
   Loader2,
-  Link2,
-  LogOut,
   RefreshCw,
   Target,
 } from "lucide-react"
@@ -17,7 +14,6 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   fetchExamTrackSnapshot,
@@ -25,7 +21,7 @@ import {
   matchFocalSubjectId,
   type ExamTrackSnapshot,
 } from "@/lib/examtrack"
-import { examTrackSupabase, isExamTrackSupabaseConfigured } from "@/lib/examtrack-client"
+import { isSupabaseConfigured, supabase } from "@/lib/supabase/client"
 import type { StudySessionDraft, Subject } from "@/lib/types"
 
 type LoadState =
@@ -39,61 +35,38 @@ function formatPercentage(value: number | null) {
 
 export function ExamTrackView({
   subjects,
+  userId,
+  loading: authLoading,
   onCreateStudySessions,
+  onOpenSettings,
 }: {
   subjects: Subject[]
+  userId: string | undefined
+  loading: boolean
   onCreateStudySessions: (sessions: StudySessionDraft[]) => Promise<void>
+  onOpenSettings: () => void
 }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [authLoading, setAuthLoading] = useState(isExamTrackSupabaseConfigured)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [authError, setAuthError] = useState<string | null>(null)
   const [state, setState] = useState<LoadState>({ status: "idle", snapshot: null, error: null })
   const [planning, setPlanning] = useState(false)
-  const userId = session?.user.id
-
-  useEffect(() => {
-    if (!examTrackSupabase) {
-      setAuthLoading(false)
-      return
-    }
-    let cancelled = false
-    void examTrackSupabase.auth.getSession().then(({ data }) => {
-      if (!cancelled) {
-        setSession(data.session)
-        setAuthLoading(false)
-      }
-    })
-    const { data: { subscription } } = examTrackSupabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-      setAuthLoading(false)
-      setAuthError(null)
-    })
-    return () => {
-      cancelled = true
-      subscription.unsubscribe()
-    }
-  }, [])
 
   const refresh = useCallback(async () => {
-    if (!userId || !examTrackSupabase) return
+    if (!userId || !supabase) return
     setState({ status: "loading", snapshot: null, error: null })
     try {
-      const snapshot = await fetchExamTrackSnapshot(examTrackSupabase, userId)
+      const snapshot = await fetchExamTrackSnapshot(supabase, userId)
       setState({ status: "ready", snapshot, error: null })
     } catch (error) {
       console.error("ExamTrack integration failed:", error)
       setState({
         status: "error",
         snapshot: null,
-        error: "ExamTrack data is unavailable. Check the separate ExamTrack connection and its row-level-security policies.",
+        error: "ExamTrack data is unavailable. Check your connection and the row-level-security policies on attempts and mistakes.",
       })
     }
   }, [userId])
 
   useEffect(() => {
-    if (!userId || !examTrackSupabase) {
+    if (!userId || !supabase) {
       setState({ status: "idle", snapshot: null, error: null })
       return
     }
@@ -151,10 +124,10 @@ export function ExamTrackView({
             <div className="flex items-center gap-2">
               <GraduationCap className="size-5 text-primary" aria-hidden />
               <h1 className="text-xl font-semibold tracking-tight">ExamTrack</h1>
-              <Badge variant="secondary">Separate account</Badge>
+              <Badge variant="secondary">Web app</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Practice performance and planning connected across two private Supabase projects.
+              Practice performance and planning, synced through your Focal account.
             </p>
           </div>
           <div className="flex gap-2">
@@ -164,12 +137,6 @@ export function ExamTrackView({
                 Refresh
               </Button>
             )}
-            {session && examTrackSupabase && (
-              <Button variant="outline" size="sm" onClick={() => void examTrackSupabase?.auth.signOut()}>
-                <LogOut />
-                Disconnect
-              </Button>
-            )}
             <Button size="sm" disabled={!examTrackUrl} onClick={() => void launch()}>
               <ExternalLink />
               Open ExamTrack
@@ -177,47 +144,30 @@ export function ExamTrackView({
           </div>
         </header>
 
-        {!isExamTrackSupabaseConfigured ? (
+        {!isSupabaseConfigured ? (
           <Card>
             <CardContent className="py-6">
               <div>
-                <p className="font-medium">ExamTrack connection is not configured</p>
-                <p className="mt-1 text-sm text-muted-foreground">Set the ExamTrack Supabase URL and publishable key in the Focal build. The databases stay separate.</p>
+                <p className="font-medium">Supabase is not configured</p>
+                <p className="mt-1 text-sm text-muted-foreground">Set the Supabase URL and publishable key in the Focal build. ExamTrack data lives in the same project.</p>
               </div>
             </CardContent>
           </Card>
         ) : authLoading ? (
           <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            Restoring ExamTrack connection…
+            Restoring your account…
           </div>
-        ) : !session ? (
+        ) : !userId ? (
           <Card>
             <CardHeader>
-              <CardTitle>Connect your ExamTrack account</CardTitle>
+              <CardTitle>Sign in to see your ExamTrack data</CardTitle>
             </CardHeader>
             <CardContent>
-              <form className="grid max-w-md gap-3" onSubmit={async (event) => {
-                event.preventDefault()
-                if (!examTrackSupabase) return
-                setAuthLoading(true)
-                setAuthError(null)
-                try {
-                  const { error } = await examTrackSupabase.auth.signInWithPassword({ email, password })
-                  if (error) throw error
-                  setPassword("")
-                } catch (error) {
-                  setAuthError(error instanceof Error ? error.message : "Could not connect ExamTrack.")
-                } finally {
-                  setAuthLoading(false)
-                }
-              }}>
-                <p className="text-sm text-muted-foreground">This creates a separate ExamTrack session and reads only your ExamTrack rows through its RLS.</p>
-                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="ExamTrack email" aria-label="ExamTrack email address" autoComplete="username" required />
-                <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="ExamTrack password" aria-label="ExamTrack password" autoComplete="current-password" minLength={8} required />
-                <div><Button type="submit" disabled={authLoading}><Link2 />Connect ExamTrack</Button></div>
-                {authError ? <p role="alert" className="text-sm text-destructive">{authError}</p> : null}
-              </form>
+              <p className="text-sm text-muted-foreground">
+                ExamTrack and Focal share one account and one database. Sign in under Settings, then come back here.
+              </p>
+              <div className="mt-3"><Button onClick={onOpenSettings}><ExternalLink />Open account settings</Button></div>
             </CardContent>
           </Card>
         ) : state.status === "loading" || state.status === "idle" ? (

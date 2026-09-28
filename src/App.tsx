@@ -2263,7 +2263,10 @@ function App() {
                       <Suspense fallback={<ViewFallback label="ExamTrack" />}>
                         <ExamTrackView
                           subjects={allSubjects}
+                          userId={supabaseAuth.user?.id}
+                          loading={supabaseAuth.loading}
                           onCreateStudySessions={handleCreateStudySessions}
+                          onOpenSettings={navigation.openSettings}
                         />
                       </Suspense>
                     ) : plannerView ? (

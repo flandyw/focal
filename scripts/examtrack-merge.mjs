@@ -250,21 +250,22 @@ async function runImport(args) {
   const url = args.url ?? process.env.VITE_SUPABASE_URL ?? process.env.FOCAL_TARGET_URL
   const token = args.token ?? process.env.FOCAL_TARGET_ACCESS_TOKEN
   assert(url && token, "import needs --url and --token (or VITE_SUPABASE_URL / FOCAL_TARGET_ACCESS_TOKEN)")
-  assert(args.toUser, "import needs --to-user <focal auth uid>")
-
-  const bundle = JSON.parse(await readFile(join(inDir, "bundle.json"), "utf8"))
-  const plan = planImport(bundle, args.toUser)
-  console.log(`merging ${plan.sourceUserId} -> ${plan.targetUserId}`)
 
   const createClient = await loadSupabase()
   const client = createClient(url, token, { auth: { persistSession: false } })
 
   const { data: userData, error: userError } = await client.auth.getUser()
   if (userError) throw new Error(`the import token was rejected: ${userError.message}`)
+  // The signed-in account is the target, so --to-user is only a way to assert it.
+  const toUser = args.toUser ?? userData.user.id
   assert(
-    userData.user.id === plan.targetUserId,
-    `--to-user ${plan.targetUserId} does not match the signed-in account ${userData.user.id}`,
+    toUser === userData.user.id,
+    `--to-user ${toUser} does not match the signed-in account ${userData.user.id}`,
   )
+
+  const bundle = JSON.parse(await readFile(join(inDir, "bundle.json"), "utf8"))
+  const plan = planImport(bundle, toUser)
+  console.log(`merging ${plan.sourceUserId} -> ${plan.targetUserId}`)
 
   for (const table of [...TABLES, "user_state"]) {
     const rows = plan.rows[table]
@@ -318,7 +319,7 @@ const usage = () =>
       "usage:",
       "  node scripts/examtrack-merge.mjs selftest",
       "  node scripts/examtrack-merge.mjs export --out ../examtrack-export --url <examtrack url> --token <access token>",
-      "  node scripts/examtrack-merge.mjs import --in ../examtrack-export --to-user <focal uid> --url <focal url> --token <access token>",
+      "  node scripts/examtrack-merge.mjs import --in ../examtrack-export --url <focal url> --token <access token>",
     ].join("\n"),
   )
 

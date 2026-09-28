@@ -54,14 +54,33 @@ so RLS applies and no service-role key is used or accepted.
 Apply the migration, then:
 
 ```bash
-node scripts/examtrack-merge.mjs import --in ../examtrack-export --to-user <focal auth uid> \
-  --url <focal project url> --token <focal access token>
+node scripts/examtrack-merge.mjs import --in ../examtrack-export --url <focal project url> --token <focal access token>
 ```
 
-The import refuses to run if `--to-user` is not the account the token belongs to, copies
-`updated_at` verbatim, keeps tombstones, rewrites the attachment folder prefix from the
-old uid to the new one, and reads every table back afterwards so a partial import cannot
-look like a successful one. It is idempotent: running it twice writes the same rows.
+The target account is whichever one the token belongs to, so there is no uid to copy by
+hand. Passing `--to-user` is still accepted as an assertion, and the import refuses to run
+if it disagrees with the token.
+
+The import copies `updated_at` verbatim, keeps tombstones, rewrites the attachment folder
+prefix from the old uid to the new one, and reads every table back afterwards so a partial
+import cannot look like a successful one. It is idempotent: running it twice writes the
+same rows.
+
+## If migration 0010 refuses to run
+
+It raises rather than proceeding if either of these is true, because both mean the merge
+would combine two histories instead of moving one:
+
+- **`attempts`, `mistakes` or `user_state` already hold rows.** They are new tables in the
+  Focal project, so this only happens if the import already ran. Delete them and re-apply.
+- **`sync_log` or `sync_state` already holds rows for those three entities.** Nothing in
+  Focal or ExamTrack reads those entities through the log any more, so if there are rows
+  they are leftovers. Delete them for your user id, then re-apply:
+
+  ```sql
+  delete from public.sync_state where user_id = '<uid>' and entity in ('attempts','mistakes','user_state');
+  delete from public.sync_log   where user_id = '<uid>' and entity in ('attempts','mistakes','user_state');
+  ```
 
 `updated_at` is never bumped. ExamTrack and Folio resolve `attempts` and `mistakes` by
 comparing that timestamp, so a fresh value would make an old row look newer than the local

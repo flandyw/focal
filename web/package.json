@@ -8,7 +8,6 @@
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production bun server.ts",
     "lint": "oxlint",
-    "check:sync": "node scripts/check-sync-migration.mjs",
     "test": "bun test",
     "vcaa:import": "bun vcaa/import-all-grade-distributions.mjs",
     "vcaa:resources": "bun vcaa/import-exam-resources.mjs",

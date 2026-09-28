@@ -1,9 +1,16 @@
 # Merging the ExamTrack project into the Focal project
 
-ExamTrack and Focal have their own Supabase projects only because the study timer had to
+ExamTrack and Focal had their own Supabase projects only because the study timer had to
 cross a project boundary. With one project, ExamTrack's data becomes three more tables in
 Focal's database, the second Supabase client in each app goes away, and the timer stops
 being mirrored.
+
+ExamTrack also moved into this repository, at `web/`, keeping its own `package.json`,
+`bun.lock`, `bun test` suite and Vercel deployment. It is a self-contained app rather than
+a route in `src/`: merging the two `src/` trees would have collided on seventeen paths,
+ten of them shadcn/ui components that have genuinely diverged (Focal is on `radix-ui`,
+ExamTrack on `@base-ui/react` + `cmdk`), plus `lib/timetable.ts`, where both apps model
+timetables differently. Deduplicating those is its own piece of work.
 
 There is one user, so the identity mapping is a single pair of uids and the merge is a
 one-shot export/import rather than a migration that has to be resumable per account.
@@ -62,7 +69,8 @@ copy, and the merge would appear to work while silently discarding local edits.
 
 ## Repointing the clients
 
-Once the data is in, each app needs one normal Supabase client instead of two.
+Once the data is in, each app needs one normal Supabase client instead of two. `web/` still
+carries the old arrangement, so this is the code work that remains.
 
 **Focal** — `src/lib/examtrack-client.ts` currently builds a second client from
 `VITE_EXAMTRACK_SUPABASE_*`. It is deleted; `src/lib/examtrack.ts` reads `attempts` and
@@ -70,11 +78,12 @@ Once the data is in, each app needs one normal Supabase client instead of two.
 `VITE_EXAMTRACK_SUPABASE_PUBLABLE_KEY` from `.env.example`. `VITE_EXAMTRACK_URL` stays for
 now: it is the drill-through link, not a database.
 
-**ExamTrack** — `src/lib/focal-supabase.ts`, `src/lib/focal-timer.ts`,
-`src/hooks/use-focal-account.ts` and the `focal:` field in `src/lib/ongoing-timers.ts`
-are the mirror layer. `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLABLE_KEY` point at the Focal
-project and `VITE_FOCAL_SUPABASE_*` is deleted. "Connect your Focal account" in settings
-disappears with the second client. The timer state currently in `user_state`
+**ExamTrack** — `web/src/lib/focal-supabase.ts`, `web/src/lib/focal-timer.ts`,
+`web/src/hooks/use-focal-account.ts` and the `focal:` field in
+`web/src/lib/ongoing-timers.ts` are the mirror layer. `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_PUBLABLE_KEY` point at the Focal project and `VITE_FOCAL_SUPABASE_*` is
+deleted, along with "Connect your Focal account" in settings and its secrets in
+`.github/workflows/verify.yml`. The timer state currently in `user_state`
 (`activeExamTimer`, `activeSacTimer`) keeps working until it is replaced by the canonical
 `study_sessions` row, so this step is safe on its own.
 
@@ -82,7 +91,8 @@ disappears with the second client. The timer state currently in `user_state`
 for the mistake library, and `FocalStudy.kt` builds another from `BuildConfig.FOCAL_SUPABASE_URL`.
 After the merge both point at the same project and `ExamTrackAuthRepository` can use the
 Focal session. `FocalStudyManager` stays on the compatibility route until the canonical
-session API lands.
+session API lands. This one is easy to miss: Folio's mistake library is on ExamTrack's
+project, not Focal's, so it breaks if it is left pointing at the old project.
 
 ## What this does not fix
 

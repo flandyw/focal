@@ -1,10 +1,15 @@
 # ExamTrack
 
-## Focal timer integration
+## One Supabase project
 
-ExamTrack and Focal keep separate Supabase projects. In ExamTrack settings, the user connects their Focal account once; exam and SAC timers then mirror start, pause, resume, completion, and discard transitions into Focal's existing append-only `sync_changes` log. Focal remains the study-history owner; ExamTrack remains the active timer owner.
+ExamTrack and Focal share Focal's Supabase project. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLABLE_KEY` point at it, and `attempts`, `mistakes` and `user_state` are three of its tables, created by `focal/supabase/migrations/0010_examtrack_data.sql`. Apply the migrations from the repository root, not from here:
 
-Set `VITE_FOCAL_SUPABASE_URL` and `VITE_FOCAL_SUPABASE_PUBLISHABLE_KEY` on the ExamTrack Vercel deployment. Do not copy Focal migrations or data into ExamTrack. The second client authenticates directly with Focal and uses only its publishable key plus Focal's row-level-security policies; no service-role key is exposed. Timer transitions are queued locally while offline and retried when the Focal account or network returns; no account token or study data is put in the Focal launch URL.
+```bash
+cd ..
+supabase db push
+```
+
+There is no second project and no second sign-in. The `FocalTimerLink` mirror, the `activeExamTimerUpdatedAt` conflict resolution and `src/lib/focal-supabase.ts` are what remain of the old cross-project arrangement, and they are removed in the canonical session rewrite. Until then `VITE_FOCAL_SUPABASE_URL` and `VITE_FOCAL_SUPABASE_PUBLABLE_KEY` still drive the mirror and must still be set on the Vercel deployment. No service-role key is exposed by either client.
 
 A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recharts, and KaTeX.
 
@@ -18,9 +23,10 @@ bun run dev
 
 ## Supabase
 
-1. Create a Supabase project and run every SQL file in `supabase/migrations` in filename order.
-2. Copy `.env.example` to `.env.local` and add the project URL and publishable key from the Connect dialog.
+1. Use the Focal Supabase project. Run every SQL file in `focal/supabase/migrations` in numeric order.
+2. Copy `.env.example` to `.env.local` and add that project's URL and publishable key from the Connect dialog.
 3. In Authentication → Providers → Email, disable **Confirm email** for password-only signup without callbacks.
+4. To move existing data across from the old ExamTrack project, run `scripts/examtrack-merge.mjs` from the repository root. See `docs/examtrack-merge.md`.
 
 Attempts, mistakes, review history, question-level results, timing evidence, and tracked official exams stay available in local storage and sync after email/password sign-in. Never put a secret or service-role key in the Vite environment variables.
 
@@ -33,7 +39,7 @@ For a production build, set a stable `LWC_SECRET`, then run `bun run build` foll
 
 ## Vercel
 
-Import the GitHub repository into Vercel, add a stable `LWC_SECRET`, and connect an Upstash Redis database from the Vercel Marketplace. ExamTrack accepts either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL` + writable `KV_REST_API_TOKEN`; Vercel deployments fail fast without durable session storage. Redeploy after adding the variables.
+Import the Focal repository into Vercel with the root directory set to `web`, add a stable `LWC_SECRET`, and connect an Upstash Redis database from the Vercel Marketplace. ExamTrack accepts either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL` + writable `KV_REST_API_TOKEN`; Vercel deployments fail fast without durable session storage. Redeploy after adding the variables.
 
 ## Checks
 

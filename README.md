@@ -12,14 +12,23 @@ ExamTrack exam and SAC timers also mirror their lifecycle into Focal. Starting o
 
 Folio and ExamTrack timer changes reach Focal through the existing Supabase Realtime sync-log subscription. Start, pause, resume, writing-phase, finish, and discard changes show an in-app notice; the study timer's desktop-notification setting controls native alerts. Focal reads the sync cursor on each Realtime wakeup and on reconnect, with polling as a fallback.
 
-The two apps intentionally keep separate Supabase projects. Each app holds a second, explicitly connected session for the other app's database:
+## Repository layout
 
-1. Apply Focal migrations only to the Focal project and ExamTrack migrations only to the ExamTrack project.
-2. Set Focal's `VITE_EXAMTRACK_URL`, `VITE_EXAMTRACK_SUPABASE_URL`, and `VITE_EXAMTRACK_SUPABASE_PUBLISHABLE_KEY` for the hosted ExamTrack app/project.
-3. Set ExamTrack's `VITE_FOCAL_SUPABASE_URL` and `VITE_FOCAL_SUPABASE_PUBLISHABLE_KEY` for the Focal project.
-4. Connect the separate account from each app's ExamTrack/Focal integration screen.
+| Path | What it is |
+| --- | --- |
+| `src/` | Focal desktop and Android UI, built by Vite and bundled by Tauri |
+| `web/` | ExamTrack, the web app. Its own `package.json`, `bun.lock` and Vercel deployment |
+| `android-native/` | The native Android app |
+| `supabase/migrations/` | The one Supabase project shared by every app |
+| `docs/examtrack-merge.md` | Moving ExamTrack's data and second client into this project |
 
-Focal queries `attempts` and `mistakes` using the connected ExamTrack user's short-lived session. ExamTrack publishes timer transitions using the connected Focal user's short-lived session. Each database's row-level-security policies enforce ownership, and the production integration rejects non-HTTPS endpoints. Never use a Supabase service-role key in either client.
+ExamTrack used to be a separate repository with its own Supabase project. Both now live
+here. `attempts`, `mistakes` and `user_state` are tables in this project's database
+(`0010_examtrack_data.sql`), so there is one account, one sign-in and no cross-project
+session. The `FocalTimerLink` mirror and the second Supabase client in each app are the last
+remnants of the old arrangement and go away with the canonical session rewrite. `VITE_EXAMTRACK_URL`
+stays: it is the drill-through link to the hosted app, not a database.
+
 
 **A fast, minimal desktop study organiser for VCE students.**
 

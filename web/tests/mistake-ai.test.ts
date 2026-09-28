@@ -22,6 +22,7 @@ describe("mistake image analysis", () => {
     expect(validateMistakeBatchImages(Array.from({ length: 5 }, () => ({ type: "image/jpeg", size: 2 * 1024 * 1024 })))).toBeNull()
     expect(validateMistakeBatchImages(Array.from({ length: 11 }, () => ({ type: "image/jpeg", size: 100 })))).toBe("Choose no more than 10 images at once.")
     expect(selectChatGPTModel(["gpt-5.6-sol", "gpt-5.5"])).toBe("gpt-5.6-sol")
+    expect(selectChatGPTModel(["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], "gpt-6-astra")).toBe("gpt-6-astra")
     expect(selectChatGPTModel(["gpt-5.4-mini", "gpt-5.5"], "gpt-5.4-mini")).toBe("gpt-5.4-mini")
     expect(selectChatGPTModel(["gpt-5.5-pro", "gpt-5.5"])).toBe("gpt-5.5")
     expect(selectChatGPTModel(["gpt-5.5-pro"], "gpt-5.5-pro")).toBeNull()

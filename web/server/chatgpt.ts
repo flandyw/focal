@@ -18,7 +18,7 @@ export function createChatGPTAuth() {
 
   return createChatGPTHandler({
     secret,
-    clientVersion: "0.144.4",
+    clientVersion: process.env.LWC_CLIENT_VERSION ?? "0.157.1",
     sessionStore,
     responsesProxy: {
       allowedModels: (model) => /^gpt-(?:5|6)/.test(model),

@@ -21,7 +21,7 @@ export function parseEnvList(value: string | undefined): string[] {
 }
 
 const configuredOrigins = () => parseEnvList(process.env.LWC_ALLOWED_ORIGINS)
-const DEFAULT_CHATGPT_CLIENT_VERSION = "0.144.4"
+const DEFAULT_CHATGPT_CLIENT_VERSION = "0.157.1"
 
 /**
  * Build the server-side handler. Mount `handleChatGPTRequest` at `/api/chatgpt/*`

@@ -102,16 +102,18 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, onSessionChange }: {
+function FocusBlocks({ subjects, onSessionChange, preset }: {
   subjects: string[]
   onSessionChange?: (
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
     terminal?: "complete" | "cancel",
   ) => void
+  /** Subject and intent handed over from a day plan, if any. */
+  preset?: { subject?: string; intent: string }
 }) {
-  const [subject, setSubject] = useState("")
-  const [intent, setIntent] = useState("")
+  const [subject, setSubject] = useState(preset?.subject ?? "")
+  const [intent, setIntent] = useState(preset?.intent ?? "")
   const [announcement, setAnnouncement] = useState("")
 
   const { state, settings, blocks, blocksToday, focusSecondsToday, progress, updateSettings, ...actions } =
@@ -452,12 +454,14 @@ function FocusBlocks({ subjects, onSessionChange }: {
 export function StudyTimerPage({
   subjects,
   mode,
+  focusPreset,
   onModeChange,
   onFocusSessionChange,
   exam,
 }: {
   subjects: string[]
   mode: StudyTimerMode
+  focusPreset?: { subject?: string; intent: string }
   onModeChange: (mode: StudyTimerMode) => void
   /** Focus blocks mirror as `kind: "focus"`; a paper mirrors as `kind: "exam"`. */
   onFocusSessionChange: (
@@ -484,7 +488,7 @@ export function StudyTimerPage({
         </div>
 
         <TabsContent className="mt-0" value="focus">
-          <FocusBlocks subjects={subjects} onSessionChange={onFocusSessionChange} />
+          <FocusBlocks subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} />
         </TabsContent>
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

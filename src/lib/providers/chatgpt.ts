@@ -33,8 +33,9 @@ export const chatGPTFetch: typeof fetch = (input, init) => fetch(input, {
 
 type ChatGPTReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh"
 
-function normalizeChatGPTReasoningEffort(reasoning?: ReasoningConfig): ChatGPTReasoningEffort | undefined {
+function normalizeChatGPTReasoningEffort(model?: string, reasoning?: ReasoningConfig): ChatGPTReasoningEffort | undefined {
   if (!reasoning?.effort) return undefined
+  if (model === "gpt-6-astra" && reasoning.effort === "none") return "low"
   return reasoning.effort === "minimal" ? "low" : reasoning.effort
 }
 
@@ -42,7 +43,7 @@ function getProxy(model?: string, reasoning?: ReasoningConfig) {
   if (!CHATGPT_BASE_PATH) {
     throw new Error("ChatGPT is not configured for this build. Set VITE_CHATGPT_BASE_PATH and rebuild Focal.")
   }
-  const effort = normalizeChatGPTReasoningEffort(reasoning)
+  const effort = normalizeChatGPTReasoningEffort(model, reasoning)
   const fetchWithReasoning: typeof fetch = (input, init) => {
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
     new Headers(init?.headers).forEach((value, key) => headers.set(key, value))
@@ -90,13 +91,13 @@ function toolArguments(input: unknown): Record<string, unknown> {
 }
 
 function modelInfo(id: string): ModelInfo {
-  const name = id === "gpt-5.6-luna"
-    ? "GPT-5.6 Luna"
-    : id === "gpt-5.6-terra"
-      ? "GPT-5.6 Terra"
-      : id === "gpt-5.6-sol"
-        ? "GPT-5.6 Sol"
-        : id
+  const name = id === "gpt-6-astra" ? "GPT-6 Astra"
+    : id === "gpt-6-sol" ? "GPT-6 Sol"
+    : id === "gpt-6-luna" ? "GPT-6 Luna"
+    : id === "gpt-5.6-luna" ? "GPT-5.6 Luna"
+    : id === "gpt-5.6-terra" ? "GPT-5.6 Terra"
+    : id === "gpt-5.6-sol" ? "GPT-5.6 Sol"
+    : id
   return {
     id,
     name,

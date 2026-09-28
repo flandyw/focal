@@ -101,6 +101,9 @@ const GoalsPage = lazy(() =>
 const PracticeStudio = lazy(() =>
   import("@/components/practice-studio").then((module) => ({ default: module.PracticeStudio })),
 )
+const CalendarPage = lazy(() =>
+  import("@/components/calendar-page").then((module) => ({ default: module.CalendarPage })),
+)
 
 export default function App() {
   const [view, setView] = useState<AppView>(() => loadAppView(
@@ -124,6 +127,8 @@ export default function App() {
   const [trackerOpen, setTrackerOpen] = useState(false)
   const [commandOpen, setCommandOpen] = useState(false)
   const [practiceSubject, setPracticeSubject] = useState<string | undefined>()
+  // A calendar task hands the study timer its subject and intent when focused.
+  const [focusPreset, setFocusPreset] = useState<{ subject?: string; intent: string } | undefined>()
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const sync = useSupabaseSync(data, setData)
@@ -593,7 +598,8 @@ export default function App() {
             </Suspense>
           ) : null}
           {view === "planner" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><PlannerPage data={data} timetable={timetable} onChange={saveLearning} onNavigate={setView} /></Suspense> : null}
-          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage subjects={[...new Set(references.map((reference) => reference.studyName))]} mode={timerMode} onModeChange={setTimerMode} onFocusSessionChange={queueFocusSession} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
+          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
+          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage subjects={[...new Set(references.map((reference) => reference.studyName))]} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} onFocusSessionChange={queueFocusSession} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onOpenPractice={(subject) => { setPracticeSubject(subject); setView("practice") }} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onOpenPlanner={() => setView("planner")} onPlanGoal={planGoal} /></Suspense> : null}
           {view === "practice" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><PracticeStudio key={practiceSubject ?? "practice"} data={data} initialSubject={practiceSubject} onChange={saveLearning} onComplete={completePracticeSession} onOpenMistakes={() => setView("mistakes")} /></Suspense> : null}

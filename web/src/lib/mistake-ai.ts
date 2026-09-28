@@ -83,7 +83,13 @@ async function getChatGPTModel() {
   const settings = loadAISettings()
   const model = selectChatGPTModel(models, settings.model)
   if (!model) throw new Error(models.length ? "This ChatGPT account has no model that supports streamed analysis." : "This ChatGPT account has no available model.")
-  return { chatgpt, model, settings }
+  return {
+    chatgpt,
+    model,
+    settings: model === "gpt-6-astra" && settings.reasoningEffort === "none"
+      ? { ...settings, reasoningEffort: "low" as const }
+      : settings,
+  }
 }
 
 function mistakeContext(mistakes: Mistake[], attempts: ExamAttempt[]) {

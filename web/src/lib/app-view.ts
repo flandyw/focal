@@ -2,6 +2,7 @@ export const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
 
 export const APP_VIEWS = [
   "dashboard",
+  "calendar",
   "planner",
   "focus",
   "practice",
@@ -28,6 +29,7 @@ export function loadAppView(
   const timer = new URLSearchParams(search).get("timer")
   // The timed paper is a mode of the study timer now, not a view of its own.
   if (timer === "exam") return "focus"
+  if (timer === "calendar" || timer === "day") return "calendar"
   if (timer === "sac") return "sacs"
   if (timer === "focus" || timer === "study") return "focus"
   if (!storage) return "dashboard"

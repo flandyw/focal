@@ -87,6 +87,7 @@ export function PlannerPage({ data, timetable, onChange, onNavigate }: {
   return (
     <WorkspacePage>
       <PageHeader title="Revision planner" description="Turn your exam evidence, due mistakes, SACs, and official dates into a realistic study week.">
+        <Button variant="outline" onClick={() => onNavigate("calendar")}><CalendarCheck2 />Open calendar</Button>
         <Button variant="outline" onClick={() => onNavigate("practice")}><RotateCcw />Open practice studio</Button>
       </PageHeader>
 

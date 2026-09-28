@@ -89,3 +89,13 @@ test("every settings control is labelled and states its own on and off position"
     expect(markup).toContain(label)
   }
 })
+
+test("the planner is inert and honest without a ChatGPT connection", () => {
+  const markup = render("focus")
+
+  expect(markup).toContain("Plan a session")
+  expect(markup).toContain("Connect ChatGPT in Settings to plan sessions.")
+  // Nothing to plan yet, so the timer is left exactly as it was.
+  expect(markup).toContain("25:00")
+  expect(markup).toContain('aria-label="Focus, 25:00 remaining"')
+})

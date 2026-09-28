@@ -18,6 +18,37 @@ export function supportsStreamedAnalysis(model: string) {
     && !/(?:^|-)pro(?:-|$)/.test(model)
 }
 
+/** Planning is a cheap, high-volume job, so it gets its own model choice. */
+export const CHEAPEST_MODEL = "gpt-6-luna"
+
+export function isCheapestModel(model: string) {
+  return model === CHEAPEST_MODEL || model.endsWith("-luna")
+}
+
+/** Falls back to the cheapest model this account actually offers, so a stored
+ *  preference never points at a model that stopped being available. */
+export function pickPlannerModel(models: string[], preferred: string): string | null {
+  const supported = models.filter(supportsStreamedAnalysis)
+  if (supported.includes(preferred)) return preferred
+  return supported.find(isCheapestModel) ?? supported[0] ?? null
+}
+
+const PLANNER_MODEL_KEY = "examtrack:ai-settings:planner-model:v1"
+
+export function loadPlannerModel(): string {
+  if (typeof localStorage === "undefined") return CHEAPEST_MODEL
+  return localStorage.getItem(PLANNER_MODEL_KEY) || CHEAPEST_MODEL
+}
+
+export function savePlannerModel(model: string) {
+  if (typeof localStorage === "undefined") return
+  try {
+    localStorage.setItem(PLANNER_MODEL_KEY, model)
+  } catch {
+    // A blocked or full storage must not stop planning.
+  }
+}
+
 const STORAGE_KEY = "examtrack:ai-settings:v1"
 
 export function parseAISettings(value: string | null): AISettings {

@@ -21,7 +21,7 @@ export function createChatGPTAuth() {
     clientVersion: "0.144.4",
     sessionStore,
     responsesProxy: {
-      allowedModels: (model) => model.startsWith("gpt-5"),
+      allowedModels: (model) => /^gpt-(?:5|6)/.test(model),
       maxRequestBytes: 4_400_000,
       rateLimit: { limit: 20, windowMs: 60_000, store: rateLimitStore },
     },

@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MetricCard, MetricGrid, SectionHeading, WorkspacePage } from "@/components/workspace-layout"
 import { TimerReadout } from "@/components/timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
+import { StudyPlanCard } from "@/components/study-plan-card"
+import type { StudyPlan } from "@/lib/study-plan"
 import type { FocusTimerSession } from "@/lib/ongoing-timers"
 import {
   DEFAULT_SETTINGS,
@@ -140,6 +142,19 @@ function FocusBlocks({ subjects, onSessionChange }: {
     setAnnouncement(`${displayMode} started.`)
   }, [displayMode])
 
+  /** One atomic apply: a plan never lands half-configured, and the block in
+   *  progress keeps its place (settings sync) rather than restarting. */
+  function applyPlan(plan: StudyPlan) {
+    setSubject(plan.subject)
+    setIntent(plan.intent)
+    updateSettings({
+      workMinutes: plan.workMinutes,
+      breakMinutes: plan.breakMinutes,
+      longBreakMinutes: plan.longBreakMinutes,
+      longBreakEvery: plan.longBreakEvery,
+    })
+    if (plan.startNow && !state.running) actions.toggle()
+  }
   function applyPreset(preset: (typeof TIMER_PRESETS)[number]) {
     updateSettings({
       workMinutes: preset.workMinutes,
@@ -212,6 +227,17 @@ function FocusBlocks({ subjects, onSessionChange }: {
             </TimerReadout>
           </CardContent>
         </Card>
+
+        <StudyPlanCard
+          blocksToday={blocksToday}
+          canStartNow={!state.running && !state.studyOvertime && state.mode === "work"}
+          minutesLeft={Math.max(0, Math.round(state.secondsLeft / 60))}
+          onApply={applyPlan}
+          running={state.running}
+          settings={settings}
+          subjects={subjects}
+          timerMode={displayMode}
+        />
 
         <Card>
           <CardHeader>

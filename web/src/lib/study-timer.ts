@@ -117,7 +117,7 @@ function writeJson(key: string, value: unknown) {
 /* validation                                                          */
 /* ------------------------------------------------------------------ */
 
-function clampMinutes(value: unknown, fallback: number) {
+export function clampMinutes(value: unknown, fallback: number) {
   // A corrupt stored value must fall back to the default, not to a 1-minute block.
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback
   return Math.min(MAX_DURATION_MINUTES, Math.max(MIN_DURATION_MINUTES, Math.round(value)))

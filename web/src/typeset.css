@@ -1,0 +1,37 @@
+@layer components {
+  .typeset {
+    --typeset-font-body: inherit;
+    --typeset-font-heading: var(--font-heading);
+    --typeset-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --typeset-size: 1em;
+    --typeset-leading: 1.75;
+    --typeset-flow: 1.25em;
+    color: var(--foreground);
+    font-family: var(--typeset-font-body);
+    font-size: var(--typeset-size);
+    line-height: var(--typeset-leading);
+  }
+
+  .typeset-mistake {
+    --typeset-size: 0.9375rem;
+    --typeset-leading: 1.6;
+    --typeset-flow: 1em;
+  }
+
+  .typeset :where(h1, h2, h3, h4) {
+    margin-block: var(--typeset-flow) 0;
+    font-family: var(--typeset-font-heading);
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .typeset :where(p, ul, ol, blockquote, pre, table) { margin-block: var(--typeset-flow) 0; }
+  .typeset > :first-child { margin-block-start: 0; }
+  .typeset :where(ul, ol) { padding-inline-start: 1.5em; }
+  .typeset ul { list-style: disc; }
+  .typeset ol { list-style: decimal; }
+  .typeset :where(code) { font-family: var(--typeset-font-mono); font-size: 0.9em; }
+  .typeset :where(a) { color: var(--foreground); text-decoration: underline; text-underline-offset: 0.2em; }
+  .typeset :where(blockquote) { border-inline-start: 1px solid var(--border); padding-inline-start: 1em; color: var(--muted-foreground); }
+  .typeset :where(.katex-display) { overflow-x: auto; overflow-y: hidden; padding-block: 0.25rem; }
+}

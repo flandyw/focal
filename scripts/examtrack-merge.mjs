@@ -77,14 +77,6 @@ export function planImport(bundle, toUser) {
   for (const table of TABLES) {
     rows[table] = (bundle.tables?.[table] ?? []).map((row) => remapRow(row, fromUser, toUser))
   }
-  // user_state is a singleton keyed by user_id and has no id column, so it is remapped
-  // by hand rather than through remapRow.
-  rows.user_state = (bundle.tables?.user_state ?? []).map((row) => {
-    assert(row?.user_id === fromUser, `user_state belongs to ${row?.user_id}, expected ${fromUser}`)
-    assert(row?.payload == null || typeof row.payload === "object", "user_state payload must be an object")
-    return { user_id: toUser, payload: row.payload ?? {}, updated_at: row.updated_at }
-  })
-  assert(rows.user_state.length <= 1, "bundle contains more than one user_state row")
   const attachments = (bundle.attachments ?? []).map((entry) => ({
     localPath: entry.localPath,
     from: entry.path,
@@ -142,15 +134,12 @@ function selfTest() {
     tables: {
       attempts: [],
       mistakes: [{ user_id: from, id: from, payload: { subject: "Chemistry" }, updated_at: "2026-09-01T10:00:00.000Z", deleted_at: null }],
-      user_state: [{ user_id: from, payload: { a: 1 }, updated_at: "2026-09-01T10:00:00.000Z" }],
     },
     attachments: [{ localPath: "files/photo.png", path: `${from}/photo.png` }],
   }
   const first = planImport(bundle, to)
   const second = planImport(bundle, to)
   assert(JSON.stringify(first) === JSON.stringify(second), "the import plan must be idempotent")
-  assert(first.rows.user_state[0].user_id === to, "user_state must move to the target user")
-  assert(!("id" in first.rows.user_state[0]), "user_state has no id column, so none may be sent")
   assert(first.rows.mistakes[0].user_id === to, "mistakes must move to the target user")
   assert(first.rows.mistakes[0].id === from, "mistake ids must not be rewritten")
   assert(first.attachments[0].to === `${to}/photo.png`, "attachments must be re-uploaded under the target folder")
@@ -269,13 +258,12 @@ async function runExport(args) {
   const sourceUserId = userData.user.id
   console.log(`source project ${url} user ${sourceUserId}`)
 
-  const tables = { attempts: [], mistakes: [], user_state: [] }
+  // user_state is not a table: settings live as user_state rows in the ordered feed, and no
+  // client reads a mirror of them. There is nothing to export or import for it any more.
+  const tables = { attempts: [], mistakes: [] }
   for (const table of TABLES) tables[table] = await readAllRows(client, table)
-  const { data: stateRows, error: stateError } = await client.from("user_state").select("*")
-  if (stateError) throw new Error(`user_state: ${stateError.message}`)
-  tables.user_state = stateRows
 
-  for (const table of [...TABLES, "user_state"]) {
+  for (const table of TABLES) {
     const foreign = tables[table].filter((row) => row.user_id !== sourceUserId)
     assert(foreign.length === 0, `${table} contains ${foreign.length} rows owned by another account`)
   }
@@ -298,7 +286,6 @@ async function runExport(args) {
 
   console.log(`attempts   ${tables.attempts.length}`)
   console.log(`mistakes   ${tables.mistakes.length} (${tables.mistakes.filter((r) => r.deleted_at).length} tombstones)`)
-  console.log(`user_state ${tables.user_state.length}`)
   console.log(`files      ${attachments.length} -> ${out}`)
   console.log(`\nwrote ${join(out, "bundle.json")}`)
 }
@@ -332,13 +319,13 @@ async function runImport(args) {
   const plan = planImport(bundle, toUser)
   console.log(`merging ${plan.sourceUserId} -> ${plan.targetUserId}`)
 
-  for (const table of [...TABLES, "user_state"]) {
+  for (const table of TABLES) {
     const rows = plan.rows[table]
     if (rows.length === 0) {
       console.log(`${table.padEnd(10)} 0`)
       continue
     }
-    const onConflict = table === "user_state" ? "user_id" : "user_id,id"
+    const onConflict = "user_id,id"
     const { error } = await client.from(table).upsert(rows, { onConflict })
     if (error) throw new Error(`${table}: ${error.message}`)
     console.log(`${table.padEnd(10)} ${rows.length}`)
@@ -354,7 +341,7 @@ async function runImport(args) {
   console.log(`files      ${plan.attachments.length}`)
 
   // Read back and compare, so a partial import cannot look like a successful one.
-  for (const table of [...TABLES, "user_state"]) {
+  for (const table of TABLES) {
     const { data, error } = await client.from(table).select("*")
     if (error) throw new Error(`${table} verify: ${error.message}`)
     assert(

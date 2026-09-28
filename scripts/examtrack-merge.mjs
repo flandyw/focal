@@ -20,7 +20,9 @@
 // overwrites with the same values) and it never deletes. The upgrade path, if the data
 // ever needs to move again, is the same script with a different --to-user.
 
+import { copyFileSync, rmSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import process from "node:process"
 
@@ -184,7 +186,8 @@ async function listObjects(client, prefix) {
       if (error) throw new Error(`${BUCKET}/${folder}: ${error.message}`)
       for (const entry of data) {
         const path = `${folder}/${entry.name}`
-        if (entry.id) queue.push(path)
+        // Storage lists a folder with `id: null` and a file with its object id.
+        if (entry.id == null) queue.push(path)
         else found.push(path)
       }
       if (data.length < 1000) break
@@ -202,6 +205,37 @@ async function makeClient(url, key, token) {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   })
+}
+
+// Focal is a Tauri app, so its session never reaches a browser localStorage a human can
+// open. It lives in the `preferences` table of the install's SQLite database instead, under
+// the same credential key the app uses, and it refreshes on its own while the app runs.
+// Reading it here is a convenience for a one-user migration: it saves copying a token that
+// expires every hour out of a devtools panel that a Tauri window does not have.
+export async function tokenFromFocalDatabase(path) {
+  const { DatabaseSync } = await import("node:sqlite")
+  const { copyFileSync } = await import("node:fs")
+  // Copy first: the app holds this database open with a write-ahead log, and reading the
+  // live file would miss anything still sitting in the WAL.
+  const snapshot = join(tmpdir(), `focal-merge-${process.pid}.db`)
+  for (const suffix of ["", "-wal", "-shm"]) {
+    try {
+      copyFileSync(path + suffix, snapshot + suffix)
+    } catch (error) {
+      if (suffix === "") throw new Error(`could not read ${path}: ${error.message}`)
+    }
+  }
+  const database = new DatabaseSync(snapshot, { readOnly: true })
+  const row = database
+    .prepare("select value from preferences where key = ?")
+    .get("focal-supabase-auth-session")
+  database.close()
+  for (const suffix of ["", "-wal", "-shm"]) rmSync(snapshot + suffix, { force: true })
+  if (!row) throw new Error("Focal has no stored Supabase session. Sign in in Focal first.")
+  let session = JSON.parse(row.value)
+  if (typeof session === "string") session = JSON.parse(session)
+  assert(session.access_token, "Focal's stored session has no access token")
+  return session.access_token
 }
 
 async function runExport(args) {
@@ -260,8 +294,11 @@ async function runImport(args) {
   const inDir = args.in ?? "./examtrack-export"
   const url = args.url ?? process.env.FOCAL_TARGET_URL
   const key = args.key ?? process.env.FOCAL_TARGET_PUBLISHABLE_KEY
-  const token = args.token ?? process.env.FOCAL_TARGET_ACCESS_TOKEN
-  assert(url && key && token, "import needs --url, --key and --token")
+  assert(url && key, "import needs --url and --key")
+  const token = args.token
+    ?? process.env.FOCAL_TARGET_ACCESS_TOKEN
+    ?? (args.focalDb ? await tokenFromFocalDatabase(args.focalDb) : null)
+  assert(token, "import needs --token, or --focal-db <path to focal.db>")
 
   const client = await makeClient(url, key, token)
 
@@ -330,7 +367,7 @@ const usage = () =>
       "usage:",
       "  node scripts/examtrack-merge.mjs selftest",
       "  node scripts/examtrack-merge.mjs export --out ../examtrack-report --url <examtrack url> --key <publishable key> --token <access token>",
-      "  node scripts/examtrack-merge.mjs import --in ../examtrack-report --url <focal url> --key <publishable key> --token <access token>",
+      "  node scripts/examtrack-merge.mjs import --in ../examtrack-report --url <focal url> --key <publishable key> --focal-db <path to focal.db>",
     ].join("\n"),
   )
 

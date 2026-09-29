@@ -53,7 +53,7 @@ import {
   rowKey,
 } from "@/lib/sync/reduce"
 import { getNotionDeleteMetadata, notionDeletePayload, recordNotionUpsertIntent } from "@/lib/sync/sinks"
-import { repairDuplicateSessions, sessionCommands } from "@/lib/sync/sessions"
+import { repairDuplicateSessions, sessionCommands, sessionReplayTiming } from "@/lib/sync/sessions"
 import {
   applyChanges,
   applyStudySessionCommand,
@@ -65,8 +65,11 @@ import {
   subscribeWakeup,
 } from "@/lib/sync/transport"
 import {
+  estimateServerNow,
   isStudySessionCommand,
+  observeServerClock,
   type CanonicalStudySession,
+  type ServerClockAnchor,
   type StudySessionCommand,
 } from "@/lib/sync/sessionContract"
 import {
@@ -109,6 +112,11 @@ let stopWakeup: (() => void) | null = null
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let lastLocalChangeAt = 0
 let detachEnvironmentListeners: (() => void) | null = null
+// One publish at a time per session, keyed by session id.
+const sessionPublishes = new Map<string, Promise<void>>()
+// The server's clock, anchored whenever it speaks. A replayed boundary is placed with this,
+// never with the device's own wall clock, which may be minutes out.
+let serverClockAnchor: ServerClockAnchor | null = null
 
 let snapshot: SyncStatusSnapshot = {
   status: "signed-out",
@@ -310,7 +318,10 @@ export async function recordLocalUpsert(
     // sync pass re-derives the commands from this record, so an offline edit is sent as soon
     // as the network is back.
     markLocalChange()
-    if (currentSession) void publishSession(rowId, currentSession.user.id, currentDeviceId ?? await getDeviceId())
+    if (currentSession) {
+      void schedulePublishSession(rowId, currentSession.user.id, currentDeviceId ?? await getDeviceId())
+        .catch(reportSessionPublishFailure)
+    }
     return
   }
   const queue = await pushOrQueue(accountId, table, rowId, "put", sanitizePayload(table, payload))
@@ -338,7 +349,15 @@ async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: str
     // Nothing queues a cancel any more (migration 0006), so say it to the server directly.
     // If this fails, the next sync pass still knows: the record is gone, the applied row is not.
     await (await openFocalDatabase()).execute("delete from records where kind = 'study_sessions' and id = $1", [rowId])
-    if (currentSession) void publishSession(rowId, accountId, currentDeviceId ?? await getDeviceId())
+    if (currentSession) {
+      // The discarded record keeps its timer boundaries until the server has heard them:
+      // its intervals replay like any other offline history, ending in the cancel.
+      const tombstone = current && typeof current === "object"
+        ? { ...(current as Record<string, unknown>), deleted_at: new Date().toISOString() } as LocalRecord
+        : undefined
+      void schedulePublishSession(rowId, accountId, currentDeviceId ?? await getDeviceId(), tombstone)
+        .catch(reportSessionPublishFailure)
+    }
     queue = await readOutbox(accountId)
   } else {
     queue = await pushOrQueue(accountId, table, rowId, "delete", deletePayload)
@@ -555,24 +574,85 @@ async function repairLocalSessionDuplicates(accountId = currentSession?.user.id 
 // ---------------------------------------------------------------------------
 
 /**
+ * One publish at a time per session. Start, Pause and Resume can land back to back, and
+ * overlapping publishes would each build commands from an older record than the newest one.
+ * This is not a queue: the next pass simply re-reads the state its predecessor left, so the
+ * last local word is always what reaches the server.
+ */
+function schedulePublishSession(rowId: string, accountId: string, deviceId: string, tombstone?: LocalRecord): Promise<void> {
+  const previous = sessionPublishes.get(rowId) ?? Promise.resolve()
+  const task = previous.then(() => publishSession(rowId, accountId, deviceId, tombstone))
+  // The link itself never rejects, so one failed pass cannot poison the chain behind it.
+  const settled = task.then(() => undefined, () => undefined).then(() => {
+    if (sessionPublishes.get(rowId) === settled) sessionPublishes.delete(rowId)
+  })
+  sessionPublishes.set(rowId, settled)
+  return task
+}
+
+/** A failed direct publish is silent to the caller but never invisible: the record stays
+ *  saved and every later sync pass re-derives the same commands and tries again. */
+function reportSessionPublishFailure(error: unknown): void {
+  emitStatus({
+    status: currentSession ? "pending" : "signed-out",
+    error: describeSyncError(error),
+    details: "A study session could not be sent. It stays saved on this device and is retried automatically.",
+  })
+}
+
+function observeServerClockAnchor(serverNow: string): void {
+  if (typeof performance === "undefined") return
+  serverClockAnchor = observeServerClock(serverNow, performance.now()) ?? serverClockAnchor
+}
+
+/**
+ * Maps a stored wall-clock boundary onto the server clock. Without an anchor this returns
+ * null and the server places the replay at receipt time; the exact elapsed gaps still keep
+ * every interval's length right.
+ */
+function placeReplayBoundary(boundaryAt: number): string | null {
+  if (!serverClockAnchor || typeof performance === "undefined") return null
+  const age = Date.now() - boundaryAt
+  if (age < -5_000 || age > 30 * 24 * 60 * 60 * 1000) {
+    throw new Error("This offline timer is outside the server's 30-day timing window; it cannot be replayed accurately")
+  }
+  const skew = estimateServerNow(serverClockAnchor, performance.now()) - Date.now()
+  return new Date(boundaryAt + skew).toISOString()
+}
+
+const sessionTiming = sessionReplayTiming(placeReplayBoundary)
+
+function canonicalStateOf(payload: unknown): string | undefined {
+  const state = (payload as { state?: unknown } | undefined)?.state
+  return typeof state === "string" ? state : undefined
+}
+
+/**
  * Publish one local session by sending the commands the server is missing. Nothing is stored
  * on the way out: the commands are re-derived from the record and the last canonical row on
  * every pass, so a lost request costs one round trip and a failure is simply retried.
  */
-async function publishSession(rowId: string, accountId: string, deviceId: string): Promise<void> {
+async function publishSession(rowId: string, accountId: string, deviceId: string, tombstone?: LocalRecord): Promise<void> {
   if (!supabase || !currentSession) return
   const record = await readCurrentLocalValue("study_sessions", rowId)
   const applied = (await readApplied(accountId, ["study_sessions"])).find((row) => row.rowId === rowId)
-  if (record === undefined) {
-    // The record is gone locally: the server still needs to hear about it once.
-    if (!applied || applied.operation === "delete") return
+  const known = applied !== undefined && applied.operation !== "delete"
+  // A tombstone speaks only for a session the server has seen; a discard of a purely local
+  // record is nothing for it to hear.
+  const source = record ?? (known ? tombstone : undefined)
+  if (source === undefined) {
+    // The record is gone locally and there is no history to replay: the server still needs
+    // to hear the cancel once -- and only while its row is still open.
+    if (!known) return
+    const state = canonicalStateOf(applied?.payload)
+    if (state === "completed" || state === "cancelled") return
     await sendSessionCommands([{ mutation_id: crypto.randomUUID(), session_id: rowId,
       expected_revision: applied.lamport, action: "cancel", device_id: deviceId, app: "focal",
       kind: kindOfCanonical(applied.payload), phase: "focus", title: sessionTitle(applied.payload),
       subject_id: null, metadata: {} }], accountId, deviceId)
     return
   }
-  const commands = sessionCommands(record as StudySession, applied, deviceId)
+  const commands = sessionCommands(source as StudySession, applied, deviceId, sessionTiming)
   if (!commands.length) return
   await sendSessionCommands(commands, accountId, deviceId)
 }
@@ -584,14 +664,15 @@ async function publishAllSessions(accountId: string, deviceId: string, epoch: nu
   const records = await readLocalDataArray<StudySession>("sessions.json")
   for (const record of records) {
     if (epoch !== syncEpoch) return
-    const commands = sessionCommands(record, applied.get(record.id), deviceId)
-    if (!commands.length) continue
-    try {
-      await sendSessionCommands(commands, accountId, deviceId)
-    } catch (error) {
-      emitStatus({ status: "pending", details: "A study session could not be sent. It stays saved on this device and is retried automatically." })
-      throw error
-    }
+    await schedulePublishSession(record.id, accountId, deviceId)
+  }
+  // A discard whose publish never landed leaves no local record to find. Without this pass
+  // nothing would ever tell the server, and its timer would keep counting for good.
+  const live = new Set(records.map((record) => record.id))
+  for (const rowId of applied.keys()) {
+    if (epoch !== syncEpoch) return
+    if (live.has(rowId)) continue
+    await schedulePublishSession(rowId, accountId, deviceId)
   }
 }
 
@@ -605,6 +686,7 @@ async function sendSessionCommands(
     let rebases = 0
     for (;;) {
       const result = await applyStudySessionCommand(current, deviceId, accountId)
+      observeServerClockAnchor(result.server_now)
       if (result.session) {
         // The canonical row is this device's newest version of the session, so a pull of our own
         // change cannot look like somebody else's newer edit.

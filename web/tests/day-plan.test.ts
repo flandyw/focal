@@ -13,6 +13,7 @@ import {
 } from "../src/lib/day-plan"
 import { EMPTY_LEARNING_WORKSPACE, localDate, type LearningWorkspace, type StudyTask } from "../src/lib/learning-workspace"
 import type { Timetable } from "../src/lib/timetable"
+import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const stamp = "2026-03-01T00:00:00.000Z"
 
@@ -86,6 +87,93 @@ test("a multi-day exam appears on every day it runs, and untracked exams never a
   expect(buildDayPlan("2026-03-10", source({ trackedExamIds: ["e2"] }), timetable).items).toHaveLength(1)
   expect(buildDayPlan("2026-03-11", source({ trackedExamIds: ["e2"] }), timetable).items).toHaveLength(0)
   expect(buildDayPlan("2026-03-04", source(), timetable).items).toHaveLength(0)
+})
+
+const segment = (startedAt: string, endedAt: string | null, id = "g1") =>
+  ({ id, session_id: "cs1", started_at: startedAt, ended_at: endedAt, phase: null, source_device_id: null })
+
+function canonicalSession(overrides: Partial<CanonicalStudySession> = {}): CanonicalStudySession {
+  return {
+    id: "cs1",
+    kind: "focus",
+    state: "completed",
+    phase: "focus",
+    revision: 4,
+    title: "Methods revision",
+    subject_id: "mm",
+    originating_app: "focal",
+    created_at: "2026-03-04T08:00:00.000Z",
+    updated_at: "2026-03-04T10:00:00.000Z",
+    started_at: "2026-03-04T08:00:00.000Z",
+    paused_at: null,
+    completed_at: "2026-03-04T10:00:00.000Z",
+    cancelled_at: null,
+    accumulated_active_ms: 3_900_000,
+    segment_started_at: null,
+    metadata: {
+      subjectIds: ["mm"],
+      schedule: { blocks: [{ start: "2026-03-04T08:00:00.000Z", end: "2026-03-04T10:00:00.000Z" }] },
+    },
+    segments: [
+      segment("2026-03-04T08:00:00.000Z", "2026-03-04T08:20:00.000Z"),
+      segment("2026-03-04T08:30:00.000Z", "2026-03-04T09:15:00.000Z", "g2"),
+    ],
+    ...overrides,
+  }
+}
+
+// Both apps read the one canonical study log, so the calendar must place every sitting
+// exactly where Focal desktop's calendar places it: the day of its `startTime`, counted
+// in worked intervals rather than the window they span.
+test("a study session appears on the desktop's day, with the desktop's minutes", () => {
+  const data = source({ sessions: [canonicalSession()] })
+  const item = buildDayPlan("2026-03-04", data, timetable).items.find((entry) => entry.kind === "session")
+  // 20 + 45 worked minutes, not the two-hour window they span; "mm" shows its name.
+  expect(item).toMatchObject({
+    kind: "session",
+    title: "Methods revision",
+    detail: "Mathematical Methods",
+    minutes: 65,
+    status: "completed",
+  })
+  expect(buildDayPlan("2026-03-05", data, timetable).items.filter((entry) => entry.kind === "session")).toHaveLength(0)
+})
+
+test("a sitting is filed under its schedule day even when the server start differs", () => {
+  const data = source({ sessions: [canonicalSession({ started_at: "2026-03-05T08:00:00.000Z" })] })
+  expect(buildDayPlan("2026-03-04", data, timetable).items.some((entry) => entry.kind === "session")).toBe(true)
+  expect(buildDayPlan("2026-03-05", data, timetable).items.some((entry) => entry.kind === "session")).toBe(false)
+})
+
+test("a timer session without a planned window lands on its start day", () => {
+  // The web's own focus blocks carry no schedule; the desktop files them at their start
+  // plus an hour and counts their closed segments. Same projection here.
+  const data = source({ sessions: [canonicalSession({
+    subject_id: "Chemistry",
+    metadata: { examtrack: { subject: "Chemistry" } },
+    segments: [segment("2026-03-04T08:00:00.000Z", "2026-03-04T08:45:00.000Z")],
+  })] })
+  const item = buildDayPlan("2026-03-04", data, timetable).items.find((entry) => entry.kind === "session")
+  expect(item).toMatchObject({ detail: "Chemistry", minutes: 45, status: "completed" })
+})
+
+test("a still-running session counts only the boundaries that have closed", () => {
+  const running = canonicalSession({
+    state: "running",
+    completed_at: null,
+    segment_started_at: "2026-03-04T08:00:00.000Z",
+    segments: [segment("2026-03-04T08:00:00.000Z", null)],
+  })
+  const item = buildDayPlan("2026-03-04", source({ sessions: [running] }), timetable)
+    .items.find((entry) => entry.kind === "session")
+  // With no closed segment yet the desktop falls back to the planned span; so does this.
+  expect(item).toMatchObject({ minutes: 120, status: "in-progress" })
+})
+
+test("a discarded sitting never appears on the calendar", () => {
+  const cancelled = canonicalSession({ state: "cancelled", completed_at: null, cancelled_at: "2026-03-04T09:00:00.000Z" })
+  const items = buildDayPlan("2026-03-04", source({ sessions: [cancelled] }), timetable).items
+  expect(items.filter((entry) => entry.kind === "session")).toHaveLength(0)
 })
 
 test("the month grid is six Monday-first weeks that always contain the month", () => {

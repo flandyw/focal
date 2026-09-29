@@ -5,10 +5,12 @@ import {
   countBlocksToday,
   getFocusSecondsToday,
   loadBlocks,
+  loadFocusSession,
   loadOpenBlock,
   loadSettings,
   loadTimerState,
   saveBlocks,
+  saveFocusSession,
   saveOpenBlock,
   saveSettings,
   saveTimerState,
@@ -18,8 +20,13 @@ import {
   type TimerSettings,
   type TimerState,
 } from "@/lib/study-timer"
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
-import { decideFocusSession } from "@/lib/focus-session"
+import {
+  createFocusSessionMirror,
+  decideFocusSession,
+  owedFocusBoundary,
+  type FocusSessionMirror,
+  type FocusSessionSink,
+} from "@/lib/focus-session"
 import { canonicalNow } from "@/lib/study-session-sync"
 
 const TICK_MS = 1000
@@ -28,13 +35,6 @@ const TICK_MS = 1000
  *  which is what makes a logged block's duration trustworthy. */
 const serverNow = () => canonicalNow().getTime()
 
-/** Returns the session the server acknowledged, so its id and revision stay ours. */
-type SessionSink = (
-  previous: FocusTimerSession | undefined,
-  next: FocusTimerSession | undefined,
-  terminal?: "complete" | "cancel",
-) => Promise<FocusTimerSession | undefined> | void
-
 export interface StudyTimerEngine {
   state: TimerState
   settings: TimerSettings
@@ -42,6 +42,9 @@ export interface StudyTimerEngine {
   blocksToday: number
   focusSecondsToday: number
   progress: number
+  /** A lifecycle command is on the wire: its buttons are disabled until the
+   *  server has answered, so one boundary cannot overtake another. */
+  sessionBusy: boolean
   updateSettings: (patch: Partial<TimerSettings>) => void
   toggle: () => void
   reset: () => void
@@ -101,7 +104,7 @@ export function useStudyTimer({
 }: {
   subject: string
   intent: string
-  onSessionChange?: SessionSink
+  onSessionChange?: FocusSessionSink
 }): StudyTimerEngine {
   const [settings, setSettings] = useState<TimerSettings>(loadSettings)
   const [state, dispatch] = useReducer(timerReducer, undefined, () => loadTimerState(loadSettings()))
@@ -112,31 +115,22 @@ export function useStudyTimer({
   settingsRef.current = settings
   // `useState` gives the one stable ref object a lazy `useRef` initializer cannot.
   const [openBlockRef] = useState(() => ({ current: loadOpenBlock() as OpenBlock | null }))
-  const sessionRef = useRef<FocusTimerSession | undefined>(undefined)
   const sinkRef = useRef(onSessionChange)
   sinkRef.current = onSessionChange
 
-  const previousState = useRef(state)
+  // The synced lifecycle of the focus session. Its acknowledged state only moves on a
+  // server answer, every boundary is sent in the order it was crossed and retried until
+  // the server takes it, so no command is ever built on a revision the server has already
+  // moved past and no failed Complete can strand a running timer on the server.
+  const [sessionBusy, setSessionBusy] = useState(false)
+  const [sessionMirror] = useState<FocusSessionMirror>(() => createFocusSessionMirror({
+    sink: (previous, next, terminal) => sinkRef.current?.(previous, next, terminal),
+    initial: loadFocusSession(),
+    onAcknowledged: saveFocusSession,
+    onBusy: setSessionBusy,
+  }))
 
-  // The sink is a network call, so these are serialised: a pause must never overtake its start.
-  const sessionQueue = useRef<Promise<unknown>>(Promise.resolve())
-  const emitSession = useCallback((next: FocusTimerSession | undefined, terminal?: "complete" | "cancel") => {
-    const previous = sessionRef.current
-    sessionRef.current = next
-    sessionQueue.current = sessionQueue.current.catch(() => {}).then(async () => {
-      try {
-        const saved = await sinkRef.current?.(previous, next, terminal)
-        if (terminal) return
-        // The server's row is the truth, on the first start as much as any other: the
-        // pre-server object carries no revision, and the next command built on it is stale
-        // the moment the server has handed one back.
-        if (saved) sessionRef.current = saved
-      } catch {
-        // The sink has already told the user the command did not land. Local state is
-        // what they asked for, and the next boundary is built from it.
-      }
-    })
-  }, [])
+  const previousState = useRef(state)
 
   const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number, at: number) => {
     if (openBlockRef.current) return
@@ -176,34 +170,33 @@ export function useStudyTimer({
   const syncSession = useCallback((previous: TimerState, next: TimerState, at: number) => {
     const settingsNow = settingsRef.current
     const identity = { subject: subject.trim(), title: intent.trim() || `${settingsNow.workMinutes} minute focus block` }
-    const open = sessionRef.current
-    const decision = decideFocusSession(previous, next, open, identity, at)
+    // Boundaries are decided against the projected session: the acknowledged one plus
+    // the boundaries still on their way. A Start and a Pause pressed on a slow connection
+    // then form one coherent history instead of two commands fighting over one revision.
+    const decision = decideFocusSession(previous, next, sessionMirror.projected(), identity, at)
+      // No transition was crossed, but a reload mid-block or a server row adopted after a
+      // refusal can still leave the session and the countdown disagreeing.
+      ?? owedFocusBoundary(next, sessionMirror.projected(), at)
     if (!decision) return
     switch (decision.action) {
       case "start":
         // The id is minted here, not by the server: one focus block is one canonical session for
         // its whole start -> pause -> resume -> complete life, on every client.
-        emitSession({
-          id: crypto.randomUUID(), ...identity, provider: "Focal", cycleNumber: next.cycles + 1,
-          workMinutes: settingsNow.workMinutes, startedAt: at, pausedSeconds: 0,
+        sessionMirror.push({
+          action: "start", at: decision.at,
+          session: {
+            id: crypto.randomUUID(), ...identity, provider: "Focal", cycleNumber: next.cycles + 1,
+            workMinutes: settingsNow.workMinutes, startedAt: decision.at, pausedSeconds: 0,
+          },
         })
         return
-      case "complete":
-        emitSession(undefined, "complete")
-        return
       case "update":
-        emitSession({ ...open!, ...identity })
+        sessionMirror.push({ action: "update", at: decision.at, identity })
         return
-      case "pause":
-        emitSession({ ...open!, pausedAt: at })
-        return
-      case "resume": {
-        const gap = Math.max(0, at - (open!.pausedAt ?? at))
-        emitSession({ ...open!, startedAt: open!.startedAt + gap, pausedAt: undefined, pausedSeconds: open!.pausedSeconds + gap / 1000 })
-        return
-      }
+      default:
+        sessionMirror.push({ action: decision.action, at: decision.at })
     }
-  }, [emitSession, subject, intent])
+  }, [sessionMirror, subject, intent])
 
   useEffect(() => {
     if (!state.running) return
@@ -249,11 +242,15 @@ export function useStudyTimer({
     closeBlock(at)
   }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
 
+  // Every state change is a chance to reconcile the session with the countdown. Overtime
+  // counts too: free study is unbilled, so the focus block must be closed when it begins,
+  // not when the user eventually comes back to a break.
   useEffect(() => {
-    if (state.studyOvertime) return
     syncSession(previousState.current, state, serverNow())
     previousState.current = state
   }, [state, syncSession])
+
+  useEffect(() => () => sessionMirror.dispose(), [sessionMirror])
 
   // Announce the transition that just happened, once, at the moment it lands.
   const announcedRef = useRef<string>("")
@@ -309,11 +306,14 @@ export function useStudyTimer({
     blocksToday,
     focusSecondsToday,
     progress,
+    sessionBusy,
     updateSettings,
     toggle: () => dispatch({ type: "TOGGLE" }),
     reset: () => {
       closeBlock(serverNow(), true)
-      emitSession(undefined, "cancel")
+      // The cancel is recorded before the countdown resets, so the transition the effect
+      // sees projects a closed session and cannot pause what was just discarded.
+      sessionMirror.push({ action: "cancel", at: serverNow() })
       dispatch({ type: "RESET", settings: settingsRef.current })
     },
     skipBreak: () => dispatch({ type: "SKIP_BREAK", settings: settingsRef.current }),

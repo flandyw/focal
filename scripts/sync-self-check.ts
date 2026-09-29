@@ -2,6 +2,7 @@ import { chunkItems, isDue, latestChanges, retryChange, retryOrBlockChange } fro
 import { repairDuplicateSessions, sessionCommands, sessionDeletionIds } from "../src/lib/sync/sessions"
 import { normalizeStudySession } from "../src/lib/studySessions"
 import type { RemoteSyncChange, SyncChange } from "../src/lib/sync/types"
+import type { StudySession } from "../src/lib/types"
 
 interface BunSqliteDatabase {
   exec(sql: string): void
@@ -102,6 +103,67 @@ assertEqual(sessionCommands(pausedSitting, { operation: "put", payload: { state:
   "a local pause against a running server row is one pause at the server revision")
 assertEqual(sessionCommands(sitting, { operation: "put", payload: { state: "completed", revision: 9 }, lamport: 9 } , device), [],
   "a terminal server row is never re-published")
+
+// The interval replay: a sitting's durable intervals carry its timer boundaries, and the
+// commands the server is missing are rebuilt one boundary at a time with their real elapsed
+// timing. A flattened final state bills the whole span up to the reconnect instead of the
+// minutes that were actually worked.
+const minuteMs = 60_000
+const t = (minute: number) => new Date(Date.UTC(2026, 8, 28, 0, minute)).toISOString()
+const replaySitting = (intervals: { start: string; end?: string }[], completedAt?: string): StudySession =>
+  normalizeStudySession({
+    id: "session-replay", title: "Focus", createdVia: "focal", subjectIds: ["mm"],
+    created_at: t(0), updated_at: t(20),
+    execution: completedAt === undefined
+      ? { state: "in-progress", intervals }
+      : { state: "completed", intervals, completedAt },
+  })
+const segment = (start: string, end?: string) =>
+  ({ id: "segment", session_id: "session-replay", started_at: start, ended_at: end ?? null, phase: null, source_device_id: null })
+const replayActions = (local: StudySession, row?: { operation: string; payload: unknown; lamport: number }) =>
+  sessionCommands(local, row, device).map((command) =>
+    [command.action, command.expected_revision, command.elapsed_since_previous_ms ?? null, command.occurred_at ?? null])
+
+assertEqual(replayActions(
+  replaySitting([{ start: t(0), end: t(5) }, { start: t(10), end: t(20) }]),
+  applied({ state: "running", phase: "focus", segments: [segment(t(0))] }, 1)),
+  [["pause", 1, 5 * minuteMs, null], ["resume", 2, 5 * minuteMs, null], ["pause", 3, 10 * minuteMs, null]],
+  "an offline pause -> resume -> pause must replay every real boundary with its elapsed time")
+assertEqual(replayActions(
+  replaySitting([{ start: t(0), end: t(5) }, { start: t(10) }]),
+  applied({ state: "running", phase: "focus", segments: [segment(t(0))] }, 3)),
+  [["pause", 3, 5 * minuteMs, null], ["resume", 4, 5 * minuteMs, null]],
+  "an offline pause and resume must not disappear when the final state is still running")
+assertEqual(replayActions(
+  replaySitting([{ start: t(0), end: t(5) }, { start: t(10), end: t(20) }]),
+  applied({ state: "paused", phase: "focus", segments: [segment(t(0), t(5))] }, 2)),
+  [["resume", 2, 5 * minuteMs, null], ["pause", 3, 10 * minuteMs, null]],
+  "a partially published interval history must resume at the first missing boundary")
+assertEqual(replayActions(
+  replaySitting([{ start: t(0), end: t(5) }, { start: t(10), end: t(20) }], t(20))),
+  [["start", 0, 0, null], ["pause", 1, 5 * minuteMs, null], ["resume", 2, 5 * minuteMs, null], ["complete", 3, 10 * minuteMs, null]],
+  "a new offline completed sitting must replay both intervals before its completion")
+assertEqual(replayActions(
+  replaySitting([{ start: t(0), end: t(5) }], t(20)),
+  applied({ state: "running", phase: "focus", segments: [segment(t(0))] }, 1)),
+  [["pause", 1, 5 * minuteMs, null], ["complete", 2, 15 * minuteMs, null]],
+  "finishing an already-paused offline sitting must not create another active segment")
+assertEqual(replayActions(
+  replaySitting([{ start: t(0) }]),
+  applied({ state: "running", phase: "focus", segments: [segment(t(0))] }, 1)),
+  [],
+  "a session the server already holds every boundary for needs no command")
+{
+  let flattened = false
+  try {
+    sessionCommands(replaySitting([{ start: t(0), end: t(5) }]),
+      applied({ state: "running", phase: "focus", segments: [segment(t(0)), segment(t(10))] }, 2), device)
+  } catch {
+    flattened = true
+  }
+  assertEqual(flattened, true,
+    "server boundaries that cannot be matched to local intervals must never be silently flattened")
+}
 
 const duplicateBase = {
   schemaVersion: 2 as const,

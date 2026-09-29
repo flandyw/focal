@@ -3,6 +3,7 @@ import type { AppData } from "@/lib/exam-data"
 import { saveAppData } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "@/lib/ongoing-timers"
+import { SessionRefusedError } from "@/lib/focus-session"
 import {
   estimateServerNow,
   observeServerClock,
@@ -104,7 +105,10 @@ export function reconcileSessionResult<T extends TimerSession>(
   const canonical = result.session
   if (!canonical) throw new Error("The server sent a session response with no session")
   if (!result.applied && !actionSatisfied(canonical, command)) {
-    throw new Error(`This timer changed on another device (${result.reason ?? "unknown"}).`)
+    // The refusal still carries the row the server holds. Hand it over so the caller's
+    // next attempt is built on that revision instead of the one this command guessed.
+    throw new SessionRefusedError(`This timer changed on another device (${result.reason ?? "unknown"}).`,
+      projectTimerSession(canonical, current, kind))
   }
   // A closing command has no session left to hand back, and neither has one that somebody
   // else closed. The cursor pull brings the closed row in either way.

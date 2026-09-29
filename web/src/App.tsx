@@ -284,13 +284,19 @@ export default function App() {
     setData((current) => ({ ...current, examProgression }))
   }
 
-  // A timer action is one call to the server state machine. If it cannot be published there
-  // is nothing to replay later, so say so plainly and leave the timer on screen to retry.
+  // A timer action is one call to the server state machine. A failed one is said plainly:
+  // the focus timer keeps its boundary queued and retries it, so the message must not
+  // repeat with every retry through an outage.
+  const lastSessionFailure = useRef<{ key: string; at: number } | null>(null)
   function reportSessionFailure(action: string, error: unknown) {
+    const message = error instanceof Error && error.message ? error.message : "Check your connection and try again."
     console.error(`Could not ${action} the study session:`, error)
-    toast.error(`Couldn't ${action}`, {
-      description: error instanceof Error && error.message ? error.message : "Check your connection and try again.",
-    })
+    const key = `${action}:${message}`
+    const now = Date.now()
+    const repeat = lastSessionFailure.current?.key === key && now - lastSessionFailure.current.at < 60_000
+    lastSessionFailure.current = { key, at: now }
+    if (repeat) return
+    toast.error(`Couldn't ${action}`, { description: message })
   }
 
   async function saveActiveExamTimer(activeExamTimer: AppData["activeExamTimer"], action?: "cancel" | "complete") {
@@ -314,7 +320,10 @@ export default function App() {
   }
 
   // A focus block is the timer's own record, so the canonical session is the
-  // only place it is written: it reaches Focal analytics through the server.
+  // only place it is written: it reaches Focal analytics through the server. The
+  // failure is re-thrown so the timer knows the boundary did not land: swallowing
+  // it would read as "the session is closed", which strands a running timer on
+  // the server with nothing left to close it.
   async function queueFocusSession(
     previous: FocusTimerSession | undefined,
     next: FocusTimerSession | undefined,
@@ -324,7 +333,7 @@ export default function App() {
       return await saveTimerSessionChange(previous, next, "focus", action)
     } catch (error) {
       reportSessionFailure(action ?? "save", error)
-      return undefined
+      throw error
     }
   }
 
@@ -593,7 +602,7 @@ export default function App() {
               />
             </Suspense>
           ) : null}
-          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
+          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} sessions={studySessionSync.sessions} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
           {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} onFocusSessionChange={queueFocusSession} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onPlanGoal={planGoal} /></Suspense> : null}

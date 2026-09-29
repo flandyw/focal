@@ -2,6 +2,8 @@ import type { ExamAttempt, Mistake } from "@/lib/exam-data"
 import { isCompletedSac, type SacRecord } from "@/lib/sac"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "@/lib/timetable"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "@/lib/learning-workspace"
+import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
+import { VCE_SUBJECTS } from "../../../src/lib/types"
 
 /** The day plan reads the records the app already keeps. It never stores a
  *  second copy, so a task edited anywhere is edited on the calendar too. */
@@ -11,6 +13,8 @@ export type DayPlanSource = {
   mistakes: Mistake[]
   learning: LearningWorkspace
   trackedExamIds: string[]
+  /** Canonical study sessions: the same shared rows the desktop calendar reads. */
+  sessions?: CanonicalStudySession[]
 }
 
 /** Everything the web app already knows about a single day, in one list. No
@@ -20,6 +24,7 @@ export type DayItem =
   | { kind: "task"; id: string; title: string; detail: string; subject?: string; minutes: number; status: StudyTaskStatus }
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
+  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; status: "planned" | "in-progress" | "completed" }
   | { kind: "logged-exam"; id: string; title: string; detail: string; minutes: number; completed: true }
   | { kind: "mistakes"; id: string; title: string; detail: string; minutes: number; count: number }
 
@@ -107,6 +112,81 @@ function isDueOn(mistake: Mistake, date: string) {
   return localDate(new Date(mistake.dueAt)) === date
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+/** Desktop rows file under VCE subject ids; show the same names the desktop does. */
+function subjectLabel(id: string | undefined): string {
+  if (!id) return ""
+  return VCE_SUBJECTS.find((subject) => subject.id === id)?.name ?? id
+}
+
+/** Overlapping ranges count once, exactly as the desktop's effective minutes do. */
+function mergedMinutes(ranges: readonly { start: string; end: string }[]): number {
+  const sorted = ranges
+    .map((range) => ({ start: new Date(range.start).getTime(), end: new Date(range.end).getTime() }))
+    .filter((range) => Number.isFinite(range.start) && Number.isFinite(range.end) && range.end > range.start)
+    .sort((a, b) => a.start - b.start)
+  let total = 0
+  let current = sorted[0]
+  for (const range of sorted.slice(1)) {
+    if (range.start > current.end) {
+      total += current.end - current.start
+      current = range
+    } else {
+      current.end = Math.max(current.end, range.end)
+    }
+  }
+  if (current) total += current.end - current.start
+  return Math.round(total / 60000)
+}
+
+/**
+ * Projects one canonical study session exactly the way Focal desktop's calendar does:
+ * it lands on the local date of its `startTime` (its first schedule block, or its start
+ * when there is none), its minutes are its worked intervals, and a cancelled sitting is
+ * never shown. Both apps then list the same sessions on the same days with the same
+ * durations, from the one shared record.
+ */
+function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
+  if (session.state === "cancelled") return null
+  const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
+  const legacy = isRecord(nested) ? nested : {}
+  const subjectIds = Array.isArray(legacy.subjectIds)
+    ? legacy.subjectIds.filter((id): id is string => typeof id === "string")
+    : []
+  const scheduleBlocks = isRecord(legacy.schedule) && Array.isArray(legacy.schedule.blocks)
+    ? legacy.schedule.blocks.flatMap((block) => {
+      if (!isRecord(block) || typeof block.start !== "string" || typeof block.end !== "string") return []
+      return [{ start: block.start, end: block.end }]
+    })
+    : []
+  const start = session.started_at ?? session.created_at
+  // Without a schedule the desktop files the sitting under its start plus an hour, so
+  // the calendar lands it on the same day here.
+  const schedule = scheduleBlocks.length > 0
+    ? scheduleBlocks
+    : [{ start, end: new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() }]
+  const worked = session.state === "planned"
+    ? schedule
+    : session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
+  const span = { start: schedule[0].start, end: schedule[schedule.length - 1].end }
+  const minutes = worked.length > 0 ? mergedMinutes(worked) : mergedMinutes([span])
+  return {
+    date: localDate(new Date(schedule[0].start)),
+    item: {
+      kind: "session",
+      id: session.id,
+      title: session.title,
+      detail: subjectIds.map(subjectLabel).filter(Boolean).join(" · ") || subjectLabel(session.subject_id ?? undefined),
+      minutes,
+      startTime: timeOf(schedule[0].start) ?? "",
+      status: session.state === "planned" ? "planned" : session.state === "completed" ? "completed" : "in-progress",
+    },
+  }
+}
+
 export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timetable | null): DayPlan {
   const items: DayItem[] = []
 
@@ -117,6 +197,10 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
   for (const record of data.sacRecords) {
     if (localDate(new Date(record.scheduledAt)) !== date) continue
     items.push(sacItem(record))
+  }
+  for (const session of data.sessions ?? []) {
+    const projected = sessionItem(session)
+    if (projected && projected.date === date) items.push(projected.item)
   }
   for (const attempt of data.attempts) {
     if (localDate(new Date(attempt.completedAt)) !== date) continue
@@ -157,8 +241,8 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     .filter((item) => item.kind === "task" && item.status === "completed")
     .reduce((total, item) => total + item.minutes, 0)
 
-  // Work first, then anything fixed in time, then the revision queue.
-  const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, exam: 2, "logged-exam": 3, mistakes: 4 }
+  // Work first, then anything fixed in time, then what is already on record, then the queue.
+  const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
   items.sort((a, b) => order[a.kind] - order[b.kind] || b.minutes - a.minutes)
   return { date, items, plannedMinutes, completedMinutes, dueMistakes: dueMistakes.length }
 }

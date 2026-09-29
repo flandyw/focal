@@ -1,4 +1,5 @@
 import { formatTimer } from "@/lib/exam-timer"
+import type { FocusTimerSession } from "@/lib/ongoing-timers"
 
 export { formatTimer }
 
@@ -6,6 +7,7 @@ const SETTINGS_KEY = "examtrack:study-timer:settings:v1"
 const STATE_KEY = "examtrack:study-timer:state:v1"
 const BLOCKS_KEY = "examtrack:study-timer:blocks:v1"
 const OPEN_BLOCK_KEY = "examtrack:study-timer:open-block:v1"
+const FOCUS_SESSION_KEY = "examtrack:study-timer:focus-session:v1"
 
 export const DEFAULT_SETTINGS = {
   workMinutes: 25,
@@ -459,6 +461,40 @@ export function saveOpenBlock(block: OpenBlock | null) {
       localStorage.removeItem(OPEN_BLOCK_KEY)
     } catch {
       // Nothing to do: the open block is rebuilt from the next mode change.
+    }
+  }
+}
+
+/** The focus session the server last acknowledged. Persisted so a reload mid-block
+ *  keeps the same server session instead of minting a second one beside a zombie. */
+export function loadFocusSession(): FocusTimerSession | undefined {
+  const stored = readJson<Record<string, unknown>>(FOCUS_SESSION_KEY)
+  if (!stored || typeof stored !== "object") return undefined
+  if (typeof stored.id !== "string" || typeof stored.subject !== "string" ||
+      typeof stored.title !== "string" || !Number.isFinite(stored.startedAt) ||
+      !Number.isFinite(stored.workMinutes) || !Number.isFinite(stored.pausedSeconds)) return undefined
+  return {
+    id: stored.id,
+    ...(Number.isSafeInteger(stored.revision) ? { revision: stored.revision as number } : {}),
+    subject: stored.subject,
+    provider: typeof stored.provider === "string" ? stored.provider : "Focal",
+    title: stored.title,
+    ...(Number.isFinite(stored.cycleNumber) ? { cycleNumber: stored.cycleNumber as number } : {}),
+    ...(typeof stored.intent === "string" ? { intent: stored.intent } : {}),
+    workMinutes: stored.workMinutes as number,
+    startedAt: stored.startedAt as number,
+    ...(Number.isFinite(stored.pausedAt) ? { pausedAt: stored.pausedAt as number } : {}),
+    pausedSeconds: stored.pausedSeconds as number,
+  }
+}
+
+export function saveFocusSession(session: FocusTimerSession | undefined) {
+  if (session) writeJson(FOCUS_SESSION_KEY, session)
+  else if (typeof localStorage !== "undefined") {
+    try {
+      localStorage.removeItem(FOCUS_SESSION_KEY)
+    } catch {
+      // Nothing to do: a session that is closed here is rebuilt from the next block.
     }
   }
 }

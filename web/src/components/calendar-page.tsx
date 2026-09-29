@@ -27,6 +27,7 @@ import {
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "@/lib/learning-workspace"
 import type { Timetable } from "@/lib/timetable"
 import { cn } from "@/lib/utils"
+import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const today = () => localDate(new Date())
 
@@ -56,18 +57,22 @@ const CHIP: Record<DayItem["kind"], string> = {
   task: "bg-chart-2/20",
   sac: "bg-chart-4/25",
   exam: "bg-destructive/20",
+  session: "bg-chart-1/25",
   "logged-exam": "bg-muted",
   mistakes: "bg-chart-3/25",
 }
 
 export function CalendarPage({
   data,
+  sessions,
   onChange,
   onNavigate,
   onStartFocus,
   timetable,
 }: {
   data: DayPlanSource
+  /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
+  sessions: CanonicalStudySession[]
   onChange: (update: LearningWorkspaceUpdate) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string) => void
@@ -80,8 +85,9 @@ export function CalendarPage({
   const [subject, setSubject] = useState("")
   const [error, setError] = useState<string | null>(null)
 
-  const days = useMemo(() => buildCalendarMonth(month, data, timetable), [month, data, timetable])
-  const plan = useMemo(() => buildDayPlan(selected, data, timetable), [selected, data, timetable])
+  const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
+  const days = useMemo(() => buildCalendarMonth(month, source, timetable), [month, source, timetable])
+  const plan = useMemo(() => buildDayPlan(selected, source, timetable), [selected, source, timetable])
   const overdue = useMemo(
     () => (selected >= today() ? overdueTasks(data.learning.tasks, today()) : []),
     [data.learning.tasks, selected],
@@ -137,7 +143,7 @@ export function CalendarPage({
                 <Button aria-label="Next month" onClick={() => setMonth((current) => shiftMonth(current, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
               </div>
             </div>
-            <CardDescription>Select a day to plan it. Dots mark work, SACs, exams, and reviews.</CardDescription>
+            <CardDescription>Select a day to plan it. Dots mark work, sessions, SACs, exams, and reviews.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-1">
             <div className="grid grid-cols-7 gap-1 text-xs font-medium text-muted-foreground">
@@ -295,7 +301,9 @@ function DayItemRow({
           <p className="truncate text-sm font-medium">{item.title}</p>
           <p className="text-xs text-muted-foreground">{meta}</p>
         </div>
-        <Badge variant="outline">{item.kind === "mistakes" ? "Review" : item.kind === "sac" ? "SAC" : "Exam"}</Badge>
+        <Badge variant="outline">{item.kind === "mistakes" ? "Review" : item.kind === "sac" ? "SAC" : item.kind === "session"
+          ? item.status === "completed" ? "Studied" : item.status === "in-progress" ? "Studying" : "Planned"
+          : "Exam"}</Badge>
         {item.kind === "mistakes" ? <Button onClick={() => onNavigate("mistakes")} size="sm" variant="ghost">Review</Button> : null}
         {item.kind === "sac" ? <Button onClick={() => onNavigate("sacs")} size="sm" variant="ghost">Open</Button> : null}
       </div>

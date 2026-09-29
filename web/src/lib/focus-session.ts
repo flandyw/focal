@@ -69,3 +69,203 @@ export function decideFocusSession(
   if (!isCounting && wasCounting) return { action: "pause", at }
   return null
 }
+
+/**
+ * The one boundary still owed between the session and the countdown, if any.
+ *
+ * A reload mid-block, or a server row adopted after a refusal, leaves them
+ * disagreeing with no transition left to notice it. Decisions are transitions;
+ * this is the standing disagreement between two states.
+ */
+export function owedFocusBoundary(
+  state: TimerState,
+  open: FocusTimerSession | undefined,
+  at: number,
+): FocusSessionDecision | null {
+  if (!open) return null
+  if (!isFocusBlockState(state)) return { action: "complete", at }
+  if (isFocusCounting(state)) return open.pausedAt === undefined ? null : { action: "resume", at }
+  return open.pausedAt === undefined ? { action: "pause", at } : null
+}
+
+/* ------------------------------------------------------------------ */
+/* the acknowledged mirror                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where a boundary goes. Returns what the *server* acknowledged -- `undefined`
+ * means the session is closed there -- and throws when the command did not land.
+ * A sink that swallows its failure is indistinguishable from a closed session,
+ * which is how a failed Complete turns into a zombie timer on the server.
+ */
+export type FocusSessionSink = (
+  previous: FocusTimerSession | undefined,
+  next: FocusTimerSession | undefined,
+  terminal?: "complete" | "cancel",
+) => Promise<FocusTimerSession | undefined> | FocusTimerSession | undefined
+
+/**
+ * A command the server refused. It carries the row the server actually holds;
+ * that row *is* the last acknowledged state, so the mirror adopts it and the
+ * next attempt is built on the truth instead of a stale revision.
+ */
+export class SessionRefusedError<T = FocusTimerSession> extends Error {
+  readonly canonical: T | undefined
+  constructor(message: string, canonical: T | undefined) {
+    super(message)
+    this.name = "SessionRefusedError"
+    this.canonical = canonical
+  }
+}
+
+/**
+ * One boundary the user crossed, kept until the server has taken it. `start`
+ * carries its minted session, `update` the corrected identity; the rest are
+ * lifecycle moves stamped with the wall time they happened at.
+ */
+export type FocusSessionBoundary =
+  | { action: "start"; at: number; session: FocusTimerSession }
+  | { action: "update"; at: number; identity: FocusSessionIdentity }
+  | { action: "pause" | "resume" | "complete" | "cancel"; at: number }
+
+export interface FocusSessionMirror {
+  /** The last state the server acknowledged. Never the optimistic desired state. */
+  acknowledged(): FocusTimerSession | undefined
+  /** What the session becomes once every recorded boundary has landed: the basis
+   *  the next boundary is decided against, so a burst of presses stays one
+   *  coherent history instead of each press acting on stale knowledge. */
+  projected(): FocusTimerSession | undefined
+  /** Record a boundary. Boundaries go to the server in the order they were
+   *  crossed, each built from the acknowledged state at send time, and a failed
+   *  one is retried until the server takes it. */
+  push(boundary: FocusSessionBoundary): void
+  /** True while a command is on the wire: the lifecycle buttons are disabled. */
+  busy(): boolean
+  dispose(): void
+}
+
+/**
+ * The focus session's synced lifecycle, transactional from the caller's side.
+ *
+ * `acknowledged()` only ever moves on a server answer, so a command is never
+ * built on a wish: on a slow connection Start and Pause cannot race into a
+ * stale `expected_revision`, and a failed Complete keeps the session alive here
+ * to retry rather than silently orphaning a running timer on the server.
+ * This is not a queue of work to replay later -- boundaries are the history the
+ * user already crossed, sent once, in order.
+ */
+export function createFocusSessionMirror({
+  sink,
+  initial,
+  onAcknowledged,
+  onBusy,
+  retryDelayMs = 2_000,
+}: {
+  sink: FocusSessionSink
+  /** The persisted acknowledged session, so a reload mid-block keeps the same
+   *  server session instead of minting a second one behind a zombie. */
+  initial?: FocusTimerSession | undefined
+  onAcknowledged?: (session: FocusTimerSession | undefined) => void
+  onBusy?: (busy: boolean) => void
+  retryDelayMs?: number
+}): FocusSessionMirror {
+  let acknowledged: FocusTimerSession | undefined = initial
+  const boundaries: FocusSessionBoundary[] = []
+  let busy = false
+  let attempts = 0
+  let disposed = false
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  let draining: Promise<void> | null = null
+
+  const setBusy = (next: boolean) => {
+    if (busy === next) return
+    busy = next
+    onBusy?.(next)
+  }
+
+  const commit = (session: FocusTimerSession | undefined) => {
+    acknowledged = session
+    onAcknowledged?.(session)
+  }
+
+  const derive = (base: FocusTimerSession | undefined, boundary: FocusSessionBoundary): FocusTimerSession | undefined => {
+    switch (boundary.action) {
+      case "start":
+        return boundary.session
+      case "complete":
+      case "cancel":
+        return undefined
+      case "update":
+        return base ? { ...base, ...boundary.identity } : undefined
+      case "pause":
+        return base ? { ...base, pausedAt: boundary.at } : undefined
+      case "resume": {
+        if (!base) return undefined
+        const gap = Math.max(0, boundary.at - (base.pausedAt ?? boundary.at))
+        return { ...base, startedAt: base.startedAt + gap, pausedAt: undefined, pausedSeconds: base.pausedSeconds + gap / 1000 }
+      }
+    }
+  }
+
+  const scheduleRetry = () => {
+    if (disposed || retryTimer !== null) return
+    const delay = Math.min(30_000, retryDelayMs * 2 ** Math.min(attempts, 4))
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      void drain()
+    }, delay)
+  }
+
+  const drain = async () => {
+    if (disposed || draining) return draining ?? undefined
+    const run = (async () => {
+      while (!disposed && boundaries.length > 0) {
+        const head = boundaries[0]
+        // A boundary that needs an open session is moot once the server has closed
+        // it: a session closed here or on another device is never resurrected.
+        if (head.action !== "start" && acknowledged === undefined) {
+          boundaries.shift()
+          continue
+        }
+        const previous = head.action === "start" ? undefined : acknowledged
+        const next = derive(previous, head)
+        setBusy(true)
+        try {
+          const saved = await sink(previous, next, head.action === "complete" || head.action === "cancel" ? head.action : undefined)
+          commit(saved)
+          boundaries.shift()
+          attempts = 0
+        } catch (error) {
+          // A refusal carries the row the server holds; adopting it is what keeps
+          // the retry from re-sending a revision the server has already moved past.
+          const canonical = error instanceof SessionRefusedError ? error.canonical : undefined
+          if (canonical) commit(canonical)
+          attempts += 1
+          setBusy(false)
+          scheduleRetry()
+          return
+        }
+      }
+      setBusy(false)
+    })()
+    draining = run
+    await run
+    if (draining === run) draining = null
+  }
+
+  return {
+    acknowledged: () => acknowledged,
+    projected: () => boundaries.reduce<FocusTimerSession | undefined>((session, boundary) => derive(session, boundary), acknowledged),
+    push: (boundary) => {
+      if (disposed) return
+      boundaries.push(boundary)
+      void drain()
+    },
+    busy: () => busy,
+    dispose: () => {
+      disposed = true
+      if (retryTimer !== null) clearTimeout(retryTimer)
+      retryTimer = null
+    },
+  }
+}

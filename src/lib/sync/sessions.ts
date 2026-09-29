@@ -138,16 +138,59 @@ function sessionSortKey(session: StudySession): string {
   return `${localRank}:${session.updated_at ?? session.created_at}:${session.created_at}`
 }
 
+export type SessionCommandTiming = Pick<StudySessionCommand, "occurred_at" | "elapsed_since_previous_ms">
+
+/**
+ * Measures one replayed boundary. `at` and `previousAt` are the stored wall-clock instants
+ * of the boundary and of the boundary before it; `null` means the command is not a replayed
+ * boundary and is stamped by the server at receipt instead.
+ */
+export type SessionTimingForAction = (
+  action: StudySessionCommand["action"],
+  at: number | null,
+  previousAt: number | null,
+) => SessionCommandTiming | undefined
+
+/**
+ * Timing for replayed boundaries, taken from the stored interval history. The gap between
+ * two boundaries is exact, and that is what the server bills from. Only the first boundary
+ * of a fresh replay needs an absolute placement, and `placeFirstBoundary` supplies it from a
+ * server-clock estimate; without one the server anchors the replay at receipt time and the
+ * exact gaps still keep every interval's length right.
+ */
+export function sessionReplayTiming(
+  placeFirstBoundary: (boundaryAt: number) => string | null = () => null,
+): SessionTimingForAction {
+  return (_action, at, previousAt) => {
+    if (at === null) return undefined
+    if (previousAt !== null) {
+      const gap = at - previousAt
+      if (gap < 0 || gap > 604_800_000) {
+        throw new Error("This offline timer boundary is outside the server's seven-day timing window")
+      }
+      return { elapsed_since_previous_ms: gap }
+    }
+    return { occurred_at: placeFirstBoundary(at), elapsed_since_previous_ms: 0 }
+  }
+}
+
 /**
  * The commands implied by the difference between the server's last canonical row for a
  * session and the local record. This is a pure diff, not a queue: an empty list means the
  * server is already there, and sending the same commands twice is harmless, so an edit made
  * offline is published by the next sync pass with nothing to keep in step.
+ *
+ * The local intervals are the durable timer boundaries. When they can be matched against the
+ * server's segments, only the missing boundaries are replayed -- one command each, carrying
+ * their real elapsed timing -- so an offline pause -> resume -> pause bills the minutes that
+ * were worked and not the whole span up to the reconnect. A final-state diff cannot do that:
+ * it knows where the timer ended up, not where its boundaries were.
  */
 export function sessionCommands(
   raw: StudySession,
   applied: { operation: string; payload: unknown; lamport: number } | undefined,
   deviceId: string,
+  timingFor: SessionTimingForAction = sessionReplayTiming(),
 ): StudySessionCommand[] {
   const canonical = typeof applied?.payload === "object" && applied.payload !== null
     ? applied.payload as Record<string, unknown> : undefined
@@ -161,10 +204,97 @@ export function sessionCommands(
   const revision = typeof canonical?.revision === "number" ? canonical.revision : applied?.lamport ?? 0
   const commands: StudySessionCommand[] = []
   let expected = revision
-  const append = (action: StudySessionCommand["action"]) => {
+  let currentState = remoteState
+  const append = (action: StudySessionCommand["action"], at: number | null = null, previousAt: number | null = null) => {
+    const timing = at === null ? undefined : timingFor(action, at, previousAt)
     commands.push({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: expected++,
       action, device_id: deviceId, app: appOf(session), kind: kindOf(session), phase, title: session.title,
-      subject_id: session.subjectIds[0] ?? null, metadata: metadata() })
+      subject_id: session.subjectIds[0] ?? null, metadata: metadata(), ...(timing ?? {}) })
+    switch (action) {
+      case "start":
+      case "resume":
+        currentState = "running"
+        break
+      case "pause":
+        currentState = "paused"
+        break
+      case "complete":
+        currentState = "completed"
+        break
+      case "cancel":
+        currentState = "cancelled"
+        break
+      case "create":
+        currentState = "planned"
+        break
+      default:
+        break
+    }
+  }
+  // The durable intervals carry the offline boundaries. Rebuild only what the server's
+  // segments are missing, even when the final state happens to agree. A row without
+  // segments may be a legacy or imported row: it gets the plain diff below instead.
+  const intervals = session.execution.intervals
+    .map((interval) => ({
+      start: Date.parse(interval.start),
+      end: interval.end === undefined ? undefined : Date.parse(interval.end),
+    }))
+  const measured = intervals.length > 0 &&
+    intervals.every((interval) => Number.isFinite(interval.start) &&
+      (interval.end === undefined || Number.isFinite(interval.end) && interval.end >= interval.start)) &&
+    intervals.slice(1).every((next, index) => intervals[index].end !== undefined && next.start >= intervals[index].end)
+  const segments = Array.isArray(canonical?.segments) ? canonical.segments : undefined
+  // Only a plain focus session carries its boundaries in its intervals. Exam and SAC sittings
+  // split them by phase too, and replaying those as pause/resume would mislabel every segment;
+  // they need their own boundary records before they can be replayed like this.
+  if (kindOf(session) === "focus" && measured && (canonical === undefined || segments !== undefined) &&
+      remoteState !== "completed" && remoteState !== "cancelled") {
+    const count = segments?.length ?? 0
+    // Another client may have added segments this device has never seen in its intervals.
+    // A final-state diff cannot reconcile two incompatible timelines safely.
+    if (count > intervals.length || ((remoteState === "running" || remoteState === "paused") && count === 0)) {
+      throw new Error("This session has server timer boundaries that do not match its local intervals")
+    }
+    let index = remoteState === undefined || remoteState === "planned" ? 0 : count - 1
+    let boundary: number | null = remoteState === "running" ? intervals[index].start
+      : remoteState === "paused" ? intervals[index].end ?? null
+      : null
+    if ((remoteState === "running" || remoteState === "paused") && boundary === null) {
+      throw new Error("This session's last server boundary cannot be matched to a local interval")
+    }
+    if (remoteState === undefined || remoteState === "planned" || count > 0) {
+      if (remoteState === undefined || remoteState === "planned") {
+        append("start", intervals[0].start, null)
+        boundary = intervals[0].start
+      }
+      while (index < intervals.length) {
+        const interval = intervals[index]
+        if (currentState === "running") {
+          const end = interval.end
+          if (end === undefined) break
+          // A sitting finished at the end of its last interval closes on that boundary;
+          // one finished after a pause owes a separate close below.
+          const terminal = index === intervals.length - 1 &&
+            (desired === "completed" || desired === "cancelled") && sessionEndedAt(session) === end
+          if (terminal) {
+            append(desired === "cancelled" ? "cancel" : "complete", end, boundary)
+            return commands
+          }
+          append("pause", end, boundary)
+          boundary = end
+        }
+        if (index === intervals.length - 1) break
+        index += 1
+        const start = intervals[index].start
+        append("resume", start, boundary)
+        boundary = start
+      }
+      if ((desired === "completed" || desired === "cancelled") &&
+          currentState !== "completed" && currentState !== "cancelled") {
+        append(desired === "cancelled" ? "cancel" : "complete", sessionEndedAt(session), boundary)
+      }
+      if (commands.length > 0) return commands
+    }
   }
   // A session the server has never seen needs its whole history, because the state machine
   // cannot invent the segments a local record already contains.
@@ -200,6 +330,14 @@ function desiredState(session: StudySession): "planned" | "running" | "paused" |
   // An open last segment is the timer running; a closed one is where it was last paused.
   const last = lastInterval(session)
   return last && !last.end ? "running" : "paused"
+}
+
+/** When the sitting really ended: the recorded completion, or the discard for a deletion. */
+function sessionEndedAt(session: StudySession): number | null {
+  const stamp = session.execution.state === "completed" ? session.execution.completedAt : session.deleted_at
+  if (!stamp) return null
+  const ended = Date.parse(stamp)
+  return Number.isFinite(ended) ? ended : null
 }
 
 function canonicalState(canonical: Record<string, unknown> | undefined): string | undefined {

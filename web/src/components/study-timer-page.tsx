@@ -27,9 +27,9 @@ import { MetricCard, MetricGrid, SectionHeading, WorkspacePage } from "@/compone
 import { SubjectCombobox } from "@/components/subject-combobox"
 import { TimerReadout } from "@/components/timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
+import type { FocusSessionSink } from "@/lib/focus-session"
 import { StudyPlanCard } from "@/components/study-plan-card"
 import type { StudyPlan } from "@/lib/study-plan"
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
 import {
   DEFAULT_SETTINGS,
   MAX_DAILY_GOAL,
@@ -109,11 +109,7 @@ function blockSummary(block: FocusBlock) {
 function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
   subjects: string[]
   preferredSubjects: string[]
-  onSessionChange?: (
-    previous: FocusTimerSession | undefined,
-    next: FocusTimerSession | undefined,
-    terminal?: "complete" | "cancel",
-  ) => Promise<FocusTimerSession | undefined> | void
+  onSessionChange?: FocusSessionSink
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
 }) {
@@ -121,7 +117,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
   const [intent, setIntent] = useState(preset?.intent ?? "")
   const [announcement, setAnnouncement] = useState("")
 
-  const { state, settings, blocks, blocksToday, focusSecondsToday, progress, updateSettings, ...actions } =
+  const { state, settings, blocks, blocksToday, focusSecondsToday, progress, sessionBusy, updateSettings, ...actions } =
     useStudyTimer({ subject, intent, onSessionChange })
 
   // Free study repurposes the break window rather than counting it down, so
@@ -207,10 +203,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
               status={state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <Button className="min-w-32" disabled={!state.running && !subjectChosen} onClick={actions.toggle} size="lg">
+                {/* A lifecycle command is one transaction with the server: its button
+                    stays down until the server has answered for the boundary. */}
+                <Button className="min-w-32" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
                   {state.running ? <><Pause />Pause</> : <><Play />Start</>}
                 </Button>
-                <Button onClick={actions.reset} size="lg" variant="outline"><RotateCcw />Reset</Button>
+                <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />Reset</Button>
                 {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
                 {!state.studyOvertime ? (
                   <>
@@ -484,11 +482,7 @@ export function StudyTimerPage({
   focusPreset?: { subject?: string; intent: string }
   onModeChange: (mode: StudyTimerMode) => void
   /** Focus blocks mirror as `kind: "focus"`; a paper mirrors as `kind: "exam"`. */
-  onFocusSessionChange: (
-    previous: FocusTimerSession | undefined,
-    next: FocusTimerSession | undefined,
-    terminal?: "complete" | "cancel",
-  ) => void
+  onFocusSessionChange: FocusSessionSink
   exam: ExamTimerModeProps
 }) {
   return (

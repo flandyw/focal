@@ -9,6 +9,7 @@ import {
   Plus,
   RotateCcw,
   SkipForward,
+  Square,
   Timer as TimerIcon,
   Volume2,
   VolumeX,
@@ -182,7 +183,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
   const caption = state.studyOvertime
     ? isFreeStudy
       ? state.running
-        ? "Free study has no end. Stop whenever you are done."
+        ? "Free study has no end. Finish it when you are done and it lands in your record."
         : "Free study is held. Your time is safe until you continue."
       : "Break time is being logged as study time."
     : onBreak
@@ -220,7 +221,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-                {state.studyOvertime ? (
+                {isFreeStudy ? (
+                  <Button onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
+                ) : state.studyOvertime ? (
                   <Button onClick={actions.returnToBreak} size="sm" variant="outline"><Coffee />Back to break</Button>
                 ) : onBreak ? (
                   <Button disabled={!subjectChosen} onClick={actions.startOvertime} size="sm" variant="outline"><Coffee />Keep studying</Button>
@@ -228,9 +231,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
                   <Button disabled={!subjectChosen} onClick={actions.startFreeStudy} size="sm" variant="outline"><TimerIcon />Start free study</Button>
                 )}
                 <p className="text-sm text-pretty text-muted-foreground">
-                  {state.studyOvertime
-                    ? "Overtime and free study still count towards today's focus time."
-                    : "Sticking with the plan? Let the break run its course."}
+                  {isFreeStudy
+                    ? "Ending it banks the time under its subject and stops the clock."
+                    : state.studyOvertime
+                      ? "Overtime and free study still count towards today's focus time."
+                      : "Sticking with the plan? Let the break run its course."}
                 </p>
               </div>
             </TimerReadout>

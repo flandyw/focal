@@ -49,6 +49,7 @@ export interface StudyTimerEngine {
   addTime: (minutes: number) => void
   startOvertime: () => void
   startFreeStudy: () => void
+  finishFreeStudy: () => void
   returnToBreak: () => void
 }
 
@@ -226,6 +227,11 @@ export function useStudyTimer({
       // Free study is unbilled, so a pause in it costs nothing to record. Plain
       // overtime only ever begins from a break, which already closed its block.
       if (state.freeStudy) {
+        // Free study is a block of its own, so the focus block it interrupted is banked
+        // here: `openBlock` will not open over an open block, and free study minutes must
+        // not be billed to the block that was cut short. A no-op once the free-study
+        // block is open, which keeps pause/resume inside it a single block.
+        if (openBlockRef.current?.source !== "free-study") closeBlock(at)
         if (state.running) openBlock("free-study", state.cycles, at)
         pauseBlock(state.running, at)
       }
@@ -241,7 +247,7 @@ export function useStudyTimer({
       return
     }
     closeBlock(at)
-  }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock])
+  }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
 
   useEffect(() => {
     if (state.studyOvertime) return
@@ -314,6 +320,7 @@ export function useStudyTimer({
     addTime: (minutes) => dispatch({ type: "ADD_TIME", minutes }),
     startOvertime: () => dispatch({ type: "START_STUDY_OVERTIME", settings: settingsRef.current }),
     startFreeStudy: () => dispatch({ type: "START_FREE_STUDY", settings: settingsRef.current }),
+    finishFreeStudy: () => dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current }),
     returnToBreak: () => dispatch({ type: "RETURN_TO_BREAK" }),
   }
 }

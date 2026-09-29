@@ -79,6 +79,21 @@ describe("study timer state machine", () => {
     expect(timerReducer(free, { type: "RETURN_TO_BREAK" }).studyOvertime).toBe(false)
   })
 
+  test("free study can be finished: a stopped focus block, one full block's time", () => {
+    const free = timerReducer(freshState(), { type: "START_FREE_STUDY", settings })
+    const finished = timerReducer({ ...free, overtimeSeconds: 900 }, { type: "END_FREE_STUDY", settings })
+
+    // Back on the focus screen and stopped, with nothing left over from free study.
+    expect(finished.mode).toBe("work")
+    expect(finished.running).toBe(false)
+    expect(finished.freeStudy).toBe(false)
+    expect(finished.studyOvertime).toBe(false)
+    expect(finished.overtimeSeconds).toBe(0)
+    expect(finished.secondsLeft).toBe(settings.workMinutes * 60)
+    // Leaving focus is not ending free study: nothing changes outside it.
+    expect(timerReducer(freshState(), { type: "END_FREE_STUDY", settings })).toEqual(freshState())
+  })
+
   test("free study counts up in overtimeSeconds, because secondsLeft stays frozen", () => {
     // The regression: free study repurposes the break window instead of
     // counting it down, so elapsed time lands in overtimeSeconds while

@@ -74,6 +74,7 @@ export type TimerAction =
   | { type: "START_STUDY_OVERTIME"; settings: TimerSettings }
   | { type: "START_FREE_STUDY"; settings: TimerSettings }
   | { type: "RETURN_TO_BREAK" }
+  | { type: "END_FREE_STUDY"; settings: TimerSettings }
   | { type: "SYNC_SETTINGS"; settings: TimerSettings; previousSettings: TimerSettings }
 
 export type FocusBlockSource = "pomodoro" | "free-study"
@@ -302,6 +303,22 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       if (state.mode !== "work" || state.studyOvertime) return state
       const totalSeconds = getDurationSeconds("break", action.settings)
       return { ...state, running: true, mode: "break", secondsLeft: totalSeconds, totalSeconds, studyOvertime: true, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
+    }
+    case "END_FREE_STUDY": {
+      // Free study ends where it began: a stopped focus block, its own block logged.
+      if (!state.freeStudy) return state
+      const totalSeconds = getDurationSeconds("work", action.settings)
+      return {
+        ...state,
+        running: false,
+        mode: "work",
+        secondsLeft: totalSeconds,
+        totalSeconds,
+        studyOvertime: false,
+        overtimeSeconds: 0,
+        freeStudy: false,
+        breakSeconds: 0,
+      }
     }
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state

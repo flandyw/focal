@@ -39,6 +39,16 @@ export function loadAppView(
   }
 }
 
+// SidebarProvider writes this cookie on every toggle; without reading it back
+// the sidebar would reopen full-width on each reload.
+export function loadSidebarOpen(cookie: string | null | undefined): boolean {
+  const stored = cookie
+    ?.split("; ")
+    .find((part) => part.startsWith("sidebar_state="))
+    ?.slice("sidebar_state=".length)
+  return stored !== "false"
+}
+
 export function saveAppView(storage: Pick<Storage, "setItem"> | null | undefined, view: AppView) {
   if (!storage) return
   try {

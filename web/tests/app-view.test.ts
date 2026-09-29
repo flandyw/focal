@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { APP_VIEWS, APP_VIEW_STORAGE_KEY, isAppView, loadAppView, saveAppView } from "../src/lib/app-view"
+import { APP_VIEWS, APP_VIEW_STORAGE_KEY, isAppView, loadAppView, loadSidebarOpen, saveAppView } from "../src/lib/app-view"
 import { ALL_NAVIGATION, getViewLabel } from "../src/lib/navigation"
 
 describe("app view preferences", () => {
@@ -24,6 +24,13 @@ describe("app view preferences", () => {
     expect(loadAppView(null)).toBe("dashboard")
     expect(loadAppView(null, "?timer=exam")).toBe("focus")
     expect(loadAppView(null, "?timer=sac")).toBe("sacs")
+  })
+
+  test("restores the collapsed sidebar from its cookie", () => {
+    expect(loadSidebarOpen("other=1; sidebar_state=false")).toBeFalse()
+    expect(loadSidebarOpen("sidebar_state=true")).toBeTrue()
+    expect(loadSidebarOpen("other=1")).toBeTrue()
+    expect(loadSidebarOpen(null)).toBeTrue()
   })
 
   test("persists navigation without making storage availability fatal", () => {

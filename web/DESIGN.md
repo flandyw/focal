@@ -2,7 +2,7 @@
 
 ## Direction
 
-Use standard shadcn/ui components and default neutral theme tokens without a custom brand palette.
+Use standard shadcn/ui components and neutral surfaces. A restrained blue accent marks primary actions, focus, and sidebar wayfinding in both themes; chart and semantic colors retain their own meanings.
 
 ## Layout
 

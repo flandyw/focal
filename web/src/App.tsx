@@ -44,7 +44,7 @@ import type { StudyTimerMode } from "@/components/study-timer-page"
 import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
 import type { SacRecord } from "@/lib/sac"
 import type { FocusTimerSession } from "@/lib/ongoing-timers"
-import { loadAppView, saveAppView, type AppView } from "@/lib/app-view"
+import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "@/lib/app-view"
 import {
   AppSidebar,
   CommandMenuTrigger,
@@ -523,7 +523,7 @@ export default function App() {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={loadSidebarOpen(typeof document === "undefined" ? null : document.cookie)}>
       <a href="#main-content" className="fixed left-2 top-2 z-50 -translate-y-20 rounded-md bg-background px-3 py-2 text-sm shadow focus:translate-y-0">Skip to content</a>
       <AppSidebar
         view={view}

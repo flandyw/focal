@@ -65,8 +65,10 @@ export function decideFocusSession(
   // A subject or intent corrected mid-block has to reach the server too, or the
   // session stays filed under whatever was picked when it began.
   if (open.subject !== identity.subject || open.title !== identity.title) return { action: "update", at }
-  if (isCounting && !wasCounting) return { action: "resume", at }
-  if (!isCounting && wasCounting) return { action: "pause", at }
+  // The session may already carry this boundary: another device crossed it first and
+  // the countdown is only catching up. Re-sending it would fight that device.
+  if (isCounting && !wasCounting) return open.pausedAt !== undefined ? { action: "resume", at } : null
+  if (!isCounting && wasCounting) return open.pausedAt === undefined ? { action: "pause", at } : null
   return null
 }
 
@@ -141,6 +143,11 @@ export interface FocusSessionMirror {
   push(boundary: FocusSessionBoundary): void
   /** True while a command is on the wire: the lifecycle buttons are disabled. */
   busy(): boolean
+  /** Adopt a row another device changed this session into. Only while no boundary is
+   *  on its way: a boundary already crossed owns the session until the server answers,
+   *  and it adopts the server's row through the refusal path instead. Returns whether
+   *  the row was taken. */
+  adopt(session: FocusTimerSession | undefined): boolean
   dispose(): void
 }
 
@@ -262,6 +269,11 @@ export function createFocusSessionMirror({
       void drain()
     },
     busy: () => busy,
+    adopt: (session) => {
+      if (boundaries.length > 0 || busy) return false
+      commit(session)
+      return true
+    },
     dispose: () => {
       disposed = true
       if (retryTimer !== null) clearTimeout(retryTimer)

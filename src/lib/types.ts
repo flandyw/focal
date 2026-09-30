@@ -61,7 +61,7 @@ export interface NotionSource {
 export interface ExamTrackSource {
   type: "examtrack";
   id: string;
-  kind: "exam" | "sac";
+  kind: "exam" | "sac" | "focus";
   subject: string;
   phase?: "reading" | "writing" | "paused";
   phaseBeforePause?: "reading" | "writing";

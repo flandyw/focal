@@ -4,6 +4,7 @@ import { saveAppData } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "@/lib/ongoing-timers"
 import { SessionRefusedError } from "@/lib/focus-session"
+import { adoptRemoteFocusSession, loadFocusSession } from "@/lib/study-timer"
 import {
   estimateServerNow,
   observeServerClock,
@@ -551,6 +552,10 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
   let changed = false
   let next = current
   for (const session of sessions) {
+    if (session.kind === "focus") {
+      adoptRemoteFocusSessionChange(session, nowMs)
+      continue
+    }
     const sameExam = next.activeExamTimer?.id === session.id
     const sameSac = next.activeSacTimer?.id === session.id
     if (session.state === "completed" || session.state === "cancelled") {
@@ -588,6 +593,23 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
     }
   }
   return changed ? next : current
+}
+
+/** A remote change to this device's open focus session. The server row is the timer:
+ *  it is adopted into the store here so the change survives a closed timer page, and
+ *  the event moves a mounted timer's countdown and session mirror with it. Rows for
+ *  sessions this device never opened are somebody else's timer and are left alone. */
+function adoptRemoteFocusSessionChange(session: CanonicalStudySession, nowMs: number): void {
+  const local = loadFocusSession()
+  if (local?.id !== session.id || (session.revision ?? 0) <= (local.revision ?? 0)) return
+  const closed = session.state === "completed" || session.state === "cancelled"
+  const projected = closed ? undefined : projectTimerSession(session, local, "focus")
+  adoptRemoteFocusSession(projected, nowMs)
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("examtrack:focus-session-remote", {
+      detail: { id: session.id, session: projected },
+    }))
+  }
 }
 
 function sameTimer(first: TimerSession | undefined, second: TimerSession): boolean {

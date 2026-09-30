@@ -6,7 +6,8 @@ import {
   matchFocalSubjectId,
   summariseExamTrackData,
 } from "../src/lib/examtrack"
-import { normalizeStudySession } from "../src/lib/studySessions"
+import { normalizeStudySession, studySessionFromCanonical } from "../src/lib/studySessions"
+import { sharedTimerNotice } from "../src/lib/sync/sessions"
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -50,5 +51,35 @@ assert(getActiveExamTrackTimer([integratedSession]) === integratedSession, "acti
 assert(getExamTrackElapsedSeconds(integratedSession, new Date("2026-08-05T10:35:00Z")) === 1800, "active timer intervals were double-counted")
 assert(integratedSession.subjectIds[0] === "chem", "ExamTrack subjects must map into Focal analytics")
 assert(integratedSession.createdVia === "examtrack", "ExamTrack provenance must survive normalization")
+
+// The web study timer publishes kind "focus" rows. They belong in the same
+// shared-timer slot as exam and SAC timers.
+assert(getExamTrackTimerUrl("focus", "https://examtrack.example") === "https://examtrack.example/?timer=focus", "study timer URL is incorrect")
+
+const canonicalFocusRow = {
+  id: "focus-1", kind: "focus", state: "running", phase: "focus", revision: 2,
+  title: "25 minute focus block", subject_id: "Chemistry", originating_app: "examtrack",
+  created_at: "2026-08-05T10:00:00Z", updated_at: "2026-08-05T10:05:00Z",
+  started_at: "2026-08-05T10:00:00Z", paused_at: null, completed_at: null, cancelled_at: null,
+  accumulated_active_ms: 300_000, segment_started_at: "2026-08-05T10:05:00Z",
+  metadata: {
+    examtrack: { workMinutes: 25, cycleNumber: 1 },
+    integrations: { examtrack: { type: "examtrack", id: "focus-1", kind: "focus", subject: "Chemistry", phase: "focus" } },
+  },
+  segments: [{ id: "seg-1", session_id: "focus-1", started_at: "2026-08-05T10:05:00Z", ended_at: null, phase: "focus", source_device_id: null }],
+}
+const focusRunning = studySessionFromCanonical(canonicalFocusRow)
+assert(focusRunning, "canonical focus row did not project into a study session")
+assert(focusRunning.integrations?.examtrack?.kind === "focus", "web study timer lost its ExamTrack identity")
+assert(focusRunning.integrations?.examtrack?.phase === undefined, "a study timer must not carry reading/writing phase")
+assert(getActiveExamTrackTimer([focusRunning]) === focusRunning, "web study timer was not detected as the shared timer")
+assert(sharedTimerNotice(undefined, focusRunning)?.title.endsWith("started") === true, "web study timer start notice missing")
+// A paused study timer has only closed intervals; no phase may claim it is running.
+const focusPaused = studySessionFromCanonical({
+  ...canonicalFocusRow, state: "paused", revision: 3, paused_at: "2026-08-05T10:06:00Z", segment_started_at: null,
+  segments: [{ ...canonicalFocusRow.segments[0], ended_at: "2026-08-05T10:06:00Z" }],
+})
+assert(focusPaused && sharedTimerNotice(focusRunning, focusPaused)?.title.endsWith("paused") === true, "web study timer pause notice missing")
+assert(focusPaused && getActiveExamTrackTimer([focusPaused]) === focusPaused, "a paused web study timer must stay in the shared slot")
 
 process.stdout.write("ExamTrack integration self-check passed\n")

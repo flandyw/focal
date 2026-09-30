@@ -168,7 +168,7 @@ export function getExamTrackUrl(
 }
 
 export function getExamTrackTimerUrl(
-  kind: "exam" | "sac",
+  kind: "exam" | "sac" | "focus",
   configured = import.meta.env.VITE_EXAMTRACK_URL,
 ): string | null {
   const base = getExamTrackUrl("", configured)

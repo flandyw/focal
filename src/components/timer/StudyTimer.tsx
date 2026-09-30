@@ -938,14 +938,18 @@ const StudyTimerInner = memo(function StudyTimerInner({
         execution = { state: "completed", intervals: nextIntervals, completedAt: nowIso };
       } else if (running) {
         nextIntervals = closeRunningInterval(intervals, nowIso);
-        if (source) {
-          phaseBeforePause = source.phase === "reading" || source.phase === "writing" ? source.phase : "writing";
+        // Only exam-shaped timers carry reading/writing across a pause. A focus
+        // timer's open interval is its running state, so its phase stays alone.
+        if (source?.phase === "reading" || source?.phase === "writing") {
+          phaseBeforePause = source.phase;
           phase = "paused";
         }
         execution = { state: "in-progress", intervals: nextIntervals };
       } else {
-        phase = phaseBeforePause ?? "writing";
-        phaseBeforePause = undefined;
+        if (source?.phase === "paused") {
+          phase = phaseBeforePause ?? "writing";
+          phaseBeforePause = undefined;
+        }
         if (phase !== "reading" && (!last || last.end)) {
           nextIntervals = [...intervals, { start: nowIso, source: "manual" }];
         }
@@ -1147,7 +1151,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
             <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{elapsed}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {examtrackSource
-                ? `${examtrackSource.kind === "exam" ? "Exam timer" : "SAC timer"} · ${examtrackSource.subject}`
+                ? `${examtrackSource.kind === "exam" ? "Exam timer" : examtrackSource.kind === "sac" ? "SAC timer" : "Study timer"} · ${examtrackSource.subject}`
                 : folioSource ? `Folio ${folioSource.kind} session${folioSource.subject ? ` · ${folioSource.subject}` : ""}`
                 : sharedSession.description ?? "Study session shared from Folio"}
             </p>

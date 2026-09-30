@@ -70,6 +70,7 @@ export interface TimerState {
 export type TimerAction =
   | { type: "TICK"; settings: TimerSettings; seconds: number }
   | { type: "TOGGLE" }
+  | { type: "SET_RUNNING"; running: boolean }
   | { type: "RESET"; settings: TimerSettings }
   | { type: "SKIP_BREAK"; settings: TimerSettings }
   | { type: "ADD_TIME"; minutes: number }
@@ -267,6 +268,12 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       return advanceTimer(state, action.settings, action.seconds)
     case "TOGGLE":
       return { ...state, running: !state.running, breakSeconds: state.freeStudy ? 0 : state.breakSeconds }
+    case "SET_RUNNING":
+      // Another device moved the session, so the countdown follows it: a countdown
+      // that disagrees with its session owes a boundary that would undo the change.
+      return state.running === action.running
+        ? state
+        : { ...state, running: action.running, breakSeconds: state.freeStudy ? 0 : state.breakSeconds }
     case "RESET": {
       const totalSeconds = getDurationSeconds("work", action.settings)
       return {
@@ -496,6 +503,20 @@ export function saveFocusSession(session: FocusTimerSession | undefined) {
     } catch {
       // Nothing to do: a session that is closed here is rebuilt from the next block.
     }
+  }
+}
+
+/** Another device moved this session on the server. The row is the timer now: it is
+ *  stored here and the persisted countdown is moved to match, because a countdown that
+ *  disagrees with its session immediately owes a boundary that would undo the change.
+ *  A mounted timer follows through the `examtrack:focus-session-remote` event; this is
+ *  what makes the change survive a reload with the timer page closed. */
+export function adoptRemoteFocusSession(session: FocusTimerSession | undefined, now = Date.now()) {
+  saveFocusSession(session)
+  const state = loadTimerState(loadSettings(), now)
+  const counting = session !== undefined && session.pausedAt === undefined
+  if (state.mode === "work" && !state.studyOvertime && state.running !== counting) {
+    saveTimerState({ ...state, running: counting }, now)
   }
 }
 

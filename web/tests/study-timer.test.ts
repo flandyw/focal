@@ -3,16 +3,21 @@ import { describe, expect, test } from "bun:test"
 import {
   DEFAULT_SETTINGS,
   MAX_DURATION_MINUTES,
+  adoptRemoteFocusSession,
   advanceTimer,
   closeOpenBlock,
   countBlocksToday,
   getFocusSecondsToday,
+  loadFocusSession,
+  loadTimerState,
   parseSettings,
+  saveTimerState,
   timerReducer,
   type FocusBlock,
   type TimerSettings,
   type TimerState,
 } from "../src/lib/study-timer"
+import type { FocusTimerSession } from "../src/lib/ongoing-timers"
 
 const settings: TimerSettings = { ...DEFAULT_SETTINGS, workMinutes: 25, breakMinutes: 5, longBreakEvery: 4 }
 
@@ -226,5 +231,40 @@ describe("focus block log", () => {
     expect(new Date(closed.startedAt).getMinutes()).toBe(0)
     expect(new Date(closed.endedAt).getHours()).toBe(10)
     expect(new Date(closed.endedAt).getMinutes()).toBe(30)
+  })
+})
+
+describe("adopting a session another device moved", () => {
+  test("the countdown follows the row: a remote pause stops it, a resume starts it, a close stops it", () => {
+    const store = new Map<string, string>()
+    const globals = globalThis as { localStorage?: unknown }
+    const original = globals.localStorage
+    Object.assign(globalThis, {
+      localStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value),
+        removeItem: (key: string) => void store.delete(key),
+      },
+    })
+    try {
+      saveTimerState(freshState({ running: true }), 1_000)
+      const remote: FocusTimerSession = {
+        id: "session-1", revision: 5, subject: "Chemistry", provider: "Focal",
+        title: "25 minute focus block", workMinutes: 25, startedAt: 500, pausedSeconds: 0, pausedAt: 2_000,
+      }
+      adoptRemoteFocusSession(remote, 2_000)
+      expect(loadFocusSession()?.revision).toBe(5)
+      expect(loadTimerState(settings, 2_000).running).toBe(false)
+
+      adoptRemoteFocusSession({ ...remote, revision: 6, pausedAt: undefined }, 3_000)
+      expect(loadTimerState(settings, 3_000).running).toBe(true)
+
+      adoptRemoteFocusSession(undefined, 4_000)
+      expect(loadFocusSession()).toBeUndefined()
+      expect(loadTimerState(settings, 4_000).running).toBe(false)
+    } finally {
+      if (original === undefined) delete globals.localStorage
+      else globals.localStorage = original
+    }
   })
 })

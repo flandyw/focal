@@ -46,6 +46,9 @@ function play(steps: readonly TimerAction[], session: FocusTimerSession | undefi
     const decision = decide(previous, next, current)
     emitted.push(decision)
     if (decision === "start") current = open()
+    // The mirror's derive: a pause stamps the boundary, a resume clears it.
+    if (decision === "pause" && current) current = { ...current, pausedAt: 2_000 }
+    if (decision === "resume" && current) current = { ...current, pausedAt: undefined }
     if (decision === "complete") current = undefined
     previous = next
   }
@@ -132,6 +135,14 @@ describe("focus session lifecycle", () => {
     // hand the server a second session for the same block.
     const afterReset = timerReducer(running(), { type: "RESET", settings: DEFAULT_SETTINGS })
     expect(decide(running(), afterReset, undefined)).toBeNull()
+  })
+
+  test("a boundary another device already crossed is not sent again", () => {
+    // The countdown is catching up with a row adopted from the desktop: the pause is
+    // already in the session, so re-sending it would fight the device that made it.
+    const paused = timerReducer(running(), { type: "TOGGLE" })
+    expect(decide(running(), paused, open({ pausedAt: 1_500 }))).toBeNull()
+    expect(decide(paused, running(), open())).toBeNull()
   })
 })
 
@@ -243,6 +254,20 @@ describe("the acknowledged session mirror", () => {
     release!(session(1_000, { revision: 1 }))
     await settle()
     expect(mirror.busy()).toBe(false)
+  })
+
+  test("a remote row is adopted only while no boundary is on its way", async () => {
+    const mirror = createFocusSessionMirror({ sink: () => new Promise(() => {}) })
+    mirror.push({ action: "start", at: 1_000, session: session(1_000) })
+    // A boundary already crossed owns the session until the server answers for it.
+    expect(mirror.adopt(session(1_000, { revision: 9, pausedAt: 2_000 }))).toBe(false)
+    expect(mirror.acknowledged()).toBeUndefined()
+
+    const idle = createFocusSessionMirror({ sink: () => new Promise(() => {}), initial: session(1_000, { revision: 4 }) })
+    expect(idle.adopt(session(1_000, { revision: 5, pausedAt: 2_000 }))).toBe(true)
+    expect(idle.acknowledged()?.revision).toBe(5)
+    expect(idle.adopt(undefined)).toBe(true)
+    expect(idle.acknowledged()).toBeUndefined()
   })
 })
 

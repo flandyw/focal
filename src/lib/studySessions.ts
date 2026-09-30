@@ -231,7 +231,7 @@ function parseNotionSource(value: unknown): NotionSource | undefined {
 function parseExamTrackSource(value: unknown): ExamTrackSource | undefined {
   if (
     !isRecord(value) || value.type !== "examtrack" || typeof value.id !== "string" ||
-    (value.kind !== "exam" && value.kind !== "sac") || typeof value.subject !== "string"
+    (value.kind !== "exam" && value.kind !== "sac" && value.kind !== "focus") || typeof value.subject !== "string"
   ) return undefined
   return {
     type: "examtrack", id: value.id, kind: value.kind, subject: value.subject,
@@ -378,10 +378,11 @@ export function studySessionFromCanonical(value: unknown): StudySession | null {
       ? { state: "completed", intervals, completedAt: session.completed_at ?? session.updated_at ?? session.created_at }
       : { state: "in-progress", intervals }
   const integrations: Record<string, unknown> = { ...legacyIntegrations }
-  if (session.originating_app === "examtrack" && (session.kind === "exam" || session.kind === "sac")) {
+  if (session.originating_app === "examtrack") {
+    // kind "focus" is the web study timer: same shared-timer slot as exam and SAC.
     integrations.examtrack = {
       ...(isRecord(legacyIntegrations.examtrack) ? legacyIntegrations.examtrack : {}),
-      type: "examtrack", id: session.id, kind: session.kind, subject: session.subject_id ?? "Exam",
+      type: "examtrack", id: session.id, kind: session.kind, subject: session.subject_id ?? (session.kind === "focus" ? "Study" : "Exam"),
       ...(session.phase ? { phase: session.phase } : {}),
     }
   } else if (session.originating_app === "folio") {

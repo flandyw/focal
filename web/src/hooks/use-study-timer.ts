@@ -28,6 +28,7 @@ import {
   type FocusSessionSink,
 } from "@/lib/focus-session"
 import { canonicalNow } from "@/lib/study-session-sync"
+import type { FocusTimerSession } from "@/lib/ongoing-timers"
 
 const TICK_MS = 1000
 
@@ -131,6 +132,24 @@ export function useStudyTimer({
   }))
 
   const previousState = useRef(state)
+
+  // Another device moved this session (a pause, resume, or finish from the Focal
+  // desktop app). The row is the timer now, so the countdown follows it: a countdown
+  // that disagrees with its session owes a boundary that would undo the change.
+  useEffect(() => {
+    const onRemoteChange = (event: Event) => {
+      const { id, session } = (event as CustomEvent<{ id: string; session: FocusTimerSession | undefined }>).detail
+      if (sessionMirror.acknowledged()?.id !== id && session?.id !== id) return
+      if (!sessionMirror.adopt(session)) return
+      const timer = previousState.current
+      // Outside a focus block the countdown is a break, not the session; the standing
+      // disagreement between a break and an open session is owedFocusBoundary's job.
+      if (timer.mode !== "work" || timer.studyOvertime) return
+      dispatch({ type: "SET_RUNNING", running: session !== undefined && session.pausedAt === undefined })
+    }
+    window.addEventListener("examtrack:focus-session-remote", onRemoteChange)
+    return () => window.removeEventListener("examtrack:focus-session-remote", onRemoteChange)
+  }, [sessionMirror])
 
   const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number, at: number) => {
     if (openBlockRef.current) return

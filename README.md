@@ -8,7 +8,7 @@
 
 Focal includes a first-class ExamTrack workspace with practice summaries, due-mistake counts, secure drill-through to the hosted app, and an action that schedules a targeted review session in Focal.
 
-ExamTrack exam and SAC timers also mirror their lifecycle into Focal. Starting one creates an in-progress study session, pause/resume preserves exact active intervals, completion feeds normal Focal analytics, and discard removes the mirrored session. While ExamTrack owns a timer, Focal shows it in the study-timer slot and prevents a second local timer from starting.
+ExamTrack exam, SAC, and study-timer blocks also mirror their lifecycle into Focal. Starting one creates an in-progress study session, pause/resume preserves exact active intervals, completion feeds normal Focal analytics, and discard removes the mirrored session. While ExamTrack owns a timer, Focal shows it in the study-timer slot and prevents a second local timer from starting. The study timer is two-way: pause, resume, or finish it from Focal and the web countdown follows.
 
 Folio and ExamTrack timer changes reach Focal through the existing Supabase Realtime sync-log subscription. Start, pause, resume, writing-phase, finish, and discard changes show an in-app notice; the study timer's desktop-notification setting controls native alerts. Focal reads the sync cursor on each Realtime wakeup and on reconnect, with polling as a fallback.
 

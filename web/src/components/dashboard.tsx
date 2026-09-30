@@ -313,7 +313,9 @@ function NextActionNotice({ action }: { action: NextAction | null }) {
 
 function StatRow({ data }: { data: AppData }) {
   const stats = useMemo(() => computeStats(data.attempts, data.examDifficulty), [data.attempts, data.examDifficulty])
-  const mature = data.mistakes.filter((mistake) => mistake.resolved).length
+  // Count mastery with the shared scheduler, so the dashboard agrees with the
+  // mistakes page, the calendar and the folio app rather than reading the raw flag.
+  const mature = getMistakeProgress(data.mistakes).matureCards
   const total = data.mistakes.length
   const due = getDueMistakes(data.mistakes).length
   const completion = total ? (mature / total) * 100 : 0

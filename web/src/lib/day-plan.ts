@@ -1,4 +1,4 @@
-import type { ExamAttempt, Mistake } from "@/lib/exam-data"
+import { getMistakeSchedule, type ExamAttempt, type Mistake } from "@/lib/exam-data"
 import { isCompletedSac, type SacRecord } from "@/lib/sac"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "@/lib/timetable"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "@/lib/learning-workspace"
@@ -107,9 +107,14 @@ function examItem(entry: TimetableEntry): DayItem {
   }
 }
 
+// Use the same scheduler as the mistakes page and the folio app: a card with no
+// explicit due date still lands on its computed day, and mastered or paused cards
+// never join the revision queue.
 function isDueOn(mistake: Mistake, date: string) {
-  if (!mistake.dueAt || mistake.resolved) return false
-  return localDate(new Date(mistake.dueAt)) === date
+  if (mistake.suspended) return false
+  const schedule = getMistakeSchedule(mistake)
+  if (schedule.resolved) return false
+  return localDate(new Date(schedule.dueAt)) === date
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

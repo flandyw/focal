@@ -221,10 +221,7 @@ export function getSessionEffectiveMinutes(session: StudySession): number {
     if (current) total += current.end - current.start
     return Math.round(total / 60000)
   }
-  const start = new Date(session.startTime).getTime()
-  const end = new Date(session.endTime).getTime()
-  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0
-  return Math.round((end - start) / 60000)
+  return 0
 }
 
 export function formatDeadline(dateString: string): string {

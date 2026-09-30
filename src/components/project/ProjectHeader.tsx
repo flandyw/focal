@@ -84,7 +84,7 @@ export function ProjectHeader({
   const completedTasks = checklist.filter((item) => item.completed).length;
   const nextTask = checklist.find((item) => !item.completed)?.text;
   const plannedMinutes = sessions
-    .filter((session) => session.status === "planned" && new Date(session.startTime) >= new Date())
+    .filter((session) => session.execution.state === "planned" && new Date(session.schedule.blocks[0].start) >= new Date())
     .reduce((total, session) => total + getSessionEffectiveMinutes(session), 0);
   return (
     <div className="border-b">

@@ -221,8 +221,8 @@ const preparedSession = prepareStudySessionUpdate(
 )
 if ("error" in preparedSession) throw new Error(`session update failed: ${preparedSession.error}`)
 if (preparedSession.session.id !== "session-1") throw new Error("session update matched the wrong session")
-if (preparedSession.updates.status !== "completed") throw new Error("session completion was not prepared")
-if (preparedSession.updates.completedAt !== "2026-06-21T14:46:00+10:00") throw new Error("session completion time was not set")
+if (preparedSession.updates.execution?.state !== "completed") throw new Error("session completion was not prepared")
+if ((preparedSession.updates.execution?.state === "completed" ? preparedSession.updates.execution.completedAt : undefined) !== "2026-06-21T14:46:00+10:00") throw new Error("session completion time was not set")
 
 const invalidSessionTime = prepareStudySessionUpdate(
   {

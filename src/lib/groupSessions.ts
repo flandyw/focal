@@ -10,7 +10,7 @@ export interface CalendarSessionIndicator {
   count: number
   totalMinutes: number
   sessionIds: string[]
-  status: StudySession["status"]
+  status: StudySession["execution"]["state"]
 }
 
 export interface SessionProjectGroup {
@@ -49,7 +49,7 @@ export function getCalendarSessionIndicators(
     count: number
     totalMinutes: number
     sessionIds: string[]
-    statuses: StudySession["status"][]
+    statuses: StudySession["execution"]["state"][]
   }>()
 
   for (const session of sessions) {
@@ -65,13 +65,13 @@ export function getCalendarSessionIndicators(
         entry.count += 1
         entry.totalMinutes += minutesPerSubject
         entry.sessionIds.push(session.id)
-        entry.statuses.push(session.status)
+        entry.statuses.push(session.execution.state)
       } else {
         bySubject.set(subjectId, {
           count: 1,
           totalMinutes: minutesPerSubject,
           sessionIds: [session.id],
-          statuses: [session.status],
+          statuses: [session.execution.state],
         })
       }
     }
@@ -80,7 +80,7 @@ export function getCalendarSessionIndicators(
   return Array.from(bySubject.entries())
     .map(([subjectId, data]) => {
       const info = getSubjectInfo(subjectId)
-      const status: StudySession["status"] = data.statuses.includes("in-progress")
+      const status: StudySession["execution"]["state"] = data.statuses.includes("in-progress")
         ? "in-progress"
         : data.statuses.every((item) => item === "completed")
           ? "completed"
@@ -167,7 +167,7 @@ function buildProjectGroups(sessions: StudySession[], projects: Project[]): Sess
       projectId: g.projectId,
       projectName: g.projectName,
       sessions: g.sessions.sort(
-        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+        (a, b) => new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime(),
       ),
       totalMinutes: Math.round(g.totalMinutes),
       count: g.sessions.length,

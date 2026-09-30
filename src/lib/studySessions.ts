@@ -7,7 +7,7 @@ import type {
   StudyInterval,
   StudySession,
   StudySessionExecution,
-  StudySessionStatus,
+  StudySessionDraft,
   StudyTimeRange,
 } from "@/lib/types"
 import { VCE_SUBJECTS } from "@/lib/types"
@@ -35,19 +35,6 @@ export interface StartPlannedStudySessionInput {
   subjectIds?: string[]
   projectId?: string
   intent?: string
-}
-
-type LegacyStudySessionPatch = Partial<Omit<StudySession, "id" | "created_at">> & {
-  startTime?: string
-  endTime?: string
-  status?: StudySessionStatus
-  notes?: string
-  confidence?: ConfidenceScore
-  blockers?: string
-  nextAction?: string
-  activeDurations?: StudyTimeRange[]
-  completedAt?: string
-  source?: NotionSource
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -153,63 +140,6 @@ function validRange(start: string, end: string): StudyTimeRange {
   return { start: safeStart, end: new Date(new Date(safeStart).getTime() + 60 * 60 * 1000).toISOString() }
 }
 
-function statusFor(execution: StudySessionExecution): StudySessionStatus {
-  return execution.state
-}
-
-function legacyActiveDurations(session: StudySession): StudyTimeRange[] | undefined {
-  if (session.execution.state === "planned") return session.schedule.blocks
-  const closed = session.execution.intervals.flatMap((interval) => interval.end
-    ? [{ start: interval.start, end: interval.end }]
-    : [])
-  return closed.length > 0 ? closed : undefined
-}
-
-function canonicalSession(session: StudySession): Record<string, unknown> {
-  return {
-    schemaVersion: STUDY_SESSION_SCHEMA_VERSION,
-    id: session.id,
-    revision: session.revision,
-    projectId: session.projectId,
-    subjectIds: session.subjectIds,
-    title: session.title,
-    description: session.description,
-    topics: session.topics,
-    schedule: session.schedule,
-    execution: session.execution,
-    reflection: session.reflection,
-    createdVia: session.createdVia,
-    integrations: session.integrations,
-    created_at: session.created_at,
-    updated_at: session.updated_at,
-    deleted_at: session.deleted_at,
-    last_modified_device_id: session.last_modified_device_id,
-  }
-}
-
-function attachCompatibilityView(session: StudySession): StudySession {
-  const firstBlock = () => session.schedule.blocks[0]
-  const lastBlock = () => session.schedule.blocks[session.schedule.blocks.length - 1]
-  const aliases: PropertyDescriptorMap = {
-    startTime: { enumerable: true, get: () => firstBlock().start },
-    endTime: { enumerable: true, get: () => lastBlock().end },
-    status: { enumerable: true, get: () => statusFor(session.execution) },
-    notes: { enumerable: true, get: () => session.reflection?.notes },
-    confidence: { enumerable: true, get: () => session.reflection?.confidence },
-    blockers: { enumerable: true, get: () => session.reflection?.blockers },
-    nextAction: { enumerable: true, get: () => session.reflection?.nextAction },
-    activeDurations: { enumerable: true, get: () => legacyActiveDurations(session) },
-    completedAt: {
-      enumerable: true,
-      get: () => session.execution.state === "completed" ? session.execution.completedAt : undefined,
-    },
-    source: { enumerable: true, get: () => session.integrations?.notion },
-    toJSON: { enumerable: false, value: () => canonicalSession(session) },
-  }
-  Object.defineProperties(session, aliases)
-  return session
-}
-
 function parseNotionSource(value: unknown): NotionSource | undefined {
   if (!isRecord(value) || value.type !== "notion" || typeof value.id !== "string") return undefined
   const snapshotEntries = isRecord(value.syncSnapshot) ? Object.entries(value.syncSnapshot) : []
@@ -304,7 +234,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
   const execution: StudySessionExecution = state === "completed"
     ? {
         state,
-        intervals: actualIntervals.length > 0
+        intervals: executionValue || actualIntervals.length > 0
           ? actualIntervals
           : [{ ...validRange(fallbackStart, fallbackEnd), source: legacyPomodoro ? "pomodoro" : "imported" }],
         completedAt: completedAt ?? schedule.blocks[schedule.blocks.length - 1].end,
@@ -330,7 +260,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
   const rawSubjectIds = [...new Set(stringArray(value.subjectIds).map((id) => studySubjectId(id)))]
   const integratedSubjectId = rawSubjectIds.length === 0 ? examTrackSubjectId(examtrack) : undefined
 
-  return attachCompatibilityView({
+  return {
     schemaVersion: STUDY_SESSION_SCHEMA_VERSION,
     id: optionalString(value.id) ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     revision: Number.isSafeInteger(value.revision) && (value.revision as number) >= 0 ? value.revision as number : undefined,
@@ -350,7 +280,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
     last_modified_device_id: typeof value.last_modified_device_id === "string" || value.last_modified_device_id === null
       ? value.last_modified_device_id
       : null,
-  } as StudySession)
+  }
 }
 
 /** Projects the server row into Focal's existing planner/history shape. */
@@ -474,55 +404,51 @@ export function mergedStudySessionTitle(sessions: readonly StudySession[]): stri
   return `${titles[0]} + ${titles.length - 1} more`
 }
 
-export function updateStudySession(session: StudySession, patch: LegacyStudySessionPatch, now = new Date().toISOString()): StudySession {
-  const raw = canonicalSession(session)
-  const nextSchedule = patch.schedule ?? session.schedule
-  const start = patch.startTime ?? nextSchedule.blocks[0]?.start ?? session.startTime
-  const end = patch.endTime ?? nextSchedule.blocks[nextSchedule.blocks.length - 1]?.end ?? session.endTime
-  const requestedState = patch.execution?.state ?? patch.status ?? session.execution.state
-  const legacyIntervals = patch.activeDurations
-    ? patch.activeDurations.map((range) => ({ ...range, source: "manual" as const }))
-    : undefined
-  const currentIntervals = session.execution.state === "planned" ? [] : session.execution.intervals
-  const nextIntervals = patch.execution?.intervals ?? legacyIntervals ?? currentIntervals
-  const execution: StudySessionExecution = requestedState === "completed"
-    ? {
-        state: "completed",
-        intervals: nextIntervals,
-        completedAt: patch.completedAt
-          ?? (patch.execution?.state === "completed" ? patch.execution.completedAt : undefined)
-          ?? (session.execution.state === "completed" ? session.execution.completedAt : now),
-        ...(patch.execution?.state === "completed" && patch.execution.reportedMinutes !== undefined
-          ? { reportedMinutes: patch.execution.reportedMinutes }
-          : {}),
-      }
-    : requestedState === "in-progress"
-      ? { state: "in-progress", intervals: nextIntervals }
-      : { state: "planned", intervals: [] }
-  const reflectionPatch = patch.reflection ?? {}
-  const reflection = {
-    notes: "notes" in patch ? patch.notes : "notes" in reflectionPatch ? reflectionPatch.notes : session.reflection?.notes,
-    confidence: "confidence" in patch ? patch.confidence : "confidence" in reflectionPatch ? reflectionPatch.confidence : session.reflection?.confidence,
-    blockers: "blockers" in patch ? patch.blockers : "blockers" in reflectionPatch ? reflectionPatch.blockers : session.reflection?.blockers,
-    nextAction: "nextAction" in patch ? patch.nextAction : "nextAction" in reflectionPatch ? reflectionPatch.nextAction : session.reflection?.nextAction,
-  }
-
+export function updateStudySession(session: StudySession, patch: Partial<Omit<StudySession, "id" | "created_at">>, now = new Date().toISOString()): StudySession {
   return normalizeStudySession({
-    ...raw,
-    ...patch,
-    schedule: patch.schedule ?? {
-      blocks: patch.activeDurations && requestedState === "planned"
-        ? patch.activeDurations
-        : nextSchedule.blocks.map((block, index, blocks) => ({
-            start: index === 0 ? start : block.start,
-            end: index === blocks.length - 1 ? end : block.end,
-          })),
-    },
-    execution,
-    reflection,
-    integrations: patch.integrations ?? (patch.source ? { ...session.integrations, notion: patch.source } : session.integrations),
+    ...session, ...patch,
+    reflection: { ...session.reflection, ...patch.reflection },
     updated_at: now,
   })
+}
+
+/** Form DTO boundary. Draft blocks are planned time unless completion is explicit. */
+export function studySessionDraftInput(draft: StudySessionDraft): CreateStudySessionInput {
+  const blocks = draft.activeDurations?.length ? draft.activeDurations : [{ start: draft.startTime, end: draft.endTime }]
+  const state = draft.status ?? "planned"
+  return {
+    projectId: draft.projectId, subjectIds: draft.subjectIds, title: draft.title,
+    description: draft.description, topics: draft.topics, schedule: { blocks },
+    execution: state === "planned" ? { state, intervals: [] } : state === "completed"
+      ? { state, intervals: blocks.map((block) => ({ ...block, source: "manual" })), completedAt: draft.completedAt ?? new Date().toISOString() }
+      : { state, intervals: blocks.map((block) => ({ ...block, source: "manual" })) },
+    reflection: { notes: draft.notes, confidence: draft.confidence, blockers: draft.blockers, nextAction: draft.nextAction },
+    integrations: draft.source ? { notion: draft.source } : undefined,
+  }
+}
+
+/** Notion/form partial DTO boundary; timer mutations never pass through this adapter. */
+export function studySessionDraftPatch(session: StudySession, draft: Partial<StudySessionDraft>): Partial<StudySession> {
+  const { startTime, endTime, status, activeDurations, completedAt, source, notes, confidence, blockers, nextAction, ...fields } = draft
+  const blocks = activeDurations?.length && (status ?? session.execution.state) === "planned"
+    ? activeDurations : session.schedule.blocks.map((block, index, all) => ({
+      start: index === 0 ? startTime ?? block.start : block.start,
+      end: index === all.length - 1 ? endTime ?? block.end : block.end,
+    }))
+  const state = status ?? session.execution.state
+  const actual = activeDurations?.map((block) => ({ ...block, source: "manual" as const })) ?? session.execution.intervals
+  const execution: StudySessionExecution = state === "planned" ? { state, intervals: [] }
+    : state === "completed" ? { state, intervals: actual.length ? actual : blocks.map((block) => ({ ...block, source: "manual" })),
+      completedAt: completedAt ?? (session.execution.state === "completed" ? session.execution.completedAt : new Date().toISOString()) }
+      : { state, intervals: actual }
+  const reflection = { ...("notes" in draft ? { notes } : {}), ...("confidence" in draft ? { confidence } : {}), ...("blockers" in draft ? { blockers } : {}), ...("nextAction" in draft ? { nextAction } : {}) }
+  return {
+    ...fields,
+    ...(startTime || endTime || activeDurations && state === "planned" ? { schedule: { blocks } } : {}),
+    ...(status !== undefined || activeDurations && state !== "planned" ? { execution } : {}),
+    ...(Object.keys(reflection).length ? { reflection } : {}),
+    ...(source ? { integrations: { ...session.integrations, notion: source } } : {}),
+  }
 }
 
 export function startPlannedStudySession(
@@ -550,5 +476,5 @@ export function startPlannedStudySession(
 }
 
 export function studySessionPayload(session: StudySession): Record<string, unknown> {
-  return canonicalSession(normalizeStudySession(session))
+  return { ...normalizeStudySession(session) }
 }

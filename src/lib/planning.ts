@@ -9,7 +9,7 @@ export function getCompletedStudyMinutesBySubject(
   const minutesBySubject: Record<string, number> = {}
 
   for (const session of sessions) {
-    if (session.status !== "completed") continue
+    if (session.execution.state !== "completed") continue
     const subjectIds = getSessionSubjectIds(
       session,
       session.projectId ? projectsById.get(session.projectId) : undefined,

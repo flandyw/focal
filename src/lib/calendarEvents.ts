@@ -1,4 +1,21 @@
-import type { CalendarEvent, StudySessionDraft } from "@/lib/types"
+import type { CalendarEvent, EventType, StudySessionDraft } from "@/lib/types"
+import { isRecord, safeString, safeStringOpt, safeBool, safeDateMeta, parseCalendarEventSource } from "@/lib/utils"
+
+export function normaliseEvent(raw: unknown): CalendarEvent {
+  const obj = isRecord(raw) ? raw : {}
+  const types = ["sac", "exam", "assignment", "event", "homework", "other", "practice-sac"]
+  return {
+    id: safeString(obj, "id", `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`),
+    title: safeString(obj, "title", "Untitled Event"),
+    description: safeStringOpt(obj, "description"),
+    startTime: safeString(obj, "startTime", new Date().toISOString()),
+    endTime: safeStringOpt(obj, "endTime"),
+    eventType: types.includes(String(obj.eventType)) ? obj.eventType as EventType : "event",
+    subjectId: safeStringOpt(obj, "subjectId"), location: safeStringOpt(obj, "location"),
+    isFinished: safeBool(obj, "isFinished", false), finishedAt: safeStringOpt(obj, "finishedAt"),
+    source: parseCalendarEventSource(obj.source), ...safeDateMeta(obj),
+  }
+}
 
 export function eventToStudySessionDraft(event: CalendarEvent): StudySessionDraft {
   const start = new Date(event.startTime).getTime()

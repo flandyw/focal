@@ -1,8 +1,6 @@
 # Focal: deletion-first architecture simplification
 
-Status: partially implemented: shared calendar context menu, planning record row writes,
-and atomic event conversion. Stages 3–5 remain proposed; project writes and remote/import
-compatibility APIs still retain array operations.
+Status: Stages 1–5 implemented. Project writes and import/export still use array operations.
 Scope: desktop first; preserve the web/Android protocol and all user data.
 
 ## Goal
@@ -162,62 +160,83 @@ snapshot changes. Logic checks replay a serialized offline discard through cance
 verify generation/account-scoped acknowledgement, and exercise Notion structural comparison.
 Full app restart/auth-switch/network UI interaction remains unverified.
 
-Remaining compatibility boundaries: legacy session aliases and form DTO normalization;
-project mutation arrays; remote application/echo suppression and import/export array APIs;
-legacy session publication fallback for pre-migration records. Notion ownership and planning
-state are still Stage 4/5 work. No destructive cloud migration or server changes were made.
+Remaining compatibility boundaries: legacy import normalization for old backups, project
+mutation arrays, remote application/echo suppression and import/export array APIs, and
+legacy session publication for pre-migration records. Stages 3–5 below remove the session
+aliases, UI Notion pushes, and dialog state that this increment still left in place.
 
-## Stage 3 — one session model inside the app
+## Stage 3 — one session model inside the app (implemented)
 
-Use `schedule.blocks`, `execution.state/intervals`, `reflection`, and `integrations`
-throughout desktop feature code. Retain `StudySessionDraft` as a form DTO, not a second
-persisted model. Forms explicitly convert drafts once at their mutation boundary.
+Persisted sessions are plain canonical data: `schedule.blocks`, `execution`, `reflection`,
+and `integrations`. Deleted the deprecated aliases from `StudySession`,
+`attachCompatibilityView`, `legacyActiveDurations`, `canonicalSession`, the custom
+`toJSON`, and every legacy patch branch in `updateStudySession`, which is now a merge of
+explicit canonical fields. All feature callers (calendar, analytics, planner, assistant,
+timer, integrations, CSV export, duplicate repair) read canonical fields directly.
 
-Migrate consumers in small groups: calendar/analytics, planning forms, assistant/planner,
-then timer and integrations. Replace `activeDurations` with explicitly named planned
-blocks or actual intervals at every caller; never infer study evidence from an event's
-finished flag. Keep interval validation and overnight/DST handling.
+`StudySessionDraft` remains a form/Notion wire DTO. `studySessionDraftInput` and
+`studySessionDraftPatch` convert it once at the mutation boundary; the timer path uses
+canonical execution directly. Legacy normalization (`startTime`/`status`/`activeDurations`
+input) stays at the import and cloud-DTO boundaries, so old backups still load.
 
-After all callers migrate, delete deprecated fields from `StudySession`,
-`attachCompatibilityView`, `legacyActiveDurations`, and legacy patch branches from
-`updateStudySession`. Legacy import normalization stays at the import boundary; old
-backups must still load. Shared cloud DTO conversion remains a boundary adapter.
+Planned blocks no longer leak into completed study: `getSessionEffectiveMinutes` returns
+0 for a completed session without closed intervals instead of falling back to scheduled
+time. Deleted callers of the aliases that inferred study evidence from a finished event.
 
-Checks: old backups; planned blocks do not count as completed study; completed manual
-logs; pause/resume; multiple blocks; overnight intervals; canonical DTO round trips.
+Checks: `bun run check`, all 34 logic checks, and 12 native tests. Added assertions that
+legacy aliases are absent from the runtime object, canonical JSON round-trips, and planned
+blocks are not counted as evidence.
 
-## Stage 4 — remove Notion from UI mutation handlers
+## Stage 4 — remove Notion from UI mutation handlers (implemented)
 
-Make committed local mutations and applied remote mutations the only sources of Notion
-intent. Verify every mutation class reaches the durable Notion outbox before removing
-manual pushes; session writes currently take a special path in `recordLocalUpsert`.
+Committed records and applied remote mutations are the only Notion intent sources.
+Local migration 8 (`notion_ownership`) rebuilds the record triggers to read canonical
+session page identity (`integrations.notion.id`) and to ignore metadata-only writes, so
+the Notion worker updating integration metadata cannot echo a mirror write. Deletes still
+trigger linked-page archival through the outbox.
 
-Then remove per-feature `push*Change` calls and automatic `requestNotionSync` calls from
-`App.tsx`. Keep explicit user sync/retry controls. The Notion worker updates integration
-metadata without echoing endless mirror writes. Preserve conflict UI and failed intents.
+Removed `pushEventChange`, `pushSessionChange`, every automatic `requestNotionSync` call,
+and `recordNotionUpsertIntent`. The worker owns startup, data-change/focus/online wakeups,
+a 30-second poll for remote edits and due intents, retries, and acknowledgements; it reads
+committed records instead of a caller-supplied array. Retries and acknowledgements are
+scoped to the intent generation they acted on, so a concurrent edit is never lost. Explicit
+user sync/retry controls, conflict UI, and failed intents are unchanged.
 
-Checks: create/edit/delete/merge/convert from UI, assistant, cloud, and Notion; conflicts;
-network failures; VCAA exclusions; linked-page archives; no mirror loops or lost edits.
+Checks: `bun run check`, all 34 logic checks, 12 native tests. New checks exercise trigger
+ownership (canonical identity retained, metadata receipt ignored, VCAA excluded, stale
+retry rejected) through the shipped SQL.
 
-## Stage 5 — simplify dialog state, then shrink App
+## Stage 5 — simplify dialog state, then shrink App (implemented)
 
-Replace mutually exclusive planning-dialog booleans, selected records, initial dates,
-mode, and reset keys with one discriminated planning-dialog state:
-`closed | event | session | convert`. Store only the source ID plus the draft/initial
-values that cannot be derived. Unrelated search/settings dialogs stay independent.
+Seven mutually exclusive planning states (two open booleans, two selected records, mode,
+initial date, conversion draft, reset keys) are one discriminated `PlanningDialog`:
+`closed | event | session | convert`. Selected records derive from the committed
+projection by ID, so a deleted record cannot leave the dialog editing a ghost. Conversion
+stores the source ID plus its draft and `updated_at`, and rejects a changed source instead
+of converting stale data. The reset key is gone; keyboard re-open preserves an unsaved form.
 
-Delete impossible state combinations and repeated setter/reset sequences. Pass one
-stable conversion opener to menus and the event dialog. Keep form-specific saving state
-inside the form; errors retain drafts. Undo uses the atomic mutations from stage 2.
+Saving state lives in the forms: both dialogs block a second submit, show a saving label,
+keep the draft on failure or cancelled confirmation, and close only once the record is
+committed. `App.tsx` shrank by 152 lines; dialog rendering stayed in place because nothing
+duplicated there. Undo still uses the Stage 2 atomic mutations.
 
-Only then move the remaining planning-dialog rendering out of `App.tsx` if it improves
-ownership. Moving code without deleting duplicate behavior is not an acceptance criterion.
+Checks: `bun run check` and all 34 logic checks, extended with wiring assertions for the
+discriminated state, the absent legacy setters, save guards, and the removal of UI Notion
+pushes.
 
 ## Rollout and acceptance
 
 Order: shared menu -> row writes/atomic conversion -> canonical session consumers ->
 Notion ownership -> dialog state. Do not rewrite sync, storage, forms, and lifecycle together.
 No destructive cloud schema migration is required by this plan.
+
+Production physical LOC delta for Stages 3–5: **−209** across `src/` (488 added, 697
+deleted), plus 44 lines of local migration 8, and `App.tsx` down 152 lines to 2,494.
+Excludes docs, checks, and the lockfile. Cumulative against the shared-menu checkpoint
+(`342d1a3`), all five stages net **+128** production lines, which is under the 25%
+reduction target: Stages 2 and 4 traded lines for correctness, and the model and dialog
+work removed representation and state rather than bulk code. Further reduction needs the
+project and import/export array paths migrated the same way.
 
 For each stage, record production LOC delta (excluding docs/tests), removed APIs/call
 sites, and any remaining compatibility boundary. Aim for at least a 25% reduction in the

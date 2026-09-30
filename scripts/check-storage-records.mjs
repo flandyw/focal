@@ -82,5 +82,26 @@ assert(database.query("select count(*) as count from session_outbox").get().coun
 acknowledge.run("a", "session", "new")
 assert(database.query("select count(*) as count from session_outbox").get().count === 0, "matching receipt must acknowledge its intent")
 
+for (const migration of ["0002_rebuild_sync_outbox", "0003_sync_reliability", "0004_change_log", "0005_study_session_commands", "0006_direct_session_publish", "0008_notion_ownership"]) {
+  database.exec(readFileSync(`src-tauri/migrations/${migration}.sql`, "utf8"))
+}
+database.query("insert into preferences (key, value, updated_at) values ('focal-notion-data-source-id', '\"notion\"', '2026-01-01')").run()
+const mirror = { id: "mirror", schemaVersion: 2, title: "Study", integrations: { notion: { type: "notion", id: "page" } }, reflection: { notes: "Old" } }
+database.query("insert into records (kind, id, payload, position) values ('study_sessions', 'mirror', ?, 0)").run(JSON.stringify(mirror))
+assert(database.query("select page_id from notion_outbox where local_id = 'mirror'").get().page_id === "page", "canonical session creation must retain its page identity")
+database.query("delete from notion_outbox where local_id = 'mirror'").run()
+mirror.integrations.notion.url = "https://notion.so/page"
+database.query("update records set payload = ? where id = 'mirror'").run(JSON.stringify(mirror))
+assert(!database.query("select * from notion_outbox where local_id = 'mirror'").get(), "integration metadata receipt must not echo a mirror intent")
+mirror.reflection.notes = "New"
+database.query("update records set payload = ? where id = 'mirror'").run(JSON.stringify(mirror))
+assert(database.query("select operation from notion_outbox where local_id = 'mirror'").get().operation === "upsert", "session reflection edit must queue a mirror intent")
+database.query("insert into records (kind, id, payload, position) values ('events', 'vcaa', ?, 0)").run(JSON.stringify({ id: "vcaa", source: { type: "vcaa", id: "exam" } }))
+assert(!database.query("select * from notion_outbox where local_id = 'vcaa'").get(), "VCAA events must not be mirrored")
+const retrySql = outboxSource.match(/`update notion_outbox set retry_count[\s\S]*?page_id is \$9`/)?.[0].slice(1, -1)
+assert(retrySql, "Notion retries must guard their original intent")
+database.query(retrySql).run(9, "old failure", "2100-01-01", "notion", "session", "mirror", "archive", "old", "page")
+assert(database.query("select retry_count from notion_outbox where local_id = 'mirror'").get().retry_count === 0, "an old failed archive must not overwrite a newer edit")
+
 // eslint-disable-next-line no-console
 console.log("storage record checks passed")

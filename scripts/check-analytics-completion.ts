@@ -20,9 +20,8 @@ function session(id: string, start: string) {
 }
 
 const completed = updateStudySession(session("completed", "2020-01-01T08:00:00Z"), {
-  status: "completed",
   subjectIds: ["eng", "mm"],
-  activeDurations: [{ start: "2020-01-01T08:00:00Z", end: "2020-01-01T09:01:00Z" }],
+  execution: { state: "completed", intervals: [{ start: "2020-01-01T08:00:00Z", end: "2020-01-01T09:01:00Z", source: "manual" }], completedAt: "2020-01-01T09:01:00Z" },
 })
 const overdue = session("overdue", "2020-01-02T08:00:00Z")
 const future = session("future", "2100-01-01T08:00:00Z")
@@ -63,8 +62,7 @@ yesterday.setDate(yesterday.getDate() - 1)
 yesterday.setHours(8, 0, 0, 0)
 const yesterdayEnd = new Date(yesterday.getTime() + 3_600_000)
 const yesterdayCompleted = updateStudySession(session("yesterday", yesterday.toISOString()), {
-  status: "completed",
-  activeDurations: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString() }],
+  execution: { state: "completed", intervals: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString(), source: "manual" }], completedAt: yesterdayEnd.toISOString() },
 })
 const streak = getConsistencyData([yesterdayCompleted], 7).stats.currentStreak
 if (streak !== 1) throw new Error(`Yesterday's active streak was lost: ${streak}`)
@@ -74,16 +72,14 @@ if (sevenDayRange.length !== 7) {
 }
 
 const shifted = updateStudySession(session("shifted", "2020-01-01T08:00:00Z"), {
-  status: "completed",
-  activeDurations: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString() }],
+  execution: { state: "completed", intervals: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString(), source: "manual" }], completedAt: yesterdayEnd.toISOString() },
 })
 const shiftedBreakdown = getSubjectBreakdown([shifted], [], 7)
 if (shiftedBreakdown[0]?.minutes !== 60) {
   throw new Error(`Actual interval was excluded by its old planned date: ${JSON.stringify(shiftedBreakdown)}`)
 }
 const rescheduled = updateStudySession(session("rescheduled", "2100-01-01T08:00:00Z"), {
-  status: "completed",
-  activeDurations: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString() }],
+  execution: { state: "completed", intervals: [{ start: yesterday.toISOString(), end: yesterdayEnd.toISOString(), source: "manual" }], completedAt: yesterdayEnd.toISOString() },
 })
 if (getConsistencyData([rescheduled], 0).stats.totalMinutes !== 60) {
   throw new Error("All-time consistency omitted an actual interval before its planned date")
@@ -92,12 +88,10 @@ if (getConsistencyData([rescheduled], 0).stats.totalMinutes !== 60) {
 const comparisonNow = new Date(2026, 6, 31, 12).getTime()
 const completedAt = (id: string, subjectId: string, start: Date, minutes: number) =>
   updateStudySession(session(id, start.toISOString()), {
-    status: "completed",
     subjectIds: [subjectId],
-    activeDurations: [{
-      start: start.toISOString(),
-      end: new Date(start.getTime() + minutes * 60_000).toISOString(),
-    }],
+    execution: { state: "completed", intervals: [{
+      start: start.toISOString(), end: new Date(start.getTime() + minutes * 60_000).toISOString(), source: "manual",
+    }], completedAt: new Date(start.getTime() + minutes * 60_000).toISOString() },
   })
 const comparisonSessions = [
   completedAt("current-eng", "eng", new Date(2026, 6, 29, 9), 60),

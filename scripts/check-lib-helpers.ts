@@ -162,11 +162,10 @@ const planned = createStudySession("plan-1", {
 check(getSessionEffectiveMinutes(planned) === 60, "planned session should sum all schedule blocks")
 
 const completed = updateStudySession(planned, {
-  status: "completed",
-  activeDurations: [
-    { start: "2026-06-01T09:00:00Z", end: "2026-06-01T09:20:00Z" },
-    { start: "2026-06-01T09:50:00Z", end: "2026-06-01T10:00:00Z" },
-  ],
+  execution: { state: "completed", intervals: [
+    { start: "2026-06-01T09:00:00Z", end: "2026-06-01T09:20:00Z", source: "manual" },
+    { start: "2026-06-01T09:50:00Z", end: "2026-06-01T10:00:00Z", source: "manual" },
+  ], completedAt: "2026-06-01T10:00:00Z" },
 })
 check(getSessionEffectiveMinutes(completed) === 30, "completed session should sum only intervals with an end time")
 
@@ -257,8 +256,7 @@ const completedOnly = updateStudySession(
     createdVia: "manual",
   }),
   {
-    status: "completed",
-    activeDurations: [{ start: "2026-06-01T11:00:00Z", end: "2026-06-01T12:00:00Z" }],
+    execution: { state: "completed", intervals: [{ start: "2026-06-01T11:00:00Z", end: "2026-06-01T12:00:00Z", source: "manual" }], completedAt: "2026-06-01T12:00:00Z" },
   },
 )
 check(

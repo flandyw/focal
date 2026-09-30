@@ -36,7 +36,7 @@ import { getStoredQuickLinks, QUICK_LINKS_STORAGE_KEY } from "@/lib/quickLinks"
 import { setCachedPreference } from "@/lib/storage/preferences"
 import { emitLocalDataChanged, readLocalStorageArray, SYNC_DATA_FILES } from "@/lib/sync/localData"
 import { clearRecordOutboxSuppressions, suppressRecordOutbox, readOutbox, readSessionIntents } from "@/lib/sync/persistence"
-import { recordNotionUpsertIntent, recordRemoteNotionDeleteIntent } from "@/lib/sync/sinks"
+import { recordRemoteNotionDeleteIntent } from "@/lib/sync/sinks"
 import type { LocalRecord, SyncRowState, SyncTable } from "@/lib/sync/types"
 import type { StudySession, Subject, TimetableConfig, UserSettings } from "@/lib/types"
 import { mutatePersistedArray, readRecordRows } from "@/lib/storage/database"
@@ -135,9 +135,6 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
     })
   } finally {
     await clearRecordOutboxSuppressions(putRecords)
-  }
-  for (const record of putRecords) {
-    await recordNotionUpsertIntent(table, record.rowId, record.payload as LocalRecord)
   }
   emitLocalDataChanged(table)
   for (const notice of timerNotices) window.dispatchEvent(new CustomEvent("focal-shared-timer-notice", { detail: notice }))

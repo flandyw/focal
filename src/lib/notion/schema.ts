@@ -1,5 +1,6 @@
 import { isRecord } from "@/lib/utils"
 export { isRecord }
+import { normalizeStudySession } from "@/lib/studySessions"
 import type { CalendarEvent, EventType, NotionSource, NotionSyncSnapshot, StudySession, StudySessionDraft, Subject } from "@/lib/types"
 
 export type NotionProperty = Record<string, unknown>
@@ -75,7 +76,8 @@ export interface NotionCalendarSyncResult {
 }
 
 export type EventUpdates = Partial<Omit<CalendarEvent, "id" | "created_at">>
-export type SessionUpdates = Partial<Omit<StudySession, "id" | "created_at">>
+/** Notion's date/completion wire DTO, converted once before a local mutation. */
+export type SessionUpdates = Partial<StudySessionDraft>
 
 export interface PushTask {
   run: () => Promise<void>
@@ -510,7 +512,7 @@ export function bodyHasChanged(storedHash: string | undefined, text: string | un
 }
 
 export function buildSessionBodyText(session: StudySession): string | undefined {
-  const base = [session.description, session.notes].filter(Boolean).join("\n\n")
+  const base = [session.description, session.reflection?.notes].filter(Boolean).join("\n\n")
   const activeDurations = session.execution.intervals.filter(
     (interval): interval is typeof interval & { end: string } => Boolean(interval.end),
   )
@@ -578,17 +580,18 @@ export function eventSyncSnapshot(
 }
 
 export function sessionSyncSnapshot(
-  session: Pick<StudySessionDraft, "title" | "startTime" | "endTime" | "status" | "completedAt" | "subjectIds">,
+  session: StudySession | StudySessionDraft,
   settings: NotionMappedSettings,
   subjects: Subject[],
 ): NotionSyncSnapshot {
-  const primarySubjectId = getPrimarySessionSubjectId(session, subjects)
+  const record = "schedule" in session ? session : normalizeStudySession(session)
+  const primarySubjectId = getPrimarySessionSubjectId(record, subjects)
   return {
-    title: session.title,
-    startTime: canonicalSyncInstant(session.startTime),
-    endTime: canonicalSyncInstant(session.endTime),
+    title: record.title,
+    startTime: canonicalSyncInstant(record.schedule.blocks[0].start),
+    endTime: canonicalSyncInstant(record.schedule.blocks[record.schedule.blocks.length - 1].end),
     ...(settings.completedProperty.trim()
-      ? { isCompleted: session.status === "completed" || Boolean(session.completedAt) }
+      ? { isCompleted: record.execution.state === "completed" }
       : {}),
     ...(settings.subjectProperty.trim() ? { subjectId: primarySubjectId } : {}),
   }
@@ -653,14 +656,9 @@ export function eventFingerprint(e: CalendarEvent | Omit<CalendarEvent, "id" | "
   ].join("|")
 }
 
-export function sessionFingerprint(s: StudySession | StudySessionDraft): string {
-  return [
-    s.title,
-    s.startTime,
-    s.endTime,
-    [...(s.subjectIds ?? [])].sort().join(","),
-    s.status,
-  ].join("|")
+export function sessionFingerprint(value: StudySession | StudySessionDraft): string {
+  const s = "schedule" in value ? value : normalizeStudySession(value)
+  return [s.title, s.schedule.blocks[0].start, s.schedule.blocks[s.schedule.blocks.length - 1].end, [...s.subjectIds].sort().join(","), s.execution.state].join("|")
 }
 
 export function getFocalId(page: NotionPage): string | undefined {
@@ -815,11 +813,11 @@ export function pageMatchesSession(
 
   return (
     title === session.title &&
-    sameInstant(startTime, session.startTime) &&
-    sameInstant(endTime, session.endTime) &&
+    sameInstant(startTime, session.schedule.blocks[0].start) &&
+    sameInstant(endTime, session.schedule.blocks[session.schedule.blocks.length - 1].end) &&
     subjectMatches &&
     (!settings.completedProperty.trim()
-      || isCompleted(properties, settings) === (session.status === "completed"))
+      || isCompleted(properties, settings) === (session.execution.state === "completed"))
   )
 }
 

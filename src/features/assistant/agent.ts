@@ -2,7 +2,8 @@ import { combineDateAndTime, getDeadlineTypeInfo, getEventTypeInfo, getLocalDate
 import { getAssistantPersonalityInstruction } from "@/lib/settings"
 import { VCE_SYSTEM_PREAMBLE } from "@/lib/aiAssistant"
 import type { ToolCall, ToolDefinition } from "@/lib/providers"
-import type { CalendarEvent, EventType, Project, StudySession, Subject } from "@/lib/types"
+import { studySessionDraftPatch } from "@/lib/studySessions"
+import type { CalendarEvent, EventType, Project, StudySession, StudySessionDraft, Subject } from "@/lib/types"
 
 export interface AssistantContextRefs {
   project?: Project | null
@@ -106,12 +107,12 @@ export function buildCalendarContext(
  const upcomingSessions = (sessions ?? [])
  .filter(
  (s) =>
- new Date(s.startTime).getTime() >= now &&
- new Date(s.startTime).getTime() <= horizon,
+ new Date(s.schedule.blocks[0].start).getTime() >= now &&
+ new Date(s.schedule.blocks[0].start).getTime() <= horizon,
  )
  .sort(
  (a, b) =>
- new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+ new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime(),
  )
  .slice(0, 5);
 
@@ -122,7 +123,7 @@ export function buildCalendarContext(
  }
  if (upcomingSessions.length > 0) {
  lines.push(
- `- Upcoming sessions: ${upcomingSessions.map((s) => `"${s.title}" ${s.startTime.slice(0, 10)}`).join(";")}`,
+ `- Upcoming sessions: ${upcomingSessions.map((s) => `"${s.title}" ${s.schedule.blocks[0].start.slice(0, 10)}`).join(";")}`,
  );
  }
  if (lines.length === 1) return `Calendar snapshot: ${lines[0].slice(2)}`;
@@ -186,15 +187,15 @@ export function buildAssistantOverview(
  const todayMs = dateOnlyMs(today) ?? 0;
  const nextWeekMs = todayMs + 7 * 24 * 60 * 60 * 1000;
  const planned = (sessions ?? []).filter((session) => {
- const start = new Date(session.startTime).getTime();
+ const start = new Date(session.schedule.blocks[0].start).getTime();
  return (
- session.status !=="completed" && start >= todayMs && start <= nextWeekMs
+ session.execution.state !=="completed" && start >= todayMs && start <= nextWeekMs
  );
  });
  const plannedMinutes = planned.reduce((total, session) => {
  const duration =
- new Date(session.endTime).getTime() -
- new Date(session.startTime).getTime();
+ new Date(session.schedule.blocks[session.schedule.blocks.length - 1].end).getTime() -
+ new Date(session.schedule.blocks[0].start).getTime();
  return total + Math.max(0, Math.round(duration / 60_000));
  }, 0);
  const plannedDetail =
@@ -1334,10 +1335,10 @@ export function sessionSearchText(
  session.id,
  session.title,
  session.description,
- session.status,
- session.notes,
- session.blockers,
- session.nextAction,
+ session.execution.state,
+ session.reflection?.notes,
+ session.reflection?.blockers,
+ session.reflection?.nextAction,
  session.topics?.join(""),
  subjectLabels,
  project?.name,
@@ -1357,10 +1358,10 @@ export function formatSessionLine(
  .map((id) => projectSubjectLabel(subjects, id))
  .join(", ") ||"no subject";
  const projectLabel = project ? `; project "${project.name}"` :"";
- const confidence = session.confidence
- ? `; confidence ${session.confidence}/5`
+ const confidence = session.reflection?.confidence
+ ? `; confidence ${session.reflection.confidence}/5`
  :"";
- return `- ${session.id}:"${session.title}" (${session.status}) ${session.startTime} to ${session.endTime}; ${subjectLabels}${projectLabel}${confidence}`;
+ return `- ${session.id}:"${session.title}" (${session.execution.state}) ${session.schedule.blocks[0].start} to ${session.schedule.blocks[session.schedule.blocks.length - 1].end}; ${subjectLabels}${projectLabel}${confidence}`;
 }
 
 export type PreparedStudySessionUpdate =
@@ -1412,7 +1413,7 @@ export function prepareStudySessionUpdate(
  }
 
  const session = matches[0];
- const updates: Partial<Omit<StudySession,"id" |"created_at">> = {};
+ const updates: Partial<StudySessionDraft> = {};
  const title = readOptionalString(args,"title");
  const subjectIds = readOptionalStringArray(args,"subjectIds");
  const projectId = readOptionalString(args,"projectId");
@@ -1483,8 +1484,8 @@ export function prepareStudySessionUpdate(
  error: `Project id "${projectId}" does not exist, so I did not update the session.`,
  };
  }
- const nextStart = updates.startTime ?? session.startTime;
- const nextEnd = updates.endTime ?? session.endTime;
+ const nextStart = updates.startTime ?? session.schedule.blocks[0].start;
+ const nextEnd = updates.endTime ?? session.schedule.blocks[session.schedule.blocks.length - 1].end;
  if (!isIsoDateTime(nextStart) || !isIsoDateTime(nextEnd)) {
  return {
  error:"The updated study-session times were not valid ISO dates.",
@@ -1493,7 +1494,7 @@ export function prepareStudySessionUpdate(
  if (new Date(nextEnd).getTime() <= new Date(nextStart).getTime()) {
  return { error:"The study session must end after it starts." };
  }
- return { session, updates };
+ return { session, updates: studySessionDraftPatch(session, updates) };
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -1516,16 +1517,16 @@ export function buildStudyOverviewToolResult(
  .slice(0, 5);
  const plannedSessions = (sessions ?? [])
  .filter((session) => {
- const start = new Date(session.startTime).getTime();
+ const start = new Date(session.schedule.blocks[0].start).getTime();
  return (
- session.status !=="completed" &&
+ session.execution.state !=="completed" &&
  start >= todayMs &&
  start <= nextWeekMs
  );
  })
  .sort(
  (a, b) =>
- new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+ new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime(),
  )
  .slice(0, 8);
  // ponytail: project/subject linkage is a deliberately cheap coverage heuristic.
@@ -1534,8 +1535,8 @@ export function buildStudyOverviewToolResult(
  const deadlineMs = project.deadline ? dateOnlyMs(project.deadline) : null;
  if (deadlineMs === null || deadlineMs > nextFortnightMs) return false;
  return !(sessions ?? []).some((session) => {
- if (session.status ==="completed") return false;
- const start = new Date(session.startTime).getTime();
+ if (session.execution.state ==="completed") return false;
+ const start = new Date(session.schedule.blocks[0].start).getTime();
  if (start < todayMs || start > deadlineMs + 24 * 60 * 60 * 1000 - 1)
  return false;
  return (
@@ -1662,9 +1663,9 @@ export function executeReadOnlyFocalToolCall(
  if (call.name ==="list_study_sessions") {
  const status = readOptionalString(args,"status");
  const matches = (context.sessions ?? [])
- .filter((session) => !status || session.status === status)
+ .filter((session) => !status || session.execution.state === status)
  .filter((session) =>
- dateMatchesRange(session.startTime, startDate, endDate),
+ dateMatchesRange(session.schedule.blocks[0].start, startDate, endDate),
  )
  .filter((session) =>
  searchMatches(
@@ -1674,7 +1675,7 @@ export function executeReadOnlyFocalToolCall(
  )
  .sort(
  (a, b) =>
- new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+ new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime(),
  )
  .slice(0, 30);
  if (matches.length === 0) return"No matching study sessions found.";

@@ -80,6 +80,7 @@ interface EventFormProps {
  timetableConfig?: TimetableConfig
  initialValues?: EventFormInitialValues
  submitLabel: string
+ saving?: boolean
  onCancel: () => void
  onSubmit: (values: EventFormValues) => void
  showFinishedControl?: boolean
@@ -103,7 +104,7 @@ export interface EventDialogProps {
  eventType: EventType
  subjectId?: string
  location?: string
- }) => void
+ }) => Promise<unknown>
  onSubmitMultiple?: (events: {
  title: string
  description?: string
@@ -112,9 +113,9 @@ export interface EventDialogProps {
  eventType: EventType
  subjectId?: string
  location?: string
- }[]) => void
- onDelete?: (id: string) => void
- onDuplicate?: (event: CalendarEvent) => void | Promise<void>
+ }[]) => Promise<unknown>
+ onDelete?: (id: string) => Promise<unknown>
+ onDuplicate?: (event: CalendarEvent) => Promise<unknown>
  onConvertToSession?: (event: CalendarEvent) => void
 }
 
@@ -174,6 +175,7 @@ function EventForm({
  timetableConfig,
  initialValues,
  submitLabel,
+ saving = false,
  onCancel,
  onSubmit,
  showFinishedControl = false,
@@ -650,8 +652,8 @@ function EventForm({
  <Button type="button" variant="outline" onClick={onCancel}>
  Cancel
  </Button>
- <Button type="submit" disabled={!title.trim()}>
- {submitLabel}
+ <Button type="submit" disabled={!title.trim() || saving}>
+ {saving ? "Saving…" : submitLabel}
  </Button>
  </div>
  </DialogFooter>
@@ -676,6 +678,7 @@ export function EventDialog({
  onConvertToSession,
 }: EventDialogProps) {
  const submittingRef = useRef(false)
+ const [saving, setSaving] = useState(false)
  const isEditMode = Boolean(event)
  const existingEvent = isEditMode ? event! : null
 
@@ -683,20 +686,24 @@ export function EventDialog({
  if (open) submittingRef.current = false
  }, [open])
 
- const handleSubmit = (values: EventFormValues) => {
+ // Errors keep the draft: `false` is the shared failure signal from the entry
+ // points, and a rejected commit must not close the form.
+ const handleSubmit = async (values: EventFormValues) => {
  if (submittingRef.current) return
  submittingRef.current = true
+ setSaving(true)
+ const finish = (result: unknown) => {
+ if (result === false) { submittingRef.current = false; return }
+ onOpenChange(false)
+ }
+ try {
  if (existingEvent) {
  const { id } = existingEvent
- onSubmit?.({
+ finish(await onSubmit?.({
  id,
  ...values,
- } as Parameters<NonNullable<typeof onSubmit>>[0])
- onOpenChange(false)
- return
- }
-
- if (values.recurrence && values.recurrence.pattern !=="none" && onSubmitMultiple) {
+ } as Parameters<NonNullable<typeof onSubmit>>[0]))
+ } else if (values.recurrence && values.recurrence.pattern !=="none" && onSubmitMultiple) {
  const recurringEvents = generateRecurringEvents(
  {
  title: values.title,
@@ -710,23 +717,37 @@ export function EventDialog({
  values.recurrence.pattern,
  values.recurrence.endDate ? new Date(values.recurrence.endDate) : undefined,
  )
- onSubmitMultiple(recurringEvents as Parameters<typeof onSubmitMultiple>[0])
+finish(await onSubmitMultiple(recurringEvents as Parameters<typeof onSubmitMultiple>[0]))
  } else if (onSubmit) {
- onSubmit(values)
+finish(await onSubmit(values))
  }
- onOpenChange(false)
+ } catch (error: unknown) {
+ submittingRef.current = false
+ console.error("Could not save the event:", error)
+ } finally {
+ setSaving(false)
+ }
  }
 
- const handleDuplicate = () => {
+ const handleDuplicate = async () => {
  if (!existingEvent || !onDuplicate) return
- void onDuplicate(existingEvent)
+ submittingRef.current = true
+ setSaving(true)
+ try {
+ await onDuplicate(existingEvent)
  onOpenChange(false)
+ } catch (error: unknown) {
+ submittingRef.current = false
+ console.error("Could not duplicate the event:", error)
+ } finally {
+ setSaving(false)
+ }
  }
 
- const handleDelete = () => {
+ const handleDelete = async () => {
  if (!existingEvent || !onDelete) return
  const { id } = existingEvent
- onDelete(id)
+ if (await onDelete(id) === false) { submittingRef.current = false; return }
  onOpenChange(false)
  }
 
@@ -772,6 +793,7 @@ export function EventDialog({
  finishedAt: existingEvent.finishedAt,
  } : { date: initialDate ? new Date(initialDate) : new Date() }}
  submitLabel={isEditMode ?"Save Changes" :"Add Event"}
+ saving={saving}
  showFinishedControl={isEditMode}
  footerStart={isEditMode && (onDuplicate || onDelete || onConvertToSession) ? (
  <div className="flex flex-wrap gap-2">

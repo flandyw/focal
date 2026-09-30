@@ -127,8 +127,8 @@ export function getPriorityItems({
   const plannedProjectIds = new Set(
     sessions
       .filter((session) => {
-        const start = getTime(session.startTime)
-        return session.projectId && session.status === "planned" && start !== null && start >= now && start <= nextWeek
+        const start = getTime(session.schedule.blocks[0].start)
+        return session.projectId && session.execution.state === "planned" && start !== null && start >= now && start <= nextWeek
       })
       .map((session) => session.projectId!)
   )
@@ -173,8 +173,8 @@ export function getPriorityItems({
   })
 
   sessions.forEach((session) => {
-    if (session.status !== "planned") return
-    const start = getTime(session.startTime)
+    if (session.execution.state !== "planned") return
+    const start = getTime(session.schedule.blocks[0].start)
     if (start === null || start < now || start > nextWeek) return
     const project = session.projectId ? activeProjectById.get(session.projectId) : undefined
     const days = Math.ceil((start - now) / DAY_MS)
@@ -208,14 +208,14 @@ export function getPriorityItems({
   })
 
   sessions.forEach((session) => {
-    if (session.status !== "completed" || !session.confidence || session.confidence > 2) return
+    if (session.execution.state !== "completed" || !session.reflection?.confidence || session.reflection.confidence > 2) return
     const project = session.projectId ? activeProjectById.get(session.projectId) : undefined
     const topics = session.topics?.filter((topic) => topic.trim().length > 0) ?? []
     items.push({
       id: `weak-${session.id}`,
       kind: "weak-topic",
       title: topics.length > 0 ? `Revise ${topics[0]}` : `Review ${session.title}`,
-      reason: `confidence ${session.confidence}/5 after last review`,
+      reason: `confidence ${session.reflection.confidence}/5 after last review`,
       urgency: "medium",
       subjectIds: getSessionSubjectIds(session, project),
       projectId: session.projectId,

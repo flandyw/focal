@@ -54,23 +54,6 @@ export function retryNotionIntent(intent: NotionIntent, error: string, now: stri
   }
 }
 
-export function enqueueNotionUpsert(
-  dataSourceId: string,
-  kind: NotionIntentKind,
-  localId: string,
-  pageId?: string,
-): Promise<void> {
-  return upsertIntent({
-    dataSourceId,
-    kind,
-    localId,
-    operation: "upsert",
-    pageId,
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
-  })
-}
-
 export function enqueueNotionArchive(
   dataSourceId: string,
   kind: NotionIntentKind,
@@ -109,12 +92,15 @@ export function clearNotionIntent(
   localId: string,
   operation?: NotionIntentOperation,
   expectedRecord?: unknown,
+  expectedIntent?: Pick<NotionIntent, "createdAt" | "pageId">,
 ): Promise<void> {
   return serialized(async () => {
     const expectedPayload = expectedRecord === undefined ? undefined : JSON.stringify(expectedRecord)
+    const intentIndex = 4 + (operation ? 1 : 0) + (expectedPayload === undefined ? 0 : 1)
     await (await openFocalDatabase()).execute(
       `delete from notion_outbox
         where data_source_id = $1 and kind = $2 and local_id = $3
+          ${expectedIntent ? `and created_at = $${intentIndex} and page_id is $${intentIndex + 1}` : ""}
           ${operation ? "and operation = $4" : ""}
           ${expectedPayload === undefined
             ? ""
@@ -145,13 +131,23 @@ export function clearNotionIntent(
         localId,
         ...(operation ? [operation] : []),
         ...(expectedPayload === undefined ? [] : [expectedPayload]),
+        ...(expectedIntent ? [expectedIntent.createdAt, expectedIntent.pageId ?? null] : []),
       ],
     )
   })
 }
 
 export function persistRetriedNotionIntent(intent: NotionIntent): Promise<void> {
-  return upsertIntent(intent)
+  return serialized(async () => {
+    // A failed old archive/upsert cannot replace a newer restore/edit intent.
+    await (await openFocalDatabase()).execute(
+      `update notion_outbox set retry_count = $1, last_error = $2, next_attempt_at = $3
+       where data_source_id = $4 and kind = $5 and local_id = $6
+         and operation = $7 and created_at = $8 and page_id is $9`,
+      [intent.retryCount, intent.lastError ?? null, intent.nextAttemptAt ?? null,
+        intent.dataSourceId, intent.kind, intent.localId, intent.operation, intent.createdAt, intent.pageId ?? null],
+    )
+  })
 }
 
 function upsertIntent(intent: NotionIntent): Promise<void> {

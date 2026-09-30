@@ -4,9 +4,11 @@ import { getNotionCalendarSettings, type NotionCalendarSettings } from "@/lib/se
 import { syncNotionCalendar, pushEventToNotion, pushSessionToNotion, type NotionCalendarSyncResult } from "@/lib/notion"
 import type { CalendarEvent, NotionSyncSnapshot, StudySession, StudySessionDraft, Subject } from "@/lib/types"
 import type { NotionConflict } from "@/components/sync/NotionConflictDialog"
-import { clearNotionIntent } from "@/lib/notion/outbox"
+import { clearNotionIntent, readNotionIntents, notionIntentDue } from "@/lib/notion/outbox"
+import { readRecords } from "@/lib/storage/database"
+import { normaliseEvent } from "@/lib/calendarEvents"
 import { fetchNotionPage } from "@/lib/notion/api"
-import { updateStudySession } from "@/lib/studySessions"
+import { updateStudySession, studySessionDraftPatch, normalizeStudySession } from "@/lib/studySessions"
 import { rebaseNotionConflictUpdates } from "@/lib/notion/pull"
 import {
   buildSessionBodyText,
@@ -19,6 +21,7 @@ import {
 const MAX_CONFLICT_RESOLUTION_ATTEMPTS = 3
 
 interface UseNotionSyncOptions {
+  ready: boolean
   events: CalendarEvent[]
   sessions: StudySession[]
   allSubjects: Subject[]
@@ -68,8 +71,8 @@ function snapshotSubject(snapshot: NotionSyncSnapshot, subjects: Subject[]): str
 }
 
 function sourcesEqual(
-  first: CalendarEvent["source"] | StudySession["source"],
-  second: CalendarEvent["source"] | StudySession["source"],
+  first: CalendarEvent["source"],
+  second: CalendarEvent["source"],
 ): boolean {
   return JSON.stringify(first) === JSON.stringify(second)
 }
@@ -96,10 +99,10 @@ export function preserveNewerEventChanges(
 export function preserveNewerSessionChanges(
   input: StudySession,
   current: StudySession,
-  updates: Partial<Omit<StudySession, "id" | "created_at">>,
+  updates: Partial<StudySessionDraft>,
   settings: NotionCalendarSettings,
   subjects: Subject[],
-): Partial<Omit<StudySession, "id" | "created_at">> {
+): Partial<StudySessionDraft> {
   const before = sessionSyncSnapshot(input, settings, subjects)
   const now = sessionSyncSnapshot(current, settings, subjects)
   const next = { ...updates }
@@ -124,7 +127,7 @@ export function preserveNewerSessionChanges(
     delete next.status
     delete next.completedAt
   }
-  if (!sourcesEqual(input.source, current.source)) delete next.source
+  if (!sourcesEqual(input.integrations?.notion, current.integrations?.notion)) delete next.source
   return next
 }
 
@@ -142,7 +145,7 @@ export function notionSessionIsSettled(
   settings: NotionCalendarSettings,
   subjects: Subject[],
 ): boolean {
-  const source = session.source?.type === "notion" ? session.source : undefined
+  const source = session.integrations?.notion
   return Boolean(
     source?.syncSnapshot
     && notionSnapshotsEqual(sessionSyncSnapshot(session, settings, subjects), source.syncSnapshot)
@@ -150,7 +153,7 @@ export function notionSessionIsSettled(
   )
 }
 
-export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncSessions }: UseNotionSyncOptions) {
+export function useNotionSync({ ready, events, sessions, allSubjects, syncEvents, syncSessions }: UseNotionSyncOptions) {
   const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "error" | "success">("idle")
   const [lastSyncTime, setLastSyncTime] = useState(0)
   const [notionConflicts, setNotionConflicts] = useState<NotionConflict[]>([])
@@ -205,8 +208,10 @@ export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncS
     let succeeded = false
     let pauseQueuedSync = false
     try {
-      const inputEvents = eventsRef.current
-      const inputSessions = sessionsRef.current
+      const inputEvents = (await readRecords("events")).map(normaliseEvent)
+      const inputSessions = (await readRecords("study_sessions")).map(normalizeStudySession)
+      eventsRef.current = inputEvents
+      sessionsRef.current = inputSessions
       const inputEventById = new Map(inputEvents.map((event) => [event.id, event]))
       const inputSessionById = new Map(inputSessions.map((session) => [session.id, session]))
       const result = await syncNotionCalendar(settings, inputEvents, inputSessions, allSubjectsRef.current, onProgress, changedEventIds, changedSessionIds)
@@ -247,7 +252,7 @@ export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncS
         return input && current
           ? [{
               ...item,
-              updates: preserveNewerSessionChanges(input, current, item.updates, settings, allSubjectsRef.current),
+              updates: studySessionDraftPatch(current, preserveNewerSessionChanges(input, current, item.updates, settings, allSubjectsRef.current)),
               expectedRecord: current,
             }]
           : []
@@ -437,13 +442,33 @@ export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncS
     }, 500)
   }, [notionConflictDialogOpen, performNotionSync])
 
-  const pushEventChange = useCallback((_event: CalendarEvent) => {
+  useEffect(() => {
+    if (!ready) return
     requestNotionSync(false)
-  }, [requestNotionSync])
-
-  const pushSessionChange = useCallback((_session: StudySession) => {
-    requestNotionSync(false)
-  }, [requestNotionSync])
+    const wake = () => {
+      const settings = getNotionCalendarSettings()
+      void readNotionIntents(settings.dataSourceId).then((intents) => {
+        if (intents.some((intent) => notionIntentDue(intent, new Date().toISOString()))) requestNotionSync(false)
+      }).catch((error: unknown) => console.error("Could not read Notion intents:", error))
+    }
+    const onChange = (event: Event) => {
+      const tables = (event as CustomEvent<{ tables?: string[]; table?: string }>).detail
+      if (tables?.tables?.some((table) => table === "events" || table === "study_sessions") || tables?.table === "events" || tables?.table === "study_sessions") wake()
+    }
+    window.addEventListener("focal-sync-data-changed", onChange)
+    window.addEventListener("online", wake)
+    window.addEventListener("focus", wake)
+    // ponytail: one 30-second poll discovers remote Notion edits and retries due intents.
+    // Use Notion webhooks only if lower-latency remote discovery becomes necessary.
+    const timer = window.setInterval(() => requestNotionSync(false), 30_000)
+    return () => {
+      window.clearInterval(timer)
+      if (debounceTimerRef.current !== null) clearTimeout(debounceTimerRef.current)
+      window.removeEventListener("focal-sync-data-changed", onChange)
+      window.removeEventListener("online", wake)
+      window.removeEventListener("focus", wake)
+    }
+  }, [ready, requestNotionSync])
 
   const resolveConflicts = useCallback(async (resolutions: Record<string, "local" | "notion" | "skip">) => {
     const settings = getNotionCalendarSettings()
@@ -511,21 +536,21 @@ export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncS
             }
           } else {
             const session = currentLocal as StudySession
-            const sessionUpdates = chosenUpdates as Partial<Omit<StudySession, "id" | "created_at">>
-            const resolvedSession = updateStudySession(session, sessionUpdates)
+            const sessionUpdates = chosenUpdates as Partial<StudySessionDraft>
+            const resolvedSession = updateStudySession(session, studySessionDraftPatch(session, sessionUpdates))
             const result = await pushSessionToNotion(settings, {
               ...resolvedSession,
-              source: {
-                ...resolvedSession.source,
+              integrations: { ...resolvedSession.integrations, notion: {
+                ...resolvedSession.integrations?.notion,
                 type: "notion",
                 id: currentPage.id,
                 kind: "session",
-              },
+              } },
             }, allSubjectsRef.current)
             if (!result) throw new Error("Notion did not accept the study session")
             const synced = await syncSessions([], [{
               id: session.id,
-              updates: { ...sessionUpdates, source: result.source },
+              updates: studySessionDraftPatch(session, { ...sessionUpdates, source: result.source }),
               expectedRecord: session,
             }])
             const saved = synced.updated[0]
@@ -597,8 +622,6 @@ export function useNotionSync({ events, sessions, allSubjects, syncEvents, syncS
     setNotionConflictDialogOpen,
     performNotionSync,
     requestNotionSync,
-    pushEventChange,
-    pushSessionChange,
     resolveConflicts,
   }
 }

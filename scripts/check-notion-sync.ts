@@ -38,7 +38,7 @@ import {
   pullFromNotionAfterConflictRecheck,
   rebaseNotionConflictUpdates,
 } from "../src/lib/notion/pull"
-import { normalizeStudySession, updateStudySession } from "../src/lib/studySessions"
+import { normalizeStudySession, updateStudySession, studySessionDraftPatch } from "../src/lib/studySessions"
 import {
   notionEventIsSettled,
   preserveNewerEventChanges,
@@ -488,7 +488,7 @@ pullFromNotion(
   VCE_SUBJECTS,
   roundedActiveSessionCtx,
 )
-assert(sameInstant(activeSecondPrecisionSession.startTime, "2026-07-20T01:00:00.000Z"), "Notion minute rounding must preserve equivalent timer instants")
+assert(sameInstant(activeSecondPrecisionSession.schedule.blocks[0].start, "2026-07-20T01:00:00.000Z"), "Notion minute rounding must preserve equivalent timer instants")
 assert(roundedActiveSessionCtx.conflicts === 0, "an active timer must not conflict with Notion's minute-rounded dates")
 assert(
   !("startTime" in (roundedActiveSessionCtx.updatedSessions.get(activeSecondPrecisionSession.id) ?? {})),
@@ -555,7 +555,7 @@ const conflictingSessionPage = {
     Name: { type: "title", title: [{ plain_text: "Notion session title" }] },
     Deadline: {
       type: "date",
-      date: { start: baselineSession.startTime, end: baselineSession.endTime },
+      date: { start: baselineSession.schedule.blocks[0].start, end: baselineSession.schedule.blocks[0].end },
     },
   },
 }
@@ -635,8 +635,8 @@ const completedSession = normalizeStudySession({
   id: "completed-session",
   execution: {
     state: "completed",
-    intervals: [{ start: baselineSession.startTime, end: baselineSession.endTime, source: "manual" }],
-    completedAt: baselineSession.endTime,
+    intervals: [{ start: baselineSession.schedule.blocks[0].start, end: baselineSession.schedule.blocks[0].end, source: "manual" }],
+    completedAt: baselineSession.schedule.blocks[0].end,
   },
   integrations: {
     notion: {
@@ -647,8 +647,8 @@ const completedSession = normalizeStudySession({
     },
   },
 })
-if (completedSession.source?.type === "notion") {
-  completedSession.source.syncSnapshot = sessionSyncSnapshot(completedSession, notionSettings, VCE_SUBJECTS)
+if (completedSession.integrations?.notion) {
+  completedSession.integrations.notion.syncSnapshot = sessionSyncSnapshot(completedSession, notionSettings, VCE_SUBJECTS)
 }
 const reopenedPage = {
   ...disjointSessionPage,
@@ -656,7 +656,7 @@ const reopenedPage = {
   properties: {
     ...disjointSessionPage.properties,
     Name: { type: "title", title: [{ plain_text: completedSession.title }] },
-    Deadline: { type: "date", date: { start: completedSession.startTime, end: completedSession.endTime } },
+    Deadline: { type: "date", date: { start: completedSession.schedule.blocks[0].start, end: completedSession.schedule.blocks[0].end } },
     Complete: { type: "checkbox", checkbox: false },
     Subject: { type: "select", select: null },
     [FOCAL_ID_PROPERTY]: { type: "rich_text", rich_text: [{ plain_text: completedSession.id }] },
@@ -664,8 +664,8 @@ const reopenedPage = {
 }
 const reopenCtx = createSyncCtx()
 pullFromNotion([reopenedPage], [], [completedSession], notionSettings, VCE_SUBJECTS, reopenCtx)
-const reopenedSession = updateStudySession(completedSession, reopenCtx.updatedSessions.get(completedSession.id) ?? {})
-assert(reopenedSession.status === "in-progress", "unchecking Complete must reopen a recorded session without resetting it")
+const reopenedSession = updateStudySession(completedSession, studySessionDraftPatch(completedSession, reopenCtx.updatedSessions.get(completedSession.id) ?? {}))
+assert(reopenedSession.execution.state === "in-progress", "unchecking Complete must reopen a recorded session without resetting it")
 assert(reopenedSession.execution.intervals.length === 1, "reopening from Notion must preserve recorded study intervals")
 
 const newerEvent = { ...localEvent, title: "Newest local title" }
@@ -745,7 +745,7 @@ const secondarySubjectMatchCtx = createSyncCtx()
 pullFromNotion(
   [secondarySubjectOnlyPage],
   [],
-  [{ ...multiSubjectSession, source: undefined }],
+  [{ ...multiSubjectSession, integrations: undefined }],
   notionSettings,
   VCE_SUBJECTS,
   secondarySubjectMatchCtx,

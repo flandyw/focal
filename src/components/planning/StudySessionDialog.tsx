@@ -74,7 +74,7 @@ interface StudySessionDialogProps {
  completedAt?: string
  activeDurations?: { start: string; end: string }[]
  }) => void | Promise<void>
- onDelete?: (id: string) => void
+ onDelete?: (id: string) => Promise<unknown>
  onPlanAgain?: (session: StudySession) => void | Promise<void>
 }
 
@@ -105,6 +105,15 @@ export function StudySessionDialog({
  const [nextAction, setNextAction] = useState("")
  const [startDate, setStartDate] = useState<Date | undefined>(() => initialValues ? parseISO(initialValues.startTime) : initialDate ? new Date(initialDate) : new Date())
  const [isDeleting, setIsDeleting] = useState(false)
+ const [saving, setSaving] = useState(false)
+ const savingRef = useRef(false)
+ const requestClose = (open: boolean) => { if (!savingRef.current) onOpenChange(open) }
+ const saveSession = async (data: Parameters<typeof onSubmit>[0]) => {
+ if (savingRef.current) throw new Error("Study session is already saving")
+ savingRef.current = true
+ setSaving(true)
+ try { await onSubmit(data) } finally { savingRef.current = false; setSaving(false) }
+ }
  const [restDuration, setRestDuration] = useState("5")
  const [segments, setSegments] = useState<{ start: string; end: string }[]>(() => [{ start: initialValues ? format(parseISO(initialValues.startTime), "HH:mm") : "14:00", end: initialValues ? format(parseISO(initialValues.endTime), "HH:mm") : "15:00" }])
  const initializedSessionIdRef = useRef<string | null>(null)
@@ -147,7 +156,7 @@ export function StudySessionDialog({
  const subjects = [...hiddenSelectedSubjects, ...baseSubjects]
  const selectedSubjects = subjects.filter((subject) => subjectIds.includes(subject.id))
  const durationMinutes = segmentTotalActive
- const canSave = title.trim().length > 0
+ const canSave = !saving && title.trim().length > 0
  && subjectIds.length > 0
  && Boolean(startDate)
  && Number.isFinite(durationMinutes)
@@ -169,19 +178,20 @@ export function StudySessionDialog({
  setTitle(session.title)
  setDescription(session.description ??"")
  setTopicsInput(session.topics?.join(", ") ??"")
- setNotes(session.notes ??"")
- setStatus(session.status)
- setConfidence(session.confidence)
- setBlockers(session.blockers ??"")
- setNextAction(session.nextAction ??"")
+ setNotes(session.reflection?.notes ??"")
+ setStatus(session.execution.state)
+ setConfidence(session.reflection?.confidence)
+ setBlockers(session.reflection?.blockers ??"")
+ setNextAction(session.reflection?.nextAction ??"")
  setIsDeleting(false)
 
- const start = parseISO(session.startTime)
+ const start = parseISO(session.schedule.blocks[0].start)
  setStartDate(start)
- // Initialize editable segments from activeDurations
- if (session.activeDurations && session.activeDurations.length > 0) {
+ // Completed forms edit actual evidence; planning forms edit scheduled blocks.
+ const ranges = session.execution.state === "planned" ? session.schedule.blocks : session.execution.intervals.flatMap((interval) => interval.end ? [{ start: interval.start, end: interval.end }] : [])
+ if (ranges.length > 0) {
  setSegments(
- [...session.activeDurations]
+ [...ranges]
  .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
  .map((d) => ({
  start: format(parseISO(d.start),"HH:mm"),
@@ -192,7 +202,7 @@ export function StudySessionDialog({
  setSegments([
  {
  start: format(start,"HH:mm"),
- end: format(parseISO(session.endTime),"HH:mm"),
+ end: format(parseISO(session.schedule.blocks[session.schedule.blocks.length - 1].end),"HH:mm"),
  },
  ])
  }
@@ -291,7 +301,7 @@ export function StudySessionDialog({
  confidence,
  blockers: blockers.trim() ? blockers : undefined,
  nextAction: nextAction.trim() ? nextAction : undefined,
- completedAt: nextStatus ==="completed" ? (session?.completedAt ?? new Date().toISOString()) : undefined,
+ completedAt: nextStatus ==="completed" ? (session?.execution.state === "completed" ? session.execution.completedAt : new Date().toISOString()) : undefined,
  }
  }
 
@@ -300,7 +310,7 @@ export function StudySessionDialog({
  const data = buildSubmitData()
  if (!data) return
  try {
- await onSubmit(data)
+ await saveSession(data)
  if (!isEdit) onOpenChange(false)
  } catch { /* The parent reports save failures; preserve the draft. */ }
  }
@@ -309,7 +319,7 @@ export function StudySessionDialog({
  const data = buildSubmitData("completed")
  if (!data) return
  try {
- await onSubmit(data)
+ await saveSession(data)
  setStatus("completed")
  onOpenChange(false)
  } catch { /* Preserve the draft on failure. */ }
@@ -319,38 +329,41 @@ export function StudySessionDialog({
  const data = buildSubmitData("in-progress")
  if (!data) return
  try {
- await onSubmit(data)
+ await saveSession(data)
  setStatus("in-progress")
  onOpenChange(false)
  } catch { /* Preserve the draft on failure. */ }
  }
 
- const handleDelete = () => {
- if (session && onDelete) {
+ const handleDelete = async () => {
+ if (!session || !onDelete || savingRef.current) return
  setIsDeleting(true)
- onDelete(session.id)
+ try {
+ // A cancelled confirmation or failed delete keeps the form open.
+ if (await onDelete(session.id) === false) return
  onOpenChange(false)
+ } finally {
+ setIsDeleting(false)
  }
  }
 
  const handlePlanAgain = () => {
  if (!session || !onPlanAgain) return
  void onPlanAgain(session)
- onOpenChange(false)
  }
 
- if (!isEdit && loggingPast) return <Dialog open={open} onOpenChange={onOpenChange}>
+ if (!isEdit && loggingPast) return <Dialog open={open} onOpenChange={requestClose}>
  <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
  <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>Record study you’ve already done. It counts toward your study history, not your plan.</DialogDescription></DialogHeader>
  <div className="flex gap-2"><Button variant="outline" onClick={() => setLoggingPast(false)}>Plan future study</Button><Button aria-pressed>Log past study</Button></div>
- <PastStudyForm subjects={subjects} onCancel={() => onOpenChange(false)} onSave={async (log) => {
- await onSubmit({ subjectIds: [log.subjectId], title: log.title, notes: log.notes, startTime: log.blocks[0].start, endTime: log.blocks[log.blocks.length - 1].end, activeDurations: log.blocks, status: "completed", completedAt: log.blocks[log.blocks.length - 1].end })
+ <PastStudyForm subjects={subjects} onCancel={() => requestClose(false)} onSave={async (log) => {
+ await saveSession({ subjectIds: [log.subjectId], title: log.title, notes: log.notes, startTime: log.blocks[0].start, endTime: log.blocks[log.blocks.length - 1].end, activeDurations: log.blocks, status: "completed", completedAt: log.blocks[log.blocks.length - 1].end })
  onOpenChange(false)
  }} />
  </DialogContent></Dialog>
 
  return (
- <Dialog open={open} onOpenChange={onOpenChange}>
+ <Dialog open={open} onOpenChange={requestClose}>
  <DialogContent className="flex h-[min(92dvh,54rem)] w-[calc(100vw-1rem)] max-w-7xl flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-5xl">
  <DialogHeader className="shrink-0 border-b px-5 pb-4 pr-14 pt-5">
  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -781,7 +794,7 @@ export function StudySessionDialog({
  type="button"
  variant="destructive"
  onClick={handleDelete}
- disabled={isDeleting}
+ disabled={isDeleting || saving}
  className="w-full gap-1.5 sm:w-auto"
  >
  <Trash2 className="h-4 w-4" />
@@ -794,7 +807,8 @@ export function StudySessionDialog({
  <Button
  type="button"
  variant="outline"
- onClick={() => onOpenChange(false)}
+ onClick={() => requestClose(false)}
+ disabled={saving}
  >
  Cancel
  </Button>
@@ -823,7 +837,7 @@ export function StudySessionDialog({
  </Button>
  )}
  <Button type="submit" disabled={!canSave}>
- {isEdit ?"Save Changes" :"Create Session"}
+ {saving ? "Saving…" : isEdit ?"Save Changes" :"Create Session"}
  </Button>
  </div>
  </DialogFooter>

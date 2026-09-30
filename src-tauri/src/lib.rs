@@ -134,6 +134,12 @@ fn database_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0007_session_intents.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 8,
+            description: "notion_ownership",
+            sql: include_str!("../migrations/0008_notion_ownership.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -151,10 +151,8 @@ function buildDayItemView(
   return {
     id: session.id,
     title: session.title,
-    timeLabel: formatStartTime(session.startTime),
-    timeDetail: session.endTime
-      ? `${formatTimeRange(session.startTime, session.endTime)} · ${duration}`
-      : duration,
+    timeLabel: formatStartTime(session.schedule.blocks[0].start),
+    timeDetail: `${formatTimeRange(session.schedule.blocks[0].start, session.schedule.blocks[session.schedule.blocks.length - 1].end)} · ${duration}`,
     metaLabel: [
       project?.name ?? subjects,
       session.schedule.blocks.length > 1
@@ -162,19 +160,19 @@ function buildDayItemView(
         : undefined,
     ].filter(Boolean).join(" · "),
     accentColor: primarySubject?.color,
-    kindLabel: session.status === "in-progress" ? "In progress" : "Session",
-    kindColor: session.status === "in-progress" ? undefined : primarySubject?.color,
+    kindLabel: session.execution.state === "in-progress" ? "In progress" : "Session",
+    kindColor: session.execution.state === "in-progress" ? undefined : primarySubject?.color,
     selected: selectedSessionIdSet.has(session.id),
     onToggleSelection: () => onToggleSessionSelection(session.id),
     onOpen: () => onSelectSession(session),
     selection: { eventIds: [], sessionIds: [session.id] },
-    markComplete: session.status !== "completed",
+    markComplete: session.execution.state !== "completed",
   }
 }
 
 function sortDayItems(items: DayItem[]): DayItem[] {
   return [...items].sort(
-    (a, b) => parseISO(a.item.startTime).getTime() - parseISO(b.item.startTime).getTime(),
+    (a, b) => parseISO(a.kind === "session" ? a.item.schedule.blocks[0].start : a.item.startTime).getTime() - parseISO(b.kind === "session" ? b.item.schedule.blocks[0].start : b.item.startTime).getTime(),
   )
 }
 
@@ -255,7 +253,7 @@ export function DayDetail({
   const uncompletedItems = useMemo<DayItem[]>(
     () => sortDayItems([
       ...sessions
-        .filter((session) => session.status !== "completed")
+        .filter((session) => session.execution.state !== "completed")
         .map((session) => ({ kind: "session" as const, item: session })),
       ...dayEvents
         .filter((event) => !event.isFinished)
@@ -266,7 +264,7 @@ export function DayDetail({
   const completedItems = useMemo<DayItem[]>(
     () => sortDayItems([
       ...sessions
-        .filter((session) => session.status === "completed")
+        .filter((session) => session.execution.state === "completed")
         .map((session) => ({ kind: "session" as const, item: session })),
       ...dayEvents
         .filter((event) => event.isFinished)

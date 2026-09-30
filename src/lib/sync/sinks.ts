@@ -4,7 +4,7 @@
  * needing a cursor of its own.
  */
 import { getNotionCalendarSettings } from "@/lib/settings"
-import { enqueueNotionArchive, enqueueNotionUpsert, type NotionIntentKind } from "@/lib/notion/outbox"
+import { enqueueNotionArchive, type NotionIntentKind } from "@/lib/notion/outbox"
 import { isSyncTable } from "@/lib/sync/reduce"
 import type { LocalRecord, RemoteSyncChange, SyncTable } from "@/lib/sync/types"
 
@@ -59,17 +59,6 @@ export function getNotionDeleteMetadata(payload: unknown): NotionDeleteMetadata 
     kind: notion.kind,
     dataSourceId: typeof notion.dataSourceId === "string" ? notion.dataSourceId : "",
   }
-}
-
-export async function recordNotionUpsertIntent(table: SyncTable, rowId: string, value: LocalRecord): Promise<void> {
-  const kind = notionKindForTable(table)
-  if (!kind || !isObject(value)) return
-  const source = notionSourceFromRecord(value)
-  if (isObject(source) && source.type === "vcaa") return
-  const settings = getNotionCalendarSettings()
-  if (!settings.dataSourceId.trim()) return
-  const pageId = source?.type === "notion" && typeof source.id === "string" ? source.id : undefined
-  await enqueueNotionUpsert(settings.dataSourceId, kind, rowId, pageId)
 }
 
 export async function recordRemoteNotionDeleteIntent(

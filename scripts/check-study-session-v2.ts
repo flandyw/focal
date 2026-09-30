@@ -6,6 +6,7 @@ import {
   startPlannedStudySession,
   updateStudySession,
 } from "../src/lib/studySessions.ts"
+import { getSessionEffectiveMinutes } from "../src/lib/utils.ts"
 import { sharedTimerNotice } from "../src/lib/sync/sessions.ts"
 
 function check(condition: boolean, message: string): void {
@@ -17,10 +18,10 @@ for (const type of ["folio", "examtrack"] as const) {
     id: "shared-exam",
     integrations: { [type]: { type, id: "shared-exam", kind: "exam", subject: "mm", phase: "paused" } },
   })
-  const mirrored = updateStudySession(shared, { source: { type: "notion", id: "page", kind: "session" } })
+  const mirrored = updateStudySession(shared, { integrations: { ...shared.integrations, notion: { type: "notion", id: "page", kind: "session" } } })
   check(mirrored.integrations?.[type]?.id === "shared-exam", "Notion erased shared session identity")
   check(mirrored.integrations?.[type]?.phase === "paused", "Notion erased shared timer phase")
-  check(mirrored.source?.id === "page", "Notion link was not saved")
+  check(mirrored.integrations?.notion?.id === "page", "Notion link was not saved")
 
   const started = updateStudySession(shared, {
     execution: { state: "in-progress", intervals: [{ start: "2026-06-24T08:00:00.000Z", source: "imported" }] },
@@ -66,7 +67,7 @@ const planned = normalizeStudySession({
 check(planned.schemaVersion === 2, "legacy session was not migrated to V2")
 check(planned.schedule.blocks.length === 2, "legacy planned blocks were not preserved")
 check(planned.execution.state === "planned" && planned.execution.intervals.length === 0, "planned session gained execution intervals")
-check(planned.startTime === "2026-06-24T08:00:00.000Z", "legacy schedule compatibility view is wrong")
+check(planned.schedule.blocks[0].start === "2026-06-24T08:00:00.000Z", "legacy schedule import is wrong")
 
 const startedPlanned = startPlannedStudySession(planned, {
   startedAt: "2026-06-24T08:05:00.000Z",
@@ -85,6 +86,11 @@ check(Boolean(stored.schedule), "stored session lost its schedule")
 check(Boolean(stored.execution), "stored session lost its execution")
 check(!("startTime" in stored), "legacy startTime leaked into canonical storage")
 check(!("status" in stored), "legacy status leaked into canonical storage")
+check(!("status" in planned) && !("activeDurations" in planned), "legacy aliases remain inside the app")
+check(Object.getOwnPropertyDescriptor(planned, "execution")?.get === undefined, "canonical session must be plain data")
+const withoutEvidence = updateStudySession(planned, { execution: { state: "completed", intervals: [], completedAt: planned.schedule.blocks[0].end } })
+check(getSessionEffectiveMinutes(withoutEvidence) === 0, "planned blocks became completed evidence")
+check(JSON.stringify(normalizeStudySession(stored)) === JSON.stringify(planned), "canonical JSON round trip changed a session")
 
 const created = createStudySession("new-session", {
   subjectIds: ["eng"],
@@ -93,22 +99,20 @@ const created = createStudySession("new-session", {
   reflection: { confidence: 3, blockers: "Introduction" },
 }, "2026-06-24T00:00:00.000Z")
 
-check(created.confidence === 3, "create dropped confidence")
-check(created.blockers === "Introduction", "create dropped blockers")
+check(created.reflection?.confidence === 3, "create dropped confidence")
+check(created.reflection?.blockers === "Introduction", "create dropped blockers")
 
 const completed = updateStudySession(created, {
-  status: "completed",
-  activeDurations: [{ start: "2026-06-25T07:05:00.000Z", end: "2026-06-25T07:50:00.000Z" }],
-  completedAt: "2026-06-25T07:50:00.000Z",
-  notes: "Drafted the outline",
+  execution: { state: "completed", intervals: [{ start: "2026-06-25T07:05:00.000Z", end: "2026-06-25T07:50:00.000Z", source: "manual" }], completedAt: "2026-06-25T07:50:00.000Z" },
+  reflection: { notes: "Drafted the outline" },
 }, "2026-06-25T07:50:00.000Z")
 
 check(completed.execution.state === "completed", "completion transition did not update state")
 check(completed.execution.intervals.length === 1, "completion transition lost actual intervals")
-check(completed.completedAt === "2026-06-25T07:50:00.000Z", "completion timestamp was not preserved")
+check(completed.execution.state === "completed" && completed.execution.completedAt === "2026-06-25T07:50:00.000Z", "completion timestamp was not preserved")
 check(completed.reflection?.notes === "Drafted the outline", "completion transition lost reflection")
 
-const cleared = updateStudySession(completed, { notes: undefined, confidence: undefined })
+const cleared = updateStudySession(completed, { reflection: { notes: undefined, confidence: undefined } })
 check(cleared.reflection?.notes === undefined, "explicitly cleared notes were restored")
 check(cleared.reflection?.confidence === undefined, "explicitly cleared confidence was restored")
 
@@ -119,7 +123,7 @@ const repaired = normalizeStudySession({
   startTime: "not-a-date",
   status: "planned",
 })
-check(Number.isFinite(new Date(repaired.startTime).getTime()), "invalid imported schedule was not repaired")
+check(Number.isFinite(new Date(repaired.schedule.blocks[0].start).getTime()), "invalid imported schedule was not repaired")
 
 const firstMergeSession = normalizeStudySession({
   id: "merge-first",

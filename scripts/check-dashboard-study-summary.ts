@@ -10,9 +10,8 @@ const planned = createStudySession("planned", {
   createdVia: "manual",
 })
 const completed = updateStudySession(planned, {
-  status: "completed",
   subjectIds: ["eng", "mm"],
-  activeDurations: [{ start: "2026-07-13T08:00:00Z", end: "2026-07-13T09:00:00Z" }],
+  execution: { state: "completed", intervals: [{ start: "2026-07-13T08:00:00Z", end: "2026-07-13T09:00:00Z", source: "manual" }], completedAt: "2026-07-13T09:00:00Z" },
 })
 const minutes = getCompletedStudyMinutesBySubject([planned, completed], [])
 

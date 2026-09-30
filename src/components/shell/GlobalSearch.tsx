@@ -826,7 +826,7 @@ export function GlobalSearch({
  getSubjectById(subjectId)?.shortCode ?? subjectId,
  )
  .join(", ");
- const sessionDate = formatSearchDate(session.startTime);
+ const sessionDate = formatSearchDate(session.schedule.blocks[0].start);
  const globalIdx = actionOffset + results.projects.length + idx;
  return (
  <Button
@@ -853,7 +853,7 @@ export function GlobalSearch({
  </p>
  <p className="truncate text-xs text-muted-foreground">
  {[(project?.name ?? subjectLabel) ||"Study session", sessionDate]
- .concat(session.status === "completed" ? ["Completed"] : [])
+ .concat(session.execution.state === "completed" ? ["Completed"] : [])
  .filter(Boolean)
  .join(" · ")}
  </p>

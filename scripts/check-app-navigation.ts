@@ -89,3 +89,20 @@ assert(appSource.includes("onNewSession={() => handleOpenNewSession()}"), "the g
 assert(appSource.includes("onOpenFocus: handleOpenFocus"), "the app must keep the focus keyboard shortcut connected")
 assert(appSource.includes("onGoAssessments: handleSelectAssessments"), "assessment navigation must have a direct shortcut")
 assert(appSource.includes('label: "Add files"'), "new assessments must offer the next core action")
+
+// Planning dialogs are one discriminated state, not parallel booleans and keys.
+const planningState = /type PlanningDialog =[\s\S]*?\n\n/.exec(appSource)?.[0] ?? ""
+for (const kind of ["\"closed\"", "\"event\"", "\"session\"", "\"convert\""]) {
+  assert(planningState.includes(kind), `planning dialog state must cover ${kind}`)
+}
+for (const legacy of ["setSessionDialogOpen", "setEventDialogOpen", "setSelectedEvent(", "setSelectedSession(", "newItemDialogKey", "newItemInitialDate", "eventConversion"]) {
+  assert(!appSource.includes(legacy), `planning dialogs must not keep ${legacy}`)
+}
+const dialogSource = await fetch(new URL("../src/components/planning/EventDialog.tsx", import.meta.url)).then((response) => response.text())
+const sessionDialogSource = await fetch(new URL("../src/components/planning/StudySessionDialog.tsx", import.meta.url)).then((response) => response.text())
+for (const [name, source] of [["EventDialog", dialogSource], ["StudySessionDialog", sessionDialogSource]] as const) {
+  assert(source.includes("savingRef.current") || source.includes("submittingRef.current"), `${name} must block a second save while one is in flight`)
+  assert(source.includes("onOpenChange(false)") && source.includes("=== false"), `${name} must keep its draft when a save fails`)
+}
+assert(!appSource.includes("pushSessionChange") && !appSource.includes("pushEventChange"), "Notion intent must not be pushed from UI handlers")
+assert(!appSource.includes("requestNotionSync(false)"), "automatic Notion syncs must not be requested by feature code")

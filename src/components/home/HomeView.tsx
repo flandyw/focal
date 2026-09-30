@@ -317,7 +317,7 @@ export const HomeView = memo(function HomeView({
   const headingDateKey = selectedDate ?? todayDateKey;
   const headingDate = parseISO(headingDateKey);
   const selectedStudyHours = (sessionsByDate[headingDateKey] ?? [])
-    .filter((session) => session.status === "completed")
+    .filter((session) => session.execution.state === "completed")
     .reduce((total, session) => total + getSessionEffectiveMinutes(session), 0) / 60;
   const selectedBatchEvents = selectedDayEvents.filter((event) =>
     selectedEventIdSet.has(event.id),
@@ -336,7 +336,7 @@ export const HomeView = memo(function HomeView({
   const allSelectedItemsComplete =
     selectedBatchCount > 0 &&
     selectedBatchEvents.every((event) => event.isFinished) &&
-    selectedBatchSessions.every((session) => session.status === "completed");
+    selectedBatchSessions.every((session) => session.execution.state === "completed");
 
   const clearEventSelection = () => {
     setCalendarSelectionMode(false);

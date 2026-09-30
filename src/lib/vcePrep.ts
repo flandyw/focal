@@ -50,7 +50,7 @@ export function getMissingVcePrepSteps(project: Project): string[] {
 function getCompletedAt(session: StudySession): string | undefined {
   return session.execution.state === "completed"
     ? session.execution.completedAt
-    : session.completedAt
+    : undefined
 }
 
 export function buildVcePrepSummary(
@@ -60,12 +60,12 @@ export function buildVcePrepSummary(
 ): VcePrepSummary {
   const checklist = project.checklist ?? []
   const projectSessions = sessions.filter(
-    (session) => session.projectId === project.id && session.status === "completed",
+    (session) => session.projectId === project.id && session.execution.state === "completed",
   )
   const latestSession = [...projectSessions]
     .sort((a, b) => {
-      const aTime = getCompletedAt(a) ?? a.endTime
-      const bTime = getCompletedAt(b) ?? b.endTime
+      const aTime = getCompletedAt(a) ?? a.schedule.blocks[a.schedule.blocks.length - 1].end
+      const bTime = getCompletedAt(b) ?? b.schedule.blocks[b.schedule.blocks.length - 1].end
       return new Date(bTime).getTime() - new Date(aTime).getTime()
     })[0]
   const deadlineTime = project.deadline ? new Date(project.deadline).getTime() : NaN
@@ -78,7 +78,7 @@ export function buildVcePrepSummary(
       0,
     ),
     completedSessionCount: projectSessions.length,
-    latestConfidence: latestSession?.confidence,
+    latestConfidence: latestSession?.reflection?.confidence,
     daysUntilDeadline: Number.isFinite(deadlineTime)
       ? Math.ceil((deadlineTime - now) / DAY_MS)
       : null,

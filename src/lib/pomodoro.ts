@@ -9,7 +9,7 @@ export function isPomodoroSession(session: StudySession) {
   return session.execution.intervals.some((interval) => interval.source === "pomodoro") || (typeof session.description === "string" && (
     session.description.startsWith(POMODORO_DESCRIPTION_PREFIX)
     || session.description === LEGACY_POMODORO_DESCRIPTION
-  )) || session.notes === LEGACY_POMODORO_NOTES
+  )) || session.reflection?.notes === LEGACY_POMODORO_NOTES
 }
 
 export function getPomodoroDescription(durationMinutes: number) {

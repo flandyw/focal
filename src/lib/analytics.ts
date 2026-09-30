@@ -80,7 +80,7 @@ function getSessionAnalyticsStart(session: StudySession): number {
       .filter(Number.isFinite)
     if (intervalStarts.length > 0) return Math.min(...intervalStarts)
   }
-  return new Date(session.startTime).getTime()
+  return new Date(session.schedule.blocks[0].start).getTime()
 }
 
 function toDateString(timestamp: number): string {
@@ -102,7 +102,7 @@ function getRangeCutoff(range: AnalyticsRange, periodEnd = Date.now()): number {
 function getCompletedSessions(sessions: StudySession[], range: AnalyticsRange, periodEnd = Date.now()): StudySession[] {
   const cutoff = getRangeCutoff(range, periodEnd)
   return sessions.filter((s) => {
-    if (s.status !== "completed") return false
+    if (s.execution.state !== "completed") return false
     const start = getSessionAnalyticsStart(s)
     if (Number.isNaN(start)) return false
     if (cutoff > 0 && start < cutoff) return false
@@ -137,7 +137,7 @@ export function getStudyPeriodComparison(
   let currentMinutes = 0
   let previousMinutes = 0
   for (const session of sessions) {
-    if (session.status !== "completed") continue
+    if (session.execution.state !== "completed") continue
     const start = getSessionAnalyticsStart(session)
     if (!Number.isFinite(start) || start < previousStart.getTime() || start > now) continue
     const minutes = getSessionMinutes(session)
@@ -413,7 +413,7 @@ export function getSubjectCompletion(
     subjectIds.forEach((subjectId) => {
       const stats = subjectStats.get(subjectId) ?? { completed: 0, total: 0 }
       stats.total++
-      if (session.status === "completed") stats.completed++
+      if (session.execution.state === "completed") stats.completed++
       subjectStats.set(subjectId, stats)
     })
   })
@@ -444,7 +444,7 @@ export function getStudyEfficiency(
 
     const project = projects.find((p) => p.id === session.projectId)
     const subjectIds = getSessionSubjectIds(session, project)
-    const confidence = session.confidence ?? 3
+    const confidence = session.reflection?.confidence ?? 3
 
     const subjects = subjectIds.length > 0 ? subjectIds : ["_unassigned"]
     const subjectMinutes = splitMinutesAcrossSubjects(minutes, subjects)
@@ -483,7 +483,7 @@ export function getAnalyticsData(
   const subjectCompletion = getSubjectCompletion(sessions, projects, range, periodEnd)
   const efficiency = getStudyEfficiency(sessions, projects, range, periodEnd)
 
-  const hasData = sessions.some((s) => s.status === "completed")
+  const hasData = sessions.some((s) => s.execution.state === "completed")
 
   return { timeTrends, subjectBreakdown, consistency, timeOfDay, timeOfDayBySubject, subjectCompletion, efficiency, hasData }
 }

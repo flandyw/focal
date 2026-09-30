@@ -428,7 +428,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     if (state.mode === "work" || state.studyOvertime || !activeSessionId) return;
     const session = sessions.find((item) => item.id === activeSessionId);
     if (!session) return;
-    const scheduledEnd = session ? new Date(session.endTime) : null;
+    const scheduledEnd = session ? new Date(session.schedule.blocks[session.schedule.blocks.length - 1].end) : null;
     void completeActiveSession(
       scheduledEnd && Number.isFinite(scheduledEnd.getTime()) && scheduledEnd < new Date()
         ? scheduledEnd

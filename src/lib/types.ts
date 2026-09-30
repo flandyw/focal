@@ -108,26 +108,6 @@ export interface StudySession {
   deleted_at?: string | null;
   last_modified_device_id?: string | null;
 
-  /** @deprecated Compatibility view. New code should use schedule.blocks. */
-  startTime: string;
-  /** @deprecated Compatibility view. New code should use schedule.blocks. */
-  endTime: string;
-  /** @deprecated Compatibility view. New code should use execution.state. */
-  status: StudySessionStatus;
-  /** @deprecated Compatibility view. New code should use reflection. */
-  notes?: string;
-  /** @deprecated Compatibility view. New code should use reflection. */
-  confidence?: ConfidenceScore;
-  /** @deprecated Compatibility view. New code should use reflection. */
-  blockers?: string;
-  /** @deprecated Compatibility view. New code should use reflection. */
-  nextAction?: string;
-  /** @deprecated Compatibility view. Planned blocks and actual intervals are now separate. */
-  activeDurations?: StudyTimeRange[];
-  /** @deprecated Compatibility view. New code should use execution. */
-  completedAt?: string;
-  /** @deprecated Compatibility view. New code should use integrations.notion. */
-  source?: NotionSource;
 }
 
 export interface CalendarEvent {

@@ -105,7 +105,7 @@ export function sessionUpdatesFromSnapshot(
     }
   }
   if (typeof snapshot.isCompleted === "boolean") {
-    const currentlyCompleted = existing.status === "completed" || Boolean(existing.completedAt)
+    const currentlyCompleted = existing.execution.state === "completed"
     if (snapshot.isCompleted !== currentlyCompleted) {
       updates.status = snapshot.isCompleted
         ? "completed"
@@ -113,7 +113,7 @@ export function sessionUpdatesFromSnapshot(
           ? "in-progress"
           : "planned"
       updates.completedAt = snapshot.isCompleted
-        ? (remoteCompletedAt ?? existing.completedAt ?? new Date().toISOString())
+        ? (remoteCompletedAt ?? (existing.execution.state === "completed" ? existing.execution.completedAt : new Date().toISOString()))
         : undefined
     }
   }
@@ -129,7 +129,7 @@ export function rebaseNotionConflictUpdates(
   subjects: Subject[],
   resolution: "local" | "notion",
 ): EventUpdates | SessionUpdates {
-  const source = current.source?.type === "notion" ? current.source : undefined
+  const source = "schedule" in current ? current.integrations?.notion : current.source?.type === "notion" ? current.source : undefined
   if (kind === "event") {
     const event = current as CalendarEvent
     const remote = toEventFromPage(page, settings, subjects, findSubjectIdFromValues)
@@ -368,8 +368,9 @@ function pullSession(
     ?? (getFocalId(page) ? existingSessions.find((session) => session.id === getFocalId(page)) : undefined)
   if (existing) {
     ctx.matchedSessionIds.add(existing.id)
+    const source = existing.integrations?.notion
     if (
-      !existing.source
+      !source
       && getFocalId(page) === existing.id
       && pageMatchesSession(page, existing, settings, subjects, findSubjectIdFromValues)
     ) {
@@ -389,22 +390,22 @@ function pullSession(
       }
       return
     }
-    if (!existing.source?.lastEditedTime || existing.source.lastEditedTime !== page.last_edited_time) {
+    if (!source?.lastEditedTime || source.lastEditedTime !== page.last_edited_time) {
       const session = toSessionFromPage(page, settings, subjects, findSubjectIdFromValues)
       if (session) {
         const localSnapshot = sessionSyncSnapshot(existing, settings, subjects)
         const remoteSnapshot = sessionSyncSnapshot(session, settings, subjects)
         const currentPrimarySubjectId = typeof localSnapshot.subjectId === "string" ? localSnapshot.subjectId : null
-        const remoteSource = getNotionSource(page, "session", existing.source?.bodyHash, remoteSnapshot)
+        const remoteSource = getNotionSource(page, "session", source?.bodyHash, remoteSnapshot)
         const remoteUpdates: SessionUpdates = {
           ...ctx.updatedSessions.get(existing.id),
           ...sessionUpdatesFromSnapshot(remoteSnapshot, existing, currentPrimarySubjectId, session.completedAt),
           source: remoteSource,
         }
         if (ctx.dirtySessionIds.has(existing.id)) {
-          const localBodyChanged = bodyHasChanged(existing.source?.bodyHash, buildSessionBodyText(existing))
-          const merge = existing.source?.syncSnapshot
-            ? mergeNotionSyncSnapshots(existing.source.syncSnapshot, localSnapshot, remoteSnapshot)
+          const localBodyChanged = bodyHasChanged(source?.bodyHash, buildSessionBodyText(existing))
+          const merge = source?.syncSnapshot
+            ? mergeNotionSyncSnapshots(source.syncSnapshot, localSnapshot, remoteSnapshot)
             : undefined
           if (merge) {
             if (merge.conflictingFields.length === 0) {
@@ -472,8 +473,8 @@ function pullSession(
             localId: existing.id,
             kind: "session",
             title: existing.title,
-            startTime: existing.startTime,
-            endTime: existing.endTime,
+            startTime: existing.schedule.blocks[0].start,
+            endTime: existing.schedule.blocks[existing.schedule.blocks.length - 1].end,
             notionPageId: page.id,
             notionLastEditedTime: page.last_edited_time,
             notionUrl: page.url,
@@ -503,8 +504,8 @@ function pullSession(
         ctx.acknowledgedSessionIds.add(existing.id)
       }
     } else if (
-      !existing.source.syncSnapshot
-      && !bodyHasChanged(existing.source.bodyHash, buildSessionBodyText(existing))
+      !source.syncSnapshot
+      && !bodyHasChanged(source.bodyHash, buildSessionBodyText(existing))
       && pageMatchesSession(page, existing, settings, subjects, findSubjectIdFromValues)
     ) {
       ctx.updatedSessions.set(existing.id, {
@@ -512,7 +513,7 @@ function pullSession(
         source: getNotionSource(
           page,
           "session",
-          existing.source.bodyHash,
+          source.bodyHash,
           sessionSyncSnapshot(existing, settings, subjects),
         ),
       })
@@ -523,13 +524,13 @@ function pullSession(
   }
 
   const candidates = existingSessions.filter((s) => (
-    !s.source && !ctx.matchedSessionIds.has(s.id) && pageMatchesSession(page, s, settings, subjects, findSubjectIdFromValues)
+    !s.integrations?.notion && !ctx.matchedSessionIds.has(s.id) && pageMatchesSession(page, s, settings, subjects, findSubjectIdFromValues)
   ))
   if (candidates.length > 1) {
     const pageStart = new Date(startTime).getTime()
     candidates.sort((a, b) =>
-      Math.abs(new Date(a.startTime).getTime() - pageStart) -
-      Math.abs(new Date(b.startTime).getTime() - pageStart),
+      Math.abs(new Date(a.schedule.blocks[0].start).getTime() - pageStart) -
+      Math.abs(new Date(b.schedule.blocks[0].start).getTime() - pageStart),
     )
   }
   for (const c of candidates) ctx.blockedSessionFingerprints.add(sessionFingerprint(c))
@@ -576,8 +577,8 @@ export function pullFromNotion(
   )
   const sessionBySourceId = new Map<string, StudySession>(
     existingSessions
-      .filter((s) => s.source?.type === "notion" && s.source.kind !== "event")
-      .map((s) => [s.source!.id, s]),
+      .filter((s) => s.integrations?.notion && s.integrations.notion.kind !== "event")
+      .map((s) => [s.integrations!.notion!.id, s]),
   )
 
   for (const page of pages) {

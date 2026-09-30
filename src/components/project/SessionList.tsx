@@ -24,7 +24,7 @@ export function SessionList({
   onNewSession,
 }: SessionListProps) {
   const sorted = useMemo(() => [...sessions].sort(
-    (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+    (a, b) => new Date(b.schedule.blocks[0].start).getTime() - new Date(a.schedule.blocks[0].start).getTime()
   ), [sessions])
 
   if (sessions.length === 0) {
@@ -51,8 +51,8 @@ export function SessionList({
     <ScrollArea className="flex-1">
       <div className="space-y-1.5 px-5 py-3 min-[1200px]:px-8">
         {sorted.map((session) => {
-          const start = parseISO(session.startTime)
-          const end = parseISO(session.endTime)
+          const start = parseISO(session.schedule.blocks[0].start)
+          const end = parseISO(session.schedule.blocks[session.schedule.blocks.length - 1].end)
           const durationMs = end.getTime() - start.getTime()
           const hours = Math.floor(durationMs / (1000 * 60 * 60))
           const minutes = Math.round((durationMs % (1000 * 60 * 60)) / (1000 * 60))
@@ -69,7 +69,7 @@ export function SessionList({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium truncate">{session.title}</p>
-                    <StatusBadge status={session.status} />
+                    <StatusBadge status={session.execution.state} />
                   </div>
                   {session.description && (
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{session.description}</p>

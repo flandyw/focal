@@ -102,10 +102,10 @@ function buildWorkloads(projects: Project[], sessions: StudySession[], now: numb
   return projects.flatMap((project): Workload[] => {
     if (project.isArchived || project.isFinished || !project.planning) return []
     const completed = sessions
-      .filter((session) => session.projectId === project.id && session.status === "completed")
+      .filter((session) => session.projectId === project.id && session.execution.state === "completed")
       .reduce((sum, session) => sum + getSessionEffectiveMinutes(session), 0)
     const alreadyPlanned = sessions
-      .filter((session) => session.projectId === project.id && session.status === "planned" && new Date(session.startTime).getTime() >= now)
+      .filter((session) => session.projectId === project.id && session.execution.state === "planned" && new Date(session.schedule.blocks[0].start).getTime() >= now)
       .reduce((sum, session) => sum + getSessionEffectiveMinutes(session), 0)
     const remaining = Math.max(0, project.planning.estimatedMinutes - completed - alreadyPlanned)
     if (remaining === 0) return []
@@ -161,7 +161,7 @@ export function buildAdaptivePlan({
       if (range && range.start < dayEnd && range.end > day.getTime()) busy.push(range)
     }
     for (const session of sessions) {
-      if (session.status === "completed") continue
+      if (session.execution.state === "completed") continue
       for (const block of session.schedule.blocks) {
         const start = new Date(block.start).getTime()
         const end = new Date(block.end).getTime()

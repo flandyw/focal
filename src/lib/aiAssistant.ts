@@ -299,11 +299,11 @@ export function buildUserBriefing({
     return project?.subjectId ? [project.subjectId] : []
   }
   for (const session of sessions) {
-    if (session.status !== "planned" && session.status !== "completed") continue
-    const startMs = new Date(session.startTime).getTime()
-    const endMs = new Date(session.endTime).getTime()
+    if (session.execution.state !== "planned" && session.execution.state !== "completed") continue
+    const startMs = new Date(session.schedule.blocks[0].start).getTime()
+    const endMs = new Date(session.schedule.blocks[session.schedule.blocks.length - 1].end).getTime()
     if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
-    if (session.status === "completed" && startMs < now - BRIEFING_PLANNING_HORIZON_MS) continue
+    if (session.execution.state === "completed" && startMs < now - BRIEFING_PLANNING_HORIZON_MS) continue
     const minutes = Math.round((endMs - startMs) / 60000)
     const ids = sessionSubjectIds(session)
     if (ids.length === 0) continue
@@ -335,12 +335,12 @@ export function buildUserBriefing({
   const lowConfidence = sessions
     .filter(
       (session) =>
-        session.status === "completed"
-        && session.confidence !== undefined
-        && session.confidence <= 2
-        && new Date(session.startTime).getTime() >= now - BRIEFING_RECENT_HORIZON_MS,
+        session.execution.state === "completed"
+        && session.reflection?.confidence !== undefined
+        && session.reflection.confidence <= 2
+        && new Date(session.schedule.blocks[0].start).getTime() >= now - BRIEFING_RECENT_HORIZON_MS,
     )
-    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+    .sort((a, b) => new Date(b.schedule.blocks[0].start).getTime() - new Date(a.schedule.blocks[0].start).getTime())
     .slice(0, 3)
 
   const lines: string[] = []
@@ -380,8 +380,8 @@ export function buildUserBriefing({
       `- Recent low-confidence sessions (≤2/5): ${lowConfidence
         .map((session) => {
           const codes = session.subjectIds.map((id) => shortCode(id)).join("/") || shortCode(undefined)
-          const blockers = session.blockers ? `, blockers: ${session.blockers}` : ""
-          return `"${session.title}" ${codes} ${session.confidence}/5${blockers}`
+          const blockers = session.reflection?.blockers ? `, blockers: ${session.reflection.blockers}` : ""
+          return `"${session.title}" ${codes} ${session.reflection?.confidence}/5${blockers}`
         })
         .join("; ")}`,
     )

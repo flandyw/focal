@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef } from "react"
 import { invoke } from "@tauri-apps/api/core"
-import type { CalendarEvent, EventType } from "@/lib/types"
-import { generateId, isRecord, safeString, safeStringOpt, safeBool, safeDateMeta, parseCalendarEventSource } from "@/lib/utils"
+import type { CalendarEvent } from "@/lib/types"
+import { generateId } from "@/lib/utils"
 import { usePersistedData } from "@/lib/hooks/usePersistedData"
 import { useLatestRef } from "@/lib/hooks/useLatestRef"
 import { mutationAccountId, notifyCommittedPlanningChanges } from "@/lib/sync/engine"
 import { ensureRecordImport, withWriteLock } from "@/lib/storage/database"
 import { getNotionCalendarSettings } from "@/lib/settings"
-import { calendarEventFingerprint, dedupeCalendarEvents } from "@/lib/calendarEvents"
+import { calendarEventFingerprint, dedupeCalendarEvents, normaliseEvent } from "@/lib/calendarEvents"
 
-const VALID_EVENT_TYPES: readonly string[] = ["sac", "exam", "assignment", "event", "homework", "other", "practice-sac"]
 type EventInput = Omit<CalendarEvent, "id" | "created_at" | "updated_at" | "isFinished"> & { isFinished?: boolean; id?: string }
 interface EventUpdate { id: string; updates: Partial<Omit<CalendarEvent, "id" | "created_at">>; expectedRecord?: CalendarEvent }
 type EventMutation =
@@ -19,24 +18,6 @@ type EventMutation =
 
 function eventHasPassed(event: Pick<CalendarEvent, "startTime" | "endTime">, now = Date.now()): boolean {
   return new Date(event.endTime ?? event.startTime).getTime() < now
-}
-
-function normaliseEvent(raw: unknown): CalendarEvent {
-  const obj = isRecord(raw) ? raw : {}
-  return {
-    id: safeString(obj, "id", `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`),
-    title: safeString(obj, "title", "Untitled Event"),
-    description: safeStringOpt(obj, "description"),
-    startTime: safeString(obj, "startTime", new Date().toISOString()),
-    endTime: safeStringOpt(obj, "endTime"),
-    eventType: VALID_EVENT_TYPES.includes(String(obj.eventType)) ? obj.eventType as EventType : "event",
-    subjectId: safeStringOpt(obj, "subjectId"),
-    location: safeStringOpt(obj, "location"),
-    isFinished: safeBool(obj, "isFinished", false),
-    finishedAt: safeStringOpt(obj, "finishedAt"),
-    source: parseCalendarEventSource(obj.source),
-    ...safeDateMeta(obj),
-  }
 }
 
 function createEvent(data: EventInput): CalendarEvent {

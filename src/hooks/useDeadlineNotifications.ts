@@ -148,9 +148,9 @@ export function createEventNotification(event: CalendarEvent, now: Date): StudyN
 }
 
 export function createSessionNotification(session: StudySession, now: Date): StudyNotification | null {
-  if (session.status !== "planned" || session.deleted_at) return null
+  if (session.execution.state !== "planned" || session.deleted_at) return null
 
-  const sessionDate = parseISO(session.startTime)
+  const sessionDate = parseISO(session.schedule.blocks[0].start)
   if (Number.isNaN(sessionDate.getTime())) return null
 
   const hoursUntil = (sessionDate.getTime() - now.getTime()) / 3_600_000

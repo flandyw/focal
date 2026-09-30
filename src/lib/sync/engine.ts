@@ -56,7 +56,7 @@ import {
   retryOrBlockChange,
   rowKey,
 } from "@/lib/sync/reduce"
-import { getNotionDeleteMetadata, notionDeletePayload, recordNotionUpsertIntent } from "@/lib/sync/sinks"
+import { getNotionDeleteMetadata, notionDeletePayload } from "@/lib/sync/sinks"
 import { sessionCommands, sessionReplayTiming } from "@/lib/sync/sessions"
 import {
   applyChanges,
@@ -329,7 +329,6 @@ export async function recordLocalUpsert(
     return
   }
   const queue = await pushOrQueue(accountId, table, rowId, "put", sanitizePayload(table, payload))
-  await recordNotionUpsertIntent(table, rowId, payload)
   markLocalChange()
   emitQueuedStatus(queue, `${table.replace(/_/g, " ")} saved locally`)
   if (currentSession) void flushQueue()

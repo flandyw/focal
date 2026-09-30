@@ -118,7 +118,7 @@ async function removeDuplicateNotionPages(
 ): Promise<NotionPage[]> {
   const linkedPageIds = new Set([
     ...events.flatMap((event) => event.source?.type === "notion" ? [event.source.id] : []),
-    ...sessions.flatMap((session) => session.source?.type === "notion" ? [session.source.id] : []),
+    ...sessions.flatMap((session) => session.integrations?.notion ? [session.integrations.notion.id] : []),
   ])
   const { archiveIds: duplicateIds, hiddenIds: hiddenDuplicateIds } = planDuplicateNotionPages(
     pages,

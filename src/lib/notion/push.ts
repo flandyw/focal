@@ -160,8 +160,8 @@ function buildNotionSessionProperties(
     [settings.titleProperty]: { title: richTextValue(session.title) },
     [settings.dateProperty]: {
       date: {
-        start: session.startTime,
-        end: session.endTime,
+        start: session.schedule.blocks[0].start,
+        end: session.schedule.blocks[session.schedule.blocks.length - 1].end,
       },
     },
   }
@@ -174,7 +174,7 @@ function buildNotionSessionProperties(
 
   if (settings.completedProperty.trim()) {
     const pt = getSchemaPropertyType(schema, settings.completedProperty, "checkbox")
-    const prop = createPropertyValue(pt, session.status === "completed" || Boolean(session.completedAt))
+    const prop = createPropertyValue(pt, session.execution.state === "completed")
     if (prop) properties[settings.completedProperty] = prop
   }
 
@@ -344,19 +344,17 @@ export async function pushSessionToNotion(
     setCachedSchema(settings.dataSourceId, schema)
   }
 
+  const source = session.integrations?.notion
   const bodyText = buildSessionBodyText(session)
-  const children = buildPageChildrenForSync(
-    bodyText,
-    session.source?.type === "notion" ? session.source.bodyHash : undefined,
-  )
+  const children = buildPageChildrenForSync(bodyText, source?.bodyHash)
   const properties = buildNotionSessionProperties(settings, session, subjects, schema)
   const bodyHash = hashBody(bodyText ?? "")
 
   const errors: string[] = []
   const page = await withRetry(
     `Session "${session.title}"`,
-    session.source?.type === "notion"
-      ? () => updateOrCreatePage(settings, session.source!.id, session.id, "session", properties, children)
+    source
+      ? () => updateOrCreatePage(settings, source.id, session.id, "session", properties, children)
       : () => createRecoverablePage(settings, session.id, "session", properties, children),
     errors,
   )
@@ -523,26 +521,24 @@ export function collectSessionPushTasks(
 ): PushTask[] {
   const tasks: PushTask[] = []
   for (const session of existingSessions) {
-    if (session.source?.type === "notion" && session.source.kind === "event") continue
+    const source = session.integrations?.notion
+    if (source?.kind === "event") continue
     const isFastPush = fastPushIds?.has(session.id)
     if (!isFastPush && (ctx.pulledSessionIds.has(session.id) || ctx.conflictedSessionIds.has(session.id))) continue
-    if (!isFastPush && !session.source && ctx.matchedSessionIds.has(session.id)) continue
-    if (!isFastPush && !session.source && ctx.blockedSessionFingerprints.has(sessionFingerprint(session))) continue
+    if (!isFastPush && !source && ctx.matchedSessionIds.has(session.id)) continue
+    if (!isFastPush && !source && ctx.blockedSessionFingerprints.has(sessionFingerprint(session))) continue
     const isDirty = ctx.dirtySessionIds.has(session.id)
     const bodyText = buildSessionBodyText(session)
-    const children = buildPageChildrenForSync(
-      bodyText,
-      session.source?.type === "notion" ? session.source.bodyHash : undefined,
-    )
+    const children = buildPageChildrenForSync(bodyText, source?.bodyHash)
     const bodyHash = hashBody(bodyText ?? "")
     const properties = buildNotionSessionProperties(settings, session, subjects, schema)
-    if (session.source?.type === "notion") {
+    if (source) {
       if (isFastPush) {
         tasks.push({
           run: async () => {
             const page = await withRetry(
               `Session "${session.title}"`,
-              () => updateOrCreatePage(settings, session.source!.id, session.id, "session", properties, children),
+              () => updateOrCreatePage(settings, source.id, session.id, "session", properties, children),
               ctx.pushErrors,
             )
             if (!page) return
@@ -561,10 +557,10 @@ export function collectSessionPushTasks(
         })
         continue
       }
-      const remotePage = pagesById.get(session.source.id)
+      const remotePage = pagesById.get(source.id)
       if (remotePage) {
         const propertiesMatch = pageMatchesSession(remotePage, session, settings, subjects, findSubjectIdFromValues)
-        const bodyDiffers = bodyHasChanged(session.source.bodyHash, bodyText)
+        const bodyDiffers = bodyHasChanged(source.bodyHash, bodyText)
         const identityMatches = getFocalId(remotePage) === session.id && getFocalKind(remotePage) === "session"
         if (!isDirty && propertiesMatch && !bodyDiffers && identityMatches) continue
         if (propertiesMatch && !bodyDiffers && identityMatches) {
@@ -586,7 +582,7 @@ export function collectSessionPushTasks(
               `Session "${session.title}"`,
               () => updateNotionPage(
                 settings,
-                session.source!.id,
+                source.id,
                 properties,
                 bodyDiffers ? children : undefined,
               ),
@@ -679,7 +675,7 @@ export async function processNotionArchiveIntents(
       ? eventIds.has(intent.localId)
       : sessionIds.has(intent.localId)
     if (restored || !intent.pageId) {
-      await clearNotionIntent(intent.dataSourceId, intent.kind, intent.localId, "archive")
+      await clearNotionIntent(intent.dataSourceId, intent.kind, intent.localId, "archive", undefined, intent)
       continue
     }
     hiddenIds.add(intent.pageId)
@@ -693,7 +689,7 @@ export async function processNotionArchiveIntents(
       await waitForWriteTurn()
       await deleteNotionPage(settings, intent.pageId)
       ctx.deleted += 1
-      await clearNotionIntent(intent.dataSourceId, intent.kind, intent.localId, "archive")
+      await clearNotionIntent(intent.dataSourceId, intent.kind, intent.localId, "archive", undefined, intent)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       ctx.pushErrors.push(`Delete page ${intent.pageId}: ${message}`)

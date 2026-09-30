@@ -43,7 +43,7 @@ export function buildTodayOverview(
     )
     .sort((a, b) => parseISO(a.deadline!).getTime() - parseISO(b.deadline!).getTime())
 
-  const completedSessionItems = sessions.filter((session) => session.status === "completed")
+  const completedSessionItems = sessions.filter((session) => session.execution.state === "completed")
   const totalStudyMinutes = completedSessionItems.reduce(
     (total, session) => total + getSessionEffectiveMinutes(session),
     0,
@@ -57,7 +57,7 @@ export function buildTodayOverview(
   }
 
   const recentSessions: RecentActivityItem[] = sessions
-    .filter((session) => session.status === "completed" && session.completedAt)
+    .filter((session) => session.execution.state === "completed")
     .map((session) => {
       const project = session.projectId
         ? projects.find((candidate) => candidate.id === session.projectId)
@@ -69,7 +69,7 @@ export function buildTodayOverview(
         id: session.id,
         title: session.title,
         subtitle: project?.name ?? (subjectLabels || "Study session"),
-        timestamp: session.completedAt!,
+        timestamp: session.execution.state === "completed" ? session.execution.completedAt : session.updated_at!,
         kind: "session",
         session,
       }
@@ -104,7 +104,7 @@ export function buildTodayOverview(
 
   const sessionsByDate: Record<string, StudySession[]> = {}
   for (const session of sessions) {
-    const dateKey = format(parseISO(session.startTime), "yyyy-MM-dd")
+    const dateKey = format(parseISO(session.schedule.blocks[0].start), "yyyy-MM-dd")
     ;(sessionsByDate[dateKey] ??= []).push(session)
   }
 
@@ -146,10 +146,10 @@ export function buildTodayOverview(
       .slice(0, 3),
     upcomingSessions: sessions
       .filter((session) => {
-        const start = new Date(session.startTime)
-        return start >= now && start <= nextWeek && session.status === "planned"
+        const start = new Date(session.schedule.blocks[0].start)
+        return start >= now && start <= nextWeek && session.execution.state === "planned"
       })
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
+      .sort((a, b) => new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime()),
     upcomingEvents: events
       .filter((event) => {
         const start = new Date(event.startTime)

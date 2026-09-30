@@ -70,7 +70,7 @@ export function repairDuplicateSessions(raw: unknown[]): {
     const duplicate = keepExisting ? session : existing
     canonical.set(fingerprint, mergeDuplicateSessionDetails(kept, duplicate))
     duplicateIds.push(duplicate.id)
-    if (duplicate.source?.type === "notion") duplicateNotionPageIds.push(duplicate.source.id)
+    if (duplicate.integrations?.notion) duplicateNotionPageIds.push(duplicate.integrations.notion.id)
   }
 
   const keptById = new Map([...canonical.values()].map((session) => [session.id, session]))
@@ -92,15 +92,14 @@ export function sessionDuplicateKey(session: StudySession): string {
   // millisecond start and Folio provenance. New clients use source ids above.
   if (session.last_modified_device_id === "folio-android" &&
       /^(Study|Exam practice) in Folio(?: ·|$)/.test(session.description ?? "")) {
-    return JSON.stringify(["legacy-folio", session.title.trim(), [...session.subjectIds].sort(), session.startTime])
+    return JSON.stringify(["legacy-folio", session.title.trim(), [...session.subjectIds].sort(), session.schedule.blocks[0].start])
   }
   return JSON.stringify({
     title: session.title.trim(),
     projectId: session.projectId ?? null,
     subjectIds: [...session.subjectIds].sort(),
-    startTime: session.startTime,
-    endTime: session.endTime,
-    status: session.status,
+    blocks: session.schedule.blocks,
+    state: session.execution.state,
   })
 }
 

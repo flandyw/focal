@@ -32,10 +32,6 @@ const completedSession: StudySession = {
   reflection: { confidence: 2 },
   createdVia: "manual",
   created_at: "2026-08-01T09:00:00.000Z",
-  startTime: "2026-08-01T09:00:00.000Z",
-  endTime: "2026-08-01T10:00:00.000Z",
-  status: "completed",
-  confidence: 2,
 }
 
 check(getVcePrepSteps("sac").length === 4, "SAC prep pack should have four steps")

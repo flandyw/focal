@@ -221,6 +221,8 @@ mod tests {
                 include_str!("../../migrations/0004_change_log.sql"),
                 include_str!("../../migrations/0005_study_session_commands.sql"),
                 include_str!("../../migrations/0006_direct_session_publish.sql"),
+                include_str!("../../migrations/0007_session_intents.sql"),
+                include_str!("../../migrations/0008_notion_ownership.sql"),
             ] {
                 sqlx::raw_sql(migration).execute(&mut db).await.unwrap();
             }

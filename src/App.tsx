@@ -65,6 +65,8 @@ import {
   mergedStudySessionTitle,
   mergeStudySessionTimelines,
   startPlannedStudySession,
+  studySessionDraftInput,
+  studySessionDraftPatch,
 } from "@/lib/studySessions";
 import {
   forcePushAndMerge,
@@ -172,6 +174,12 @@ try {
   /* Tauri runtime not available (dev/browser) */
 }
 
+type PlanningDialog =
+  | { kind: "closed" }
+  | { kind: "event"; id?: string; initialDate?: Date }
+  | { kind: "session"; id?: string; initialDate?: Date; mode: "plan" | "log" }
+  | { kind: "convert"; eventId: string; draft: StudySessionDraft; sourceUpdatedAt?: string };
+
 function App() {
   const [projectsRoot, setProjectsRoot] = useState(() => getProjectsRootPath());
 
@@ -258,21 +266,12 @@ function App() {
     inboxView,
   } = navigation;
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
-  const [newSessionMode, setNewSessionMode] = useState<"plan" | "log">("plan");
-  const [eventConversion, setEventConversion] = useState<{ event: CalendarEvent; draft: StudySessionDraft } | null>(null);
-  const conversionSavingRef = useRef(false);
-  const [selectedSession, setSelectedSession] = useState<StudySession | null>(
-    null,
-  );
-  const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
-    null,
-  );
-  const [newItemInitialDate, setNewItemInitialDate] = useState<
-    Date | undefined
-  >(undefined);
-  const [newItemDialogKey, setNewItemDialogKey] = useState(0);
+  const [planningDialog, setPlanningDialog] = useState<PlanningDialog>({ kind: "closed" });
+  const selectedSession = planningDialog.kind === "session" ? sessions.find((session) => session.id === planningDialog.id) ?? null : null;
+  const selectedEvent = planningDialog.kind === "event" ? events.find((event) => event.id === planningDialog.id) ?? null : null;
+  const closePlanningDialog = useCallback((open = false) => {
+    if (!open) setPlanningDialog((current) => current === planningDialog ? { kind: "closed" } : current);
+  }, [planningDialog]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fileCounts, setFileCounts] = useState<Record<string, number>>({});
   const prevFileCountsRef = useRef<Record<string, number>>({});
@@ -394,44 +393,15 @@ function App() {
     setNotionConflictDialogOpen,
     performNotionSync,
     requestNotionSync,
-    pushEventChange,
-    pushSessionChange,
     resolveConflicts,
   } = useNotionSync({
+    ready: !eventsLoading && !sessionsLoading && supabaseInitialSyncSettled,
     events,
     sessions,
     allSubjects,
     syncEvents,
     syncSessions,
   });
-
-  const initialAutoSyncDoneRef = useRef(false);
-  useEffect(() => {
-    if (eventsLoading || sessionsLoading || !supabaseInitialSyncSettled) return;
-    if (initialAutoSyncDoneRef.current) return;
-    initialAutoSyncDoneRef.current = true;
-    void performNotionSync(false);
-  }, [eventsLoading, sessionsLoading, performNotionSync, supabaseInitialSyncSettled]);
-
-  useEffect(() => {
-    if (eventsLoading || sessionsLoading || !supabaseInitialSyncSettled) return;
-    const syncNow = () => {
-      void requestNotionSync(false);
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        syncNow();
-      }
-    };
-    const interval = window.setInterval(syncNow, 60 * 1000);
-    window.addEventListener("focus", syncNow);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", syncNow);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [eventsLoading, sessionsLoading, requestNotionSync, supabaseInitialSyncSettled]);
 
   const selectedProject = projects.find((p) => p.id === selectedId) ?? null;
   const selectedProjectSessions = useMemo(
@@ -575,19 +545,13 @@ function App() {
     navigation.openSettings();
   }, [navigation]);
 
+  // ponytail: keyboard re-open preserves an unsaved form; close it to start another.
   const handleOpenNewSession = useCallback((initialDate?: Date) => {
-    setNewSessionMode("plan");
-    setSelectedSession(null);
-    setNewItemInitialDate(initialDate);
-    setNewItemDialogKey((key) => key + 1);
-    setSessionDialogOpen(true);
+    setPlanningDialog((current) => current.kind === "closed" ? { kind: "session", mode: "plan", initialDate } : current);
   }, []);
 
   const handleOpenNewEvent = useCallback((initialDate?: Date) => {
-    setSelectedEvent(null);
-    setNewItemInitialDate(initialDate);
-    setNewItemDialogKey((key) => key + 1);
-    setEventDialogOpen(true);
+    setPlanningDialog((current) => current.kind === "closed" ? { kind: "event", initialDate } : current);
   }, []);
 
   const handleOpenAiAssistant = useCallback(() => {
@@ -768,23 +732,17 @@ function App() {
             toast.success(`Assessment "${project.name}" restored`);
           },
         });
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to delete assessment: ${String(e)}`);
       }
     },
-    [projects, deleteProject, selectedId, restoreProject, requestNotionSync, navigation],
+    [projects, deleteProject, selectedId, restoreProject, navigation],
   );
 
   const handleConvertEventToSession = useCallback((event: CalendarEvent) => {
     try {
       const draft = eventToStudySessionDraft(event);
-      setEventConversion({ event, draft });
-      setSelectedSession(null);
-      setNewSessionMode("plan");
-      setEventDialogOpen(false);
-      setSelectedEvent(null);
-      setSessionDialogOpen(true);
+      setPlanningDialog({ kind: "convert", eventId: event.id, draft, sourceUpdatedAt: event.updated_at });
     } catch (e) {
       toast.error(`Cannot convert event: ${String(e)}`);
     }
@@ -808,53 +766,21 @@ function App() {
       completedAt?: string;
       activeDurations?: { start: string; end: string }[];
     }) => {
-      if (conversionSavingRef.current) throw new Error("Conversion is already saving");
-      if (eventConversion) conversionSavingRef.current = true;
       try {
-        const blocks = data.activeDurations?.length
-          ? data.activeDurations
-          : [{ start: data.startTime, end: data.endTime }];
-        const execution =
-          data.status === "completed"
-            ? {
-                state: "completed" as const,
-                intervals: blocks.map((block) => ({ ...block, source: "manual" as const })),
-                completedAt: data.completedAt ?? new Date().toISOString(),
-              }
-            : data.status === "in-progress"
-              ? { state: "in-progress" as const, intervals: [] }
-              : { state: "planned" as const, intervals: [] as [] };
-        const input: Parameters<typeof addSession>[0] = {
-          projectId: data.projectId,
-          subjectIds: data.subjectIds,
-          title: data.title,
-          description: data.description,
-          topics: data.topics,
-          schedule: { blocks },
-          execution,
-          reflection: {
-            notes: data.notes,
-            confidence: data.confidence,
-            blockers: data.blockers,
-            nextAction: data.nextAction,
-          },
-          createdVia: "manual",
-        };
-        const newSession = eventConversion
-          ? await convertEventToSession(eventConversion.event, input)
-          : await addSession(input);
-        if (eventConversion) setEventConversion(null);
-        toast.success(eventConversion ? "Event converted to study session" : `Study session "${data.title}" created`);
-        setSessionDialogOpen(false);
-        void pushSessionChange(newSession);
+        const input = studySessionDraftInput(data);
+        if (planningDialog.kind === "convert") {
+          const event = events.find((item) => item.id === planningDialog.eventId);
+          if (!event || event.updated_at !== planningDialog.sourceUpdatedAt) throw new Error("Event changed; reopen conversion before saving");
+          await convertEventToSession(event, input);
+        } else await addSession(input);
+        toast.success(planningDialog.kind === "convert" ? "Event converted to study session" : `Study session "${data.title}" created`);
+        closePlanningDialog();
       } catch (e) {
         toast.error(`Failed to create study session: ${String(e)}`);
         throw e;
-      } finally {
-        conversionSavingRef.current = false;
       }
     },
-    [addSession, convertEventToSession, eventConversion, pushSessionChange, setSessionDialogOpen],
+    [events, addSession, convertEventToSession, planningDialog, closePlanningDialog],
   );
 
   const handleCreateStudySessions = useCallback(
@@ -875,13 +801,12 @@ function App() {
         toast.success(
           `${items.length} study session${items.length !== 1 ? "s" : ""} created`,
         );
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to create study sessions: ${String(e)}`);
         throw e;
       }
     },
-    [addSessions, requestNotionSync],
+    [addSessions],
   );
 
   const handleStartPomodoroSession = useCallback(
@@ -927,7 +852,6 @@ function App() {
             title: startedSession.title,
             execution: startedSession.execution,
           });
-          void pushSessionChange(startedSession);
           return startedSession;
         }
 
@@ -949,14 +873,13 @@ function App() {
           },
           createdVia: "manual",
         });
-        void pushSessionChange(session);
         return session;
       } catch (e) {
         toast.error(`Failed to start Pomodoro session: ${String(e)}`);
         throw e;
       }
     },
-    [projects, sessions, addSession, updateSession, pushSessionChange],
+    [projects, sessions, addSession, updateSession],
   );
 
   const handleUpdatePomodoroSession = useCallback(
@@ -991,14 +914,12 @@ function App() {
         }
 
         await updateSession(id, effectiveUpdates);
-        if (session)
-          void pushSessionChange({ ...session, ...effectiveUpdates });
       } catch (e) {
         toast.error(`Failed to update Pomodoro session: ${String(e)}`);
         throw e;
       }
     },
-    [sessions, projects, updateSession, pushSessionChange],
+    [sessions, projects, updateSession],
   );
 
   const handleEditStudySession = useCallback(
@@ -1020,43 +941,18 @@ function App() {
       activeDurations?: { start: string; end: string }[];
     }) => {
       if (!data.id) return;
+      const session = sessions.find((item) => item.id === data.id);
+      if (!session) throw new Error("Study session no longer exists");
       try {
-        const updates: Partial<Omit<StudySession, "id" | "created_at">> = {
-          projectId: data.projectId,
-          subjectIds: data.subjectIds,
-          title: data.title,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          description: data.description,
-          topics: data.topics,
-          notes: data.notes,
-          activeDurations: data.activeDurations,
-        };
-        if (data.status) updates.status = data.status;
-        updates.confidence = data.confidence;
-        updates.blockers = data.blockers;
-        updates.nextAction = data.nextAction;
-        updates.completedAt = data.completedAt;
-        await updateSession(data.id, updates);
+        await updateSession(data.id, studySessionDraftPatch(session, data));
         toast.success("Study session updated");
-        setSessionDialogOpen(false);
-        setSelectedSession(null);
-        const sessionForPush = sessions.find(
-          (s: StudySession) => s.id === data.id,
-        );
-        if (sessionForPush)
-          void pushSessionChange({ ...sessionForPush, ...updates });
+        closePlanningDialog();
       } catch (e) {
         toast.error(`Failed to update study session: ${String(e)}`);
+        throw e;
       }
     },
-    [
-      sessions,
-      updateSession,
-      pushSessionChange,
-      setSessionDialogOpen,
-      setSelectedSession,
-    ],
+    [sessions, updateSession, closePlanningDialog],
   );
 
   const handleAiUpdateStudySession = useCallback(
@@ -1071,14 +967,13 @@ function App() {
         toast.success(
           `Study session "${updates.title ?? session.title}" updated`,
         );
-        void pushSessionChange({ ...session, ...updates });
         return true;
       } catch (e) {
         toast.error(`Failed to update study session: ${String(e)}`);
         return false;
       }
     },
-    [sessions, updateSession, pushSessionChange],
+    [sessions, updateSession],
   );
 
   // Timer discard is already an explicit action. A second toast confirmation can be
@@ -1090,8 +985,7 @@ function App() {
       message: "Study session discarded",
       onUndo: async () => { await restoreSession(session); },
     });
-    void requestNotionSync(false);
-  }, [sessions, deleteSession, restoreSession, requestNotionSync]);
+  }, [sessions, deleteSession, restoreSession]);
 
   const handleDeleteStudySession = useCallback(
     async (id: string) => {
@@ -1102,7 +996,7 @@ function App() {
         description: "This study session will be removed from your calendar.",
         actionLabel: "Delete",
       });
-      if (!confirmed) return;
+      if (!confirmed) return false;
       try {
         await deleteSession(id);
         showUndoToast({
@@ -1112,20 +1006,18 @@ function App() {
             toast.success("Study session restored");
           },
         });
-        setSessionDialogOpen(false);
-        setSelectedSession(null);
-        void requestNotionSync(false);
+        closePlanningDialog();
+        return true;
       } catch (e) {
         toast.error(`Failed to delete study session: ${String(e)}`);
+        return false;
       }
     },
     [
       sessions,
       deleteSession,
       restoreSession,
-      setSessionDialogOpen,
-      setSelectedSession,
-      requestNotionSync,
+      closePlanningDialog,
     ],
   );
 
@@ -1134,14 +1026,12 @@ function App() {
       try {
         const repeated = await addSession(repeatStudySession(session));
         toast.success(`"${repeated.title}" planned for next week`);
-        setSessionDialogOpen(false);
-        setSelectedSession(null);
-        void pushSessionChange(repeated);
+        closePlanningDialog();
       } catch (e) {
         toast.error(`Failed to plan study session: ${String(e)}`);
       }
     },
-    [addSession, pushSessionChange],
+    [addSession, closePlanningDialog],
   );
 
   const handleCreateEvent = useCallback(
@@ -1160,19 +1050,18 @@ function App() {
         const created = await addEvent(data);
         if (!created) {
           toast.info(`Event "${data.title}" already exists`);
-          setEventDialogOpen(false);
+          closePlanningDialog();
           return true;
         }
         toast.success(`Event "${data.title}" added`);
-        setEventDialogOpen(false);
-        void pushEventChange(created);
+        closePlanningDialog();
         return true;
       } catch (e) {
         toast.error(`Failed to add event: ${String(e)}`);
         return false;
       }
     },
-    [addEvent, pushEventChange, setEventDialogOpen],
+    [addEvent, closePlanningDialog],
   );
 
   const handleCreateEvents = useCallback(
@@ -1184,13 +1073,12 @@ function App() {
           return;
         }
         toast.success(`${created.length} event${created.length !== 1 ? "s" : ""} added`);
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to add events: ${String(e)}`);
         throw e;
       }
     },
-    [addEvents, requestNotionSync],
+    [addEvents],
   );
 
   const handleImportVcaaEvents = useCallback(
@@ -1257,13 +1145,7 @@ function App() {
           finishedAt: data.finishedAt,
         });
         toast.success("Event updated");
-        setEventDialogOpen(false);
-        setSelectedEvent(null);
-        const { id, ...rest } = data;
-        void pushEventChange({
-          ...events.find((e: CalendarEvent) => e.id === id),
-          ...rest,
-        } as CalendarEvent);
+        closePlanningDialog();
         return true;
       } catch (e) {
         toast.error(`Failed to update event: ${String(e)}`);
@@ -1272,10 +1154,7 @@ function App() {
     },
     [
       updateEvent,
-      events,
-      pushEventChange,
-      setEventDialogOpen,
-      setSelectedEvent,
+      closePlanningDialog,
     ],
   );
 
@@ -1292,9 +1171,7 @@ function App() {
             toast.success("Event restored");
           },
         });
-        setEventDialogOpen(false);
-        setSelectedEvent(null);
-        void requestNotionSync(false);
+        closePlanningDialog();
         return true;
       } catch (e) {
         toast.error(`Failed to delete event: ${String(e)}`);
@@ -1305,9 +1182,7 @@ function App() {
       events,
       deleteEvent,
       restoreEvent,
-      setEventDialogOpen,
-      setSelectedEvent,
-      requestNotionSync,
+      closePlanningDialog,
     ],
   );
 
@@ -1317,17 +1192,18 @@ function App() {
         const repeated = await addEvent(repeatCalendarEvent(event));
         if (!repeated) {
           toast.info(`"${event.title}" already exists next week`);
-          return;
+          closePlanningDialog();
+          return true;
         }
         toast.success(`"${event.title}" duplicated for next week`);
-        setEventDialogOpen(false);
-        setSelectedEvent(null);
-        void pushEventChange(repeated);
+        closePlanningDialog();
+        return true;
       } catch (e) {
         toast.error(`Failed to duplicate event: ${String(e)}`);
+        return false;
       }
     },
-    [addEvent, pushEventChange],
+    [addEvent, closePlanningDialog],
   );
 
   const handleDeleteCalendarItems = useCallback(
@@ -1371,7 +1247,6 @@ function App() {
             );
           },
         });
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to delete calendar items: ${String(e)}`);
         throw e;
@@ -1385,7 +1260,6 @@ function App() {
       deleteSessions,
       restoreEvents,
       restoreSessions,
-      requestNotionSync,
     ],
   );
 
@@ -1409,12 +1283,9 @@ function App() {
             : Promise.resolve(),
           itemIds.sessionIds.length > 0
             ? updateSessions(
-                itemIds.sessionIds.map((id) => ({
-                  id,
-                  updates: {
-                    status: isCompleted ? "completed" : "planned",
-                    completedAt,
-                  },
+                sessions.filter((session) => itemIds.sessionIds.includes(session.id)).map((session) => ({
+                  id: session.id,
+                  updates: studySessionDraftPatch(session, { status: isCompleted ? "completed" : "planned", completedAt }),
                 })),
               )
             : Promise.resolve(),
@@ -1422,13 +1293,12 @@ function App() {
         toast.success(
           `${total} calendar item${total === 1 ? "" : "s"} marked ${isCompleted ? "complete" : "current"}`,
         );
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to update calendar items: ${String(e)}`);
         throw e;
       }
     },
-    [updateEvents, updateSessions, requestNotionSync],
+    [sessions, updateEvents, updateSessions],
   );
 
   const handleMergeEvents = useCallback(
@@ -1501,13 +1371,12 @@ function App() {
         );
 
         toast.success(`${selectedEvents.length} events merged`);
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to merge events: ${String(e)}`);
         throw e;
       }
     },
-    [events, updateAndDeleteEvents, requestNotionSync],
+    [events, updateAndDeleteEvents],
   );
 
   const handleMergeStudySessions = useCallback(
@@ -1515,10 +1384,7 @@ function App() {
       const selectedSessions = ids
         .map((id) => sessions.find((session) => session.id === id))
         .filter((session): session is StudySession => Boolean(session))
-        .sort(
-          (a, b) =>
-            new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-        );
+        .sort((a, b) => Date.parse(a.schedule.blocks[0].start) - Date.parse(b.schedule.blocks[0].start));
 
       if (selectedSessions.length < 2) return;
 
@@ -1535,13 +1401,13 @@ function App() {
         selectedSessions.map((session) => session.description),
       );
       const notes = getUniqueStrings(
-        selectedSessions.map((session) => session.notes),
+        selectedSessions.map((session) => session.reflection?.notes),
       );
       const blockers = getUniqueStrings(
-        selectedSessions.map((session) => session.blockers),
+        selectedSessions.map((session) => session.reflection?.blockers),
       );
       const nextActions = getUniqueStrings(
-        selectedSessions.map((session) => session.nextAction),
+        selectedSessions.map((session) => session.reflection?.nextAction),
       );
       const topicItems = getUniqueArrayItems(
         selectedSessions.map((session) => session.topics),
@@ -1553,7 +1419,7 @@ function App() {
         (session) => session.projectId === keeper.projectId,
       );
       const sameConfidence = selectedSessions.every(
-        (session) => session.confidence === keeper.confidence,
+        (session) => session.reflection?.confidence === keeper.reflection?.confidence,
       );
       const deletedSessions = selectedSessions.filter(
         (session) => session.id !== keeper.id,
@@ -1575,14 +1441,12 @@ function App() {
                 schedule: timeline.schedule,
                 execution: timeline.execution,
                 topics: topicItems.length > 0 ? topicItems : undefined,
-                notes: notes.length > 0 ? notes.join("\n\n") : keeper.notes,
-                confidence: sameConfidence ? keeper.confidence : undefined,
-                blockers:
-                  blockers.length > 0 ? blockers.join("\n\n") : keeper.blockers,
-                nextAction:
-                  nextActions.length > 0
-                    ? nextActions.join("\n\n")
-                    : keeper.nextAction,
+                reflection: {
+                  notes: notes.length > 0 ? notes.join("\n\n") : keeper.reflection?.notes,
+                  confidence: sameConfidence ? keeper.reflection?.confidence : undefined,
+                  blockers: blockers.length > 0 ? blockers.join("\n\n") : keeper.reflection?.blockers,
+                  nextAction: nextActions.length > 0 ? nextActions.join("\n\n") : keeper.reflection?.nextAction,
+                },
               },
             },
           ],
@@ -1594,10 +1458,8 @@ function App() {
           onUndo: async () => {
             await restoreMergedSessions(selectedSessions);
             toast.success("Study sessions restored");
-            void requestNotionSync(false);
           },
         });
-        void requestNotionSync(false);
       } catch (e) {
         toast.error(`Failed to merge study sessions: ${String(e)}`);
         throw e;
@@ -1607,7 +1469,6 @@ function App() {
       sessions,
       updateAndDeleteSessions,
       restoreMergedSessions,
-      requestNotionSync,
     ],
   );
 
@@ -1661,21 +1522,13 @@ function App() {
     [projects, updateProject],
   );
 
-  const handleSelectSession = useCallback(
-    (session: StudySession) => {
-      setSelectedSession(session);
-      setSessionDialogOpen(true);
-    },
-    [setSelectedSession, setSessionDialogOpen],
-  );
+  const handleSelectSession = useCallback((session: StudySession) => {
+    setPlanningDialog({ kind: "session", id: session.id, mode: "plan" });
+  }, []);
 
-  const handleSelectEvent = useCallback(
-    (event: CalendarEvent) => {
-      setSelectedEvent(event);
-      setEventDialogOpen(true);
-    },
-    [setSelectedEvent, setEventDialogOpen],
-  );
+  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    setPlanningDialog({ kind: "event", id: event.id });
+  }, []);
 
   const handleMoveEvent = useCallback(
     (eventId: string, newStartTime: string, newEndTime?: string) => {
@@ -2126,8 +1979,7 @@ function App() {
               onHelp={() => setShortcutsOpen(true)}
             >
               {!settingsView && <Button size="sm" variant="outline" onClick={() => {
-                handleOpenNewSession();
-                setNewSessionMode("log");
+                setPlanningDialog({ kind: "session", mode: "log" });
               }}>Log past study</Button>}
               {!settingsView && <NotionSyncIndicator
                 status={syncStatus}
@@ -2499,22 +2351,18 @@ function App() {
                 availableSubjects={availableSubjects}
               />
             </Suspense>}
-            {sessionDialogOpen && <Suspense fallback={null}>
+            {(planningDialog.kind === "session" || planningDialog.kind === "convert") && <Suspense fallback={null}>
               <StudySessionDialog
-              key={eventConversion?.event.id ?? selectedSession?.id ?? `new-session-${newItemDialogKey}`}
-              open={sessionDialogOpen}
-              onOpenChange={(open) => {
-                if (conversionSavingRef.current) return;
-                setSessionDialogOpen(open);
-                if (!open) setEventConversion(null);
-              }}
+              key={planningDialog.kind === "convert" ? `convert-${planningDialog.eventId}` : planningDialog.id ?? `new-${planningDialog.mode}`}
+              open
+              onOpenChange={closePlanningDialog}
               projects={projects}
               customSubjects={customSubjects}
               availableSubjects={availableSubjects}
               session={selectedSession}
-              initialMode={newSessionMode}
-              initialValues={eventConversion?.draft}
-              initialDate={newItemInitialDate}
+              initialMode={planningDialog.kind === "session" ? planningDialog.mode : "plan"}
+              initialValues={planningDialog.kind === "convert" ? planningDialog.draft : undefined}
+              initialDate={planningDialog.kind === "session" ? planningDialog.initialDate : undefined}
               onSubmit={
                 selectedSession
                   ? handleEditStudySession
@@ -2524,16 +2372,16 @@ function App() {
               onPlanAgain={selectedSession ? handleRepeatStudySession : undefined}
               />
             </Suspense>}
-            {eventDialogOpen && <Suspense fallback={null}>
+            {planningDialog.kind === "event" && <Suspense fallback={null}>
               <EventDialog
-                key={`event-${selectedEvent?.id ?? `new-${newItemDialogKey}`}`}
+                key={planningDialog.id ?? "new-event"}
                 open
-                onOpenChange={setEventDialogOpen}
+                onOpenChange={closePlanningDialog}
                 event={selectedEvent}
                 customSubjects={customSubjects}
                 availableSubjects={availableSubjects}
                 timetableConfig={timetableConfig}
-                initialDate={selectedEvent ? undefined : newItemInitialDate}
+                initialDate={planningDialog.initialDate}
                 onSubmit={
                   (selectedEvent
                     ? handleEditEvent

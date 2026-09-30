@@ -1,4 +1,20 @@
-import type { CalendarEvent } from "@/lib/types"
+import type { CalendarEvent, StudySessionDraft } from "@/lib/types"
+
+export function eventToStudySessionDraft(event: CalendarEvent): StudySessionDraft {
+  const start = new Date(event.startTime).getTime()
+  if (!Number.isFinite(start)) throw new Error("Event has an invalid start time")
+  const end = event.endTime ? new Date(event.endTime).getTime() : start + 60 * 60_000
+  if (!Number.isFinite(end) || end <= start) throw new Error("Event must end after it starts")
+  return {
+    title: event.title,
+    description: [event.description, event.location ? `Location: ${event.location}` : undefined].filter(Boolean).join("\n\n") || undefined,
+    subjectIds: event.subjectId ? [event.subjectId] : [],
+    startTime: event.startTime,
+    endTime: new Date(end).toISOString(),
+    // ponytail: finished events do not prove actual study; completion stays an explicit choice.
+    status: "planned",
+  }
+}
 
 function instantKey(value?: string): string {
   if (!value) return ""

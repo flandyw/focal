@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from"react"
 import { addMinutes, format, parseISO, addWeeks, addMonths, startOfDay } from"date-fns"
-import { CalendarIcon, CheckCircle2, Clock, Copy, MapPin, Repeat, Tag, Trash2, X } from"lucide-react"
+import { BookOpen, CalendarIcon, CheckCircle2, Clock, Copy, MapPin, Repeat, Tag, Trash2, X } from"lucide-react"
 import {
  Dialog,
  DialogBody,
@@ -115,6 +115,7 @@ export interface EventDialogProps {
  }[]) => void
  onDelete?: (id: string) => void
  onDuplicate?: (event: CalendarEvent) => void | Promise<void>
+ onConvertToSession?: (event: CalendarEvent) => void
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -672,6 +673,7 @@ export function EventDialog({
  onSubmitMultiple,
  onDelete,
  onDuplicate,
+ onConvertToSession,
 }: EventDialogProps) {
  const submittingRef = useRef(false)
  const isEditMode = Boolean(event)
@@ -771,8 +773,14 @@ export function EventDialog({
  } : { date: initialDate ? new Date(initialDate) : new Date() }}
  submitLabel={isEditMode ?"Save Changes" :"Add Event"}
  showFinishedControl={isEditMode}
- footerStart={isEditMode && (onDuplicate || onDelete) ? (
+ footerStart={isEditMode && (onDuplicate || onDelete || onConvertToSession) ? (
  <div className="flex flex-wrap gap-2">
+ {onConvertToSession && existingEvent && (
+ <Button type="button" variant="outline" size="sm" onClick={() => onConvertToSession(existingEvent)}>
+ <BookOpen className="h-4 w-4" />
+ Convert to study session
+ </Button>
+ )}
  {onDuplicate && (
  <Button
  type="button"

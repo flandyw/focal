@@ -35,6 +35,7 @@ import {
  type ConfidenceScore,
  type Project,
  type StudySession,
+ type StudySessionDraft,
  type StudySessionStatus,
  type Subject,
 } from"@/lib/types"
@@ -55,6 +56,7 @@ interface StudySessionDialogProps {
  session?: StudySession | null
  initialDate?: Date
  initialMode?: "plan" | "log"
+ initialValues?: StudySessionDraft
  onSubmit: (data: {
  id?: string
  projectId?: string
@@ -85,25 +87,26 @@ export function StudySessionDialog({
  session,
  initialDate,
  initialMode = "plan",
+ initialValues,
  onSubmit,
  onDelete,
  onPlanAgain,
 }: StudySessionDialogProps) {
  const [loggingPast, setLoggingPast] = useState(initialMode === "log")
  const [projectId, setProjectId] = useState("")
- const [subjectIds, setSubjectIds] = useState<string[]>([])
- const [title, setTitle] = useState("")
- const [description, setDescription] = useState("")
+ const [subjectIds, setSubjectIds] = useState<string[]>(initialValues?.subjectIds ?? [])
+ const [title, setTitle] = useState(initialValues?.title ?? "")
+ const [description, setDescription] = useState(initialValues?.description ?? "")
  const [topicsInput, setTopicsInput] = useState("")
  const [notes, setNotes] = useState("")
  const [status, setStatus] = useState<StudySessionStatus>("planned")
  const [confidence, setConfidence] = useState<ConfidenceScore | undefined>(undefined)
  const [blockers, setBlockers] = useState("")
  const [nextAction, setNextAction] = useState("")
- const [startDate, setStartDate] = useState<Date | undefined>(() => initialDate ? new Date(initialDate) : new Date())
+ const [startDate, setStartDate] = useState<Date | undefined>(() => initialValues ? parseISO(initialValues.startTime) : initialDate ? new Date(initialDate) : new Date())
  const [isDeleting, setIsDeleting] = useState(false)
  const [restDuration, setRestDuration] = useState("5")
- const [segments, setSegments] = useState<{ start: string; end: string }[]>(() => [{ start:"14:00", end:"15:00" }])
+ const [segments, setSegments] = useState<{ start: string; end: string }[]>(() => [{ start: initialValues ? format(parseISO(initialValues.startTime), "HH:mm") : "14:00", end: initialValues ? format(parseISO(initialValues.endTime), "HH:mm") : "15:00" }])
  const initializedSessionIdRef = useRef<string | null>(null)
  const hasSegments = segments.length > 0
  const computedSegmentStart = hasSegments ? segments[0].start : null
@@ -111,7 +114,13 @@ export function StudySessionDialog({
  const getMinutes = (time: string) => { const [h, m] = time.split(":").map(Number); return h * 60 + m }
  const formatDurationStr = (totalMin: number) =>
  totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`
- const segmentTotalActive = hasSegments
+ // Preserve a converted event's full interval, including overnight/multi-day events, until its times are edited.
+ const unchangedInitialTimes = initialValues && segments.length === 1
+ && segments[0].start === format(parseISO(initialValues.startTime), "HH:mm")
+ && segments[0].end === format(parseISO(initialValues.endTime), "HH:mm")
+ const segmentTotalActive = unchangedInitialTimes
+ ? (Date.parse(initialValues.endTime) - Date.parse(initialValues.startTime)) / 60000
+ : hasSegments
  ? segments.reduce((sum, seg) => sum + Math.max(0, getMinutes(seg.end) - getMinutes(seg.start)), 0)
  : 0
  const segmentWallSpan = hasSegments
@@ -258,12 +267,14 @@ export function StudySessionDialog({
  return d
  }
  const segStart = toDate(segments[0].start)
- const segEnd = toDate(segments[segments.length - 1].end)
+ const segEnd = unchangedInitialTimes
+ ? new Date(segStart.getTime() + segmentTotalActive * 60000)
+ : toDate(segments[segments.length - 1].end)
  if (segEnd.getTime() <= segStart.getTime()) return null
  if (!Number.isFinite(segmentTotalActive) || segmentTotalActive <= 0) return null
  const activeDurations = segments.map((seg) => ({
  start: toDate(seg.start).toISOString(),
- end: toDate(seg.end).toISOString(),
+ end: unchangedInitialTimes ? segEnd.toISOString() : toDate(seg.end).toISOString(),
  }))
  return {
  id: session?.id,
@@ -345,8 +356,9 @@ export function StudySessionDialog({
  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
  <div className="min-w-0">
  <DialogTitle>{isEdit ?"Edit Study Session" :"Plan Study Session"}</DialogTitle>
- {!isEdit && <div className="mt-3 flex gap-2"><Button type="button" size="sm" aria-pressed>Plan future study</Button><Button type="button" size="sm" variant="outline" onClick={() => setLoggingPast(true)}>Log past study</Button></div>}
+ {!isEdit && !initialValues && <div className="mt-3 flex gap-2"><Button type="button" size="sm" aria-pressed>Plan future study</Button><Button type="button" size="sm" variant="outline" onClick={() => setLoggingPast(true)}>Log past study</Button></div>}
  <DialogDescription className="mt-1">
+ {initialValues ? "Saving replaces the original event. " : ""}
  {activeProject ? activeProject.name :"No assessment attached"} · {subjectSummary}
  </DialogDescription>
  </div>

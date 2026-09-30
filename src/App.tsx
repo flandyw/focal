@@ -31,6 +31,7 @@ import { useProjects, type ProjectSortKey } from "@/hooks/useProjects";
 import { useProjectsDirectoryWatcher } from "@/hooks/useProjectsDirectoryWatcher";
 import { useStudySessions } from "@/hooks/useStudySessions";
 import { useEvents } from "@/hooks/useEvents";
+import { eventToStudySessionDraft } from "@/lib/calendarEvents";
 import { useDeadlineNotifications } from "@/hooks/useDeadlineNotifications";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useNotionSync } from "@/hooks/useNotionSync";
@@ -93,6 +94,7 @@ import {
   type EventType,
   type PriorityItem,
   type StudySession,
+  type StudySessionDraft,
   type StudySessionStatus,
 } from "@/lib/types";
 import type { ProjectTemplate } from "@/lib/types";
@@ -257,6 +259,9 @@ function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [newSessionMode, setNewSessionMode] = useState<"plan" | "log">("plan");
+  const [eventConversion, setEventConversion] = useState<{ event: CalendarEvent; draft: StudySessionDraft } | null>(null);
+  const convertedSessionsRef = useRef(new Map<string, StudySession>());
+  const conversionSavingRef = useRef(false);
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(
     null,
   );
@@ -789,6 +794,8 @@ function App() {
       completedAt?: string;
       activeDurations?: { start: string; end: string }[];
     }) => {
+      if (conversionSavingRef.current) throw new Error("Conversion is already saving");
+      if (eventConversion) conversionSavingRef.current = true;
       try {
         const blocks = data.activeDurations?.length
           ? data.activeDurations
@@ -803,7 +810,7 @@ function App() {
             : data.status === "in-progress"
               ? { state: "in-progress" as const, intervals: [] }
               : { state: "planned" as const, intervals: [] as [] };
-        const newSession = await addSession({
+        const input: Parameters<typeof addSession>[0] = {
           projectId: data.projectId,
           subjectIds: data.subjectIds,
           title: data.title,
@@ -818,16 +825,29 @@ function App() {
             nextAction: data.nextAction,
           },
           createdVia: "manual",
-        });
-        toast.success(`Study session "${data.title}" created`);
+        };
+        const previous = eventConversion ? convertedSessionsRef.current.get(eventConversion.event.id) : undefined;
+        const newSession = previous ?? await addSession(input);
+        if (eventConversion) {
+          // ponytail: save first; retain the session ID so a failed event deletion can be retried without duplicates.
+          convertedSessionsRef.current.set(eventConversion.event.id, newSession);
+          if (previous) await updateSession(previous.id, input);
+          await deleteEvent(eventConversion.event.id);
+          convertedSessionsRef.current.delete(eventConversion.event.id);
+          setEventConversion(null);
+        }
+        toast.success(eventConversion ? "Event converted to study session" : `Study session "${data.title}" created`);
         setSessionDialogOpen(false);
-        void pushSessionChange(newSession);
+        if (previous) void requestNotionSync(false);
+        else void pushSessionChange(newSession);
       } catch (e) {
         toast.error(`Failed to create study session: ${String(e)}`);
         throw e;
+      } finally {
+        conversionSavingRef.current = false;
       }
     },
-    [addSession, pushSessionChange, setSessionDialogOpen],
+    [addSession, updateSession, deleteEvent, eventConversion, pushSessionChange, requestNotionSync, setSessionDialogOpen],
   );
 
   const handleCreateStudySessions = useCallback(
@@ -2473,14 +2493,19 @@ function App() {
             </Suspense>}
             {sessionDialogOpen && <Suspense fallback={null}>
               <StudySessionDialog
-              key={selectedSession?.id ?? `new-session-${newItemDialogKey}`}
+              key={eventConversion?.event.id ?? selectedSession?.id ?? `new-session-${newItemDialogKey}`}
               open={sessionDialogOpen}
-              onOpenChange={setSessionDialogOpen}
+              onOpenChange={(open) => {
+                if (conversionSavingRef.current) return;
+                setSessionDialogOpen(open);
+                if (!open) setEventConversion(null);
+              }}
               projects={projects}
               customSubjects={customSubjects}
               availableSubjects={availableSubjects}
               session={selectedSession}
               initialMode={newSessionMode}
+              initialValues={eventConversion?.draft}
               initialDate={newItemInitialDate}
               onSubmit={
                 selectedSession
@@ -2509,6 +2534,19 @@ function App() {
                 onSubmitMultiple={handleCreateEvents}
                 onDelete={selectedEvent ? handleDeleteEvent : undefined}
                 onDuplicate={selectedEvent ? handleRepeatEvent : undefined}
+                onConvertToSession={(event) => {
+                  try {
+                    const draft = eventToStudySessionDraft(event);
+                    setEventConversion({ event, draft });
+                    setSelectedSession(null);
+                    setNewSessionMode("plan");
+                    setEventDialogOpen(false);
+                    setSelectedEvent(null);
+                    setSessionDialogOpen(true);
+                  } catch (e) {
+                    toast.error(`Cannot convert event: ${String(e)}`);
+                  }
+                }}
               />
             </Suspense>}
             {settingsOpen && <Suspense fallback={null}>

@@ -24,6 +24,7 @@ const checks = [
   "scripts/check-analytics-completion.ts",
   "scripts/check-backup-import.ts",
   "scripts/check-calendar-events.mjs",
+  "scripts/check-event-conversion.ts",
   "scripts/check-adaptive-planner.ts",
   "scripts/check-notion-sync.ts",
   "scripts/check-file-metadata.ts",

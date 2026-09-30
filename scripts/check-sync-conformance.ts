@@ -184,4 +184,12 @@ if (!readFileSync(new URL("../supabase/tests/study_session_commands.test.sql", i
   throw new Error("Canonical session database failure/race tests are missing")
 }
 
+const singleTableMigration = readFileSync(new URL("../supabase/migrations/0018_single_table_study_sessions.sql", import.meta.url), "utf8")
+for (const required of ["add column segments jsonb", "drop table public.study_session_segments", "drop function public.study_session_mutate_timed", "drop function public.study_session_mutate_v1"]) {
+  if (!singleTableMigration.includes(required)) throw new Error(`Single-table session migration is missing ${required}`)
+}
+if (/insert into public\.study_session_segments|update public\.study_session_segments/i.test(singleTableMigration)) {
+  throw new Error("Single-table session writes must not depend on the removed interval table")
+}
+
 console.warn(`Sync conformance passed (${vectors.cases.length} vectors, digest ${digest.slice(0, 12)})`)

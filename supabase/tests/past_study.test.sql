@@ -22,16 +22,16 @@ select is((select completed_at from public.study_sessions where id = 'past-study
   '2020-01-02T00:45:00Z'::timestamptz, 'overnight study retains the actual finish');
 select is(public.study_session_mutate(current_setting('test.past_study_command')::jsonb)->'session'->>'state',
   'completed', 'lost responses can be retried');
-select is((select count(*)::integer from public.study_session_segments where session_id = 'past-study'),
+select is((select jsonb_array_length(segments) from public.study_sessions where id = 'past-study'),
   2, 'retry does not duplicate intervals');
 select throws_ok($sql$
   select public.study_session_mutate(jsonb_set(
-    jsonb_set(current_setting('test.past_study_command')::jsonb, '{mutation_id}', '"20000000-0000-4000-8000-000000000018"'),
+    jsonb_set(current_setting('test.past_study_command')::jsonb || '{"session_id":"invalid-overlap"}'::jsonb, '{mutation_id}', '"20000000-0000-4000-8000-000000000018"'),
     '{blocks,1,start}', '"2020-01-02T00:00:00Z"'))
 $sql$, 'P0001', 'Invalid, future, or overlapping study blocks', 'overlaps are rejected');
 select throws_ok($sql$
   select public.study_session_mutate(jsonb_set(
-    jsonb_set(current_setting('test.past_study_command')::jsonb, '{mutation_id}', '"20000000-0000-4000-8000-000000000019"'),
+    jsonb_set(current_setting('test.past_study_command')::jsonb || '{"session_id":"invalid-future"}'::jsonb, '{mutation_id}', '"20000000-0000-4000-8000-000000000019"'),
     '{blocks,1,end}', '"2999-01-02T00:45:00Z"'))
 $sql$, 'P0001', 'Invalid, future, or overlapping study blocks', 'future study is rejected');
 select * from finish();

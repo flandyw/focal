@@ -11,6 +11,7 @@ import type {
   StudyTimeRange,
 } from "@/lib/types"
 import { VCE_SUBJECTS } from "@/lib/types"
+import { studySubjectId } from "@/lib/studySubjects"
 import { parseCanonicalStudySession } from "@/lib/sync/sessionContract"
 
 export const STUDY_SESSION_SCHEMA_VERSION = 2 as const
@@ -325,7 +326,8 @@ export function normalizeStudySession(raw: unknown): StudySession {
   const notion = parseNotionSource(integrationsValue?.notion ?? value.source)
   const examtrack = parseExamTrackSource(integrationsValue?.examtrack)
   const folio = parseFolioSource(integrationsValue?.folio)
-  const rawSubjectIds = stringArray(value.subjectIds)
+  // Older web sessions (including cached rows) used display names instead of stable IDs.
+  const rawSubjectIds = [...new Set(stringArray(value.subjectIds).map((id) => studySubjectId(id)))]
   const integratedSubjectId = rawSubjectIds.length === 0 ? examTrackSubjectId(examtrack) : undefined
 
   return attachCompatibilityView({

@@ -60,7 +60,7 @@ select public.study_session_mutate(jsonb_build_object(
   'device_id','32000000-0000-4000-8000-000000000001','app','focal'
 )) as result;
 select is((result->'session'->>'accumulated_active_ms')::bigint,1800000::bigint,'offline start then 30 minutes then pause records 30 active minutes') from first_pause;
-select is((select floor(extract(epoch from (ended_at-started_at))*1000)::bigint from public.study_session_segments where session_id='offline-start-pause'),1800000::bigint,'replayed pause preserves the original segment length');
+select is((select floor(extract(epoch from (g.ended_at-g.started_at))*1000)::bigint from public.study_sessions s, jsonb_to_recordset(s.segments) g(started_at timestamptz, ended_at timestamptz) where s.id='offline-start-pause'),1800000::bigint,'replayed pause preserves the original segment length');
 create temporary table replay_receipt as select result from first_pause;
 select is((public.study_session_mutate(jsonb_build_object(
   'mutation_id','22000000-0000-4000-8000-000000000002','session_id','offline-start-pause',
@@ -68,7 +68,7 @@ select is((public.study_session_mutate(jsonb_build_object(
   'device_id','32000000-0000-4000-8000-000000000001','app','focal'
 )) = (select result from replay_receipt)),true,'duplicate replay returns the exact original timing receipt');
 select is((select revision from public.study_sessions where id='offline-start-pause'),2::bigint,'duplicate replay adds no revision');
-select is((select count(*)::integer from public.study_session_segments where session_id='offline-start-pause'),1,'duplicate replay adds no segment');
+select is((select jsonb_array_length(segments) from public.study_sessions where id='offline-start-pause'),1,'duplicate replay adds no segment');
 
 -- A valid server anchor lets an offline action land at its actual occurrence despite a
 -- 30-minute-late reconnect. The remote receipt time is deliberately not the boundary.
@@ -84,7 +84,7 @@ select public.study_session_mutate((select jsonb_build_object(
   'device_id','32000000-0000-4000-8000-000000000001','app','folio'
 ) from anchored_start));
 select is((select accumulated_active_ms from public.study_sessions where id='online-offline-pause'),300000::bigint,'late reconnect does not overcount 25 disconnected minutes');
-select is((select floor(extract(epoch from (ended_at-started_at))*1000)::bigint from public.study_session_segments where session_id='online-offline-pause'),300000::bigint,'online-start/offline-pause segment is exactly five minutes');
+select is((select floor(extract(epoch from (g.ended_at-g.started_at))*1000)::bigint from public.study_sessions s, jsonb_to_recordset(s.segments) g(started_at timestamptz, ended_at timestamptz) where s.id='online-offline-pause'),300000::bigint,'online-start/offline-pause segment is exactly five minutes');
 
 -- Offline pause/resume/pause retains both active intervals and the intervening pause gap.
 create temporary table sequence_anchor as select clock_timestamp() - interval '40 minutes' as started;
@@ -109,8 +109,8 @@ select public.study_session_mutate((select jsonb_build_object(
   'device_id','32000000-0000-4000-8000-000000000001','app','folio'
 ) from sequence_anchor));
 select is((select accumulated_active_ms from public.study_sessions where id='offline-resume-sequence'),900000::bigint,'offline pause/resume/pause stores 15 active minutes');
-select is((select count(*)::integer from public.study_session_segments where session_id='offline-resume-sequence'),2,'offline resume creates exactly one additional segment');
-select is((select sum(floor(extract(epoch from (ended_at-started_at))*1000)::bigint) from public.study_session_segments where session_id='offline-resume-sequence' and ended_at is not null),900000::bigint,'both offline active intervals remain exact');
+select is((select jsonb_array_length(segments) from public.study_sessions where id='offline-resume-sequence'),2,'offline resume creates exactly one additional segment');
+select is((select sum(floor(extract(epoch from (g.ended_at-g.started_at))*1000)::bigint)::bigint from public.study_sessions s, jsonb_to_recordset(s.segments) g(started_at timestamptz, ended_at timestamptz) where s.id='offline-resume-sequence' and ended_at is not null),900000::bigint,'both offline active intervals remain exact');
 
 -- An offline reading-to-writing phase boundary and completion close distinct segments.
 create temporary table phase_anchor as select clock_timestamp() - interval '20 minutes' as started;
@@ -131,7 +131,7 @@ select public.study_session_mutate((select jsonb_build_object(
 ) from phase_anchor));
 select is((select state from public.study_sessions where id='offline-phase-complete'),'completed','offline completion reaches a terminal state');
 select is((select accumulated_active_ms from public.study_sessions where id='offline-phase-complete'),900000::bigint,'reading phase transition and completion retain all active time');
-select is((select count(*)::integer from public.study_session_segments where session_id='offline-phase-complete' and ended_at is not null),2,'phase transition and complete preserve two closed segments');
+select is((select count(*)::integer from public.study_sessions s, jsonb_to_recordset(s.segments) g(ended_at timestamptz) where s.id='offline-phase-complete' and ended_at is not null),2,'phase transition and complete preserve two closed segments');
 
 -- Cancellation closes an active segment but cannot later be reopened. A restarted client
 -- with no monotonic continuity uses a zero delta and therefore does not invent elapsed time.
@@ -153,25 +153,28 @@ select public.study_session_mutate(jsonb_build_object(
   'expected_revision',0,'action','start','device_id','32000000-0000-4000-8000-000000000001',
   'app','focal','kind','focus','phase','focus'
 ));
+reset role;
 update public.study_sessions
    set started_at = clock_timestamp() - interval '30 minutes',
        segment_started_at = clock_timestamp() - interval '30 minutes',
+       segments = jsonb_set(segments, '{0,started_at}', to_jsonb(clock_timestamp() - interval '30 minutes')),
        timing_at = clock_timestamp() - interval '30 minutes'
  where id = 'untimed-direct-pause';
+set local role authenticated;
 create temporary table untimed_pause as
 select public.study_session_mutate(jsonb_build_object(
   'mutation_id','22000000-0000-4000-8000-000000000022','session_id','untimed-direct-pause',
   'expected_revision',1,'action','pause','device_id','32000000-0000-4000-8000-000000000001',
   'app','focal','kind','focus','phase','focus'
 )) as result;
-select is((result->'session'->>'state') from untimed_pause,'paused','an untimed pause is applied');
+select is(result->'session'->>'state','paused','an untimed pause is applied') from untimed_pause;
 select is((result->'session'->>'accumulated_active_ms')::bigint > 1700000,true,
   'an untimed pause records the elapsed run at server receipt time, not zero')
   from untimed_pause;
 
 select is((select state from public.study_sessions where id='offline-cancel'),'cancelled','offline cancel remains terminal');
 select is((select accumulated_active_ms from public.study_sessions where id='offline-cancel'),1::bigint,'restart recovery adds at most the one-millisecond positive-segment floor');
-select is((select count(*)::integer from public.study_session_segments where session_id='offline-cancel' and ended_at is null),0,'cancel closes the only open segment');
+select is((select count(*)::integer from public.study_sessions s, jsonb_to_recordset(s.segments) g(ended_at timestamptz) where s.id='offline-cancel' and ended_at is null),0,'cancel closes the only open segment');
 
 select * from finish();
 rollback;

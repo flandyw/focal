@@ -11,7 +11,7 @@ supabase db push
 
 There is no second project and no second sign-in. The second Supabase client, the separate-account settings card and the `VITE_FOCAL_SUPABASE_*` variables are gone; `web/` writes with the same client as the rest of the app.
 
-Study sessions now use the canonical `study_sessions` and `study_session_segments` tables through `study_session_mutate` and `sync_read_changes`. Timer lifecycle commands are durably queued in account-scoped IndexedDB, retain their order, and carry monotonic elapsed deltas plus a server-clock estimate when available. Ordinary ExamTrack records continue through the generic cursor/change protocol.
+Study sessions use one shared `study_sessions` table through `study_session_mutate` and `sync_read_changes`. Desktop and web write the same rows, and both calendars read them. Actual study intervals live in each row's `segments` JSON array; migration `0018` preserves existing intervals and removes the old interval table and RPC wrappers. Timer commands retain monotonic elapsed deltas and server-clock estimates. Ordinary ExamTrack records continue through the generic cursor/change protocol.
 
 A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recharts, and KaTeX.
 

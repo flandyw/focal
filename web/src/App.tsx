@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PastStudyForm } from "../../src/components/planning/PastStudyForm"
+import { studySubjectOptions } from "../../src/lib/studySubjects"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -571,7 +572,7 @@ export default function App() {
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
-              {pastStudyId && <PastStudyForm key={pastStudyId} subjects={[...new Set([...data.subjects, ...references.map((reference) => reference.studyName)])].map((name) => ({ id: name, name }))} onCancel={() => setPastStudyId(null)} onSave={async (entry) => {
+              {pastStudyId && <PastStudyForm key={pastStudyId} subjects={studySubjectOptions([...data.subjects, ...references.map((reference) => reference.studyName)])} onCancel={() => setPastStudyId(null)} onSave={async (entry) => {
                 await studySessionSync.log(entry, pastStudyId)
                 setPastStudyId(null)
                 toast.success("Study logged")

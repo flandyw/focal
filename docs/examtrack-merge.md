@@ -17,6 +17,8 @@ The shared sync architecture is now:
 
 - `0011_canonical_study_sessions.sql`: canonical `study_sessions` and
   `study_session_segments`, with lifecycle mutations through `study_session_mutate`.
+  `0018_single_table_study_sessions.sql` consolidates these into one `study_sessions`
+  table with embedded intervals, preserving the same client API and calendar payload.
 - `0012_examtrack_cursor_sync.sql`: cursor reads and versioned generic changes for ExamTrack
   rows; compatibility tables remain projections, not a second client-side sync protocol.
 - `0013_study_session_offline_timing.sql`: server-clock estimates, monotonic elapsed deltas,

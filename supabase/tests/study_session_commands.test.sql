@@ -53,8 +53,8 @@ select is(
 );
 
 select is(
-  (select count(*)::integer from public.study_session_segments
-    where user_id = auth.uid() and session_id = 'session-clock' and ended_at is not null),
+  (select count(*)::integer from public.study_sessions s, jsonb_to_recordset(s.segments) g(ended_at timestamptz)
+    where s.user_id = auth.uid() and s.id = 'session-clock' and ended_at is not null),
   1, 'repeated pause does not close a segment twice'
 );
 

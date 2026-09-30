@@ -9,7 +9,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
 }) {
   const id = useId()
   const [subjectId, setSubjectId] = useState(subjects.length === 1 ? subjects[0].id : "")
-  const [rows, setRows] = useState(() => [{ start: localStudyTime(new Date(Date.now() - 30 * 60000)), minutes: "30" }])
+  const [rows, setRows] = useState(() => [{ start: localStudyTime(new Date(Date.now() - 60 * 60000)), minutes: "60" }])
   const [title, setTitle] = useState("")
   const [notes, setNotes] = useState("")
   const [error, setError] = useState("")

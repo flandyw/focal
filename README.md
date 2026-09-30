@@ -24,8 +24,9 @@ Folio and ExamTrack timer changes reach Focal through the existing Supabase Real
 
 ExamTrack used to be a separate repository with its own Supabase project. Both now live
 here. `attempts`, `mistakes` and `user_state` are in this project's database, and all clients
-share one account. Study sessions use the canonical `study_sessions`/`study_session_segments`
-records and lifecycle mutation RPC; timer durations use server-clock estimates and monotonic
+share one account. Study sessions use one shared `study_sessions` table, with actual intervals
+inside each row, and one authenticated mutation RPC. Both apps' calendars read those same
+rows. Apply migration `0018` to consolidate existing intervals; timer durations still use server-clock estimates and monotonic
 elapsed deltas. `VITE_EXAMTRACK_URL` remains the drill-through link to the hosted app, not a
 database.
 

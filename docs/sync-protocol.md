@@ -6,8 +6,18 @@ changes. Session lifecycle is a separate transactional protocol over canonical s
 
 ## Study sessions
 
-`study_sessions` is the only canonical live-session record. `study_session_segments` stores
-each server-timed active interval. Clients render elapsed time as:
+`study_sessions` is the single shared session table. Each row contains its schedule in
+`metadata`, lifecycle state, and actual study intervals in the `segments` JSON array.
+Desktop and web both write that row through `study_session_mutate` and read it through
+`sync_read_changes`; their respective calendars render the same session IDs and intervals.
+There is no separate interval table or app-specific cloud session store.
+
+Migration `0018_single_table_study_sessions.sql` copies all existing intervals into their
+session rows, verifies the copied count, and drops `study_session_segments` and the old
+mutation wrappers in one transaction. The client DTO stays unchanged. Retry receipts and
+the generic sync feed remain transport infrastructure, not alternative session records.
+
+Clients render elapsed time as:
 
 ```text
 accumulated_active_ms + max(0, estimated_server_now - segment_started_at)
@@ -23,7 +33,8 @@ commands may include `occurred_at`, estimated from a server-clock anchor, and
 `elapsed_since_previous_ms`, measured with a monotonic clock. When wall-clock time is not
 anchored, the server reconstructs boundaries from elapsed deltas and shifts the replayed
 timeline as needed; it never trusts device wall time or reconnect receipt time. Missing timing
-fields on legacy queued commands conservatively mean zero elapsed time. The `timing_at`
+fields on untimed legacy commands use server receipt time; explicitly supplied zero elapsed
+time conservatively adds only the positive-interval floor. The `timing_at`
 column is the durable previous boundary.
 
 The server derives the owner from `auth.uid()`, serializes mutations per user, locks the
@@ -79,7 +90,8 @@ ExamTrack timer metadata (year, provider, paper, marks, reading/writing limits, 
 items, and SAC details) remains in canonical session metadata. Live timer state and its old
 updated-at markers are no longer written into the `user_state` payload. The one-time
 backfill in migration `0011` moves legacy active timers and their known intervals into the
-canonical session tables before removing the embedded timer keys.
+canonical storage before removing the embedded timer keys. Migration `0018` then folds the
+intervals into the session row without changing any session IDs or client APIs.
 
 Migration `0012_examtrack_cursor_sync.sql` backfills existing attempts, mistakes and setting
 keys into the feed, then keeps `attempts`, `mistakes` and `user_state` as compatibility
@@ -100,7 +112,8 @@ user records, backfills the latest materialized study-session row, imports embed
 timers only when no canonical session with that ID already exists, and removes the old
 study-session LWW materialized rows. Migration `0013_study_session_offline_timing.sql` adds
 monotonic/server-anchored offline timing while retaining the same command RPC and receipt
-protocol. Session RLS denies direct writes; authenticated users use the canonical mutation
+protocol. Migration `0018` replaces the wrapper stack with one mutation implementation and
+one session table. Session RLS denies direct writes; authenticated users use the canonical mutation
 and cursor-read RPCs.
 
 `sync_apply_changes` rejects `study_sessions`; the `sync_changes` view also rejects writes

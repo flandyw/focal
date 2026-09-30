@@ -34,12 +34,13 @@ import {
 } from "@/lib/settings"
 import { getStoredQuickLinks, QUICK_LINKS_STORAGE_KEY } from "@/lib/quickLinks"
 import { setCachedPreference } from "@/lib/storage/preferences"
-import { emitLocalDataChanged, readLocalDataArray, readLocalStorageArray, SYNC_DATA_FILES } from "@/lib/sync/localData"
-import { clearRecordOutboxSuppressions, suppressRecordOutbox, readOutbox } from "@/lib/sync/persistence"
+import { emitLocalDataChanged, readLocalStorageArray, SYNC_DATA_FILES } from "@/lib/sync/localData"
+import { clearRecordOutboxSuppressions, suppressRecordOutbox, readOutbox, readSessionIntents } from "@/lib/sync/persistence"
 import { recordNotionUpsertIntent, recordRemoteNotionDeleteIntent } from "@/lib/sync/sinks"
 import type { LocalRecord, SyncRowState, SyncTable } from "@/lib/sync/types"
 import type { StudySession, Subject, TimetableConfig, UserSettings } from "@/lib/types"
-import { mutatePersistedArray } from "@/lib/storage/database"
+import { mutatePersistedArray, readRecordRows } from "@/lib/storage/database"
+import { parseStoredPayloads } from "@/lib/storage/records"
 import { normalizeStudySession, studySessionFromCanonical } from "@/lib/studySessions"
 import { sharedTimerNotice, type SharedTimerNotice } from "@/lib/sync/sessions"
 import { bustSubjectCache } from "@/lib/utils"
@@ -91,7 +92,10 @@ async function applyRecordEntries(table: RecordTable, entries: readonly SyncRowS
       const byId = new Map((local as Record<string, unknown>[]).map((record) => [String(record.id), record]))
       // A local edit/delete can land after reduction while this projection waits
       // for the storage lock. Never overwrite that newer, unpublished boundary.
-      const pending = new Set((await readOutbox()).filter((change) => change.entity === table).map((change) => change.rowId))
+      const pending = new Set([
+        ...(await readOutbox()).filter((change) => change.entity === table).map((change) => change.rowId),
+        ...(table === "study_sessions" ? (await readSessionIntents()).map((intent) => intent.session_id) : []),
+      ])
       for (const entry of entries) {
         if (pending.has(entry.rowId)) continue
         if (table === "study_sessions" && entry.operation === "put" && isObject(entry.payload)) {
@@ -171,10 +175,8 @@ function applySingletonChange(entries: readonly SyncRowState[], entity: SyncTabl
 }
 
 export async function readCurrentLocalValue(table: SyncTable, rowId: string): Promise<LocalRecord | undefined> {
-  const fileName = SYNC_DATA_FILES[table]
-  if (fileName) {
-    const records = await readLocalDataArray<LocalRecord & { id?: string }>(fileName)
-    return records.find((record) => record.id === rowId)
+  if (table === "projects" || table === "events" || table === "study_sessions") {
+    return parseStoredPayloads(await readRecordRows(table, [rowId]))[0] as LocalRecord | undefined
   }
   if (table === "custom_subjects") return readLocalStorageArray<Subject>(CUSTOM_SUBJECTS_KEY).find((subject) => subject.id === rowId)
   if (table === "hidden_subjects") return readLocalStorageArray<string>(HIDDEN_SUBJECTS_KEY).includes(rowId) ? rowId : undefined

@@ -1,4 +1,6 @@
 pub mod credits;
+pub mod events;
+pub mod sessions;
 pub mod chatgpt;
 pub mod files;
 pub mod notion;

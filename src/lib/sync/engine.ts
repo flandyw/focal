@@ -14,15 +14,19 @@ import { getTimetableConfig } from "@/lib/settings"
 import { enqueueNotionArchive } from "@/lib/notion/outbox"
 import { supabase } from "@/lib/supabase/client"
 import { applyRemoteEntries, collectUserSettings, readCurrentLocalValue } from "@/lib/sync/applier"
-import { openFocalDatabase, withWriteLock, mutatePersistedArray } from "@/lib/storage/database"
+import { withWriteLock } from "@/lib/storage/database"
+import { commitSessionChanges, repairStudySessionDuplicates } from "@/lib/storage/sessionMutations"
 import { getDeviceId } from "@/lib/sync/device"
 import {
   emitLocalDataChanged,
-  readLocalDataArray,
+  readLocalRecords,
   readLocalStorageArray,
   SYNC_DATA_FILES,
 } from "@/lib/sync/localData"
 import {
+  acknowledgeSessionIntent,
+  readSessionIntents,
+  readForeignSessionIds,
   activateOutboxAccount,
   deferInboxChanges,
   enqueueChange,
@@ -53,7 +57,7 @@ import {
   rowKey,
 } from "@/lib/sync/reduce"
 import { getNotionDeleteMetadata, notionDeletePayload, recordNotionUpsertIntent } from "@/lib/sync/sinks"
-import { repairDuplicateSessions, sessionCommands, sessionReplayTiming } from "@/lib/sync/sessions"
+import { sessionCommands, sessionReplayTiming } from "@/lib/sync/sessions"
 import {
   applyChanges,
   applyStudySessionCommand,
@@ -166,7 +170,7 @@ export async function setSyncSession(session: Session | null): Promise<void> {
   if (!session || !supabase) {
     emitStatus({
       status: "signed-out",
-      pendingCount: (await readOutbox()).length,
+      pendingCount: (await readOutbox()).length + (await readSessionIntents()).length,
       error: null,
       details: null,
       tableStats: null,
@@ -234,7 +238,7 @@ function schedulePoll(): void {
   if (pollTimer) clearTimeout(pollTimer)
   if (!currentSession) return
   pollTimer = setTimeout(() => {
-    void pullRemoteChanges()
+    void flushQueue().then(() => pullRemoteChanges())
       .catch((error: unknown) => emitStatus({ error: describeSyncError(error) }))
       .finally(schedulePoll)
   }, pollIntervalMs())
@@ -336,6 +340,10 @@ export async function recordLocalSoftDelete(
   rowId: string,
   accountId = currentSession?.user.id ?? "",
 ): Promise<void> {
+  if (table === "study_sessions") {
+    await commitSessionChanges([], [], [rowId])
+    return
+  }
   const fileName = SYNC_DATA_FILES[table]
   if (fileName) await withWriteLock(fileName, () => deleteLocalRecord(table, rowId, accountId))
   else await deleteLocalRecord(table, rowId, accountId)
@@ -344,24 +352,7 @@ export async function recordLocalSoftDelete(
 async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: string): Promise<void> {
   const current = await readCurrentLocalValue(table, rowId)
   const deletePayload = notionDeletePayload(table, rowId, current)
-  let queue: SyncChange[]
-  if (table === "study_sessions") {
-    // Nothing queues a cancel any more (migration 0006), so say it to the server directly.
-    // If this fails, the next sync pass still knows: the record is gone, the applied row is not.
-    await (await openFocalDatabase()).execute("delete from records where kind = 'study_sessions' and id = $1", [rowId])
-    if (currentSession) {
-      // The discarded record keeps its timer boundaries until the server has heard them:
-      // its intervals replay like any other offline history, ending in the cancel.
-      const tombstone = current && typeof current === "object"
-        ? { ...(current as Record<string, unknown>), deleted_at: new Date().toISOString() } as LocalRecord
-        : undefined
-      void schedulePublishSession(rowId, accountId, currentDeviceId ?? await getDeviceId(), tombstone)
-        .catch(reportSessionPublishFailure)
-    }
-    queue = await readOutbox(accountId)
-  } else {
-    queue = await pushOrQueue(accountId, table, rowId, "delete", deletePayload)
-  }
+  const queue = await pushOrQueue(accountId, table, rowId, "delete", deletePayload)
   const notion = getNotionDeleteMetadata(deletePayload)
   if (notion) {
     await enqueueNotionArchive(
@@ -374,6 +365,17 @@ async function deleteLocalRecord(table: SyncTable, rowId: string, accountId: str
   }
   markLocalChange()
   emitQueuedStatus(queue, `${table.replace(/_/g, " ")} deletion saved locally`)
+  if (currentSession) void flushQueue()
+}
+
+/** Row mutations already committed their cloud and Notion intents; only wake workers. */
+export function mutationAccountId(): string | undefined {
+  return currentSession?.user.id
+}
+
+export function notifyCommittedPlanningChanges(tables: readonly ("events" | "study_sessions")[]): void {
+  emitLocalDataChanged(tables)
+  markLocalChange()
   if (currentSession) void flushQueue()
 }
 
@@ -517,9 +519,9 @@ async function bootstrapLocalState(accountId: string, epoch: number): Promise<vo
 
 async function enqueueAllLocalData(accountId = currentSession?.user.id ?? "", epoch = syncEpoch): Promise<void> {
   const [projects, events, sessions] = await Promise.all([
-    readLocalDataArray<Project>("projects.json"),
-    readLocalDataArray<CalendarEvent>("events.json"),
-    readLocalDataArray<StudySession>("sessions.json"),
+    readLocalRecords<Project>("projects"),
+    readLocalRecords<CalendarEvent>("events"),
+    readLocalRecords<StudySession>("study_sessions"),
   ])
   if (epoch !== syncEpoch) return
   const pendingDeletes = new Set((await readOutbox(accountId))
@@ -541,8 +543,11 @@ async function enqueueAllLocalData(accountId = currentSession?.user.id ?? "", ep
       const normalized = typeof payload === "object" && payload !== null ? { ...payload, device_id: currentDeviceId } : payload
       return isStudySessionCommand(normalized) ? [normalized.session_id] : []
     })
+  const foreignSessions = await readForeignSessionIds(accountId)
+  const ownIntents = new Set((await readSessionIntents(accountId)).map((intent) => intent.session_id))
   for (const session of sessions) {
     if (epoch !== syncEpoch) return
+    if (foreignSessions.has(session.id) && !canonicalSessions.has(session.id) && !ownIntents.has(session.id)) continue
     if (!canonicalSessions.has(session.id) && !queuedCommands.includes(session.id)
       && !pendingDeletes.has(rowKey("study_sessions", session.id))) {
       await publishSession(session.id, accountId, currentDeviceId ?? await getDeviceId())
@@ -555,18 +560,8 @@ async function enqueueAllLocalData(accountId = currentSession?.user.id ?? "", ep
 }
 
 async function repairLocalSessionDuplicates(accountId = currentSession?.user.id ?? ""): Promise<void> {
-  const raw = await readLocalDataArray<unknown>("sessions.json")
-  const repair = repairDuplicateSessions(raw)
-  if (repair.duplicateIds.length === 0) return
-
-  for (const id of repair.duplicateIds) await recordLocalSoftDelete("study_sessions", id, accountId)
-  await mutatePersistedArray("sessions.json", (current) => repairDuplicateSessions(current).sessions)
-  await rememberDuplicateNotionPages(repair.duplicateNotionPageIds)
-  emitLocalDataChanged("study_sessions")
-  emitStatus({
-    status: currentSession ? "pending" : "signed-out",
-    details: `Removed ${repair.duplicateIds.length} duplicate study session${repair.duplicateIds.length === 1 ? "" : "s"}`,
-  })
+  if (accountId !== (currentSession?.user.id ?? "")) return
+  await rememberDuplicateNotionPages(await repairStudySessionDuplicates(false))
 }
 
 // ---------------------------------------------------------------------------
@@ -579,14 +574,15 @@ async function repairLocalSessionDuplicates(accountId = currentSession?.user.id 
  * This is not a queue: the next pass simply re-reads the state its predecessor left, so the
  * last local word is always what reaches the server.
  */
-function schedulePublishSession(rowId: string, accountId: string, deviceId: string, tombstone?: LocalRecord): Promise<void> {
-  const previous = sessionPublishes.get(rowId) ?? Promise.resolve()
-  const task = previous.then(() => publishSession(rowId, accountId, deviceId, tombstone))
+function schedulePublishSession(rowId: string, accountId: string, deviceId: string): Promise<void> {
+  const key = `${accountId}:${rowId}`
+  const previous = sessionPublishes.get(key) ?? Promise.resolve()
+  const task = previous.then(() => publishSession(rowId, accountId, deviceId))
   // The link itself never rejects, so one failed pass cannot poison the chain behind it.
   const settled = task.then(() => undefined, () => undefined).then(() => {
-    if (sessionPublishes.get(rowId) === settled) sessionPublishes.delete(rowId)
+    if (sessionPublishes.get(key) === settled) sessionPublishes.delete(key)
   })
-  sessionPublishes.set(rowId, settled)
+  sessionPublishes.set(key, settled)
   return task
 }
 
@@ -632,14 +628,14 @@ function canonicalStateOf(payload: unknown): string | undefined {
  * on the way out: the commands are re-derived from the record and the last canonical row on
  * every pass, so a lost request costs one round trip and a failure is simply retried.
  */
-async function publishSession(rowId: string, accountId: string, deviceId: string, tombstone?: LocalRecord): Promise<void> {
-  if (!supabase || !currentSession) return
-  const record = await readCurrentLocalValue("study_sessions", rowId)
+async function publishSession(rowId: string, accountId: string, deviceId: string): Promise<void> {
+  if (!supabase || currentSession?.user.id !== accountId) return
+  const intent = (await readSessionIntents(accountId, rowId))[0]
+  const record = intent ? JSON.parse(intent.payload) as LocalRecord : await readCurrentLocalValue("study_sessions", rowId)
   const applied = (await readApplied(accountId, ["study_sessions"])).find((row) => row.rowId === rowId)
   const known = applied !== undefined && applied.operation !== "delete"
-  // A tombstone speaks only for a session the server has seen; a discard of a purely local
-  // record is nothing for it to hear.
-  const source = record ?? (known ? tombstone : undefined)
+  // The durable tombstone retains offline intervals even when no server row exists yet.
+  const source = record
   if (source === undefined) {
     // The record is gone locally and there is no history to replay: the server still needs
     // to hear the cancel once -- and only while its row is still open.
@@ -652,28 +648,38 @@ async function publishSession(rowId: string, accountId: string, deviceId: string
       subject_id: null, metadata: {} }], accountId, deviceId)
     return
   }
+  const state = canonicalStateOf(applied?.payload)
+  if (intent?.operation === "put" && (state === "cancelled" ||
+      state === "completed" && (source as StudySession).execution.state !== "completed")) {
+    throw new Error("This session ended on another device. Its unsent local history remains saved; discard it to accept the server state.")
+  }
   const commands = sessionCommands(source as StudySession, applied, deviceId, sessionTiming)
-  if (!commands.length) return
   await sendSessionCommands(commands, accountId, deviceId)
+  if (intent && currentSession?.user.id === accountId) await acknowledgeSessionIntent(intent)
 }
 
 /** Every local session with a difference from the server. Cheap: the diff is a local compare. */
 async function publishAllSessions(accountId: string, deviceId: string, epoch: number): Promise<void> {
   if (!supabase || !currentSession) return
   const applied = new Map((await readApplied(accountId, ["study_sessions"])).map((row) => [row.rowId, row]))
-  const records = await readLocalDataArray<StudySession>("sessions.json")
-  for (const record of records) {
+  const records = await readLocalRecords<StudySession>("study_sessions")
+  const intents = await readSessionIntents()
+  const foreign = await readForeignSessionIds(accountId)
+  const own = new Set(intents.filter((intent) => intent.account_id === accountId).map((intent) => intent.session_id))
+  // Include durable deletions and pre-migration applied rows with no local record.
+  const ids = new Set([...records.map((record) => record.id), ...applied.keys(), ...own])
+  let failure: unknown
+  for (const rowId of ids) {
     if (epoch !== syncEpoch) return
-    await schedulePublishSession(record.id, accountId, deviceId)
+    if (foreign.has(rowId) && !own.has(rowId)) continue
+    try {
+      await schedulePublishSession(rowId, accountId, deviceId)
+    } catch (error) {
+      // One rejected history must not starve unrelated sessions of publication.
+      failure ??= error
+    }
   }
-  // A discard whose publish never landed leaves no local record to find. Without this pass
-  // nothing would ever tell the server, and its timer would keep counting for good.
-  const live = new Set(records.map((record) => record.id))
-  for (const rowId of applied.keys()) {
-    if (epoch !== syncEpoch) return
-    if (live.has(rowId)) continue
-    await schedulePublishSession(rowId, accountId, deviceId)
-  }
+  if (failure) throw failure
 }
 
 async function sendSessionCommands(
@@ -685,6 +691,7 @@ async function sendSessionCommands(
     let current = command
     let rebases = 0
     for (;;) {
+      if (currentSession?.user.id !== accountId) throw new Error("Account changed during session publication")
       const result = await applyStudySessionCommand(current, deviceId, accountId)
       observeServerClockAnchor(result.server_now)
       if (result.session) {
@@ -696,13 +703,16 @@ async function sendSessionCommands(
       }
       const stale = result.reason === "stale_revision" && result.session
       if (!stale) {
-        if (result.reason === "session_terminal" || result.reason === "not_found" ||
-            result.reason === "invalid_transition") return
+        if (result.reason === "not_found" && current.action === "cancel") return
+        if (!result.ok && result.session && sessionActionSatisfied(current, result.session)) return
         if (!result.ok) throw new Error(`study_session_mutate failed: ${result.reason ?? "server_unavailable"}`)
         break
       }
       const session = result.session!
-      if (session.state === "completed" || session.state === "cancelled" || sessionActionSatisfied(current, session)) return
+      if (sessionActionSatisfied(current, session)) return
+      if (session.state === "completed" || session.state === "cancelled") {
+        throw new Error("This session ended on another device before its local history could be sent")
+      }
       if (rebases++ >= 2) throw new Error("This study session kept changing on another device. Try again in a moment.")
       current = { ...current, mutation_id: crypto.randomUUID(), expected_revision: session.revision }
     }
@@ -776,8 +786,7 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   const due = coalesceChanges(queue.filter((change) => isDue(change, now)))
   const blocked = queue.filter((change) => Boolean(change.blockedAt))
 
-  // Sessions are published directly and leave no queue entry behind, so an empty outbox is the
-  // normal case -- and exactly the case where a failed direct publish would never be retried.
+  // Canonical RPC publication runs even when the generic change-log outbox is empty.
   let sessionError: unknown = null
   try {
     await publishAllSessions(session.user.id, deviceId, epoch)
@@ -785,18 +794,20 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
     sessionError = error
   }
 
+  const sessionPending = (await readSessionIntents(session.user.id)).length
+  if (epoch !== syncEpoch) return
   if (due.length === 0) {
     emitStatus({
-      status: sessionError || blocked.length > 0 ? "error" : queue.length === 0 ? "synced" : "pending",
-      pendingCount: queue.length,
+      status: sessionError || blocked.length > 0 ? "error" : queue.length + sessionPending === 0 ? "synced" : "pending",
+      pendingCount: queue.length + sessionPending,
       error: sessionError ? describeSyncError(sessionError) : blocked[0]?.lastError ?? null,
       details: sessionError
         ? "A study session could not be sent. It stays saved on this device and is retried automatically."
         : blocked.length > 0
         ? `${blocked.length} change${blocked.length === 1 ? "" : "s"} need attention`
-        : queue.length === 0
+        : queue.length + sessionPending === 0
           ? "All changes synced"
-          : `${queue.length} change${queue.length === 1 ? "" : "s"} waiting to retry`,
+          : `${queue.length + sessionPending} changes waiting to retry`,
       failedItems: blocked.map((change) => ({
         table: change.entity,
         rowId: change.rowId,
@@ -889,7 +900,7 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   if (errors.length > 0) {
     emitStatus({
       status: "error",
-      pendingCount: next.length,
+      pendingCount: next.length + sessionPending,
       error: describeSyncError(errors[0]),
       details: blockedAfter.length > 0
         ? `${blockedAfter.length} change${blockedAfter.length === 1 ? "" : "s"} need attention`
@@ -907,8 +918,8 @@ async function flushQueueInternal(session: Session, deviceId: string, epoch: num
   }
 
   emitStatus({
-    status: next.length === 0 ? "synced" : "pending",
-    pendingCount: next.length,
+    status: next.length + sessionPending === 0 ? "synced" : "pending",
+    pendingCount: next.length + sessionPending,
     error: null,
     lastSuccessfulSyncAt: new Date().toISOString(),
     details: `Synced ${published.size} change${published.size === 1 ? "" : "s"}`,
@@ -968,7 +979,10 @@ async function pullRemoteChangesInternal(session: Session, epoch: number): Promi
     if (epoch !== syncEpoch) return
 
     const queue = await readOutbox(accountId)
-    const pending = queue.map((change) => rowKey(change.entity, change.rowId))
+    const pending = [
+      ...queue.map((change) => rowKey(change.entity, change.rowId)),
+      ...(await readSessionIntents(accountId)).map((intent) => rowKey("study_sessions", intent.session_id)),
+    ]
     const applied = await applyPulledResult(accountId, cursor, result, pending)
     if (epoch !== syncEpoch) return
 
@@ -979,6 +993,8 @@ async function pullRemoteChangesInternal(session: Session, epoch: number): Promi
     if (epoch !== syncEpoch) return
 
     const remaining = await readOutbox(accountId)
+    const sessionPending = (await readSessionIntents(accountId)).length
+    if (epoch !== syncEpoch) return
     const lastPullMs = Date.now() - startedAt
     emitMetrics({
       lastPullMs,
@@ -986,8 +1002,8 @@ async function pullRemoteChangesInternal(session: Session, epoch: number): Promi
       snapshots: snapshot.metrics.snapshots + (result.mode === "snapshot" ? 1 : 0),
     })
     emitStatus({
-      status: applied.deferred.length > 0 || remaining.length > 0 ? "pending" : "synced",
-      pendingCount: remaining.length,
+      status: applied.deferred.length > 0 || remaining.length + sessionPending > 0 ? "pending" : "synced",
+      pendingCount: remaining.length + sessionPending,
       error: null,
       lastSuccessfulSyncAt: new Date().toISOString(),
       details: applied.deferred.length > 0

@@ -1,346 +1,147 @@
 import { useCallback, useEffect, useRef } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import type { CalendarEvent, EventType } from "@/lib/types"
-import { generateId, isRecord, safeString, safeStringOpt, safeBool, safeDateMeta, parseCalendarEventSource, stableJsonStringify } from "@/lib/utils"
+import { generateId, isRecord, safeString, safeStringOpt, safeBool, safeDateMeta, parseCalendarEventSource } from "@/lib/utils"
 import { usePersistedData } from "@/lib/hooks/usePersistedData"
 import { useLatestRef } from "@/lib/hooks/useLatestRef"
-import { recordLocalSoftDelete, recordLocalUpsert } from "@/lib/sync/engine"
+import { mutationAccountId, notifyCommittedPlanningChanges } from "@/lib/sync/engine"
+import { ensureRecordImport, withWriteLock } from "@/lib/storage/database"
+import { getNotionCalendarSettings } from "@/lib/settings"
 import { calendarEventFingerprint, dedupeCalendarEvents } from "@/lib/calendarEvents"
 
 const VALID_EVENT_TYPES: readonly string[] = ["sac", "exam", "assignment", "event", "homework", "other", "practice-sac"]
-
-function getEventEndTime(event: Pick<CalendarEvent, "startTime" | "endTime">): number {
-  const value = event.endTime ?? event.startTime
-  const time = new Date(value).getTime()
-  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
-}
+type EventInput = Omit<CalendarEvent, "id" | "created_at" | "updated_at" | "isFinished"> & { isFinished?: boolean; id?: string }
+interface EventUpdate { id: string; updates: Partial<Omit<CalendarEvent, "id" | "created_at">>; expectedRecord?: CalendarEvent }
+type EventMutation =
+  | { operation: "put"; record: CalendarEvent; overwrite?: boolean }
+  | { operation: "update"; id: string; patch: Record<string, unknown>; expected?: CalendarEvent }
+  | { operation: "delete"; id: string }
 
 function eventHasPassed(event: Pick<CalendarEvent, "startTime" | "endTime">, now = Date.now()): boolean {
-  return getEventEndTime(event) < now
-}
-
-function markPastEventsFinished(events: CalendarEvent[], now = Date.now()): CalendarEvent[] {
-  let changed = false
-  const finishedAt = new Date(now).toISOString()
-  const updated = events.map((event) => {
-    if (event.isFinished || !eventHasPassed(event, now)) return event
-    changed = true
-    return { ...event, isFinished: true, finishedAt }
-  })
-  return changed ? updated : events
+  return new Date(event.endTime ?? event.startTime).getTime() < now
 }
 
 function normaliseEvent(raw: unknown): CalendarEvent {
   const obj = isRecord(raw) ? raw : {}
-  const eventType = VALID_EVENT_TYPES.includes(String(obj.eventType)) ? (obj.eventType as EventType) : "event"
-  const meta = safeDateMeta(obj)
   return {
     id: safeString(obj, "id", `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`),
     title: safeString(obj, "title", "Untitled Event"),
     description: safeStringOpt(obj, "description"),
     startTime: safeString(obj, "startTime", new Date().toISOString()),
     endTime: safeStringOpt(obj, "endTime"),
-    eventType,
+    eventType: VALID_EVENT_TYPES.includes(String(obj.eventType)) ? obj.eventType as EventType : "event",
     subjectId: safeStringOpt(obj, "subjectId"),
     location: safeStringOpt(obj, "location"),
     isFinished: safeBool(obj, "isFinished", false),
     finishedAt: safeStringOpt(obj, "finishedAt"),
     source: parseCalendarEventSource(obj.source),
-    ...meta,
+    ...safeDateMeta(obj),
   }
+}
+
+function createEvent(data: EventInput): CalendarEvent {
+  const now = new Date().toISOString()
+  const isFinished = Boolean(data.isFinished) || eventHasPassed(data)
+  return { ...data, id: data.id ?? generateId(), isFinished, finishedAt: data.finishedAt ?? (isFinished ? now : undefined), created_at: now, updated_at: now }
+}
+
+function updateMutation(item: EventUpdate): EventMutation {
+  // Explicit undefined clears a field; JSON would otherwise silently omit it.
+  const patch = Object.fromEntries(Object.entries(item.updates).map(([key, value]) => [key, value ?? null]))
+  return { operation: "update", id: item.id, patch: { ...patch, updated_at: new Date().toISOString() }, expected: item.expectedRecord }
+}
+
+async function commit(mutations: EventMutation[]): Promise<CalendarEvent[]> {
+  if (!mutations.length) return []
+  const expectedAccountId = mutationAccountId()
+  await ensureRecordImport("events")
+  const records = await withWriteLock("events", () => invoke<unknown[]>("mutate_events", {
+    mutations,
+    expectedAccountId,
+    dataSourceId: getNotionCalendarSettings().dataSourceId,
+  }))
+  notifyCommittedPlanningChanges(["events"])
+  return records.map(normaliseEvent)
 }
 
 export function useEvents() {
   const duplicateIdsRef = useRef<string[]>([])
-  const { data: events, loading, error, save: saveEvents, mutate: mutateEvents, refresh } = usePersistedData({
-    fileName: "events.json",
+  const { data: events, loading, error, refresh } = usePersistedData({
+    kind: "events",
     normalize: normaliseEvent,
     onLoad: (normalised) => {
-      const result = dedupeCalendarEvents(
-        markPastEventsFinished(normalised.filter((event) => !event.deleted_at)),
-      )
+      const result = dedupeCalendarEvents(normalised.filter((event) => !event.deleted_at))
       duplicateIdsRef.current = result.duplicateIds
       return result.events
     },
   })
-
   const eventsRef = useLatestRef(events)
 
   useEffect(() => {
-    if (loading || duplicateIdsRef.current.length === 0) return
-    const duplicateIds = duplicateIdsRef.current
+    if (loading || !duplicateIdsRef.current.length) return
+    const ids = duplicateIdsRef.current
     duplicateIdsRef.current = []
-    void Promise.all(duplicateIds.map((id) => recordLocalSoftDelete("events", id)))
-      .then(() => saveEvents(events))
-  }, [events, loading, saveEvents])
-
-  const addEvent = useCallback(async (data: {
-    title: string
-    description?: string
-    startTime: string
-    endTime?: string
-    eventType: EventType
-    subjectId?: string
-    location?: string
-    source?: CalendarEvent["source"]
-  }) => {
-    const fingerprint = calendarEventFingerprint(data)
-    const existing = eventsRef.current.find(
-      (event) => calendarEventFingerprint(event) === fingerprint,
-    )
-    if (existing) return null
-
-    const now = new Date().toISOString()
-    const isFinished = eventHasPassed(data)
-    const event: CalendarEvent = {
-      id: generateId(),
-      title: data.title,
-      description: data.description,
-      startTime: data.startTime,
-      endTime: data.endTime,
-      eventType: data.eventType,
-      subjectId: data.subjectId,
-      location: data.location,
-      source: data.source,
-      isFinished,
-      finishedAt: isFinished ? now : undefined,
-      created_at: now,
-      updated_at: now,
-    }
-    const updated = [...eventsRef.current, event]
-    await saveEvents(updated)
-    await recordLocalUpsert("events", event)
-    return event
-  }, [eventsRef, saveEvents])
-
-  const addEvents = useCallback(async (items: {
-    title: string
-    description?: string
-    startTime: string
-    endTime?: string
-    eventType: EventType
-    subjectId?: string
-    location?: string
-    source?: CalendarEvent["source"]
-  }[]) => {
-    const createdAt = new Date().toISOString()
-    const newEvents: CalendarEvent[] = items.map((data) => {
-      const isFinished = eventHasPassed(data)
-      return {
-        id: generateId(),
-        title: data.title,
-        description: data.description,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        eventType: data.eventType,
-        subjectId: data.subjectId,
-        location: data.location,
-        source: data.source,
-        isFinished,
-        finishedAt: isFinished ? createdAt : undefined,
-        created_at: createdAt,
-        updated_at: createdAt,
-      }
+    void commit(ids.map((id) => ({ operation: "delete", id }))).catch((error: unknown) => {
+      duplicateIdsRef.current = ids
+      console.error("Could not persist duplicate event repair:", error)
     })
-    const existingFingerprints = new Set(
-      eventsRef.current.map(calendarEventFingerprint),
-    )
-    const uniqueNewEvents = newEvents.filter((event) => {
+  }, [events, loading])
+
+  const addEvents = useCallback(async (items: EventInput[]) => {
+    const fingerprints = new Set(eventsRef.current.map(calendarEventFingerprint))
+    const created = items.map(createEvent).filter((event) => {
       const fingerprint = calendarEventFingerprint(event)
-      if (existingFingerprints.has(fingerprint)) return false
-      existingFingerprints.add(fingerprint)
+      if (fingerprints.has(fingerprint)) return false
+      fingerprints.add(fingerprint)
       return true
     })
-    const updated = [...eventsRef.current, ...uniqueNewEvents]
-    await saveEvents(updated)
-    await Promise.all(uniqueNewEvents.map((event) => recordLocalUpsert("events", event)))
-    return uniqueNewEvents
-  }, [eventsRef, saveEvents])
-
-  const updateEvent = useCallback(async (
-    id: string,
-    updates: Partial<Omit<CalendarEvent, "id" | "created_at">>
-  ) => {
-    const updated = markPastEventsFinished(eventsRef.current.map((event) =>
-      event.id === id ? { ...event, ...updates, updated_at: new Date().toISOString() } : event
-    ))
-    await saveEvents(updated)
-    const event = updated.find((item) => item.id === id)
-    if (event) await recordLocalUpsert("events", event)
-  }, [eventsRef, saveEvents])
-
-  const updateEvents = useCallback(async (items: {
-    id: string
-    updates: Partial<Omit<CalendarEvent, "id" | "created_at">>
-  }[]) => {
-    const updateMap = new Map(items.map((item) => [item.id, item.updates]))
-    const updated = markPastEventsFinished(eventsRef.current.map((event) => {
-      const updates = updateMap.get(event.id)
-      return updates ? { ...event, ...updates, updated_at: new Date().toISOString() } : event
-    }))
-    await saveEvents(updated)
-    await Promise.all(items.map(async (item) => {
-      const event = updated.find((candidate) => candidate.id === item.id)
-      if (event) await recordLocalUpsert("events", event)
-    }))
-  }, [eventsRef, saveEvents])
-
-  const deleteEvent = useCallback(async (id: string) => {
-    const updated = eventsRef.current.filter((event) => event.id !== id)
-    await recordLocalSoftDelete("events", id)
-    await saveEvents(updated)
-  }, [eventsRef, saveEvents])
-
-  const restoreEvent = useCallback(async (event: CalendarEvent) => {
-    const exists = eventsRef.current.some((e) => e.id === event.id)
-    if (exists) return
-    const restored = { ...event, deleted_at: null, updated_at: new Date().toISOString() }
-    const updated = [...eventsRef.current, restored]
-    await saveEvents(updated)
-    await recordLocalUpsert("events", restored)
-  }, [eventsRef, saveEvents])
-
+    return commit(created.map((record) => ({ operation: "put", record })))
+  }, [eventsRef])
+  const addEvent = useCallback(async (data: EventInput) => (await addEvents([data]))[0] ?? null, [addEvents])
+  const updateEvents = useCallback(async (items: EventUpdate[]) => {
+    await commit(items.map(updateMutation))
+  }, [])
+  const updateEvent = useCallback(async (id: string, updates: EventUpdate["updates"]) => {
+    await updateEvents([{ id, updates }])
+  }, [updateEvents])
   const deleteEvents = useCallback(async (ids: string[]) => {
-    const idSet = new Set(ids)
-    const updated = eventsRef.current.filter((event) => !idSet.has(event.id))
-    await Promise.all(ids.map((id) => recordLocalSoftDelete("events", id)))
-    await saveEvents(updated)
-  }, [eventsRef, saveEvents])
-
-  const restoreEvents = useCallback(async (eventsToRestore: CalendarEvent[]) => {
-    const existingIds = new Set(eventsRef.current.map((e) => e.id))
-    const newEvents = eventsToRestore.filter((e) => !existingIds.has(e.id))
-    if (newEvents.length === 0) return
-    const restoredEvents = newEvents.map((event) => ({ ...event, deleted_at: null, updated_at: new Date().toISOString() }))
-    const updated = [...eventsRef.current, ...restoredEvents]
-    await saveEvents(updated)
-    await Promise.all(restoredEvents.map((event) => recordLocalUpsert("events", event)))
-  }, [eventsRef, saveEvents])
-
-  const updateAndDeleteEvents = useCallback(async (
-    items: {
-      id: string
-      updates: Partial<Omit<CalendarEvent, "id" | "created_at">>
-    }[],
-    ids: string[],
-  ) => {
-    const updateMap = new Map(items.map((item) => [item.id, item.updates]))
-    const deleteSet = new Set(ids)
-    const updated = markPastEventsFinished(eventsRef.current
-      .filter((event) => !deleteSet.has(event.id))
-      .map((event) => {
-        const updates = updateMap.get(event.id)
-        return updates ? { ...event, ...updates, updated_at: new Date().toISOString() } : event
-      }))
-    await Promise.all(ids.map((id) => recordLocalSoftDelete("events", id)))
-    await saveEvents(updated)
-    await Promise.all(items.map(async (item) => {
-      const event = updated.find((candidate) => candidate.id === item.id)
-      if (event) await recordLocalUpsert("events", event)
-    }))
-  }, [eventsRef, saveEvents])
-
-  const syncEvents = useCallback(async (
-    itemsToCreate: (Omit<CalendarEvent, "id" | "created_at"> & { id?: string })[],
-    itemsToUpdate: {
-      id: string
-      updates: Partial<Omit<CalendarEvent, "id" | "created_at">>
-      expectedRecord?: CalendarEvent
-    }[],
-  ) => {
-    const updateMap = new Map(itemsToUpdate.map((item) => [item.id, item.updates]))
-    const expectedRecordMap = new Map(itemsToUpdate.flatMap((item) => (
-      item.expectedRecord ? [[item.id, stableJsonStringify(item.expectedRecord)] as const] : []
-    )))
-    const createdAt = new Date().toISOString()
-    const newEvents: CalendarEvent[] = itemsToCreate.map((data) => {
-      const isFinished = Boolean(data.isFinished) || eventHasPassed(data)
-      return {
-        id: data.id ?? generateId(),
-        title: data.title,
-        description: data.description,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        eventType: data.eventType,
-        subjectId: data.subjectId,
-        location: data.location,
-        source: data.source,
-        isFinished,
-        finishedAt: data.finishedAt ?? (isFinished ? createdAt : undefined),
-        created_at: createdAt,
-        updated_at: createdAt,
-      }
-    })
-    const createdIds = new Set<string>()
-    const appliedUpdateIds = new Set<string>()
-    const updated = await mutateEvents((current) => {
-      const existingIds = new Set(current.map((event) => event.id))
-      const created = newEvents.filter((event) => {
-        if (existingIds.has(event.id)) return false
-        createdIds.add(event.id)
-        return true
-      })
-      return markPastEventsFinished([
-        ...current.map((event) => {
-          const updates = updateMap.get(event.id)
-          const expectedRecord = expectedRecordMap.get(event.id)
-          if (!updates || (expectedRecord && stableJsonStringify(event) !== expectedRecord)) return event
-          appliedUpdateIds.add(event.id)
-          return { ...event, ...updates, updated_at: createdAt }
-        }),
-        ...created,
-      ])
-    })
-    await Promise.all(itemsToUpdate.map(async (item) => {
-      if (!appliedUpdateIds.has(item.id)) return
-      const event = updated.find((candidate) => candidate.id === item.id)
-      if (event) await recordLocalUpsert("events", event)
-    }))
-    const created = newEvents.filter((event) => createdIds.has(event.id))
-    await Promise.all(created.map((event) => recordLocalUpsert("events", event)))
-    return {
-      created,
-      updated: itemsToUpdate.flatMap((item) => {
-        if (!appliedUpdateIds.has(item.id)) return []
-        const event = updated.find((candidate) => candidate.id === item.id)
-        return event ? [event] : []
-      }),
-    }
-  }, [mutateEvents])
+    await commit(ids.map((id) => ({ operation: "delete", id })))
+  }, [])
+  const deleteEvent = useCallback(async (id: string) => deleteEvents([id]), [deleteEvents])
+  const restoreEvents = useCallback(async (records: CalendarEvent[]) => {
+    await commit(records.map((record) => ({ operation: "put", record: { ...record, deleted_at: null, updated_at: new Date().toISOString() } })))
+  }, [])
+  const restoreEvent = useCallback(async (record: CalendarEvent) => restoreEvents([record]), [restoreEvents])
+  const updateAndDeleteEvents = useCallback(async (items: EventUpdate[], ids: string[]) => {
+    const deleted = new Set(ids)
+    await commit([
+      ...items.filter((item) => !deleted.has(item.id)).map(updateMutation),
+      ...ids.map((id): EventMutation => ({ operation: "delete", id })),
+    ])
+  }, [])
+  const syncEvents = useCallback(async (itemsToCreate: EventInput[], itemsToUpdate: EventUpdate[]) => {
+    const createdRecords = itemsToCreate.map(createEvent)
+    const applied = await commit([
+      ...itemsToUpdate.map(updateMutation),
+      ...createdRecords.map((record): EventMutation => ({ operation: "put", record })),
+    ])
+    const createdIds = new Set(createdRecords.map((record) => record.id))
+    return { created: applied.filter((record) => createdIds.has(record.id)), updated: applied.filter((record) => !createdIds.has(record.id)) }
+  }, [])
 
   useEffect(() => {
+    if (loading) return
     const markFinished = () => {
-      const updated = markPastEventsFinished(eventsRef.current)
-      if (updated !== eventsRef.current) {
-        void saveEvents(updated)
-        // Sync the isFinished/finishedAt changes to the remote so other
-        // devices pick up the auto-finished status.
-        updated.forEach((event, i) => {
-          if (event !== eventsRef.current[i]) {
-            void recordLocalUpsert("events", event)
-          }
-        })
-      }
+      const now = new Date().toISOString()
+      const items = eventsRef.current.filter((event) => !event.isFinished && eventHasPassed(event))
+      // Conditional patches cannot auto-finish an event rescheduled by a concurrent edit.
+      void updateEvents(items.map((event) => ({ id: event.id, expectedRecord: event, updates: { isFinished: true, finishedAt: now } })))
+        .catch((error: unknown) => console.error("Could not auto-finish events:", error))
     }
-
     markFinished()
-    const interval = window.setInterval(markFinished, 60 * 1000)
+    const interval = window.setInterval(markFinished, 60_000)
     return () => window.clearInterval(interval)
-  }, [eventsRef, saveEvents])
+  }, [eventsRef, loading, updateEvents])
 
-  return {
-    events,
-    loading,
-    error,
-    addEvent,
-    addEvents,
-    updateEvent,
-    updateEvents,
-    deleteEvent,
-    deleteEvents,
-    restoreEvent,
-    restoreEvents,
-    updateAndDeleteEvents,
-    syncEvents,
-    refresh,
-  }
+  return { events, loading, error, addEvent, addEvents, updateEvent, updateEvents, deleteEvent, deleteEvents, restoreEvent, restoreEvents, updateAndDeleteEvents, syncEvents, refresh }
 }

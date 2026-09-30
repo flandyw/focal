@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useLatestRef } from "@/lib/hooks/useLatestRef"
-import { mutatePersistedArray, readPersistedArray, writePersistedArray } from "@/lib/storage/database"
-import type { CoreDataFile } from "@/lib/storage/records"
+import { mutatePersistedArray, readRecords, writePersistedArray } from "@/lib/storage/database"
+import { coreDataFile, type CoreRecordKind } from "@/lib/storage/records"
 
 /**
  * Generic hook for reading/writing a persisted record array.
@@ -10,7 +10,7 @@ import type { CoreDataFile } from "@/lib/storage/records"
  * in React state without reloading the page.
  */
 interface PersistedDataOptions<T> {
-  fileName: CoreDataFile
+  kind: CoreRecordKind
   normalize: (raw: unknown) => T
   onLoad?: (data: T[]) => T[]
 }
@@ -25,10 +25,11 @@ interface PersistedDataResult<T> {
 }
 
 export function usePersistedData<T>({
-  fileName,
+  kind,
   normalize,
   onLoad,
 }: PersistedDataOptions<T>): PersistedDataResult<T> {
+  const fileName = coreDataFile(kind)
   const [data, setData] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,20 +41,20 @@ export function usePersistedData<T>({
   const refresh = useCallback(async () => {
     try {
       setError(null)
-      const raw = await readPersistedArray(fileName)
+      const raw = await readRecords(kind)
       let normalised = raw.map(normalizeRef.current)
       if (onLoadRef.current) {
         normalised = onLoadRef.current(normalised)
       }
       setData(normalised)
     } catch (e) {
-      const msg = `Failed to load ${fileName}: ${String(e)}`
+      const msg = `Failed to load ${kind}: ${String(e)}`
       console.error(msg)
       setError(msg)
     } finally {
       setLoading(false)
     }
-  }, [fileName, normalizeRef, onLoadRef])
+  }, [kind, normalizeRef, onLoadRef])
 
   const save = useCallback(async (updated: T[]) => {
     await writePersistedArray(fileName, updated)
@@ -75,14 +76,14 @@ export function usePersistedData<T>({
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ fileName?: string }>).detail
-      if (detail?.fileName === fileName) {
+      const detail = (event as CustomEvent<{ table?: string; tables?: string[] }>).detail
+      if (detail?.table === kind || detail?.tables?.includes(kind)) {
         void refresh()
       }
     }
     window.addEventListener("focal-sync-data-changed", handler)
     return () => window.removeEventListener("focal-sync-data-changed", handler)
-  }, [fileName, refresh])
+  }, [kind, refresh])
 
   return { data, loading, error, save, mutate, refresh }
 }

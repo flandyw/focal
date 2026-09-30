@@ -122,7 +122,22 @@ export function clearNotionIntent(
                  select 1 from records
                   where records.kind = '${kind === "event" ? "events" : "study_sessions"}'
                     and records.id = $3
-                    and records.payload = $${operation ? 5 : 4}
+                    -- JSON key order is not identity; native writes reorder keys.
+                    -- Optional top-level nulls and absent fields normalize identically.
+                    and not exists (
+                      select fullkey, type, atom from json_tree(records.payload)
+                       where not (type = 'null' and parent = 0)
+                      except
+                      select fullkey, type, atom from json_tree($${operation ? 5 : 4})
+                       where not (type = 'null' and parent = 0)
+                    )
+                    and not exists (
+                      select fullkey, type, atom from json_tree($${operation ? 5 : 4})
+                       where not (type = 'null' and parent = 0)
+                      except
+                      select fullkey, type, atom from json_tree(records.payload)
+                       where not (type = 'null' and parent = 0)
+                    )
                )`}`,
       [
         dataSourceId,

@@ -4,6 +4,40 @@ import type { RemoteSyncChange, SyncChange, SyncOperation, SyncRowState, SyncTab
 
 type Database = Awaited<ReturnType<typeof openFocalDatabase>>
 
+export interface SessionIntent {
+  account_id: string
+  session_id: string
+  intent_id: string
+  operation: "put" | "delete"
+  payload: string
+}
+
+export async function readSessionIntents(accountId?: string, rowId?: string): Promise<SessionIntent[]> {
+  await lock
+  return (await openFocalDatabase()).select<SessionIntent[]>(
+    `select account_id, session_id, intent_id, operation, payload from session_outbox
+     ${accountId === undefined ? "" : "where account_id = $1"}
+     ${rowId === undefined ? "" : "and session_id = $2"} order by created_at`,
+    accountId === undefined ? [] : [accountId, ...(rowId === undefined ? [] : [rowId])],
+  )
+}
+
+export async function readForeignSessionIds(accountId: string): Promise<Set<string>> {
+  const rows = await (await openFocalDatabase()).select<{ session_id: string }[]>(
+    `select session_id from session_outbox where account_id <> $1
+     union select row_id as session_id from sync_applied where entity = 'study_sessions' and account_id <> $1`,
+    [accountId],
+  )
+  return new Set(rows.map((row) => row.session_id))
+}
+
+export async function acknowledgeSessionIntent(intent: SessionIntent): Promise<void> {
+  await (await openFocalDatabase()).execute(
+    "delete from session_outbox where account_id = $1 and session_id = $2 and intent_id = $3",
+    [intent.account_id, intent.session_id, intent.intent_id],
+  )
+}
+
 interface OutboxRow {
   change_id: string
   account_id: string
@@ -187,6 +221,22 @@ export function activateOutboxAccount(accountId: string): Promise<void> {
     const lastAccountId = context[0]?.last_account_id ?? ""
     const canClaimUnowned = accountId.length > 0 && (lastAccountId === "" || lastAccountId === accountId)
     if (canClaimUnowned) {
+      await database.execute(
+        `insert into session_outbox (account_id, session_id, intent_id, created_at, operation, payload)
+         select $1, session_id, intent_id, created_at, operation, payload from session_outbox where account_id = ''
+         on conflict (account_id, session_id) do update set
+           intent_id = excluded.intent_id, created_at = excluded.created_at,
+           operation = excluded.operation, payload = excluded.payload
+         where session_outbox.created_at <= excluded.created_at`,
+        [accountId],
+      )
+      await database.execute("delete from session_outbox where account_id = ''")
+      await database.execute(
+        `insert into event_conversions (account_id, event_id, session_id, payload)
+         select $1, event_id, session_id, payload from event_conversions where account_id = ''
+         on conflict (account_id, event_id) do nothing`, [accountId],
+      )
+      await database.execute("delete from event_conversions where account_id = ''")
       const unowned = await database.select<OutboxRow[]>(
         `select change_id, account_id, entity, row_id, operation, payload, created_at, lamport,
                 retry_count, last_error, next_attempt_at, blocked_at

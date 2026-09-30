@@ -24,18 +24,16 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
-  Pencil,
   CheckCircle2,
-  Trash2,
   CalendarDays,
   Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CalendarItemMenu } from "./CalendarItemMenu";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem as CtxMenuItem,
-  ContextMenuSeparator as CtxMenuSep,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { getSubjectById, getEventTypeInfo, cn } from "@/lib/utils";
@@ -82,6 +80,7 @@ interface CalendarGridProps {
   onSelectProject: (projectId: string) => void;
   onSelectSession: (session: StudySession) => void;
   onSelectEvent: (event: CalendarEvent) => void;
+  onConvertToSession?: (event: CalendarEvent) => void;
   onNewEvent: (initialDate: Date) => void;
   onMoveEvent?: (
     eventId: string,
@@ -122,11 +121,21 @@ export function CalendarGrid({
   onSelectProject,
   onSelectSession,
   onSelectEvent,
+  onConvertToSession,
   onNewEvent,
   onMoveEvent,
   onDeleteCalendarItems,
   onSetCalendarItemsCompleted,
 }: CalendarGridProps) {
+  const renderEventMenu = (event: CalendarEvent) => (
+    <CalendarItemMenu
+      onEdit={() => onSelectEvent(event)}
+      onConvert={onConvertToSession && (() => onConvertToSession(event))}
+      isCompleted={Boolean(event.isFinished)}
+      onToggleComplete={onSetCalendarItemsCompleted && (() => onSetCalendarItemsCompleted({ eventIds: [event.id], sessionIds: [] }, !event.isFinished))}
+      onDelete={onDeleteCalendarItems && (() => onDeleteCalendarItems({ eventIds: [event.id], sessionIds: [] }))}
+    />
+  );
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
@@ -725,40 +734,7 @@ export function CalendarGrid({
                                 })()}
                             </div>
                           </ContextMenuTrigger>
-                          <ContextMenuContent className="w-40">
-                            <CtxMenuItem onSelect={() => onSelectEvent(event)}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </CtxMenuItem>
-                            {onSetCalendarItemsCompleted && (
-                              <CtxMenuItem
-                                onSelect={() =>
-                                  onSetCalendarItemsCompleted(
-                                    { eventIds: [event.id], sessionIds: [] },
-                                    !event.isFinished,
-                                  )
-                                }
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                                {event.isFinished
-                                  ? "Mark current"
-                                  : "Mark complete"}
-                              </CtxMenuItem>
-                            )}
-                            <CtxMenuSep />
-                            <CtxMenuItem
-                              variant="destructive"
-                              onSelect={() =>
-                                onDeleteCalendarItems?.({
-                                  eventIds: [event.id],
-                                  sessionIds: [],
-                                })
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </CtxMenuItem>
-                          </ContextMenuContent>
+                          {renderEventMenu(event)}
                         </ContextMenu>
                       );
                     })}
@@ -854,40 +830,7 @@ export function CalendarGrid({
                               {content}
                             </div>
                           </ContextMenuTrigger>
-                          <ContextMenuContent className="w-40">
-                            <CtxMenuItem onSelect={() => onSelectEvent(ev)}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </CtxMenuItem>
-                            {onSetCalendarItemsCompleted && (
-                              <CtxMenuItem
-                                onSelect={() =>
-                                  onSetCalendarItemsCompleted(
-                                    { eventIds: [ev.id], sessionIds: [] },
-                                    !ev.isFinished,
-                                  )
-                                }
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                                {ev.isFinished
-                                  ? "Mark current"
-                                  : "Mark complete"}
-                              </CtxMenuItem>
-                            )}
-                            <CtxMenuSep />
-                            <CtxMenuItem
-                              variant="destructive"
-                              onSelect={() =>
-                                onDeleteCalendarItems?.({
-                                  eventIds: [ev.id],
-                                  sessionIds: [],
-                                })
-                              }
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </CtxMenuItem>
-                          </ContextMenuContent>
+                          {renderEventMenu(ev)}
                         </ContextMenu>
                       );
                     }
@@ -1087,31 +1030,7 @@ export function CalendarGrid({
                             </span>
                           </button>
                             </ContextMenuTrigger>
-                            <ContextMenuContent className="w-40">
-                              <CtxMenuItem onSelect={() => onSelectEvent(event)}>
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </CtxMenuItem>
-                              {onSetCalendarItemsCompleted && (
-                                <CtxMenuItem
-                                  onSelect={() => onSetCalendarItemsCompleted(
-                                    { eventIds: [event.id], sessionIds: [] },
-                                    !event.isFinished,
-                                  )}
-                                >
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  {event.isFinished ? "Mark current" : "Mark complete"}
-                                </CtxMenuItem>
-                              )}
-                              <CtxMenuSep />
-                              <CtxMenuItem
-                                variant="destructive"
-                                onSelect={() => onDeleteCalendarItems?.({ eventIds: [event.id], sessionIds: [] })}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </CtxMenuItem>
-                            </ContextMenuContent>
+                            {renderEventMenu(event)}
                           </ContextMenu>
                         );
                       })}
@@ -1200,31 +1119,7 @@ export function CalendarGrid({
                       return (
                         <ContextMenu key={`${item.type}-${idx}`}>
                           <ContextMenuTrigger asChild>{itemButton}</ContextMenuTrigger>
-                          <ContextMenuContent className="w-40">
-                            <CtxMenuItem onSelect={() => onSelectEvent(event)}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </CtxMenuItem>
-                            {onSetCalendarItemsCompleted && (
-                              <CtxMenuItem
-                                onSelect={() => onSetCalendarItemsCompleted(
-                                  { eventIds: [event.id], sessionIds: [] },
-                                  !event.isFinished,
-                                )}
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                                {event.isFinished ? "Mark current" : "Mark complete"}
-                              </CtxMenuItem>
-                            )}
-                            <CtxMenuSep />
-                            <CtxMenuItem
-                              variant="destructive"
-                              onSelect={() => onDeleteCalendarItems?.({ eventIds: [event.id], sessionIds: [] })}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Delete
-                            </CtxMenuItem>
-                          </ContextMenuContent>
+                          {renderEventMenu(event)}
                         </ContextMenu>
                       );
                     })}

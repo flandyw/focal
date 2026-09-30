@@ -1,12 +1,10 @@
 import { useMemo, type ComponentType, type ReactNode } from "react"
 import { format, parseISO, differenceInDays } from "date-fns"
-import { X, Check, ChevronRight, CheckCircle2, Trash2, Pencil, CalendarClock, BookOpen, CalendarDays, Plus } from "lucide-react"
+import { X, Check, ChevronRight, CheckCircle2, CalendarClock, BookOpen, CalendarDays, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CalendarItemMenu } from "./CalendarItemMenu"
 import {
   ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem as CtxMenuItem,
-  ContextMenuSeparator as CtxMenuSep,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { formatDeadline, getSubjectById, getEventTypeInfo, getSessionEffectiveMinutes, getSessionSubjectIds, cn } from "@/lib/utils"
@@ -75,6 +73,7 @@ interface DayDetailProps {
   onSelectProject: (projectId: string) => void
   onSelectSession: (session: StudySession) => void
   onSelectEvent: (event: CalendarEvent) => void
+  onConvertToSession?: (event: CalendarEvent) => void
   onNewEvent: () => void
   onNewSession: () => void
   onDeleteCalendarItems?: (itemIds: { eventIds: string[]; sessionIds: string[] }) => void
@@ -241,6 +240,7 @@ export function DayDetail({
   onSelectProject,
   onSelectSession,
   onSelectEvent,
+  onConvertToSession,
   onNewEvent,
   onNewSession,
   onDeleteCalendarItems,
@@ -385,26 +385,13 @@ export function DayDetail({
                 </Button>
               )}
             </div>
-            <ContextMenuContent className="w-40">
-              <CtxMenuItem onSelect={view.onOpen}>
-                <Pencil className="h-4 w-4" />
-                Edit
-              </CtxMenuItem>
-              {onSetCalendarItemsCompleted && (
-                <CtxMenuItem onSelect={() => onSetCalendarItemsCompleted(view.selection, view.markComplete)}>
-                  <CheckCircle2 className="h-4 w-4" />
-                  {view.markComplete ? "Mark complete" : "Mark current"}
-                </CtxMenuItem>
-              )}
-              <CtxMenuSep />
-              <CtxMenuItem
-                variant="destructive"
-                onSelect={() => onDeleteCalendarItems?.(view.selection)}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </CtxMenuItem>
-            </ContextMenuContent>
+            <CalendarItemMenu
+              onEdit={view.onOpen}
+              onConvert={dayItem.kind === "event" && onConvertToSession ? () => onConvertToSession(dayItem.item) : undefined}
+              isCompleted={!view.markComplete}
+              onToggleComplete={onSetCalendarItemsCompleted && (() => onSetCalendarItemsCompleted(view.selection, view.markComplete))}
+              onDelete={onDeleteCalendarItems && (() => onDeleteCalendarItems(view.selection))}
+            />
           </ContextMenu>
         )
       })}

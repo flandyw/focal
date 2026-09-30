@@ -26,6 +26,11 @@ export function coreRecordKind(fileName: CoreDataFile): CoreRecordKind {
   return KIND_BY_FILE[fileName]
 }
 
+/** Legacy import/export addressing only. Runtime records use their kind. */
+export function coreDataFile(kind: CoreRecordKind): CoreDataFile {
+  return kind === "study_sessions" ? "sessions.json" : `${kind}.json`
+}
+
 export function prepareStoredRecords(items: unknown[]): StoredRecordInput[] {
   return items.map((item, position) => {
     const record = typeof item === "object" && item !== null && !Array.isArray(item)

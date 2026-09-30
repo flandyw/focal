@@ -220,6 +220,7 @@ function App() {
     loading: sessionsLoading,
     addSession,
     addSessions,
+    convertEventToSession,
     updateSession,
     updateSessions,
     deleteSession,
@@ -260,7 +261,6 @@ function App() {
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
   const [newSessionMode, setNewSessionMode] = useState<"plan" | "log">("plan");
   const [eventConversion, setEventConversion] = useState<{ event: CalendarEvent; draft: StudySessionDraft } | null>(null);
-  const convertedSessionsRef = useRef(new Map<string, StudySession>());
   const conversionSavingRef = useRef(false);
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(
     null,
@@ -776,6 +776,20 @@ function App() {
     [projects, deleteProject, selectedId, restoreProject, requestNotionSync, navigation],
   );
 
+  const handleConvertEventToSession = useCallback((event: CalendarEvent) => {
+    try {
+      const draft = eventToStudySessionDraft(event);
+      setEventConversion({ event, draft });
+      setSelectedSession(null);
+      setNewSessionMode("plan");
+      setEventDialogOpen(false);
+      setSelectedEvent(null);
+      setSessionDialogOpen(true);
+    } catch (e) {
+      toast.error(`Cannot convert event: ${String(e)}`);
+    }
+  }, []);
+
   const handleCreateStudySession = useCallback(
     async (data: {
       id?: string;
@@ -826,20 +840,13 @@ function App() {
           },
           createdVia: "manual",
         };
-        const previous = eventConversion ? convertedSessionsRef.current.get(eventConversion.event.id) : undefined;
-        const newSession = previous ?? await addSession(input);
-        if (eventConversion) {
-          // ponytail: save first; retain the session ID so a failed event deletion can be retried without duplicates.
-          convertedSessionsRef.current.set(eventConversion.event.id, newSession);
-          if (previous) await updateSession(previous.id, input);
-          await deleteEvent(eventConversion.event.id);
-          convertedSessionsRef.current.delete(eventConversion.event.id);
-          setEventConversion(null);
-        }
+        const newSession = eventConversion
+          ? await convertEventToSession(eventConversion.event, input)
+          : await addSession(input);
+        if (eventConversion) setEventConversion(null);
         toast.success(eventConversion ? "Event converted to study session" : `Study session "${data.title}" created`);
         setSessionDialogOpen(false);
-        if (previous) void requestNotionSync(false);
-        else void pushSessionChange(newSession);
+        void pushSessionChange(newSession);
       } catch (e) {
         toast.error(`Failed to create study session: ${String(e)}`);
         throw e;
@@ -847,7 +854,7 @@ function App() {
         conversionSavingRef.current = false;
       }
     },
-    [addSession, updateSession, deleteEvent, eventConversion, pushSessionChange, requestNotionSync, setSessionDialogOpen],
+    [addSession, convertEventToSession, eventConversion, pushSessionChange, setSessionDialogOpen],
   );
 
   const handleCreateStudySessions = useCallback(
@@ -2348,6 +2355,7 @@ function App() {
                         onSelectProject={handleSelectProject}
                         onSelectSession={handleSelectSession}
                         onSelectEvent={handleSelectEvent}
+                        onConvertToSession={handleConvertEventToSession}
                         onMoveEvent={handleMoveEvent}
                         onNewSession={handleOpenNewSession}
                         onNewEvent={handleOpenNewEvent}
@@ -2534,19 +2542,7 @@ function App() {
                 onSubmitMultiple={handleCreateEvents}
                 onDelete={selectedEvent ? handleDeleteEvent : undefined}
                 onDuplicate={selectedEvent ? handleRepeatEvent : undefined}
-                onConvertToSession={(event) => {
-                  try {
-                    const draft = eventToStudySessionDraft(event);
-                    setEventConversion({ event, draft });
-                    setSelectedSession(null);
-                    setNewSessionMode("plan");
-                    setEventDialogOpen(false);
-                    setSelectedEvent(null);
-                    setSessionDialogOpen(true);
-                  } catch (e) {
-                    toast.error(`Cannot convert event: ${String(e)}`);
-                  }
-                }}
+                onConvertToSession={handleConvertEventToSession}
               />
             </Suspense>}
             {settingsOpen && <Suspense fallback={null}>

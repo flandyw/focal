@@ -83,6 +83,7 @@ interface HomeViewProps {
   onSelectProject: (projectId: string) => void;
   onSelectSession: (session: StudySession) => void;
   onSelectEvent: (event: CalendarEvent) => void;
+  onConvertToSession?: (event: CalendarEvent) => void;
   onNewSession: (initialDate?: Date) => void;
   onNewEvent: (initialDate?: Date) => void;
   onNewProject: () => void;
@@ -137,6 +138,7 @@ export const HomeView = memo(function HomeView({
   onSelectProject,
   onSelectSession,
   onSelectEvent,
+  onConvertToSession,
   onNewSession,
   onNewEvent,
   onNewProject: _onNewProject,
@@ -819,6 +821,7 @@ export const HomeView = memo(function HomeView({
                   onSelectProject={onSelectProject}
                   onSelectSession={onSelectSession}
                   onSelectEvent={onSelectEvent}
+                  onConvertToSession={onConvertToSession}
                   onNewEvent={onNewEvent}
                   onDeleteCalendarItems={onDeleteCalendarItems}
                   onSetCalendarItemsCompleted={onSetCalendarItemsCompleted}
@@ -857,6 +860,7 @@ export const HomeView = memo(function HomeView({
                   onSelectProject={onSelectProject}
                   onSelectSession={onSelectSession}
                   onSelectEvent={onSelectEvent}
+                  onConvertToSession={onConvertToSession}
                   onNewEvent={() => onNewEvent(selectedCalendarDate)}
                   onNewSession={() => onNewSession(selectedCalendarDate)}
                   onDeleteCalendarItems={onDeleteCalendarItems}

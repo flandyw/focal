@@ -13,6 +13,7 @@ import {
 import { confirmDestructiveAction } from"@/lib/confirmToast"
 import { parseBackup } from"@/lib/backup"
 import { writePersistedArray } from"@/lib/storage/database"
+import { restoreStudySessionBackup } from"@/lib/storage/sessionMutations"
 import { createDiagnosticReport } from"@/lib/diagnostics"
 import { DEFAULT_SUBFOLDERS, type CalendarEvent, type Project, type StudySession } from"@/lib/types"
 
@@ -116,7 +117,7 @@ export function DataExport({ projects, sessions, events, open, onOpenChange }: D
  }
 
  if (data.sessions) {
- await writePersistedArray("sessions.json", data.sessions)
+ await restoreStudySessionBackup(data.sessions)
  }
 
  if (data.events) {

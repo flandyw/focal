@@ -1,5 +1,5 @@
-import { readPersistedArray, writePersistedArray } from "@/lib/storage/database"
-import type { CoreDataFile } from "@/lib/storage/records"
+import { readRecords } from "@/lib/storage/database"
+import type { CoreDataFile, CoreRecordKind } from "@/lib/storage/records"
 import type { SyncTable } from "@/lib/sync/types"
 
 export const SYNC_DATA_FILES: Partial<Record<SyncTable, CoreDataFile>> = {
@@ -8,12 +8,8 @@ export const SYNC_DATA_FILES: Partial<Record<SyncTable, CoreDataFile>> = {
   study_sessions: "sessions.json",
 }
 
-export async function readLocalDataArray<T>(fileName: CoreDataFile): Promise<T[]> {
-  return await readPersistedArray(fileName) as T[]
-}
-
-export async function writeLocalDataArray(fileName: CoreDataFile, items: unknown[]): Promise<void> {
-  await writePersistedArray(fileName, items)
+export async function readLocalRecords<T>(kind: CoreRecordKind): Promise<T[]> {
+  return await readRecords(kind) as T[]
 }
 
 export function readLocalStorageArray<T>(key: string): T[] {
@@ -25,11 +21,12 @@ export function readLocalStorageArray<T>(key: string): T[] {
   }
 }
 
-export function emitLocalDataChanged(table: SyncTable): void {
+export function emitLocalDataChanged(table: SyncTable | readonly SyncTable[]): void {
+  const tables = typeof table === "string" ? [table] : table
   window.dispatchEvent(new CustomEvent("focal-sync-data-changed", {
-    detail: { table, fileName: SYNC_DATA_FILES[table] },
+    detail: { table: tables[0], tables, fileName: SYNC_DATA_FILES[tables[0]] },
   }))
-  if (table === "timetable_config") {
+  if (tables.includes("timetable_config")) {
     window.dispatchEvent(new CustomEvent("focal-timetable-updated"))
   }
 }

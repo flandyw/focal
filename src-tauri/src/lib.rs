@@ -128,6 +128,12 @@ fn database_migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0006_direct_session_publish.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "session_intents",
+            sql: include_str!("../migrations/0007_session_intents.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -171,6 +177,8 @@ pub fn run() {
         .manage(commands::chatgpt::ChatGptSidecar::default())
         .manage(commands::ollama::OllamaRequests::default())
         .invoke_handler(tauri::generate_handler![
+            commands::events::mutate_events,
+            commands::sessions::mutate_sessions,
             commands::files::move_files_to_project,
             commands::files::get_project_files,
             commands::files::get_project_file_count,

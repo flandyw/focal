@@ -147,7 +147,7 @@ function normaliseProject(raw: unknown): Project {
 
 export function useProjects() {
   const { data: projects, loading, error, save: saveProjects, refresh } = usePersistedData({
-    fileName: "projects.json",
+    kind: "projects",
     normalize: normaliseProject,
     onLoad: (projects) => [...projects].filter((project) => !project.deleted_at).reverse(),
   })

@@ -4,6 +4,7 @@ import { saveAppData } from "@/lib/storage"
 import { supabase } from "@/lib/supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "@/lib/ongoing-timers"
 import { SessionRefusedError } from "@/lib/focus-session"
+import type { PastStudyLog } from "../../../src/lib/pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "@/lib/study-timer"
 import {
   estimateServerNow,
@@ -22,6 +23,16 @@ const META_STORE = "sync-meta"
 const TIMING_STORE = "session-timing"
 const DEVICE_KEY = "examtrack:study-session-device:v1"
 const CURSOR_KEY = "examtrack:study-session-cursor:v1"
+
+function guestPastStudy(): CanonicalStudySession[] {
+  const value: unknown = JSON.parse(localStorage.getItem("examtrack:past-study:guest") ?? "[]")
+  if (!Array.isArray(value)) throw new Error("Saved study data is unreadable; export it before resetting browser storage.")
+  return value.map((item) => {
+    const session = parseCanonicalStudySession(item)
+    if (!session) throw new Error("Saved study data is unreadable; export it before resetting browser storage.")
+    return session
+  })
+}
 
 type TimerKind = "exam" | "sac" | "focus"
 type TimerSession = ExamTimerSession | SacTimerSession | FocusTimerSession
@@ -410,7 +421,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; control: typeof controlSession } {
+): { sessions: CanonicalStudySession[]; control: typeof controlSession; log: (entry: PastStudyLog, id: string) => Promise<void> } {
   const dataRef = useRef(data)
   dataRef.current = data
   const initialized = useRef(false)
@@ -431,7 +442,8 @@ export function useStudySessionSync(
     if (!userId || !supabase) {
       initialized.current = false
       canonicalSessions.current = new Map()
-      setSessions([])
+      try { acceptSessions(guestPastStudy(), true) }
+      catch (error) { console.error("Could not load past study:", error); setSessions([]) }
       return
     }
     canonicalSessions.current = new Map()
@@ -536,7 +548,29 @@ export function useStudySessionSync(
     }
   }, [userId, setData])
 
-  return { sessions, control: controlSession }
+  async function log(entry: PastStudyLog, id: string) {
+    const now = new Date().toISOString()
+    const metadata = { subjectIds: [entry.subjectId], reflection: { notes: entry.notes }, createdVia: "manual", schedule: { blocks: entry.blocks } }
+    let session: CanonicalStudySession
+    if (userId && supabase) {
+      const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
+        action: "log", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
+        title: entry.title, subject_id: entry.subjectId, metadata, blocks: entry.blocks })
+      if (!result?.applied || !result.session) throw new Error("Study was not saved. Try again after checking your account and connection.")
+      session = result.session
+    } else {
+      session = { id, kind: "focus", state: "completed", phase: "focus", revision: 1,
+        title: entry.title, subject_id: entry.subjectId, originating_app: "examtrack", created_at: now, updated_at: now,
+        started_at: entry.blocks[0].start, completed_at: entry.blocks.at(-1)!.end, paused_at: null, cancelled_at: null,
+        segment_started_at: null, accumulated_active_ms: entry.blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0), metadata,
+        segments: entry.blocks.map((block) => ({ id: crypto.randomUUID(), session_id: id, started_at: block.start, ended_at: block.end, phase: "focus", source_device_id: deviceId() })) }
+      const stored = guestPastStudy()
+      localStorage.setItem("examtrack:past-study:guest", JSON.stringify([...stored.filter((item) => item.id !== id), session]))
+    }
+    acceptSessions([session])
+  }
+
+  return { sessions, control: controlSession, log }
 }
 
 function estimateNow(): number {

@@ -202,6 +202,13 @@ export function sessionCommands(
   const phase = phaseOf(session)
   const remotePhase = typeof canonical?.phase === "string" ? canonical.phase : undefined
   const revision = typeof canonical?.revision === "number" ? canonical.revision : applied?.lamport ?? 0
+  if (!canonical && desired === "completed" && session.createdVia === "manual" &&
+      session.execution.intervals.length > 0 && session.execution.intervals.every((interval) => interval.source === "manual" && interval.end)) {
+    return [{ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: 0,
+      action: "log", device_id: deviceId, app: "focal", kind: "focus", phase: "focus", title: session.title,
+      subject_id: session.subjectIds[0], metadata: metadata(),
+      blocks: session.execution.intervals.map((interval) => ({ start: interval.start, end: interval.end! })) }]
+  }
   const commands: StudySessionCommand[] = []
   let expected = revision
   let currentState = remoteState

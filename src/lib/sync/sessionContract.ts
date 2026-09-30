@@ -3,7 +3,7 @@ export type StudySessionState = "planned" | "running" | "paused" | "completed" |
 export type StudySessionPhase = "focus" | "reading" | "writing"
 export type StudySessionApp = "focal" | "examtrack" | "folio"
 export type StudySessionAction =
-  | "create" | "start" | "pause" | "resume" | "phase_change"
+  | "log" | "create" | "start" | "pause" | "resume" | "phase_change"
   | "save_progress" | "complete" | "cancel"
 
 export interface StudySessionSegment {
@@ -49,6 +49,8 @@ export interface StudySessionCommand {
   title?: string
   subject_id?: string | null
   metadata?: Record<string, unknown>
+  /** Explicit completed study blocks, accepted only by the log action. */
+  blocks?: { start: string; end: string }[]
   /** Server-clock estimate captured from a server anchor and monotonic time, never Date.now(). */
   occurred_at?: string | null
   /** Monotonic milliseconds since this session's previous lifecycle boundary. */
@@ -171,12 +173,15 @@ export function isStudySessionCommand(value: unknown): value is StudySessionComm
     typeof value.session_id === "string" && value.session_id.length > 0 && value.session_id.length <= 160 &&
     Number.isSafeInteger(value.expected_revision) && (value.expected_revision as number) >= 0 &&
     typeof value.device_id === "string" && uuid.test(value.device_id) && SESSION_APPS.has(value.app) &&
-    ["create", "start", "pause", "resume", "phase_change", "save_progress", "complete", "cancel"].includes(String(value.action)) &&
+    ["log", "create", "start", "pause", "resume", "phase_change", "save_progress", "complete", "cancel"].includes(String(value.action)) &&
     (value.kind === undefined || SESSION_KINDS.has(value.kind)) &&
     (value.phase === undefined || SESSION_PHASES.has(value.phase)) &&
     (value.title === undefined || typeof value.title === "string" && value.title.length <= 512) &&
     (value.subject_id === undefined || value.subject_id === null || typeof value.subject_id === "string") &&
     (value.metadata === undefined || isRecord(value.metadata)) &&
+    (value.action !== "log" || Array.isArray(value.blocks) && value.blocks.length > 0 && value.blocks.length <= 100 &&
+      value.blocks.every((block) => isRecord(block) && typeof block.start === "string" && typeof block.end === "string" &&
+        Number.isFinite(Date.parse(block.start)) && Number.isFinite(Date.parse(block.end)) && Date.parse(block.end) > Date.parse(block.start))) &&
     (value.occurred_at === undefined || value.occurred_at === null || typeof value.occurred_at === "string" && Number.isFinite(Date.parse(value.occurred_at))) &&
     (value.elapsed_since_previous_ms === undefined || Number.isSafeInteger(value.elapsed_since_previous_ms) && (value.elapsed_since_previous_ms as number) >= 0 && (value.elapsed_since_previous_ms as number) <= 604_800_000)
 }

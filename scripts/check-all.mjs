@@ -12,6 +12,7 @@ const checks = [
   "scripts/check-examtrack-integration.ts",
   "scripts/check-text-event-planner.mjs",
   "scripts/check-study-session-v2.ts",
+  "scripts/check-past-study.ts",
   "scripts/check-timetable-reorder.ts",
   "scripts/check-timetable.ts",
   "scripts/check-study-timer.mjs",

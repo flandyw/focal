@@ -256,6 +256,7 @@ function App() {
   } = navigation;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [newSessionMode, setNewSessionMode] = useState<"plan" | "log">("plan");
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(
     null,
   );
@@ -570,6 +571,7 @@ function App() {
   }, [navigation]);
 
   const handleOpenNewSession = useCallback((initialDate?: Date) => {
+    setNewSessionMode("plan");
     setSelectedSession(null);
     setNewItemInitialDate(initialDate);
     setNewItemDialogKey((key) => key + 1);
@@ -795,7 +797,7 @@ function App() {
           data.status === "completed"
             ? {
                 state: "completed" as const,
-                intervals: [],
+                intervals: blocks.map((block) => ({ ...block, source: "manual" as const })),
                 completedAt: data.completedAt ?? new Date().toISOString(),
               }
             : data.status === "in-progress"
@@ -822,6 +824,7 @@ function App() {
         void pushSessionChange(newSession);
       } catch (e) {
         toast.error(`Failed to create study session: ${String(e)}`);
+        throw e;
       }
     },
     [addSession, pushSessionChange, setSessionDialogOpen],
@@ -2095,6 +2098,10 @@ function App() {
               onSettings={navigation.openSettings}
               onHelp={() => setShortcutsOpen(true)}
             >
+              {!settingsView && <Button size="sm" variant="outline" onClick={() => {
+                handleOpenNewSession();
+                setNewSessionMode("log");
+              }}>Log past study</Button>}
               {!settingsView && <NotionSyncIndicator
                 status={syncStatus}
                 lastSyncTime={lastSyncTime}
@@ -2473,6 +2480,7 @@ function App() {
               customSubjects={customSubjects}
               availableSubjects={availableSubjects}
               session={selectedSession}
+              initialMode={newSessionMode}
               initialDate={newItemInitialDate}
               onSubmit={
                 selectedSession

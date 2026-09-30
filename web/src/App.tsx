@@ -9,6 +9,8 @@ import {
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { PastStudyForm } from "../../src/components/planning/PastStudyForm"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -126,6 +128,7 @@ export default function App() {
   const importInput = useRef<HTMLInputElement>(null)
   const sync = useSupabaseSync(data, setData)
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
+  const [pastStudyId, setPastStudyId] = useState<string | null>(null)
   const examSaveStatus = sync.status === "synced"
     ? "Saved to your account. Open Focal on another device and sign in to the same account to continue."
     : sync.status === "syncing" ? "Saving to your account. Wait for confirmation before switching devices."
@@ -547,6 +550,7 @@ export default function App() {
           <span className="text-sm font-medium">{getViewLabel(view)}</span>
           <div className="ml-auto flex items-center gap-1">
             <CommandMenuTrigger onClick={() => setCommandOpen(true)} />
+            <Button size="sm" variant="outline" onClick={() => setPastStudyId(crypto.randomUUID())}>Log past study</Button>
             <Button size="sm" onClick={openNewExam}>
               <Plus />
               <span className="hidden sm:inline">Log exam</span>
@@ -564,6 +568,16 @@ export default function App() {
           </div>
         </header>
         <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
+          <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
+            <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+              <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
+              {pastStudyId && <PastStudyForm key={pastStudyId} subjects={[...new Set([...data.subjects, ...references.map((reference) => reference.studyName)])].map((name) => ({ id: name, name }))} onCancel={() => setPastStudyId(null)} onSave={async (entry) => {
+                await studySessionSync.log(entry, pastStudyId)
+                setPastStudyId(null)
+                toast.success("Study logged")
+              }} />}
+            </DialogContent>
+          </Dialog>
           <SharedStudySessions userId={sync.user?.id} sessions={studySessionSync.sessions} onControl={studySessionSync.control} />
           {data.activeExamTimer && view !== "focus" ? (
             <Alert className="mb-6">

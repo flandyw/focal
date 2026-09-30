@@ -22,6 +22,7 @@ import {
  DialogTitle,
 } from"@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { PastStudyForm } from "./PastStudyForm"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePickerField, FormField, FormSection, SelectField } from "@/components/ui/form-controls"
 import TimePicker from "@/components/ui/time-picker"
@@ -53,6 +54,7 @@ interface StudySessionDialogProps {
  availableSubjects?: Subject[]
  session?: StudySession | null
  initialDate?: Date
+ initialMode?: "plan" | "log"
  onSubmit: (data: {
  id?: string
  projectId?: string
@@ -69,7 +71,7 @@ interface StudySessionDialogProps {
  nextAction?: string
  completedAt?: string
  activeDurations?: { start: string; end: string }[]
- }) => void
+ }) => void | Promise<void>
  onDelete?: (id: string) => void
  onPlanAgain?: (session: StudySession) => void | Promise<void>
 }
@@ -82,10 +84,12 @@ export function StudySessionDialog({
  availableSubjects,
  session,
  initialDate,
+ initialMode = "plan",
  onSubmit,
  onDelete,
  onPlanAgain,
 }: StudySessionDialogProps) {
+ const [loggingPast, setLoggingPast] = useState(initialMode === "log")
  const [projectId, setProjectId] = useState("")
  const [subjectIds, setSubjectIds] = useState<string[]>([])
  const [title, setTitle] = useState("")
@@ -280,28 +284,34 @@ export function StudySessionDialog({
  }
  }
 
- const handleSubmit = (event: React.FormEvent) => {
+ const handleSubmit = async (event: React.FormEvent) => {
  event.preventDefault()
  const data = buildSubmitData()
  if (!data) return
- onSubmit(data)
+ try {
+ await onSubmit(data)
  if (!isEdit) onOpenChange(false)
+ } catch { /* The parent reports save failures; preserve the draft. */ }
  }
 
- const handleCompleteAndReview = () => {
- setStatus("completed")
+ const handleCompleteAndReview = async () => {
  const data = buildSubmitData("completed")
  if (!data) return
- onSubmit(data)
+ try {
+ await onSubmit(data)
+ setStatus("completed")
  onOpenChange(false)
+ } catch { /* Preserve the draft on failure. */ }
  }
 
- const handleStartSession = () => {
- setStatus("in-progress")
+ const handleStartSession = async () => {
  const data = buildSubmitData("in-progress")
  if (!data) return
- onSubmit(data)
+ try {
+ await onSubmit(data)
+ setStatus("in-progress")
  onOpenChange(false)
+ } catch { /* Preserve the draft on failure. */ }
  }
 
  const handleDelete = () => {
@@ -318,6 +328,16 @@ export function StudySessionDialog({
  onOpenChange(false)
  }
 
+ if (!isEdit && loggingPast) return <Dialog open={open} onOpenChange={onOpenChange}>
+ <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+ <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>Record study you’ve already done. It counts toward your study history, not your plan.</DialogDescription></DialogHeader>
+ <div className="flex gap-2"><Button variant="outline" onClick={() => setLoggingPast(false)}>Plan future study</Button><Button aria-pressed>Log past study</Button></div>
+ <PastStudyForm subjects={subjects} onCancel={() => onOpenChange(false)} onSave={async (log) => {
+ await onSubmit({ subjectIds: [log.subjectId], title: log.title, notes: log.notes, startTime: log.blocks[0].start, endTime: log.blocks[log.blocks.length - 1].end, activeDurations: log.blocks, status: "completed", completedAt: log.blocks[log.blocks.length - 1].end })
+ onOpenChange(false)
+ }} />
+ </DialogContent></Dialog>
+
  return (
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent className="flex h-[min(92dvh,54rem)] w-[calc(100vw-1rem)] max-w-7xl flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-5xl">
@@ -325,6 +345,7 @@ export function StudySessionDialog({
  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
  <div className="min-w-0">
  <DialogTitle>{isEdit ?"Edit Study Session" :"Plan Study Session"}</DialogTitle>
+ {!isEdit && <div className="mt-3 flex gap-2"><Button type="button" size="sm" aria-pressed>Plan future study</Button><Button type="button" size="sm" variant="outline" onClick={() => setLoggingPast(true)}>Log past study</Button></div>}
  <DialogDescription className="mt-1">
  {activeProject ? activeProject.name :"No assessment attached"} · {subjectSummary}
  </DialogDescription>

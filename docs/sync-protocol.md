@@ -36,8 +36,16 @@ that stored result. A reused mutation ID with a different request is rejected.
 
 States are `planned`, `running`, `paused`, `completed`, and `cancelled`; terminal rows are
 retained. Supported actions are `create`, `start`, `pause`, `resume`, `phase_change`,
-`save_progress`, `complete`, and `cancel`. Expected concurrency is returned as structured
+`save_progress`, `complete`, `cancel`, and `log`. Expected concurrency is returned as structured
 results such as `stale_revision`, `session_terminal`, and `invalid_transition`.
+
+Migration `0017` adds `log` for past study: an expected-revision-zero command with 1–100 explicit
+`blocks` (`start`/`end` timestamps), a title and a subject. The server validates positive,
+non-overlapping, already-finished blocks (at most 24 hours each), then atomically creates a
+completed session, its segments, receipt and feed wakeup. Dates are user-entered historical
+evidence, not timer clock estimates, so the seven-day timer replay window does not apply.
+Desktop saves locally and publishes through normal sync. Signed-in web saves through the RPC;
+signed-out web logs stay in that browser and are not uploaded automatically on sign-in.
 
 ## Durable feed
 

@@ -73,6 +73,8 @@ function chatgptPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), tailwindcss(), chatgptPlugin()],
   resolve: {
+    // The past-study form is shared with desktop; use the web app's React instance.
+    dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
     },

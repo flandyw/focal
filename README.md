@@ -56,6 +56,7 @@ Manage coursework files, plan sessions around a configurable timetable, and trac
 
 - **Timetable** — configurable cycle length (default 10-day VCE rotation), per-day period editing with subjects / locations / breaks, school holidays, weekend support, manual day override.
 - **Calendar** — month / week grid, multi-day events, drag-to-reschedule, batch select / complete / merge / delete, study priorities, prep balance, month brief.
+- **Log past study** — a dedicated flow on desktop and web: subject, start, minutes, save. Titles and notes are optional; add separate blocks to exclude breaks. Overnight study retains its actual dates. Apply migration `0017` before deploying these clients.
 - **Repeat next week** — duplicate an event or plan a study session one week later while preserving its local time and clearing completion state.
 - **Deadline notifications** — in-app toasts plus optional native OS notifications at *due now*, *today*, *tomorrow*, and *soon* (≤72 hours).
 - **Text to Events** — paste a teacher notice or rough plan; the AI extracts draft calendar events you can review and approve.

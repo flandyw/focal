@@ -165,6 +165,16 @@ assertEqual(replayActions(
     "server boundaries that cannot be matched to local intervals must never be silently flattened")
 }
 
+const durableDiscard = JSON.parse(JSON.stringify(replaySitting([
+  { start: t(0), end: t(5) }, { start: t(10), end: t(20) },
+]))) as StudySession
+durableDiscard.deleted_at = t(25)
+assertEqual(replayActions(durableDiscard),
+  [["start", 0, 0, null], ["pause", 1, 5 * minuteMs, null], ["resume", 2, 5 * minuteMs, null], ["pause", 3, 10 * minuteMs, null], ["cancel", 4, 5 * minuteMs, null]],
+  "a restarted worker must replay a deleted offline history before cancellation")
+assertEqual(replayActions(durableDiscard, applied({ state: "cancelled", segments: [], revision: 5 }, 5)), [],
+  "replaying an acknowledged cancellation must be idempotent")
+
 const duplicateBase = {
   schemaVersion: 2 as const,
   subjectIds: ["mm"],

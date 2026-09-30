@@ -679,7 +679,7 @@ async function publishAllSessions(accountId: string, deviceId: string, epoch: nu
       failure ??= error
     }
   }
-  if (failure) throw failure
+  if (failure) throw failure instanceof Error ? failure : new Error(describeSyncError(failure))
 }
 
 async function sendSessionCommands(

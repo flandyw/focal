@@ -1,7 +1,8 @@
 # Focal: deletion-first architecture simplification
 
-Status: partially implemented: shared calendar context menu and Stage 2 event row writes.
-Session row writes/atomic conversion and Stages 3–5 remain proposed.
+Status: partially implemented: shared calendar context menu, planning record row writes,
+and atomic event conversion. Stages 3–5 remain proposed; project writes and remote/import
+compatibility APIs still retain array operations.
 Scope: desktop first; preserve the web/Android protocol and all user data.
 
 ## Goal
@@ -89,7 +90,7 @@ between commit and delivery; signed-out writes; account switch; conversion retry
 
 ### Stage 2 rollout record — events
 
-Implemented the event increment only:
+Initial event-only checkpoint (before the session/conversion increment below):
 
 - `useEvents` no longer saves/reconstructs whole arrays or pairs saves with
   `recordLocalUpsert` / `recordLocalSoftDelete`. All its mutation paths, including
@@ -112,11 +113,59 @@ The native check covers signed-out intents, Notion-trigger failure rollback, mul
 rollback, successful deletion, null/absent metadata comparison, and stale conditional
 updates. Restart/delivery and account-switch interaction checks remain unverified.
 
-Compatibility boundaries still present: JSON filenames for legacy import/read/invalidation,
-legacy event normalization, existing remote application/echo suppression, and all session
-publication paths. The conversion retry map must stay until session writes and conversion
-are atomic. UI-owned Notion pushes and planning-dialog state are intentionally unchanged.
-Manual keyboard/focus/screen-reader verification is still required.
+At this checkpoint, session publication and conversion still used their old paths.
+The session/conversion increment below supersedes those boundaries. UI-owned Notion pushes
+and planning-dialog state are intentionally unchanged. Manual keyboard/focus/screen-reader
+verification is still required.
+
+### Stage 2 rollout record — sessions and conversion
+
+- `useStudySessions` no longer writes whole arrays or pairs saves with `recordLocal*`.
+  Updates read committed rows and apply the existing session normalization/patch boundary.
+  Native compare-and-swap rejects intervening edits rather than overwriting timer evidence.
+  Merge, merge undo, duplicate repair, and session-backup replacement are transactional.
+- Local migration 7 adds a per-account session outbox, containing committed records and
+  deletion tombstones, plus durable event-conversion receipts. The canonical RPC worker
+  still derives commands from session records; the web/Android protocol is unchanged.
+  Offline deletion history survives database close/reopen, including unreceived intervals.
+- Conversion commits session creation, event deletion, cloud/Notion intents, and its receipt
+  together. A retry after restart returns the original session identity. Restoring the event
+  explicitly allows a fresh conversion. Removed `convertedSessionsRef` and the paired
+  add/update/delete retry branch from `App.tsx`; failure still retains the form draft.
+- Receipts clear only the matching account/session/intent generation, preserving edits
+  made during delivery. Signed-out first-account intents are adopted with the existing
+  ownership policy. Mutations captured for a signed-in account reject a changed database
+  account; publication checks account identity before each RPC and excludes foreign rows.
+- Pull/reduction protects pending session intents. Failed histories remain durable and do
+  not starve unrelated sessions. Polling now retries publication as well as pulling changes.
+  Invalid RPC transitions do not acknowledge their intent; incompatible terminal histories
+  remain pending rather than being silently erased.
+- Runtime planning reads and locks address record kinds/IDs. One post-commit invalidation
+  covers both entities in conversion. Removed unused `writeLocalDataArray` and replaced
+  filename-based sync reads with record-kind reads.
+- Fixed Notion acknowledgement comparison to ignore JSON key ordering and optional
+  top-level null metadata, but retain intents for genuinely newer records/nested changes.
+
+Production physical LOC delta for this increment: **+361**; cumulative Stage 2: **+337**
+against the shared-menu checkpoint (`342d1a3`). Includes native transaction/validation code,
+local migration, shared storage/persistence changes, and backup boundary; excludes docs,
+tests, lockfile, and both native `#[cfg(test)]` modules. This increment is a correctness
+investment, not a claimed LOC reduction: it removes the demonstrated split-conversion,
+in-memory-deletion-history, stale-row-update, and acknowledgement-ordering failure modes.
+The final 25% reduction target has **not** been met.
+
+Checks passed: `bun run check`, all 34 `bun run test:logic` checks, and all 12
+`cargo test --manifest-path src-tauri/Cargo.toml --lib` tests. Native checks inject failures
+at record/outbox/receipt writes, close/reopen the database before retry/delivery, verify
+stable conversion identity, preserve deleted timer intervals, and reject account/stale
+snapshot changes. Logic checks replay a serialized offline discard through cancellation,
+verify generation/account-scoped acknowledgement, and exercise Notion structural comparison.
+Full app restart/auth-switch/network UI interaction remains unverified.
+
+Remaining compatibility boundaries: legacy session aliases and form DTO normalization;
+project mutation arrays; remote application/echo suppression and import/export array APIs;
+legacy session publication fallback for pre-migration records. Notion ownership and planning
+state are still Stage 4/5 work. No destructive cloud migration or server changes were made.
 
 ## Stage 3 — one session model inside the app
 

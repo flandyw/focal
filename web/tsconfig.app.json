@@ -11,7 +11,10 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      /* Shared desktop components must also resolve in web-only installs. */
+      "react": ["./node_modules/@types/react/index.d.ts"],
+      "react/*": ["./node_modules/@types/react/*"]
     },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,

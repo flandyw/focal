@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { StudyTimerPage } from "../src/components/study-timer-page"
-import type { ExamTimerModeProps } from "../src/components/exam-timer-mode"
+import { ExamTimerMode, type ExamTimerModeProps } from "../src/components/exam-timer-mode"
 import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const noop = () => {}
@@ -91,6 +91,38 @@ test("the focus mode leads with a labelled readout, its controls, and the block'
   // The subject is a searchable combobox the student can also type into.
   expect(markup).toContain('role="combobox"')
   expect(markup).toContain("Search or type a subject")
+})
+
+test("session setup comes before the readout and supporting settings", () => {
+  const markup = render("focus")
+  expect(markup.indexOf('id="timer-subject"')).toBeLessThan(markup.indexOf('role="timer"'))
+  expect(markup.indexOf('role="timer"')).toBeLessThan(markup.indexOf('id="today-title"'))
+  expect(markup.indexOf('id="today-title"')).toBeLessThan(markup.indexOf("Pomodoro settings"))
+})
+
+test("timed paper setup leads with the form rather than recommendations", () => {
+  const markup = renderToStaticMarkup(<ExamTimerMode {...exam} />)
+  expect(markup.indexOf("Set up your exam")).toBeLessThan(markup.indexOf("Suggested next exams"))
+  for (const id of ["subject", "provider", "year", "paper", "reading", "writing", "marks"]) {
+    expect(markup).toContain(`id="exam-mode-${id}"`)
+    expect(markup).toContain(`for="exam-mode-${id}"`)
+  }
+  expect(markup).toContain("Begin reading time")
+})
+
+test("an active paper groups lifecycle controls with the timer before its overview", () => {
+  const markup = renderToStaticMarkup(<ExamTimerMode {...exam} activeSession={{
+    id: "exam-layout", subject: "Chemistry", provider: "VCAA", title: "VCAA Chemistry",
+    examYear: 2025, paper: "Exam", readingMinutes: 15, writingMinutes: 120, marks: 100,
+    startedAt: Date.now(), phase: "reading", workspaceItems: [],
+  }} />)
+  const timerIndex = markup.indexOf('role="timer"')
+  for (const label of ["Pause and save", "Finish &amp; mark", "Edit conditions", "Discard exam"]) {
+    expect(markup.indexOf(label)).toBeGreaterThan(timerIndex)
+    expect(markup.indexOf(label)).toBeLessThan(markup.indexOf("Session overview"))
+  }
+  expect(markup).toContain("Expected progress")
+  expect(markup).toContain("Exam workspace")
 })
 
 test("no block starts without a subject, and the timer says why", () => {

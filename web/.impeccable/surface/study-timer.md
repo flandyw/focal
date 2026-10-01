@@ -52,6 +52,20 @@ Memorable moment: the marks strip filling, one mark per completed block or phase
   Every consumer calls `.toLowerCase()` on these names unguarded, so a row missing one
   is a white screen, not a degraded row. Keep new reference sources behind a validator.
 
+## Direction contract
+
+THESIS: A dense study workstation: setup precedes the clock, lifecycle controls stay with the readout, and supporting information is visible without dominating the task. Replaces the long stack of disconnected timer, setup, metrics, and settings cards.
+
+OWN-WORLD: Existing Focal neutral shadcn surfaces, blue actions, Geist UI type and tabular numerals. Bounded panels use dividers internally rather than nested cards.
+
+STORY: Choose a subject and intent or paper, start study, read the current state, pause or finish, then inspect the record or question progress. Keep all timer, cross-device sync, marking and progression behavior.
+
+FIRST VIEWPORT: Fluid task column plus a 22rem support column at xl. Study puts subject and intent over a shared clock-and-controls panel; settings sit alongside, today's log below. Paper setup leads, suggestions sit alongside. Active paper puts timer and actions beside the save/pace overview, questions below. Mobile follows setup, timer, record, support.
+
+FORM: User-confirmed compact workspace for both Study and Timed paper, preserving the established visual world. Pinned composition; no concept roll or replacement identity. Signature interaction remains the phase-change readout and linear phase markers, with reduced-motion support.
+
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+
 ## Build path
 
 Code-led (no image generation in this harness; no comp of this page exists).

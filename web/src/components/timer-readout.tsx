@@ -37,8 +37,8 @@ export function TimerReadout({
   children?: ReactNode
 }) {
   return (
-    <div className="grid gap-6">
-      <div className="grid gap-3">
+    <div className="grid min-w-0 gap-4 sm:grid-cols-2 sm:items-end">
+      <div className="grid min-w-0 gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={overtime ? "destructive" : "secondary"}>{mode}</Badge>
@@ -51,7 +51,7 @@ export function TimerReadout({
 
         <p
           aria-label={`${mode}, ${display} ${countUp || overtime ? "elapsed" : "remaining"}`}
-          className="font-semibold tracking-tight tabular-nums text-6xl sm:text-7xl lg:text-8xl"
+          className="py-2 text-[clamp(3rem,7vw,4.5rem)] leading-none font-semibold tracking-tight tabular-nums"
           role="timer"
         >
           <span
@@ -81,7 +81,7 @@ export function TimerReadout({
         <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">{caption}</p>
         <p className="sr-only" role="status">{onCaption ?? ""}</p>
       </div>
-      {children}
+      {children ? <div className="grid min-w-0 gap-3">{children}</div> : null}
     </div>
   )
 }

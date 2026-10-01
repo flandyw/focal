@@ -15,7 +15,8 @@ export type ExamProgressionProps = {
   onProgressionChange: (plan: ExamProgression) => void
 }
 
-export function ExamProgressionPanel({ progression, onProgressionChange, attempts, subjects, onSelect }: ExamProgressionProps & {
+export function ExamProgressionPanel({ progression, onProgressionChange, attempts, subjects, onSelect, compact = false }: ExamProgressionProps & {
+  compact?: boolean
   attempts: ExamAttempt[]
   subjects: string[]
   onSelect: (exam: ExamSuggestion) => void
@@ -28,7 +29,7 @@ export function ExamProgressionPanel({ progression, onProgressionChange, attempt
         <p className="text-xs text-muted-foreground">Choose your next paper in any subject. Each subject advances independently as you log exams.</p></div>
       <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setEditor({ adding: false, subject: "" })}>{progression?.exams.length ? "Edit progression" : "Create progression"}</Button>{progression?.exams.length ? <Button type="button" size="sm" onClick={() => setEditor({ adding: true, subject: "" })}>Add progression</Button> : null}</div>
     </div>
-    {groups.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{groups.map((group) => <div key={group.subject} className="grid content-start gap-2 rounded-lg border p-3">
+    {groups.length ? <div className={compact ? "grid gap-3" : "grid gap-3 sm:grid-cols-2 xl:grid-cols-3"}>{groups.map((group) => <div key={group.subject} className="grid content-start gap-2 rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-medium">{group.subject}</div><Button type="button" variant="ghost" size="sm" aria-label={`Add papers for ${group.subject}`} onClick={() => setEditor({ adding: true, subject: group.subject })}>Add papers</Button></div>
       <p className="text-xs text-muted-foreground">{group.completed} / {group.total} completed</p>
       {group.next ? <Button type="button" variant="outline" className="h-auto justify-start whitespace-normal py-3 text-left" onClick={() => onSelect(group.next!)}>

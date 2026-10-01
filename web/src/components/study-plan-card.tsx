@@ -23,7 +23,9 @@ export function StudyPlanCard({
   subjects,
   timerMode,
   minutesLeft,
+  className,
 }: {
+  className?: string
   blocksToday: number
   /** True only when a fresh focus block is one keystroke away: never mid break
    *  or overtime, where starting would run the wrong phase. */
@@ -87,7 +89,7 @@ export function StudyPlanCard({
   }
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>Plan a session</CardTitle>
         <CardDescription className="max-w-[68ch]">

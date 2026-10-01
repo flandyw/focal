@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MetricCard, MetricGrid, SectionHeading, WorkspacePage } from "@/components/workspace-layout"
+import { SectionHeading, WorkspacePage } from "@/components/workspace-layout"
 import { SubjectCombobox } from "@/components/subject-combobox"
 import { TimerReadout } from "@/components/timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
@@ -64,10 +64,10 @@ function ToggleRow({ label, description, pressed, onToggle, icon }: {
   icon?: React.ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2">
+    <div className="flex items-start justify-between gap-3 py-2.5">
       <div className="min-w-0 space-y-0.5">
         <p className="text-sm font-medium">{label}</p>
-        <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">{description}</p>
+        <p className="max-w-[68ch] text-xs text-pretty text-muted-foreground">{description}</p>
       </div>
       <Button aria-pressed={pressed} className="shrink-0" onClick={onToggle} size="sm" variant={pressed ? "secondary" : "outline"}>
         {icon}
@@ -260,11 +260,32 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       : "Stay with one task until the block ends."
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,0.8fr)] lg:gap-8">
-      <div className="grid gap-6 lg:gap-8">
-        <Card>
-          <CardContent className="pt-(--card-spacing)">
-            <div className="mb-6 flex gap-2" aria-label="Study mode">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <Card className="min-w-0 gap-0">
+        <CardHeader className="border-b pb-4">
+          <CardTitle>What you are working on</CardTitle>
+          <CardDescription>A subject is required to start. Each session is filed in its study record.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 py-4 sm:grid-cols-2">
+          {sharedSession ? <>
+            <div><p className="text-sm text-muted-foreground">Subject</p><p className="font-medium">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</p></div>
+            <div><p className="text-sm text-muted-foreground">Intent</p><p className="font-medium">{sharedSession.title}</p></div>
+          </> : <>
+            <Field>
+              <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
+              <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder="Search or type a subject" preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
+              <FieldDescription>{subjectChosen ? "Your subjects come first." : "Pick one to unlock the timer."}</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="timer-intent">Intent</FieldLabel>
+              <Input id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Redo the 2023 organic paper" value={intent} />
+              <FieldDescription>Up to 120 characters.</FieldDescription>
+            </Field>
+          </>}
+        </CardContent>
+        <div className="border-t">
+          <CardContent className="py-4">
+            <div className="mb-4 flex gap-2" aria-label="Study mode">
               <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} variant={isFreeStudy ? "secondary" : "ghost"}>Free study</Button>
               <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} variant={!isFreeStudy ? "secondary" : "ghost"}>Pomodoro</Button>
             </div>
@@ -283,7 +304,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               <div className="flex flex-wrap items-center gap-2">
                 {/* A lifecycle command is one transaction with the server: its button
                     stays down until the server has answered for the boundary. */}
-                <Button className="min-w-32" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
+                <Button className="min-w-32 flex-1 sm:flex-none" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
                   {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
                 </Button>
                 <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
@@ -296,7 +317,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                 {isFreeStudy ? (
                   <Button disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
                 ) : state.studyOvertime ? (
@@ -306,7 +327,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 ) : (
                   <Button disabled={sessionBusy || state.running || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant="outline"><TimerIcon />Start free study</Button>
                 )}
-                <p className="text-sm text-pretty text-muted-foreground">
+                <p className="text-xs text-pretty text-muted-foreground">
                   {isFreeStudy
                     ? "Ending it banks the time under its subject and stops the clock."
                     : state.studyOvertime
@@ -317,82 +338,27 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </TimerReadout>
             {sharedError && <p role="alert" className="mt-4 text-sm text-destructive">{sharedError}</p>}
           </CardContent>
-        </Card>
+        </div>
+      </Card>
 
-        {!isFreeStudy && <StudyPlanCard
-          blocksToday={blocksToday}
-          canStartNow={!state.running && !state.studyOvertime && state.mode === "work"}
-          minutesLeft={Math.max(0, Math.round(state.secondsLeft / 60))}
-          onApply={applyPlan}
-          running={state.running}
-          settings={settings}
-          subjects={subjects}
-          timerMode={displayMode}
-        />}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>What you are working on</CardTitle>
-            <CardDescription className="max-w-[68ch]">
-              A subject is required: every block is filed under one, and that is what the study record is read back by.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {sharedSession ? <>
-              <div><p className="text-sm text-muted-foreground">Subject</p><p className="font-medium">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</p></div>
-              <div><p className="text-sm text-muted-foreground">Intent</p><p className="font-medium">{sharedSession.title}</p></div>
-            </> : <><Field>
-              <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
-              <SubjectCombobox
-                allowCustom
-                id="timer-subject"
-                onValueChange={setSubject}
-                placeholder="Search or type a subject"
-                preferredSubjects={preferredSubjects}
-                required
-                subjects={subjects}
-                value={subject}
-              />
-              <FieldDescription>
-                {subjectChosen ? "Your subjects come first." : "Pick one to unlock the timer."}
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="timer-intent">Intent</FieldLabel>
-              <Input
-                id="timer-intent"
-                maxLength={120}
-                onChange={(event) => setIntent(event.target.value)}
-                placeholder="Redo the 2023 organic paper"
-                value={intent}
-              />
-              <FieldDescription>Up to 120 characters.</FieldDescription>
-            </Field></>}
-          </CardContent>
-        </Card>
-
-        <section className="grid gap-4" aria-labelledby="today-title">
+        <section className="grid min-w-0 gap-3" aria-labelledby="today-title">
           <SectionHeading
             id="today-title"
             title="Today's focus"
             description="Study logged since midnight, across every app on your account."
           />
-          <MetricGrid>
-            <MetricCard label="Focus time" value={formatFocusTime(recordSeconds)}>
-              <span>Across {recordCount} {isFreeStudy ? "session" : "block"}{recordCount === 1 ? "" : "s"}</span>
-            </MetricCard>
-            {!isFreeStudy && <><MetricCard label="Daily goal" value={settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}>
-              <Progress value={settings.dailyGoal ? (recordCount / settings.dailyGoal) * 100 : 0} />
-            </MetricCard>
-            <MetricCard label="Block length" value={`${settings.workMinutes}m`}>
-              <span>{settings.breakMinutes}m break every {settings.longBreakEvery} blocks</span>
-            </MetricCard></>}
-          </MetricGrid>
+          <div className={`grid gap-4 rounded-xl border px-4 py-3 ${isFreeStudy ? "" : "grid-cols-2 sm:grid-cols-3"}`}>
+            <div><p className="text-xs text-muted-foreground">Focus time</p><p className="text-xl font-semibold tabular-nums">{formatFocusTime(recordSeconds)}</p><p className="text-xs text-muted-foreground">Across {recordCount} {isFreeStudy ? "session" : "block"}{recordCount === 1 ? "" : "s"}</p></div>
+            {!isFreeStudy && <>
+              <div><p className="text-xs text-muted-foreground">Daily goal</p><p className="mb-2 text-xl font-semibold tabular-nums">{settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}</p><Progress aria-label="Daily goal progress" value={settings.dailyGoal ? (recordCount / settings.dailyGoal) * 100 : 0} /></div>
+              <div><p className="text-xs text-muted-foreground">Block length</p><p className="text-xl font-semibold tabular-nums">{settings.workMinutes}m</p><p className="text-xs text-muted-foreground">{settings.breakMinutes}m break every {settings.longBreakEvery} blocks</p></div>
+            </>}
+          </div>
 
           {todaysRecord ? (
             <div className="grid gap-2">
               {todaysRecord.map((item) => (
-                <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between" key={item.id}>
+                <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between" key={item.id}>
                   <div className="min-w-0">
                     <p className="font-medium">{item.title || "Focus block"}</p>
                     <p className="text-sm text-muted-foreground">
@@ -406,7 +372,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           ) : todaysBlocks.length ? (
             <div className="grid gap-2">
               {todaysBlocks.map((block) => (
-                <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between" key={block.id}>
+                <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between" key={block.id}>
                   <div className="min-w-0">
                     <p className="font-medium">{block.intent || "Focus block"}</p>
                     <p className="text-sm text-muted-foreground">
@@ -420,25 +386,48 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               ))}
             </div>
           ) : (
-            <Empty className="min-h-48 border">
-              <EmptyHeader>
-                <EmptyMedia variant="icon"><TimerIcon /></EmptyMedia>
-                <EmptyTitle>No study logged today</EmptyTitle>
-                <EmptyDescription>Finish a study session and it will appear here with its subject and intent.</EmptyDescription>
+            <Empty className="items-start border p-4 text-left">
+              <EmptyHeader className="max-w-none flex-row items-start gap-3">
+                <EmptyMedia className="mb-0" variant="icon"><TimerIcon /></EmptyMedia>
+                <div className="grid gap-1">
+                  <EmptyTitle>No study logged today</EmptyTitle>
+                  <EmptyDescription>Finish a study session and it will appear here with its subject and intent.</EmptyDescription>
+                </div>
               </EmptyHeader>
             </Empty>
           )}
         </section>
-      </div>
+      <aside className="grid min-w-0 gap-4 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+        {renderSettings()}
+        {!isFreeStudy && <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Plan a session</summary>
+          <StudyPlanCard
+            className="rounded-none border-0 shadow-none"
+            blocksToday={blocksToday}
+            canStartNow={!state.running && !state.studyOvertime && state.mode === "work"}
+            minutesLeft={Math.max(0, Math.round(state.secondsLeft / 60))}
+            onApply={applyPlan}
+            running={state.running}
+            settings={settings}
+            subjects={subjects}
+            timerMode={displayMode}
+          />
+        </details>}
+      </aside>
+    </div>
+  )
 
-      <details open={!isFreeStudy} className="grid gap-4 lg:sticky lg:top-20">
-        <summary className="cursor-pointer text-sm font-medium">Pomodoro settings</summary>
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Presets</CardTitle>
-            <CardDescription>Sets block length, break, and long break together.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-2">
+  function renderSettings() {
+    return (
+      <Card size="sm" className="min-w-0 gap-4">
+        <CardHeader>
+          <CardTitle>Pomodoro settings</CardTitle>
+          <CardDescription>Choose a preset or adjust your own rhythm.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="grid gap-2">
+          <h3 className="text-sm font-medium">Presets</h3>
+          <div className="grid grid-cols-2 gap-2">
             {TIMER_PRESETS.map((preset) => {
               const active = preset.workMinutes === settings.workMinutes &&
                 preset.breakMinutes === settings.breakMinutes &&
@@ -457,15 +446,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 </Button>
               )
             })}
-          </CardContent>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Durations</CardTitle>
-            <CardDescription>Changes apply to the block in progress without losing your place.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          </div>
+          </div>
+          <div className="grid gap-3 border-t pt-4">
+            <h3 className="text-sm font-medium">Durations</h3>
+          <div className="grid grid-cols-2 gap-3 [&_[data-slot=field]]:gap-1.5">
             <NumberField
               id="timer-work"
               label="Focus (min)"
@@ -506,8 +491,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               onChange={(value) => updateSettings({ dailyGoal: value })}
               value={settings.dailyGoal}
             />
-          </CardContent>
-          <CardContent className="grid">
+          </div>
+          <p className="text-xs text-muted-foreground">Changes apply without losing your place.</p>
             <Button
               className="w-full"
               onClick={() => updateSettings({
@@ -522,14 +507,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             >
               <RotateCcw />Restore defaults
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle>Alerts and flow</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y">
+          </div>
+          <details className="border-t pt-3">
+            <summary className="cursor-pointer text-sm font-medium">Alerts and flow</summary>
+            <div className="mt-2 divide-y">
             <ToggleRow
               description="A short tone when a block or break ends."
               icon={settings.soundEnabled ? <Volume2 /> : <VolumeX />}
@@ -556,11 +537,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               onToggle={() => updateSettings({ autoStartFocus: !settings.autoStartFocus })}
               pressed={settings.autoStartFocus}
             />
-          </CardContent>
-        </Card>
-      </details>
-    </div>
-  )
+            </div>
+          </details>
+        </CardContent>
+      </Card>
+    )
+  }
 }
 
 export function StudyTimerPage({
@@ -590,7 +572,7 @@ export function StudyTimerPage({
   return (
     <WorkspacePage>
       <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={mode}>
-        <div className="flex flex-col gap-3 border-b pb-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-4 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-balance xl:text-3xl">Study timer</h1>
             <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">

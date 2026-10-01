@@ -19,7 +19,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { PageHeader } from "@/components/page-header"
-import { MetricCard, MetricGrid, WorkspacePage } from "@/components/workspace-layout"
+import { WorkspacePage } from "@/components/workspace-layout"
 import { QuestionResultsEditor } from "@/components/question-results-editor"
 import { PerformanceContextFields } from "@/components/performance-context-fields"
 import { ExamWorkspace } from "@/components/exam-workspace"
@@ -62,7 +62,7 @@ function SuggestionButton({ suggestion, onClick, showProvider = false }: {
     <Button
       type="button"
       variant="outline"
-      className="h-auto justify-start whitespace-normal px-4 py-3 text-left"
+      className="h-auto min-w-0 justify-start whitespace-normal px-3 py-2 text-left"
       onClick={() => onClick(suggestion)}
     >
       <span className="grid gap-1">
@@ -257,11 +257,9 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
     setMarkingOpen(false)
   }
 
-  if (!session || !timer) {
+  function renderSuggestions() {
     return (
-      <WorkspacePage>
-        <PageHeader title="Run a timed paper" description="Choose an exam, set the conditions, then begin when your paper is ready." />
-        <Card className="w-full gap-5">
+        <Card size="sm" className="min-w-0 gap-4">
           <CardHeader>
             <CardTitle>Suggested next exams</CardTitle>
             <CardDescription>
@@ -272,10 +270,10 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5">
-            <ExamProgressionPanel progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
+            <ExamProgressionPanel compact progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
             {suggestions.length ? <section className="grid gap-2" aria-labelledby="official-suggestions-title">
               <div><h3 id="official-suggestions-title" className="text-sm font-medium">Official VCAA papers</h3><p className="text-xs text-muted-foreground">Continue through available papers and years for your current subject.</p></div>
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2">
                 {suggestions.map((suggestion) => (
                   <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} />
                 ))}
@@ -283,7 +281,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
             </section> : null}
             {companySuggestions.length ? <section className="grid gap-2" aria-labelledby="company-suggestions-title">
               <div><h3 id="company-suggestions-title" className="text-sm font-medium">Company exam progression</h3><p className="text-xs text-muted-foreground">Finish this provider&apos;s paper set, then progress from easier companies towards harder ones.</p></div>
-              <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2">
                 {companySuggestions.map((suggestion) => (
                   <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} onClick={applySuggestion} showProvider />
                 ))}
@@ -291,37 +289,43 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
             </section> : null}
           </CardContent>
         </Card>
-        <Card className="w-full gap-5">
+    )
+  }
+
+  if (!session || !timer) {
+    return (
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <Card className="min-w-0 gap-4">
           <CardHeader>
             <CardTitle>Set up your exam</CardTitle>
             <CardDescription>Enter the paper details and timed conditions.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={start}>
-              <FieldGroup className="gap-6">
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12">
-                  <Field className="xl:col-span-4">
+              <FieldGroup className="gap-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field>
                     <FieldLabel htmlFor="exam-mode-subject">Subject</FieldLabel>
                     <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="exam-mode-subject" allowCustom required placeholder="Search or enter a subject" />
                   </Field>
-                  <Field className="xl:col-span-3">
+                  <Field>
                     <FieldLabel htmlFor="exam-mode-provider">Provider</FieldLabel>
                     <Input id="exam-mode-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />
                   </Field>
-                  <Field className="xl:col-span-2">
+                  <Field>
                     <FieldLabel htmlFor="exam-mode-year">Exam year</FieldLabel>
                     <Input id="exam-mode-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                   </Field>
-                  <Field className="xl:col-span-3">
+                  <Field>
                     <FieldLabel htmlFor="exam-mode-paper">Paper</FieldLabel>
                     <Input id="exam-mode-paper" list="exam-mode-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="Exam, paper, or assessment name" />
                     <datalist id="exam-mode-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
                   </Field>
                 </div>
 
-                <div className="border-t pt-5">
-                  <p className="mb-4 text-sm font-medium">Timed conditions</p>
-                  <div className="grid gap-4 sm:grid-cols-3">
+                <div className="border-t pt-4">
+                  <p className="mb-3 text-sm font-medium">Timed conditions</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     <Field>
                       <FieldLabel htmlFor="exam-mode-reading">Reading (min)</FieldLabel>
                       <Input id="exam-mode-reading" type="number" min="0" max="180" value={readingMinutes} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
@@ -336,19 +340,19 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                     </Field>
                   </div>
                 </div>
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                  <Alert>
-                    <Clock3 />
-                    <AlertTitle>{(writingMinutes / marks || 0).toFixed(2)} minutes per mark</AlertTitle>
-                    <AlertDescription>The timer moves from reading to writing automatically and records overtime.</AlertDescription>
-                  </Alert>
+                <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium tabular-nums">{(writingMinutes / marks || 0).toFixed(2)} minutes per mark</p>
+                    <p className="max-w-[68ch] text-xs text-muted-foreground">Reading moves to writing automatically. Overtime is recorded.</p>
+                  </div>
                   <Button className="w-full lg:w-auto" type="submit" size="lg">{readingMinutes ? "Begin reading time" : "Begin writing time"}</Button>
                 </div>
               </FieldGroup>
             </form>
           </CardContent>
         </Card>
-      </WorkspacePage>
+        <aside className="min-w-0">{renderSuggestions()}</aside>
+      </div>
     )
   }
 
@@ -361,31 +365,12 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
       : "Writing time has ended. The clock is recording overtime until you finish and mark."
 
   return (
-    <WorkspacePage>
-      <PageHeader title={session.title} description={`${session.subject} · ${session.readingMinutes} min reading · ${session.writingMinutes} min writing · ${session.marks} marks`}>
-        <Button variant="outline" onClick={() => setConditionsOpen(true)}><SlidersHorizontal />Edit conditions</Button>
-        <Button variant={session.pausedAt !== undefined ? "default" : "outline"} onClick={session.pausedAt !== undefined ? resume : pause}>{session.pausedAt !== undefined ? <Play /> : <Pause />}{session.pausedAt !== undefined ? "Resume exam" : "Pause and save"}</Button>
-        <Button variant={session.pausedAt !== undefined ? "outline" : "default"} onClick={openMarking}><Check />Finish & mark</Button>
-      </PageHeader>
+    <WorkspacePage className="gap-4 lg:gap-4">
+      <PageHeader title={session.title} description={`${session.subject} · ${session.readingMinutes} min reading · ${session.writingMinutes} min writing · ${session.marks} marks`} />
 
-      <Card className="gap-3" aria-label="Session save status">
-        <CardContent className="grid gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-medium">{session.pausedAt !== undefined ? "Paused · ready when you are" : "Exam in progress"}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{session.pausedAt !== undefined ? `Paused ${new Date(session.pausedAt).toLocaleString()}. Your remaining time is frozen.` : "Pause before leaving to stop the clock."}</p>
-            </div>
-            <Button variant="outline" onClick={() => { pause(); onLeave() }}>{session.pausedAt !== undefined ? "Back to focus blocks" : "Pause, save & exit"}</Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-            <p role="status" className="flex-1 text-sm text-muted-foreground">{saveStatus}</p>
-            {syncAction ? <Button size="sm" variant="outline" onClick={syncAction.onClick}>{syncAction.label}</Button> : null}
-          </div>
-          {session.id ? <p className="text-xs text-muted-foreground">This timer is shared with Focal when you sign in to the same account.</p> : null}
-        </CardContent>
-      </Card>
-
-      <section className="grid gap-6 py-6">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <Card className="min-w-0 gap-0">
+      <CardContent className="py-4">
         <TimerReadout
           animationKey={`${phaseLabel}:${session.startedAt}`}
           caption={phaseCaption}
@@ -401,17 +386,39 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
           progress={timer.progress}
           status={session.pausedAt !== undefined ? "Paused" : overtime ? "Recording overtime" : "Running"}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            {timer.phase === "reading" ? <Button variant="outline" onClick={skipReading}>Skip to writing time</Button> : null}
-            <Button variant="ghost" size="sm" onClick={() => setDiscardOpen(true)}><Trash2 />Discard exam</Button>
+          <div className="grid gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="lg" variant={session.pausedAt !== undefined ? "default" : "outline"} onClick={session.pausedAt !== undefined ? resume : pause}>{session.pausedAt !== undefined ? <Play /> : <Pause />}{session.pausedAt !== undefined ? "Resume exam" : "Pause and save"}</Button>
+              <Button size="lg" variant={session.pausedAt !== undefined ? "outline" : "default"} onClick={openMarking}><Check />Finish & mark</Button>
+              {timer.phase === "reading" ? <Button variant="outline" onClick={skipReading}>Skip to writing time</Button> : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <Button size="sm" variant="outline" onClick={() => setConditionsOpen(true)}><SlidersHorizontal />Edit conditions</Button>
+              <Button variant="ghost" size="sm" onClick={() => setDiscardOpen(true)}><Trash2 />Discard exam</Button>
+            </div>
           </div>
         </TimerReadout>
-      </section>
+      </CardContent>
+      </Card>
 
-      <MetricGrid className="grid-cols-1 sm:grid-cols-2">
-        <MetricCard label="Pace" value={`${(session.writingMinutes / session.marks).toFixed(2)} min / mark`}><span>Planned writing pace</span></MetricCard>
-        <MetricCard label="Expected progress" value={timer.phase === "reading" ? "Starts in writing" : `${timer.expectedMarks.toFixed(1)} / ${session.marks} marks`}><span>Based on elapsed writing time</span></MetricCard>
-      </MetricGrid>
+      <Card size="sm" className="min-w-0 gap-3" aria-label="Session save status">
+        <CardHeader><CardTitle>Session overview</CardTitle></CardHeader>
+        <CardContent className="grid gap-3">
+          <dl className="grid gap-3 text-sm">
+            <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Planned pace</dt><dd className="font-medium tabular-nums">{(session.writingMinutes / session.marks).toFixed(2)} min / mark</dd></div>
+            <div className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">Expected progress</dt><dd className="font-medium tabular-nums">{timer.phase === "reading" ? "Starts in writing" : `${timer.expectedMarks.toFixed(1)} / ${session.marks} marks`}</dd></div>
+          </dl>
+          <div className="grid gap-2 border-t pt-3">
+            <p className="text-sm font-medium">{session.pausedAt !== undefined ? "Paused · ready when you are" : "Exam in progress"}</p>
+            <p className="text-xs text-muted-foreground">{session.pausedAt !== undefined ? `Paused ${new Date(session.pausedAt).toLocaleString()}. Your remaining time is frozen.` : "Pause before leaving to stop the clock."}</p>
+            <p role="status" className="text-sm text-muted-foreground">{saveStatus}</p>
+            {syncAction ? <Button size="sm" variant="outline" onClick={syncAction.onClick}>{syncAction.label}</Button> : null}
+            <Button variant="outline" onClick={() => { pause(); onLeave() }}>{session.pausedAt !== undefined ? "Back to focus blocks" : "Pause, save & exit"}</Button>
+            {session.id ? <p className="text-xs text-muted-foreground">This timer is shared with Focal when you sign in to the same account.</p> : null}
+          </div>
+        </CardContent>
+      </Card>
+      </div>
 
       <ExamWorkspace
         items={session.workspaceItems ?? []}

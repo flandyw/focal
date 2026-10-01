@@ -175,6 +175,23 @@ test("the month grid loads a day by everything it still owes plus everything it 
   expect(march.find((day) => day.isToday)?.minutes).toBe(105)
 })
 
+// Every cell carries a load bar, so a quiet day reports how quiet instead of reading blank.
+test("each day carries its load against the heaviest day in the grid", () => {
+  const march = buildCalendarMonth(new Date(2026, 2, 1), source({
+    learning: { ...EMPTY_LEARNING_WORKSPACE, tasks: [
+      task({ id: "t1", plannedFor: "2026-03-04", durationMinutes: 90 }),
+      task({ id: "t2", plannedFor: "2026-03-06", durationMinutes: 45 }),
+    ] },
+  }), null, new Date(2026, 2, 4))
+
+  expect(march.find((day) => day.date === "2026-03-04")?.loadBar).toBe(100)
+  expect(march.find((day) => day.date === "2026-03-06")?.loadBar).toBe(50)
+  expect(march.find((day) => day.date === "2026-03-07")?.loadBar).toBe(0)
+  // Nothing planned anywhere means nothing to compare against, not a division by zero.
+  expect(buildCalendarMonth(new Date(2026, 2, 1), source(), null, new Date(2026, 2, 4))
+    .every((day) => day.loadBar === 0)).toBe(true)
+})
+
 test("a sitting is filed under its schedule day even when the server start differs", () => {
   const data = source({ sessions: [canonicalSession({ started_at: "2026-03-05T08:00:00.000Z" })] })
   expect(buildDayPlan("2026-03-04", data, timetable).items.some((entry) => entry.kind === "session")).toBe(true)

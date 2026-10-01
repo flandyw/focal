@@ -74,7 +74,7 @@ export function buildContextBits(
  if (project) bits.push(projectContextLine(project));
  if (contextRefs?.focusModeActive ?? focusModeActiveFallback) {
  bits.push(
-"User is in a Pomodoro focus block right now; if they ask for help, keep replies short so they can return to the timer.",
+"User is in a study session right now; if they ask for help, keep replies short so they can return to the timer.",
  );
  }
  return bits.length > 0 ? `\n${bits.join("\n")}` :"";

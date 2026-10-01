@@ -24,12 +24,12 @@ export interface FocusSessionIdentity {
  * server bills and the block the user is looking at drift apart.
  */
 export function isFocusCounting(state: TimerState): boolean {
-  return state.mode === "work" && !state.studyOvertime && state.running
+  return (state.mode === "work" || state.mode === "free") && !state.studyOvertime && state.running
 }
 
 /** Whether the timer is a focus block at all, counting or not. */
 function isFocusBlockState(state: TimerState): boolean {
-  return state.mode === "work" && !state.studyOvertime
+  return (state.mode === "work" || state.mode === "free") && !state.studyOvertime
 }
 
 /**

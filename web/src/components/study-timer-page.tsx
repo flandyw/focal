@@ -125,17 +125,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const { state, settings, blocks, blocksToday, focusSecondsToday, progress, sessionBusy, updateSettings, ...actions } =
     useStudyTimer({ subject, intent, onSessionChange })
 
-  // Free study repurposes the break window rather than counting it down, so
-  // `secondsLeft` stays frozen and the elapsed time lands in `overtimeSeconds`.
-  // While paused it is held in `breakSeconds` instead.
-  const isFreeStudy = state.studyOvertime && state.freeStudy
-  const displayMode = state.studyOvertime ? (isFreeStudy ? (state.running ? "Free study" : "Break") : "Overtime") : MODE_LABEL[state.mode]
-  const readout = !state.studyOvertime
-    ? formatTimer(state.secondsLeft)
-    : isFreeStudy && !state.running
-      ? formatTimer(state.breakSeconds)
-      : `${isFreeStudy ? "" : "+"}${formatTimer(state.overtimeSeconds)}`
-  const onBreak = !state.studyOvertime && state.mode !== "work"
+  const isFreeStudy = state.mode === "free"
+  const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
+  const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
+  const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
   // to start until one is chosen.
   const subjectChosen = subject.trim() !== ""
@@ -186,6 +179,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       longBreakMinutes: plan.longBreakMinutes,
       longBreakEvery: plan.longBreakEvery,
     })
+    actions.selectMode("work")
     if (plan.startNow && !state.running) actions.toggle()
   }
   function applyPreset(preset: (typeof TIMER_PRESETS)[number]) {
@@ -203,7 +197,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     if (!granted) setAnnouncement("Notifications are blocked for this site.")
   }
 
-  const caption = state.studyOvertime
+  const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
     ? isFreeStudy
       ? state.running
         ? "Free study has no end. Finish it when you are done and it lands in your record."
@@ -218,16 +212,21 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       <div className="grid gap-6 lg:gap-8">
         <Card>
           <CardContent className="pt-(--card-spacing)">
+            <div className="mb-6 flex gap-2" aria-label="Study mode">
+              <Button aria-pressed={isFreeStudy} disabled={sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} variant={isFreeStudy ? "secondary" : "ghost"}>Free study</Button>
+              <Button aria-pressed={!isFreeStudy} disabled={sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} variant={!isFreeStudy ? "secondary" : "ghost"}>Pomodoro</Button>
+            </div>
             <TimerReadout
               animationKey={`${displayMode}:${state.cycles}`}
               caption={caption}
+              countUp={isFreeStudy}
               display={readout}
-              marks={{ total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
+              marks={isFreeStudy ? undefined : { total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
               mode={displayMode}
               onCaption={announcement}
               overtime={state.studyOvertime && !state.freeStudy}
               progress={progress}
-              status={state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
+              status={isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
             >
               <div className="flex flex-wrap items-center gap-2">
                 {/* A lifecycle command is one transaction with the server: its button
@@ -237,7 +236,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 </Button>
                 <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />Reset</Button>
                 {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
-                {!state.studyOvertime ? (
+                {!state.studyOvertime && !isFreeStudy ? (
                   <>
                     <Button onClick={() => actions.addTime(5)} size="lg" variant="ghost"><Plus />5 min</Button>
                     <Button onClick={() => actions.addTime(10)} size="lg" variant="ghost"><Plus />10 min</Button>
@@ -247,13 +246,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
               <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                 {isFreeStudy ? (
-                  <Button onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
+                  <Button disabled={sessionBusy || state.overtimeSeconds === 0} onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
                 ) : state.studyOvertime ? (
                   <Button onClick={actions.returnToBreak} size="sm" variant="outline"><Coffee />Back to break</Button>
                 ) : onBreak ? (
                   <Button disabled={!subjectChosen} onClick={actions.startOvertime} size="sm" variant="outline"><Coffee />Keep studying</Button>
                 ) : (
-                  <Button disabled={!subjectChosen} onClick={actions.startFreeStudy} size="sm" variant="outline"><TimerIcon />Start free study</Button>
+                  <Button disabled={sessionBusy || state.running || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant="outline"><TimerIcon />Start free study</Button>
                 )}
                 <p className="text-sm text-pretty text-muted-foreground">
                   {isFreeStudy
@@ -267,7 +266,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           </CardContent>
         </Card>
 
-        <StudyPlanCard
+        {!isFreeStudy && <StudyPlanCard
           blocksToday={blocksToday}
           canStartNow={!state.running && !state.studyOvertime && state.mode === "work"}
           minutesLeft={Math.max(0, Math.round(state.secondsLeft / 60))}
@@ -276,7 +275,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           settings={settings}
           subjects={subjects}
           timerMode={displayMode}
-        />
+        />}
 
         <Card>
           <CardHeader>
@@ -324,14 +323,14 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           />
           <MetricGrid>
             <MetricCard label="Focus time" value={formatFocusTime(recordSeconds)}>
-              <span>Across {recordCount} block{recordCount === 1 ? "" : "s"}</span>
+              <span>Across {recordCount} {isFreeStudy ? "session" : "block"}{recordCount === 1 ? "" : "s"}</span>
             </MetricCard>
-            <MetricCard label="Daily goal" value={settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}>
+            {!isFreeStudy && <><MetricCard label="Daily goal" value={settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}>
               <Progress value={settings.dailyGoal ? (recordCount / settings.dailyGoal) * 100 : 0} />
             </MetricCard>
             <MetricCard label="Block length" value={`${settings.workMinutes}m`}>
               <span>{settings.breakMinutes}m break every {settings.longBreakEvery} blocks</span>
-            </MetricCard>
+            </MetricCard></>}
           </MetricGrid>
 
           {todaysRecord ? (
@@ -368,15 +367,16 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <Empty className="min-h-48 border">
               <EmptyHeader>
                 <EmptyMedia variant="icon"><TimerIcon /></EmptyMedia>
-                <EmptyTitle>No blocks logged today</EmptyTitle>
-                <EmptyDescription>Finish one focus block and it will appear here with its subject and intent.</EmptyDescription>
+                <EmptyTitle>No study logged today</EmptyTitle>
+                <EmptyDescription>Finish a study session and it will appear here with its subject and intent.</EmptyDescription>
               </EmptyHeader>
             </Empty>
           )}
         </section>
       </div>
 
-      <aside className="grid gap-4 lg:sticky lg:top-20">
+      <details open={!isFreeStudy} className="grid gap-4 lg:sticky lg:top-20">
+        <summary className="cursor-pointer text-sm font-medium">Pomodoro settings</summary>
         <Card size="sm">
           <CardHeader>
             <CardTitle>Presets</CardTitle>
@@ -502,7 +502,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             />
           </CardContent>
         </Card>
-      </aside>
+      </details>
     </div>
   )
 }
@@ -536,11 +536,11 @@ export function StudyTimerPage({
           <div className="min-w-0 space-y-1">
             <h1 className="text-2xl font-semibold tracking-tight text-balance xl:text-3xl">Study timer</h1>
             <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">
-              Run focus blocks with rest built in, or sit a full timed paper. Both feed your study record.
+              Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record.
             </p>
           </div>
           <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
-            <TabsTrigger value="focus">Focus blocks</TabsTrigger>
+            <TabsTrigger value="focus">Study</TabsTrigger>
             <TabsTrigger value="exam">Timed paper</TabsTrigger>
           </TabsList>
         </div>

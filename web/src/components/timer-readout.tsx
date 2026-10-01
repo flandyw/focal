@@ -16,6 +16,7 @@ export function TimerReadout({
   display,
   progress,
   overtime = false,
+  countUp = false,
   animationKey,
   marks,
   caption,
@@ -27,6 +28,7 @@ export function TimerReadout({
   display: string
   progress: number
   overtime?: boolean
+  countUp?: boolean
   animationKey: string
   /** Discrete marks for a multi-step run: a set of focus blocks, or exam phases. */
   marks?: { total: number; filled: number; label: string }
@@ -48,7 +50,7 @@ export function TimerReadout({
         </div>
 
         <p
-          aria-label={`${mode}, ${display} remaining`}
+          aria-label={`${mode}, ${display} ${countUp || overtime ? "elapsed" : "remaining"}`}
           className="font-semibold tracking-tight tabular-nums text-6xl sm:text-7xl lg:text-8xl"
           role="timer"
         >
@@ -63,7 +65,7 @@ export function TimerReadout({
           </span>
         </p>
 
-        <Progress aria-label={`${mode} progress`} value={progress} />
+        {!countUp && <Progress aria-label={`${mode} progress`} value={progress} />}
 
         {marks ? (
           <ol aria-label={marks.label} className="flex items-center gap-1.5">

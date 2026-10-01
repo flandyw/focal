@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 interface FocusViewProps {
   running: boolean;
-  mode: "work" | "break" | "long-break";
+  mode: "free" | "work" | "break" | "long-break";
   isStudyOvertime: boolean;
   isFreeStudy: boolean;
   secondsLeft: number;
@@ -177,7 +177,7 @@ export function FocusView({
       } else if (key === "s" && !event.shiftKey && !isFocus && !isFreeStudy) {
         event.preventDefault();
         onSkipBreak();
-      } else if (key === "a" && !event.shiftKey && !isStudyOvertime) {
+      } else if (key === "a" && !event.shiftKey && !(isFreeStudy || isStudyOvertime)) {
         event.preventDefault();
         onAddTime();
       } else if (key === "f" && !event.shiftKey && activeSessionId) {
@@ -195,6 +195,7 @@ export function FocusView({
     };
   }, [activeSessionId, isFocus, isFreeStudy, isStudyOvertime, onAddTime, onClose, onFinish, onReset, onSkipBreak, onToggle, saving]);
 
+  const openEnded = isFreeStudy || isStudyOvertime;
   const status = activeSessionId
     ? !isFocus
       ? "Focus save pending"
@@ -239,7 +240,7 @@ export function FocusView({
                 <p className="text-xs text-muted-foreground">One thing at a time.</p>
               </div>
             </div>
-            <span className="text-xs tabular-nums text-muted-foreground">Cycle {cycles + 1}</span>
+            <span className="text-xs tabular-nums text-muted-foreground">{isFreeStudy ? "No time limit" : `Cycle ${cycles + 1}`}</span>
           </header>
 
           <div className="grid flex-1 items-center gap-10 py-8 lg:grid-cols-[minmax(0,1fr)_clamp(20rem,28vw,30rem)] lg:gap-[clamp(2rem,4vw,5rem)] lg:py-8">
@@ -254,21 +255,21 @@ export function FocusView({
                 <svg
                   viewBox="0 0 400 400"
                   className="absolute inset-0 size-full -rotate-90"
-                  role={isStudyOvertime ? "img" : "progressbar"}
-                  aria-label={isStudyOvertime ? "Open-ended session" : `${modeLabel} progress`}
-                  aria-valuemin={isStudyOvertime ? undefined : 0}
-                  aria-valuemax={isStudyOvertime ? undefined : 100}
-                  aria-valuenow={isStudyOvertime ? undefined : progressPercent}
+                  role={openEnded ? "img" : "progressbar"}
+                  aria-label={openEnded ? "Open-ended session" : `${modeLabel} progress`}
+                  aria-valuemin={openEnded ? undefined : 0}
+                  aria-valuemax={openEnded ? undefined : 100}
+                  aria-valuenow={openEnded ? undefined : progressPercent}
                 >
                   <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="1" className="text-border" />
                   <circle cx="200" cy="200" r="176" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="1 8" className="text-border" />
-                  <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="4" pathLength="100" strokeDasharray="100" strokeDashoffset={isStudyOvertime ? 0 : 100 - progressPercent} strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-1000 motion-reduce:transition-none", isFocus ? "text-primary" : "text-success")} />
+                  <circle cx="200" cy="200" r="190" fill="none" stroke="currentColor" strokeWidth="4" pathLength="100" strokeDasharray="100" strokeDashoffset={isFreeStudy ? 100 : isStudyOvertime ? 0 : 100 - progressPercent} strokeLinecap="round" className={cn("transition-[stroke-dashoffset] duration-1000 motion-reduce:transition-none", isFocus ? "text-primary" : "text-success")} />
                 </svg>
                 <div className="max-w-[80%]">
                   <p className="mb-[3cqw] text-[clamp(10px,2cqw,16px)] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    {isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}
+                    {isFreeStudy || (isStudyOvertime && isFocus) ? "Time focused" : "Time remaining"}
                   </p>
-                  <p className="font-sans text-[25cqw] font-light leading-none tabular-nums tracking-[-0.065em]" aria-label={`${isStudyOvertime && isFocus ? "Time focused" : "Time remaining"}: ${timeDisplay}`}>
+                  <p className="font-sans text-[25cqw] font-light leading-none tabular-nums tracking-[-0.065em]" aria-label={`${isFreeStudy || (isStudyOvertime && isFocus) ? "Time focused" : "Time remaining"}: ${timeDisplay}`}>
                     {timeDisplay}
                   </p>
                   <p className="mt-[4cqw] text-[clamp(12px,2.5cqw,18px)] text-muted-foreground">
@@ -304,7 +305,7 @@ export function FocusView({
                       disabled={saving || !canStartFocus}
                     >
                       <Timer />
-                      Free study
+                      {isFreeStudy ? "Use Pomodoro" : "Free study"}
                     </Button>
                   )}
                   {activeSessionId && (
@@ -319,7 +320,7 @@ export function FocusView({
                       Finish &amp; save
                     </Button>
                   )}
-                  {activeSessionId && !isStudyOvertime && (
+                  {activeSessionId && !openEnded && (
                     <Button
                       size="lg"
                     className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
@@ -480,19 +481,19 @@ export function FocusView({
               <section className="border-t border-border/60 pt-6" aria-label="Today's progress">
                 <div className="flex items-center justify-between">
                   <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"><Flame className="size-3.5" /> Today’s progress</p>
-                  {goalReached && <Check className="size-4 text-success" aria-label="Daily goal reached" />}
+                  {!isFreeStudy && goalReached && <Check className="size-4 text-success" aria-label="Daily goal reached" />}
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-4">
-                  <div>
+                  {!isFreeStudy && <div>
                     <p className="text-3xl font-light tabular-nums tracking-tight xl:text-4xl">{todayBlocks}<span className="ml-1 text-base text-muted-foreground">{dailyGoal > 0 ? `/ ${dailyGoal}` : ""}</span></p>
                     <p className="mt-1 text-xs text-muted-foreground">Blocks completed</p>
-                  </div>
+                  </div>}
                   <div>
                     <p className="text-3xl font-light tabular-nums tracking-tight xl:text-4xl">{formatFocusTime(todaySeconds)}</p>
                     <p className="mt-1 text-xs text-muted-foreground">Time focused</p>
                   </div>
                 </div>
-                {dailyGoal > 0 && (
+                {!isFreeStudy && dailyGoal > 0 && (
                   <div className="mt-5">
                     <div role="progressbar" aria-label="Daily goal progress" aria-valuemin={0} aria-valuemax={dailyGoal} aria-valuenow={Math.min(todayBlocks, dailyGoal)} className="h-1 overflow-hidden rounded-full bg-muted">
                       <div className={cn("h-full rounded-full", goalReached ? "bg-success" : "bg-primary")} style={{ width: `${Math.round(goalProgress * 100)}%` }} />
@@ -512,7 +513,7 @@ export function FocusView({
           <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-4 text-[11px] text-muted-foreground">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <span><kbd className="mr-1.5 rounded border px-1.5 py-0.5 font-sans">Space</kbd>{running ? "Pause" : "Start / resume"}</span>
-              {!isStudyOvertime && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">A</kbd> +{EXTRA_BREAK_MINUTES} min</span>}
+              {!openEnded && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">A</kbd> +{EXTRA_BREAK_MINUTES} min</span>}
               {!isFocus && !isFreeStudy && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">S</kbd> Skip break</span>}
               {activeSessionId && <span><kbd className="mr-1 rounded border px-1 py-0.5 font-sans">F</kbd> Finish</span>}
             </div>

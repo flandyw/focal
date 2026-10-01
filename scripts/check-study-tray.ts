@@ -20,7 +20,7 @@ const item = (id: string, patch: Partial<typeof input> = {}) => {
 assert.equal(item("timer-free").enabled, true);
 assert.equal(item("timer-subject:math").checked, true);
 assert.equal(item("timer-subject:custom:subject").checked, false);
-assert.equal(item("timer-free", { selectedSubjectIds: [] }).enabled, false);
+assert.equal(item("timer-free", { selectedSubjectIds: [] }).enabled, true);
 assert.equal(item("timer-toggle", { selectedSubjectIds: ["deleted"] }).enabled, false);
 assert.equal(item("timer-subject:custom:subject", { selectedSubjectIds: [] }).enabled, true);
 assert.equal(item("timer-preset:standard").checked, true);
@@ -38,9 +38,9 @@ assert.equal(item("timer-finish", active).enabled, true);
 assert.equal(item("timer-toggle", { activeSession: true }).label, "Resume focus");
 
 const free = timerReducer(state, { type: "START_FREE_STUDY", settings: DEFAULT_SETTINGS });
-assert.equal(item("timer-toggle", { state: free, activeSession: true }).label, "Take a break");
+assert.equal(item("timer-toggle", { state: free, activeSession: true }).label, "Pause study");
 const pausedFree = timerReducer(free, { type: "TOGGLE" });
-assert.equal(item("timer-toggle", { state: pausedFree, activeSession: true }).label, "Resume free study");
+assert.equal(item("timer-toggle", { state: pausedFree, activeSession: true }).label, "Resume study");
 for (const id of ["timer-add", "timer-skip", "timer-return"]) {
   assert.equal(item(id, { state: free, activeSession: true }).enabled, false);
 }

@@ -72,7 +72,7 @@ export function clampLongBreakInterval(value: number | undefined) {
   );
 }
 
-export type TimerMode = "work" | "break" | "long-break";
+export type TimerMode = "free" | "work" | "break" | "long-break";
 
 export interface TimerSettings {
   workMinutes: number;
@@ -100,6 +100,7 @@ export interface TimerState {
 
 export type TimerAction =
   | { type: "TICK"; settings: TimerSettings; seconds: number }
+  | { type: "SELECT_MODE"; mode: "free" | "work"; settings: TimerSettings }
   | { type: "TOGGLE" }
   | { type: "RESET"; settings: TimerSettings }
   | { type: "SKIP_BREAK"; settings: TimerSettings }
@@ -114,6 +115,7 @@ export type TimerAction =
     };
 
 export interface StoredTimerState {
+  version?: number;
   running: boolean;
   mode: TimerMode;
   secondsLeft: number;
@@ -132,6 +134,7 @@ export interface StoredTimerState {
 }
 
 export function getDurationSeconds(mode: TimerMode, settings: TimerSettings) {
+  if (mode === "free") return 0
   if (mode === "work") return settings.workMinutes * 60;
   if (mode === "long-break") return settings.longBreakMinutes * 60;
   return settings.breakMinutes * 60;
@@ -208,7 +211,7 @@ export function getInitialSettings() {
 }
 
 export function isValidMode(mode: unknown): mode is TimerMode {
-  return mode === "work" || mode === "break" || mode === "long-break";
+  return mode === "free" || mode === "work" || mode === "break" || mode === "long-break";
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- exported for the runnable timer self-check
@@ -222,10 +225,9 @@ export function advanceTimer(
     ? Math.max(0, Math.floor(elapsedSeconds))
     : 0;
 
+  if (next.mode === "free") return next.running ? { ...next, overtimeSeconds: next.overtimeSeconds + remaining } : next
+
   if (next.studyOvertime) {
-    if (next.freeStudy && !next.running) {
-      return { ...next, breakSeconds: next.breakSeconds + remaining };
-    }
     if (!next.running) return next;
     return { ...next, overtimeSeconds: next.overtimeSeconds + remaining };
   }
@@ -289,17 +291,9 @@ export function getActiveSessionSubjectIds(
 }
 
 export function getInitialState(settings: TimerSettings): TimerState {
-  const workSeconds = getDurationSeconds("work", settings);
   const fallback: TimerState = {
-    running: false,
-    mode: "work",
-    secondsLeft: workSeconds,
-    totalSeconds: workSeconds,
-    cycles: 0,
-    studyOvertime: false,
-    overtimeSeconds: 0,
-    freeStudy: false,
-    breakSeconds: 0,
+    running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0,
+    studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0,
   };
 
   try {
@@ -307,7 +301,14 @@ export function getInitialState(settings: TimerSettings): TimerState {
     if (!stored) return fallback;
 
     const parsed = JSON.parse(stored) as Partial<StoredTimerState>;
+    if (parsed.version !== 2 && !parsed.freeStudy && !parsed.running && !parsed.activeSessionId && !parsed.studyOvertime && parsed.secondsLeft === parsed.totalSeconds) return fallback;
     const mode = isValidMode(parsed.mode) ? parsed.mode : fallback.mode;
+    // ponytail: retain the stored counter fields so existing sessions restore without a storage migration.
+    if (mode === "free" || parsed.freeStudy === true) {
+      return advanceTimer({ ...fallback, running: parsed.running === true, overtimeSeconds: safeNonNegativeInteger(parsed.overtimeSeconds) }, settings,
+        parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.max(0, Math.floor((Date.now() - parsed.updatedAt) / 1000)) : 0);
+    }
+
     const duration = getDurationSeconds(mode, settings);
     const now = Date.now();
     const updatedAt = typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt)
@@ -315,8 +316,7 @@ export function getInitialState(settings: TimerSettings): TimerState {
       : now;
     const cycles = safeNonNegativeInteger(parsed.cycles);
     const studyOvertime = parsed.studyOvertime === true && mode !== "work";
-    const freeStudy = studyOvertime && parsed.freeStudy === true;
-    const elapsedSeconds = parsed.running || (freeStudy && parsed.running === false)
+    const elapsedSeconds = parsed.running
       ? Math.min(
           MAX_RESTORE_ELAPSED_SECONDS,
           Math.max(0, Math.floor((now - updatedAt) / 1000)),
@@ -344,10 +344,8 @@ export function getInitialState(settings: TimerSettings): TimerState {
         overtimeSeconds: parsed.running
           ? overtimeSeconds + elapsedSeconds
           : overtimeSeconds,
-        freeStudy,
-        breakSeconds: freeStudy && parsed.running === false
-          ? breakSeconds + elapsedSeconds
-          : breakSeconds,
+        freeStudy: false,
+        breakSeconds,
       };
     }
 
@@ -383,6 +381,9 @@ export function getInitialState(settings: TimerSettings): TimerState {
 
 export function timerReducer(state: TimerState, action: TimerAction): TimerState {
   switch (action.type) {
+    case "SELECT_MODE":
+      if (state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds) return state
+      return { running: false, mode: action.mode, secondsLeft: getDurationSeconds(action.mode, action.settings), totalSeconds: getDurationSeconds(action.mode, action.settings), cycles: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: action.mode === "free", breakSeconds: 0 }
     case "TICK":
       return advanceTimer(state, action.settings, action.seconds);
     case "TOGGLE":
@@ -392,6 +393,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         breakSeconds: state.freeStudy ? 0 : state.breakSeconds,
       };
     case "RESET": {
+      if (state.freeStudy) return { running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
       const totalSeconds = getDurationSeconds("work", action.settings);
       return {
         running: false,
@@ -406,7 +408,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       };
     }
     case "SKIP_BREAK":
-      if (state.mode === "work" || state.studyOvertime) return state;
+      if (state.mode === "work" || state.mode === "free" || state.studyOvertime) return state;
       return {
         running: action.settings.autoStartFocus,
         mode: "work",
@@ -419,7 +421,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         breakSeconds: 0,
       };
     case "ADD_TIME": {
-      if (state.studyOvertime) return state;
+      if (state.studyOvertime || state.mode === "free") return state;
       const extraSeconds = Math.max(0, Math.round(action.minutes * 60));
       const totalSeconds = Math.min(
         MAX_DURATION_MINUTES * 60,
@@ -432,7 +434,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       };
     }
     case "START_STUDY_OVERTIME": {
-      if (state.mode === "work") return state;
+      if (state.mode === "work" || state.mode === "free") return state;
       const elapsedBreakSeconds = Math.max(0, state.totalSeconds - state.secondsLeft);
       return {
         ...state,
@@ -444,19 +446,8 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       };
     }
     case "START_FREE_STUDY": {
-      if (state.mode !== "work" || state.studyOvertime) return state;
-      const totalSeconds = getDurationSeconds("break", action.settings);
-      return {
-        ...state,
-        running: true,
-        mode: "break",
-        secondsLeft: totalSeconds,
-        totalSeconds,
-        studyOvertime: true,
-        overtimeSeconds: 0,
-        freeStudy: true,
-        breakSeconds: 0,
-      };
+      if (state.running || state.mode !== "work") return state
+      return { ...state, running: true, mode: "free", secondsLeft: 0, totalSeconds: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
     }
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state;
@@ -469,6 +460,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         breakSeconds: 0,
       };
     case "SYNC_SETTINGS": {
+      if (state.mode === "free") return state
       const oldDuration = getDurationSeconds(
         state.mode,
         action.previousSettings,
@@ -547,7 +539,6 @@ export function getFocusSecondsToday(
 
 export function getSessionFocusSeconds(session: StudySession, now = new Date()) {
   return session.execution.intervals.reduce((total, interval) => {
-    if (interval.source !== "pomodoro") return total;
     const start = new Date(interval.start).getTime();
     const end = interval.end ? new Date(interval.end).getTime() : now.getTime();
     return Number.isFinite(start) && Number.isFinite(end)

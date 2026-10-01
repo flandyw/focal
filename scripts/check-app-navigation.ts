@@ -72,7 +72,7 @@ assert(sidebarSource.includes("Academic inbox"), "the sidebar must expose the ac
 const studyTimerSource = await fetch(
   new URL("../src/components/timer/StudyTimer.tsx", import.meta.url),
 ).then((response) => response.text())
-assert(studyTimerSource.includes("Start focus"), "the sidebar timer must expose the focus flow")
+assert(studyTimerSource.includes("Start study"), "the sidebar timer must expose free study")
 
 const shortcutSource = await fetch(
   new URL("../src/hooks/useKeyboardShortcuts.ts", import.meta.url),

@@ -72,6 +72,23 @@ test("the calendar shows the month, the day plan, and today's work", () => {
   expect(markup).toContain("Add a task")
 })
 
+// Density is a structure, not a style: the month's marks and the day's items are one list
+// each. Reverting either to one bordered card per item is what these three rules forbid.
+test("the month is a grid of marked lines and the day is one hairline list", () => {
+  const markup = render([task({ id: "t1" })])
+
+  expect(markup).toContain("of study")
+  expect(markup).toContain("Study load in")
+  // One border for the whole day's items, not one per item.
+  expect(markup.match(/divide-y/g)?.length).toBeGreaterThan(0)
+  // Rescheduling and archiving are deliberate, so they sit behind one disclosure: on first
+  // paint the row carries only start and finish, and the move control does not exist yet.
+  expect(markup).toContain('aria-expanded="false"')
+  expect(markup).toContain("More actions for Redo organic paper")
+  expect(markup).not.toContain("Move Redo organic paper to another day")
+  expect(markup).not.toContain(">Archive</button>")
+})
+
 test("an empty account renders an honest calendar, not an error", () => {
   const markup = render([])
   expect(markup).toContain("Calendar and day plan")

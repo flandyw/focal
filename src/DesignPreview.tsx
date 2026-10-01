@@ -57,8 +57,8 @@ export function DesignPreview() {
           onSelectAnalytics={noop}
           onSelectExamTrack={noop}
           onSearch={noop}
-          onStartPomodoroSession={createSession}
-          onUpdatePomodoroSession={() => Promise.resolve()}
+          onStartStudySession={createSession}
+          onUpdateStudySession={() => Promise.resolve()}
         />
       </div>
       <main className="min-w-0 flex-1">

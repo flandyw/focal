@@ -50,6 +50,9 @@ export type CalendarDay = {
   load: number
   /** Total study load on the day: what is still to do plus what was banked. */
   minutes: number
+  /** That load as a percentage of the heaviest day in the grid, so a quiet cell still
+   *  says how quiet it is instead of reading as an absence. */
+  loadBar: number
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
@@ -301,7 +304,7 @@ export function buildCalendarMonth(month: Date, data: DayPlanSource, timetable: 
   const first = new Date(month.getFullYear(), month.getMonth(), 1)
   const cursor = startOfWeek(first)
   const today = localDate(now)
-  return Array.from({ length: 42 }, (_, index) => {
+  const grid = Array.from({ length: 42 }, (_, index) => {
     const date = shiftDays(cursor, index)
     const key = localDate(date)
     const plan = buildDayPlan(key, data, timetable)
@@ -315,6 +318,8 @@ export function buildCalendarMonth(month: Date, data: DayPlanSource, timetable: 
       isToday: key === today,
     }
   })
+  const peak = Math.max(0, ...grid.map((day) => day.minutes))
+  return grid.map((day) => ({ ...day, loadBar: peak > 0 ? day.minutes / peak * 100 : 0 }))
 }
 
 export function shiftMonth(month: Date, amount: number) {

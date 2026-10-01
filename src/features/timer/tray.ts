@@ -26,18 +26,18 @@ export function studyTrayItems({ state, settings, subjects, selectedSubjectIds, 
 }): TrayItem[] {
   const available = !blocked;
   const hasSubject = subjects.some((subject) => selectedSubjectIds.includes(subject.id));
-  const idle = !activeSession && !state.running && state.mode === "work";
+  const idle = !activeSession && !state.running && (state.mode === "work" || state.mode === "free");
   const overtime = state.studyOvertime && state.mode !== "work";
-  const free = state.freeStudy && overtime;
-  const onBreak = state.mode !== "work" && !overtime;
+  const free = state.mode === "free";
+  const onBreak = state.mode !== "work" && !free && !overtime;
   const items: TrayItem[] = [
-    { id: "timer-toggle", label: state.running ? free ? "Take a break" : "Pause timer" : free ? "Resume free study" : activeSession ? "Resume focus" : onBreak ? state.secondsLeft === state.totalSeconds ? "Start break" : "Resume break" : "Start focus", enabled: available && (state.running || activeSession || onBreak || hasSubject), group: "controls" },
-    { id: "timer-free", label: "Start free study", enabled: available && idle && hasSubject, group: "controls" },
+    { id: "timer-toggle", label: state.running ? free ? "Pause study" : "Pause timer" : free ? activeSession ? "Resume study" : "Start study" : activeSession ? "Resume focus" : onBreak ? state.secondsLeft === state.totalSeconds ? "Start break" : "Resume break" : "Start focus", enabled: available && (state.running || activeSession || onBreak || hasSubject), group: "controls" },
+    { id: "timer-free", label: free ? "Use Pomodoro" : "Use free study", enabled: available && idle, group: "controls" },
     { id: "timer-finish", label: "Finish study session", enabled: available && activeSession, group: "controls" },
     { id: "timer-overtime", label: "Keep focusing through break", enabled: available && onBreak && !activeSession && hasSubject, group: "controls" },
     { id: "timer-return", label: "Return to timed break", enabled: available && overtime && !free, group: "controls" },
     { id: "timer-skip", label: "Skip break", enabled: available && onBreak, group: "controls" },
-    { id: "timer-add", label: onBreak ? "Add 5 minutes to break" : "Add 5 minutes to focus", enabled: available && !overtime, group: "controls" },
+    { id: "timer-add", label: onBreak ? "Add 5 minutes to break" : "Add 5 minutes to focus", enabled: available && !overtime && !free, group: "controls" },
     { id: "timer-reset", label: "Reset timer", enabled: available, group: "controls" },
     ...subjects.map((subject): TrayItem => ({ id: `timer-subject:${subject.id}`, label: subject.name, checked: selectedSubjectIds.includes(subject.id), enabled: available, group: "subjects" })),
     ...TIMER_PRESETS.map((preset): TrayItem => ({

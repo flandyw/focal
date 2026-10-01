@@ -809,10 +809,11 @@ function App() {
     [addSessions],
   );
 
-  const handleStartPomodoroSession = useCallback(
+  const handleStartStudySession = useCallback(
     async (data: {
       subjectIds: string[];
       durationSeconds: number;
+      timerMode?: "free" | "pomodoro";
       projectId?: string;
       sessionId?: string;
       cycleNumber: number;
@@ -827,7 +828,7 @@ function App() {
           : undefined;
         let focusIntent = data.intent?.trim();
         if (focusIntent?.length === 0) focusIntent = undefined;
-        focusIntent ??= getPomodoroTitle(data.subjectIds, projectName);
+        focusIntent ??= data.timerMode !== "pomodoro" ? projectName ?? "Free study" : getPomodoroTitle(data.subjectIds, projectName);
         const blockStart = start.toISOString();
         const blockEnd = end.toISOString();
         const plannedSession = data.sessionId
@@ -845,6 +846,7 @@ function App() {
             subjectIds: data.subjectIds,
             projectId: data.projectId,
             intent: focusIntent,
+            source: data.timerMode !== "pomodoro" ? "manual" : "pomodoro",
           });
           await updateSession(plannedSession.id, {
             projectId: startedSession.projectId,
@@ -859,14 +861,14 @@ function App() {
           projectId: data.projectId,
           subjectIds: data.subjectIds,
           title: focusIntent,
-          description: getPomodoroDescription(durationMinutes),
+          description: data.timerMode !== "pomodoro" ? "Free study" : getPomodoroDescription(durationMinutes),
           schedule: { blocks: [{ start: blockStart, end: blockEnd }] },
           execution: {
             state: "in-progress",
             intervals: [
               {
                 start: blockStart,
-                source: "pomodoro",
+                source: data.timerMode !== "pomodoro" ? "manual" : "pomodoro",
                 cycleNumber: data.cycleNumber,
               },
             ],
@@ -875,14 +877,14 @@ function App() {
         });
         return session;
       } catch (e) {
-        toast.error(`Failed to start Pomodoro session: ${String(e)}`);
+        toast.error(`Failed to start study session: ${String(e)}`);
         throw e;
       }
     },
     [projects, sessions, addSession, updateSession],
   );
 
-  const handleUpdatePomodoroSession = useCallback(
+  const handleUpdateStudySession = useCallback(
     async (
       id: string,
       updates: Partial<Omit<StudySession, "id" | "created_at">>,
@@ -915,7 +917,7 @@ function App() {
 
         await updateSession(id, effectiveUpdates);
       } catch (e) {
-        toast.error(`Failed to update Pomodoro session: ${String(e)}`);
+        toast.error(`Failed to update study session: ${String(e)}`);
         throw e;
       }
     },
@@ -2022,9 +2024,9 @@ function App() {
                   onSelectInbox={handleSelectInbox}
                   onSelectAnalytics={handleSelectAnalytics}
                   onSelectExamTrack={handleSelectExamTrack}
-                  onStartPomodoroSession={handleStartPomodoroSession}
-                  onUpdatePomodoroSession={handleUpdatePomodoroSession}
-                  onDeletePomodoroSession={handleDiscardTimerSession}
+                  onStartStudySession={handleStartStudySession}
+                  onUpdateStudySession={handleUpdateStudySession}
+                  onDeleteStudySession={handleDiscardTimerSession}
                   onSelectTimetable={handleSelectTimetable}
                   timetableSelected={timetableView}
                   onSearch={() => setSearchOpen(true)}
@@ -2136,7 +2138,7 @@ function App() {
                           onToggleFavorite={handleToggleFavorite}
                           onToggleArchive={handleToggleArchive}
                           onToggleFinished={handleToggleFinished}
-                          onStartSession={handleStartPomodoroSession}
+                          onStartSession={handleStartStudySession}
                           onAddFile={handleAddFileFromSidebar}
                           onDropFolder={handleDropFolder}
                           onBulkArchive={handleBulkArchive}

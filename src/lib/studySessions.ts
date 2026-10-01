@@ -30,6 +30,7 @@ export interface CreateStudySessionInput {
 }
 
 export interface StartPlannedStudySessionInput {
+  source?: "manual" | "pomodoro"
   startedAt: string
   cycleNumber: number
   subjectIds?: string[]
@@ -468,7 +469,7 @@ export function startPlannedStudySession(
       state: "in-progress",
       intervals: [{
         start: input.startedAt,
-        source: "pomodoro",
+        source: input.source ?? "pomodoro",
         cycleNumber: input.cycleNumber,
       }],
     },

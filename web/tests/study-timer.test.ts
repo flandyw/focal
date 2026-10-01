@@ -80,30 +80,27 @@ describe("study timer state machine", () => {
 
     const free = timerReducer(freshState(), { type: "START_FREE_STUDY", settings })
     expect(free.freeStudy).toBe(true)
-    expect(free.mode).toBe("break")
+    expect(free.mode).toBe("free")
     expect(timerReducer(free, { type: "RETURN_TO_BREAK" }).studyOvertime).toBe(false)
   })
 
-  test("free study can be finished: a stopped focus block, one full block's time", () => {
+  test("finishing free study returns to a stopped count-up timer", () => {
     const free = timerReducer(freshState(), { type: "START_FREE_STUDY", settings })
     const finished = timerReducer({ ...free, overtimeSeconds: 900 }, { type: "END_FREE_STUDY", settings })
 
     // Back on the focus screen and stopped, with nothing left over from free study.
-    expect(finished.mode).toBe("work")
+    expect(finished.mode).toBe("free")
     expect(finished.running).toBe(false)
-    expect(finished.freeStudy).toBe(false)
+    expect(finished.freeStudy).toBe(true)
     expect(finished.studyOvertime).toBe(false)
     expect(finished.overtimeSeconds).toBe(0)
-    expect(finished.secondsLeft).toBe(settings.workMinutes * 60)
+    expect(finished.secondsLeft).toBe(0)
     // Leaving focus is not ending free study: nothing changes outside it.
     expect(timerReducer(freshState(), { type: "END_FREE_STUDY", settings })).toEqual(freshState())
   })
 
   test("free study counts up in overtimeSeconds, because secondsLeft stays frozen", () => {
-    // The regression: free study repurposes the break window instead of
-    // counting it down, so elapsed time lands in overtimeSeconds while
-    // secondsLeft stays at total. Reading the elapsed time as
-    // total - secondsLeft is therefore permanently zero.
+    // The legacy counter name remains persisted, but free study has no countdown.
     const free = timerReducer(freshState(), { type: "START_FREE_STUDY", settings })
     expect(free.secondsLeft).toBe(free.totalSeconds)
 
@@ -111,9 +108,9 @@ describe("study timer state machine", () => {
     expect(later.overtimeSeconds).toBe(125)
     expect(later.totalSeconds - later.secondsLeft).toBe(0)
 
-    // Paused, the held time moves to breakSeconds instead of accruing.
+    // Pausing holds elapsed study time and starts no break countdown.
     const held = advanceTimer({ ...later, running: false }, settings, 30)
-    expect(held.breakSeconds).toBe(30)
+    expect(held.breakSeconds).toBe(0)
     expect(held.overtimeSeconds).toBe(125)
   })
 
@@ -247,6 +244,15 @@ describe("adopting a session another device moved", () => {
       },
     })
     try {
+      expect(loadTimerState(settings, 1_000).mode).toBe("free")
+      const ready = timerReducer(freshState(), { type: "SELECT_MODE", mode: "free", settings })
+      saveTimerState({ ...ready, running: true, overtimeSeconds: 100 }, 1_000)
+      expect(loadTimerState(settings, 91_000).overtimeSeconds).toBe(190)
+      saveTimerState({ ...ready, overtimeSeconds: 190 }, 91_000)
+      expect(loadTimerState(settings, 191_000).overtimeSeconds).toBe(190)
+      adoptRemoteFocusSession(undefined, 192_000)
+      expect(loadTimerState(settings, 192_000).overtimeSeconds).toBe(0)
+      expect(loadTimerState(settings, 192_000).mode).toBe("free")
       saveTimerState(freshState({ running: true }), 1_000)
       const remote: FocusTimerSession = {
         id: "session-1", revision: 5, subject: "Chemistry", provider: "Focal",

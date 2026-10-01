@@ -60,18 +60,18 @@ interface SidebarProps {
   onSelectInbox: () => void;
   onSelectAnalytics: () => void;
   onSelectExamTrack: () => void;
-  onStartPomodoroSession: (data: {
+  onStartStudySession: (data: {
     subjectIds: string[];
     durationSeconds: number;
     projectId?: string;
     cycleNumber: number;
     intent?: string;
   }) => Promise<StudySession>;
-  onUpdatePomodoroSession: (
+  onUpdateStudySession: (
     id: string,
     updates: Partial<Omit<StudySession, "id" | "created_at">>,
   ) => Promise<void>;
-  onDeletePomodoroSession?: (id: string) => Promise<void>;
+  onDeleteStudySession?: (id: string) => Promise<void>;
   onSearch?: () => void;
   onSettings?: () => void;
 }
@@ -144,9 +144,9 @@ export const Sidebar = memo(function Sidebar({
   onSelectInbox,
   onSelectAnalytics,
   onSelectExamTrack,
-  onStartPomodoroSession,
-  onUpdatePomodoroSession,
-  onDeletePomodoroSession,
+  onStartStudySession,
+  onUpdateStudySession,
+  onDeleteStudySession,
   onSearch,
   onSettings,
 }: SidebarProps) {
@@ -210,9 +210,9 @@ export const Sidebar = memo(function Sidebar({
             selectedProject={selectedProject}
             onSearch={onSearch}
             onSettings={onSettings}
-            onStartSession={onStartPomodoroSession}
-            onUpdateSession={onUpdatePomodoroSession}
-            onDeleteSession={onDeletePomodoroSession}
+            onStartSession={onStartStudySession}
+            onUpdateSession={onUpdateStudySession}
+            onDeleteSession={onDeleteStudySession}
           />
         </Suspense>
       </div>

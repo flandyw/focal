@@ -47,6 +47,7 @@ export interface StudyTimerEngine {
    *  server has answered, so one boundary cannot overtake another. */
   sessionBusy: boolean
   updateSettings: (patch: Partial<TimerSettings>) => void
+  selectMode: (mode: "free" | "work") => void
   toggle: () => void
   reset: () => void
   skipBreak: () => void
@@ -133,24 +134,6 @@ export function useStudyTimer({
 
   const previousState = useRef(state)
 
-  // Another device moved this session (a pause, resume, or finish from the Focal
-  // desktop app). The row is the timer now, so the countdown follows it: a countdown
-  // that disagrees with its session owes a boundary that would undo the change.
-  useEffect(() => {
-    const onRemoteChange = (event: Event) => {
-      const { id, session } = (event as CustomEvent<{ id: string; session: FocusTimerSession | undefined }>).detail
-      if (sessionMirror.acknowledged()?.id !== id && session?.id !== id) return
-      if (!sessionMirror.adopt(session)) return
-      const timer = previousState.current
-      // Outside a focus block the countdown is a break, not the session; the standing
-      // disagreement between a break and an open session is owedFocusBoundary's job.
-      if (timer.mode !== "work" || timer.studyOvertime) return
-      dispatch({ type: "SET_RUNNING", running: session !== undefined && session.pausedAt === undefined })
-    }
-    window.addEventListener("examtrack:focus-session-remote", onRemoteChange)
-    return () => window.removeEventListener("examtrack:focus-session-remote", onRemoteChange)
-  }, [sessionMirror])
-
   const openBlock = useCallback((source: OpenBlock["source"], cycleNumber: number, at: number) => {
     if (openBlockRef.current) return
     const block: OpenBlock = { cycleNumber, source, subject: subject.trim(), intent: intent.trim(), startedAt: at, pausedSeconds: 0 }
@@ -171,6 +154,27 @@ export function useStudyTimer({
     })
   }, [openBlockRef])
 
+  // Another device moved this session (a pause, resume, or finish from the Focal
+  // desktop app). The row is the timer now, so the countdown follows it: a countdown
+  // that disagrees with its session owes a boundary that would undo the change.
+  useEffect(() => {
+    const onRemoteChange = (event: Event) => {
+      const { id, session } = (event as CustomEvent<{ id: string; session: FocusTimerSession | undefined }>).detail
+      if (sessionMirror.acknowledged()?.id !== id && session?.id !== id) return
+      if (!sessionMirror.adopt(session)) return
+      const timer = previousState.current
+      // Outside a focus block the countdown is a break, not the session; the standing
+      // disagreement between a break and an open session is owedFocusBoundary's job.
+      if ((timer.mode !== "work" && timer.mode !== "free") || timer.studyOvertime) return
+      if (!session && timer.mode === "free") {
+        closeBlock(serverNow())
+        dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current })
+      } else dispatch({ type: "SET_RUNNING", running: session !== undefined && session.pausedAt === undefined })
+    }
+    window.addEventListener("examtrack:focus-session-remote", onRemoteChange)
+    return () => window.removeEventListener("examtrack:focus-session-remote", onRemoteChange)
+  }, [sessionMirror, closeBlock])
+
   /** Pausing must not inflate the block: the log and Supabase's session
    *  segments both bill running seconds only. */
   const pauseBlock = useCallback((running: boolean, at: number) => {
@@ -188,7 +192,7 @@ export function useStudyTimer({
    *  same minutes the timer shows. */
   const syncSession = useCallback((previous: TimerState, next: TimerState, at: number) => {
     const settingsNow = settingsRef.current
-    const identity = { subject: subject.trim(), title: intent.trim() || `${settingsNow.workMinutes} minute focus block` }
+    const identity = { subject: subject.trim(), title: intent.trim() || (next.mode === "free" ? "Free study" : `${settingsNow.workMinutes} minute focus block`) }
     // Boundaries are decided against the projected session: the acknowledged one plus
     // the boundaries still on their way. A Start and a Pause pressed on a slow connection
     // then form one coherent history instead of two commands fighting over one revision.
@@ -229,20 +233,14 @@ export function useStudyTimer({
     return () => window.clearInterval(interval)
   }, [state.running])
 
-  // Mode changes are the timer's only real events: they open a block, close
-  // one, and hand the mirrored session its lifecycle change. Every stamp comes
-  // from the server clock, so a device with the wrong time still logs real
-  // durations.
+  // Both study modes use the same logged start/pause/resume/finish lifecycle.
+  // Server-clock stamps keep devices with different clocks in agreement.
   useEffect(() => {
     const at = serverNow()
-    if (state.studyOvertime) {
-      // Free study is unbilled, so a pause in it costs nothing to record. Plain
-      // overtime only ever begins from a break, which already closed its block.
+    if (state.studyOvertime || state.mode === "free") {
+      // Pomodoro overtime begins after its block has closed; free study owns a block.
       if (state.freeStudy) {
-        // Free study is a block of its own, so the focus block it interrupted is banked
-        // here: `openBlock` will not open over an open block, and free study minutes must
-        // not be billed to the block that was cut short. A no-op once the free-study
-        // block is open, which keeps pause/resume inside it a single block.
+        // Keep pause/resume inside one free-study block, with pauses excluded.
         if (openBlockRef.current?.source !== "free-study") closeBlock(at)
         if (state.running) openBlock("free-study", state.cycles, at)
         pauseBlock(state.running, at)
@@ -261,9 +259,7 @@ export function useStudyTimer({
     closeBlock(at)
   }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
 
-  // Every state change is a chance to reconcile the session with the countdown. Overtime
-  // counts too: free study is unbilled, so the focus block must be closed when it begins,
-  // not when the user eventually comes back to a break.
+  // Reconcile the logged session with either timer mode after every state change.
   useEffect(() => {
     syncSession(previousState.current, state, serverNow())
     previousState.current = state
@@ -275,7 +271,7 @@ export function useStudyTimer({
   const announcedRef = useRef<string>("")
   useEffect(() => {
     const key = `${state.mode}:${state.cycles}:${state.studyOvertime}`
-    if (state.secondsLeft > 1 || announcedRef.current === key) return
+    if (state.mode === "free" || state.studyOvertime || state.secondsLeft > 1 || announcedRef.current === key) return
     announcedRef.current = key
     const label = state.mode === "work" ? "Focus block complete" : "Break over"
     if (settingsRef.current.soundEnabled) playChime()
@@ -310,9 +306,8 @@ export function useStudyTimer({
   const blocksToday = useMemo(() => countBlocksToday(blocks, new Date(now)), [blocks, now])
   const focusSecondsToday = useMemo(() => getFocusSecondsToday(blocks, new Date(now)), [blocks, now])
 
-  // Free study has no defined length, so it draws an empty meter; plain
-  // overtime is past its line and draws a full one.
-  const progress = state.studyOvertime
+  // Only Pomodoro has measurable progress towards an end.
+  const progress = state.studyOvertime || state.mode === "free"
     ? state.freeStudy ? 0 : 1
     : state.totalSeconds > 0
       ? Math.min(100, Math.max(0, ((state.totalSeconds - state.secondsLeft) / state.totalSeconds) * 100))
@@ -327,6 +322,10 @@ export function useStudyTimer({
     progress,
     sessionBusy,
     updateSettings,
+    selectMode: (mode) => {
+      if (state.running || openBlockRef.current) return
+      dispatch({ type: "SELECT_MODE", mode, settings: settingsRef.current })
+    },
     toggle: () => dispatch({ type: "TOGGLE" }),
     reset: () => {
       closeBlock(serverNow(), true)
@@ -339,7 +338,11 @@ export function useStudyTimer({
     addTime: (minutes) => dispatch({ type: "ADD_TIME", minutes }),
     startOvertime: () => dispatch({ type: "START_STUDY_OVERTIME", settings: settingsRef.current }),
     startFreeStudy: () => dispatch({ type: "START_FREE_STUDY", settings: settingsRef.current }),
-    finishFreeStudy: () => dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current }),
+    finishFreeStudy: () => {
+      closeBlock(serverNow())
+      sessionMirror.push({ action: "complete", at: serverNow() })
+      dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current })
+    },
     returnToBreak: () => dispatch({ type: "RETURN_TO_BREAK" }),
   }
 }

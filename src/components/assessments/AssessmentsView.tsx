@@ -478,7 +478,7 @@ export const AssessmentsView = memo(function AssessmentsView({
                     onToggleFavorite={onToggleFavorite}
                     onToggleArchive={onToggleArchive}
                     onDelete={onDelete}
-                    onStartPomodoroSession={onStartSession}
+                    onStartStudySession={onStartSession}
                     onAddFile={onAddFile}
                   />
                 ))}

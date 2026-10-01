@@ -53,7 +53,7 @@ export function RecoveryDialog({
           </div>
           <DialogTitle>Recover study session</DialogTitle>
           <DialogDescription>
-            You had an active Pomodoro session when the app was closed. What would you like to do?
+            You had an active study session when the app was closed. What would you like to do?
           </DialogDescription>
         </DialogHeader>
         {(sessionLabel ?? elapsedLabel) && (

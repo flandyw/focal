@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 export function WorkspacePage({ children, className }: { children: ReactNode; className?: string }) {
   // Fluid by design: the page never caps at a measure. Extra width is spent on
   // more columns (see the 2xl grids in the pages), never on longer lines.
-  return <div className={cn("grid w-full min-w-0 gap-6 lg:gap-8", className)}>{children}</div>
+  return <div className={cn("grid w-full min-w-0 grid-cols-1 gap-6 lg:gap-8", className)}>{children}</div>
 }
 
 export function MetricGrid({ children, className }: { children: ReactNode; className?: string }) {

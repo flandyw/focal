@@ -7,6 +7,8 @@ import {
   formatFocusTime,
   getActiveSessionSubjectIds,
   getFocusSecondsToday,
+  getInitialState,
+  TIMER_STATE_KEY,
   getSessionFocusSeconds,
   parseSettings,
   timerReducer,
@@ -105,15 +107,8 @@ const freeStudy = timerReducer({
   breakSeconds: 0,
 }, { type: "START_FREE_STUDY", settings });
 check(freeStudy, {
-  running: true,
-  mode: "break",
-  secondsLeft: 300,
-  totalSeconds: 300,
-  cycles: 0,
-  studyOvertime: true,
-  overtimeSeconds: 0,
-  freeStudy: true,
-  breakSeconds: 0,
+  running: true, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0,
+  studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0,
 });
 check(advanceTimer(freeStudy, settings, 90), {
   ...freeStudy,
@@ -126,7 +121,7 @@ check(pausedFreeStudy, {
 });
 check(advanceTimer(pausedFreeStudy, settings, 45), {
   ...pausedFreeStudy,
-  breakSeconds: 45,
+  breakSeconds: 0,
 });
 check(timerReducer({ ...pausedFreeStudy, breakSeconds: 45 }, { type: "TOGGLE" }), {
   ...freeStudy,
@@ -336,3 +331,21 @@ check(timerReducer(breakWithTimeUsed, { type: "RESET", settings }), {
 check(advanceTimer({ ...runningWork, secondsLeft: 600 }, settings, 360), {
   ...runningWork, secondsLeft: 240,
 });
+
+// Free study remains the default across fresh starts, legacy restores and pauses.
+const previousStorage = globalThis.localStorage;
+let storedTimer = null;
+globalThis.localStorage = { getItem: (key) => key === TIMER_STATE_KEY ? storedTimer : null };
+try {
+  check(getInitialState(settings).mode, "free");
+  storedTimer = JSON.stringify({ ...pausedFreeStudy, overtimeSeconds: 90, updatedAt: 0 });
+  check(getInitialState(settings).overtimeSeconds, 90);
+  check(getInitialState(settings).studyOvertime, false);
+  storedTimer = JSON.stringify({ ...pausedFreeStudy, mode: "break", studyOvertime: true, overtimeSeconds: 90, updatedAt: 0 });
+  check(getInitialState(settings).mode, "free");
+  storedTimer = JSON.stringify({ ...freeStudy, overtimeSeconds: 90, updatedAt: Date.now() + 60_000 });
+  check(getInitialState(settings).overtimeSeconds, 90);
+} finally {
+  if (previousStorage === undefined) delete globalThis.localStorage;
+  else globalThis.localStorage = previousStorage;
+}

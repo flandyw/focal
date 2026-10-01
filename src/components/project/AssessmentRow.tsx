@@ -108,7 +108,7 @@ interface AssessmentRowProps {
   onToggleFavorite?: (id: string) => void;
   onToggleArchive?: (id: string) => void;
   onDelete: (id: string) => void;
-  onStartPomodoroSession: (data: {
+  onStartStudySession: (data: {
     subjectIds: string[];
     durationSeconds: number;
     projectId?: string;
@@ -133,7 +133,7 @@ export const AssessmentRow = memo(function AssessmentRow({
   onToggleFavorite,
   onToggleArchive,
   onDelete,
-  onStartPomodoroSession,
+  onStartStudySession,
   onAddFile,
 }: AssessmentRowProps) {
   const ProjectIcon = getSidebarProjectIcon(project);
@@ -363,7 +363,7 @@ export const AssessmentRow = memo(function AssessmentRow({
                   className="opacity-65 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation();
-                    void onStartPomodoroSession({
+                    void onStartStudySession({
                       subjectIds: project.subjectId ? [project.subjectId] : [],
                       durationSeconds: 25 * 60,
                       projectId: project.id,
@@ -390,7 +390,7 @@ export const AssessmentRow = memo(function AssessmentRow({
                   <DropdownMenuItem
                     onSelect={(event) => {
                       event.stopPropagation();
-                      void onStartPomodoroSession({
+                      void onStartStudySession({
                         subjectIds: project.subjectId ? [project.subjectId] : [],
                         durationSeconds: 25 * 60,
                         projectId: project.id,
@@ -509,7 +509,7 @@ export const AssessmentRow = memo(function AssessmentRow({
           onSelect={(event) => {
             event.stopPropagation();
             const subjectIds = project.subjectId ? [project.subjectId] : [];
-            void onStartPomodoroSession({
+            void onStartStudySession({
               subjectIds,
               durationSeconds: 25 * 60,
               projectId: project.id,

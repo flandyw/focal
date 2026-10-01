@@ -112,10 +112,15 @@ describe("focus session lifecycle", () => {
     expect(decide(paused, running(), open({ pausedAt: 1_500 }))).toBe("resume")
   })
 
-  test("starting free study ends the focus block rather than pausing it", () => {
-    const freeStudy = timerReducer(running(), { type: "START_FREE_STUDY", settings: DEFAULT_SETTINGS })
-    expect(freeStudy.studyOvertime).toBe(true)
-    expect(decide(running(), freeStudy, open())).toBe("complete")
+  test("free study logs its own start, pause and resume without a countdown", () => {
+    const ready = timerReducer(parked(), { type: "SELECT_MODE", mode: "free", settings: DEFAULT_SETTINGS })
+    const studying = timerReducer(ready, { type: "TOGGLE" })
+    const held = timerReducer(studying, { type: "TOGGLE" })
+    expect(isFocusCounting(studying)).toBe(true)
+    expect(decide(ready, studying, undefined)).toBe("start")
+    expect(decide(studying, held, open())).toBe("pause")
+    expect(decide(held, studying, open({ pausedAt: 1_500 }))).toBe("resume")
+    expect(timerReducer(running(), { type: "SELECT_MODE", mode: "free", settings: DEFAULT_SETTINGS })).toEqual(running())
   })
 
   test("a subject or intent corrected mid-block is published", () => {

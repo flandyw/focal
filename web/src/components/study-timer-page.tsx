@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react"
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import {
   Bell,
   BellOff,
@@ -30,11 +30,14 @@ import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-time
 import type { FocusSessionSink } from "@/lib/focus-session"
 import { sessionItem } from "@/lib/day-plan"
 import { localDate } from "@/lib/learning-workspace"
-import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
+import { studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
+import { canonicalNow } from "@/lib/study-session-sync"
+import { VCE_SUBJECTS } from "../../../src/lib/types"
 import { StudyPlanCard } from "@/components/study-plan-card"
 import type { StudyPlan } from "@/lib/study-plan"
 import {
   DEFAULT_SETTINGS,
+  loadFocusSession,
   MAX_DAILY_GOAL,
   MAX_DURATION_MINUTES,
   MAX_LONG_BREAK_INTERVAL,
@@ -109,7 +112,7 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession }: {
   subjects: string[]
   preferredSubjects: string[]
   onSessionChange?: FocusSessionSink
@@ -117,13 +120,62 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   preset?: { subject?: string; intent: string }
   /** The shared sittings, so Focal's own study shows here as well as the calendar's. */
   sessions?: CanonicalStudySession[]
+  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) => Promise<void>
 }) {
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
   const [announcement, setAnnouncement] = useState("")
 
-  const { state, settings, blocks, blocksToday, focusSecondsToday, progress, sessionBusy, updateSettings, ...actions } =
-    useStudyTimer({ subject, intent, onSessionChange })
+  const localSessionId = loadFocusSession()?.id
+  const activeSession = (sessions ?? [])
+    .filter((session) => session.kind === "focus" && (session.state === "running" || session.state === "paused"))
+    .toSorted((left, right) => Number(right.state === "running") - Number(left.state === "running") || right.updated_at.localeCompare(left.updated_at))[0]
+  const sharedSession = activeSession?.id === localSessionId ? undefined : activeSession
+  const local = useStudyTimer({ subject, intent, onSessionChange, enabled: !sharedSession })
+  const { settings, blocks, blocksToday, focusSecondsToday, updateSettings } = local
+  const [sharedNow, setSharedNow] = useState(() => canonicalNow().getTime())
+  const [sharedBusy, setSharedBusy] = useState(false)
+  const sharedBusyRef = useRef(false)
+  const [sharedError, setSharedError] = useState("")
+
+  useEffect(() => {
+    setSharedError("")
+    setSharedNow(canonicalNow().getTime())
+    if (sharedSession?.state !== "running") return
+    const interval = window.setInterval(() => setSharedNow(canonicalNow().getTime()), 1000)
+    return () => window.clearInterval(interval)
+  }, [sharedSession?.id, sharedSession?.revision, sharedSession?.state])
+
+  async function controlShared(action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) {
+    if (!sharedSession || !onControlSession || sharedBusyRef.current) return
+    sharedBusyRef.current = true
+    setSharedBusy(true)
+    setSharedError("")
+    try {
+      await onControlSession(sharedSession, action)
+    } catch (error) {
+      setSharedError(error instanceof Error ? error.message : "Could not update the study session.")
+    } finally {
+      sharedBusyRef.current = false
+      setSharedBusy(false)
+    }
+  }
+
+  // The canonical intervals own shared time; viewing a session never creates a second local log.
+  const state = sharedSession ? {
+    ...local.state, mode: "free" as const, freeStudy: true, studyOvertime: false,
+    running: sharedSession.state === "running", secondsLeft: 0, totalSeconds: 0, cycles: 0,
+    overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, sharedNow) / 1000),
+  } : local.state
+  const progress = sharedSession ? 0 : local.progress
+  const sessionBusy = sharedBusy || local.sessionBusy || (!!sharedSession && !onControlSession)
+  const actions = sharedSession ? {
+    ...local,
+    toggle: () => void controlShared(sharedSession.state === "running" ? "pause" : "resume"),
+    reset: () => void controlShared("cancel"),
+    finishFreeStudy: () => void controlShared("complete"),
+    selectMode: () => {},
+  } : local
 
   const isFreeStudy = state.mode === "free"
   const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
@@ -131,7 +183,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
   // to start until one is chosen.
-  const subjectChosen = subject.trim() !== ""
+  const subjectChosen = !!sharedSession || subject.trim() !== ""
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {
@@ -213,8 +265,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         <Card>
           <CardContent className="pt-(--card-spacing)">
             <div className="mb-6 flex gap-2" aria-label="Study mode">
-              <Button aria-pressed={isFreeStudy} disabled={sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} variant={isFreeStudy ? "secondary" : "ghost"}>Free study</Button>
-              <Button aria-pressed={!isFreeStudy} disabled={sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} variant={!isFreeStudy ? "secondary" : "ghost"}>Pomodoro</Button>
+              <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} variant={isFreeStudy ? "secondary" : "ghost"}>Free study</Button>
+              <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} variant={!isFreeStudy ? "secondary" : "ghost"}>Pomodoro</Button>
             </div>
             <TimerReadout
               animationKey={`${displayMode}:${state.cycles}`}
@@ -232,9 +284,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 {/* A lifecycle command is one transaction with the server: its button
                     stays down until the server has answered for the boundary. */}
                 <Button className="min-w-32" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
-                  {state.running ? <><Pause />Pause</> : <><Play />Start</>}
+                  {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
                 </Button>
-                <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />Reset</Button>
+                <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
                 {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
                 {!state.studyOvertime && !isFreeStudy ? (
                   <>
@@ -246,7 +298,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
               <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                 {isFreeStudy ? (
-                  <Button disabled={sessionBusy || state.overtimeSeconds === 0} onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
+                  <Button disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
                 ) : state.studyOvertime ? (
                   <Button onClick={actions.returnToBreak} size="sm" variant="outline"><Coffee />Back to break</Button>
                 ) : onBreak ? (
@@ -263,6 +315,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 </p>
               </div>
             </TimerReadout>
+            {sharedError && <p role="alert" className="mt-4 text-sm text-destructive">{sharedError}</p>}
           </CardContent>
         </Card>
 
@@ -285,7 +338,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field>
+            {sharedSession ? <>
+              <div><p className="text-sm text-muted-foreground">Subject</p><p className="font-medium">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</p></div>
+              <div><p className="text-sm text-muted-foreground">Intent</p><p className="font-medium">{sharedSession.title}</p></div>
+            </> : <><Field>
               <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
               <SubjectCombobox
                 allowCustom
@@ -311,7 +367,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 value={intent}
               />
               <FieldDescription>Up to 120 characters.</FieldDescription>
-            </Field>
+            </Field></>}
           </CardContent>
         </Card>
 
@@ -515,6 +571,7 @@ export function StudyTimerPage({
   sessions,
   onModeChange,
   onFocusSessionChange,
+  onControlSession,
   exam,
 }: {
   subjects: string[]
@@ -527,6 +584,7 @@ export function StudyTimerPage({
   onModeChange: (mode: StudyTimerMode) => void
   /** Focus blocks mirror as `kind: "focus"`; a paper mirrors as `kind: "exam"`. */
   onFocusSessionChange: FocusSessionSink
+  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) => Promise<void>
   exam: ExamTimerModeProps
 }) {
   return (
@@ -546,7 +604,7 @@ export function StudyTimerPage({
         </div>
 
         <TabsContent className="mt-0" value="focus">
-          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} />
         </TabsContent>
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

@@ -165,7 +165,7 @@ function actionSatisfied(session: CanonicalStudySession, command: StudySessionCo
 export async function controlSession(
   session: CanonicalStudySession,
   action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">,
-): Promise<void> {
+): Promise<CanonicalStudySession | undefined> {
   const accountId = await commandAccountId()
   const command: StudySessionCommand = {
     mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
@@ -177,6 +177,7 @@ export async function controlSession(
   if (result && !result.applied && result.session && !actionSatisfied(result.session, command)) {
     throw new Error(`This timer changed on another device (${result.reason ?? "unknown"}).`)
   }
+  return result?.session ?? undefined
 }
 
 export async function buildCommand(
@@ -435,7 +436,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; control: typeof controlSession; log: (entry: PastStudyLog, id: string) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void> } {
   const dataRef = useRef(data)
   dataRef.current = data
   const initialized = useRef(false)
@@ -588,7 +589,10 @@ export function useStudySessionSync(
     acceptSessions([session])
   }
 
-  return { sessions, control: controlSession, log }
+  return { sessions, control: async (session, action) => {
+    const updated = await controlSession(session, action)
+    if (updated) acceptSessions([updated])
+  }, log }
 }
 
 function estimateNow(): number {

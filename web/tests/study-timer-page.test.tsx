@@ -28,6 +28,7 @@ function render(mode: "focus" | "exam" = "focus", subject = "", sessions?: Canon
       mode={mode}
       onModeChange={noop}
       onFocusSessionChange={noop}
+      onControlSession={async () => {}}
       exam={exam}
       sessions={sessions}
       focusPreset={subject ? { subject, intent: "" } : undefined}
@@ -156,4 +157,61 @@ test("free study hides the Pomodoro planner", () => {
   // Nothing to plan yet, so the timer is left exactly as it was.
   expect(markup).toContain("0:00")
   expect(markup).toContain('aria-label="Free study, 0:00 elapsed"')
+})
+
+
+test("Folio study uses the main elapsed readout and regular session controls", () => {
+  const session = { ...sittingToday(), originating_app: "folio" as const, state: "paused" as const,
+    accumulated_active_ms: 750_000, completed_at: null, paused_at: new Date().toISOString() }
+  const markup = render("focus", "", [session])
+  expect(markup).toContain('aria-label="Free study, 12:30 elapsed"')
+  expect(markup).toContain("Redo the 2023 organic paper")
+  expect(markup).not.toContain('id="timer-subject"')
+  expect(buttonEnding(markup, "Resume")).not.toContain('disabled=""')
+  expect(buttonEnding(markup, "Finish free study")).not.toContain('disabled=""')
+  expect(markup).toContain("Discard")
+  expect(markup).not.toContain("Pick one to unlock the timer.")
+})
+
+test("running Focal study takes priority over paused shared study", () => {
+  const paused = { ...sittingToday(), id: "paused", state: "paused" as const, accumulated_active_ms: 120_000,
+    title: "Paused session", completed_at: null }
+  const running = { ...sittingToday(), id: "running", state: "running" as const, accumulated_active_ms: 900_000,
+    title: "Live desktop study", completed_at: null }
+  const markup = render("focus", "", [paused, running])
+  expect(markup).toContain('aria-label="Free study, 15:00 elapsed"')
+  expect(buttonEnding(markup, "Pause")).not.toContain('disabled=""')
+  expect(markup).toContain("Live desktop study")
+})
+
+test("another browser's study is shared, while completed and exam sessions leave the study timer idle", () => {
+  const otherBrowser = { ...sittingToday(), originating_app: "examtrack" as const, state: "paused" as const,
+    accumulated_active_ms: 300_000, completed_at: null }
+  expect(render("focus", "", [otherBrowser])).toContain('aria-label="Free study, 5:00 elapsed"')
+  const timedExam = { ...otherBrowser, kind: "exam" as const }
+  expect(render("focus", "", [timedExam, sittingToday()])).toContain('aria-label="Free study, 0:00 elapsed"')
+})
+
+
+test("a running browser session stays in the main timer ahead of older paused sessions", () => {
+  const original = globalThis.localStorage
+  const own = { ...sittingToday(), id: "own", state: "running" as const, originating_app: "examtrack" as const }
+  const paused = { ...sittingToday(), id: "older", state: "paused" as const, accumulated_active_ms: 120_000 }
+  Reflect.set(globalThis, "localStorage", {
+    getItem: (key: string) => key.endsWith("focus-session:v1") ? JSON.stringify({
+      id: "own", subject: "Chemistry", provider: "Focal", title: "Browser study", workMinutes: 25,
+      startedAt: Date.now(), pausedSeconds: 0,
+    }) : key.endsWith("state:v1") ? JSON.stringify({
+      version: 2, mode: "free", freeStudy: true, running: false, overtimeSeconds: 60, updatedAt: Date.now(),
+    }) : null,
+  })
+  try {
+    const markup = render("focus", "Chemistry", [paused, own])
+    expect(markup).toContain('aria-label="Free study, 1:00 elapsed"')
+    expect(markup).toContain('id="timer-subject"')
+    expect(markup).not.toContain('aria-label="Free study, 2:00 elapsed"')
+  } finally {
+    if (original === undefined) Reflect.deleteProperty(globalThis, "localStorage")
+    else Reflect.set(globalThis, "localStorage", original)
+  }
 })

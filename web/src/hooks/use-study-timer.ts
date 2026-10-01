@@ -103,10 +103,12 @@ export function useStudyTimer({
   subject,
   intent,
   onSessionChange,
+  enabled = true,
 }: {
   subject: string
   intent: string
   onSessionChange?: FocusSessionSink
+  enabled?: boolean
 }): StudyTimerEngine {
   const [settings, setSettings] = useState<TimerSettings>(loadSettings)
   const [state, dispatch] = useReducer(timerReducer, undefined, () => loadTimerState(loadSettings()))
@@ -222,7 +224,7 @@ export function useStudyTimer({
   }, [sessionMirror, subject, intent])
 
   useEffect(() => {
-    if (!state.running) return
+    if (!enabled || !state.running) return
     let last = performance.now()
     const interval = window.setInterval(() => {
       const current = performance.now()
@@ -231,12 +233,17 @@ export function useStudyTimer({
       if (seconds > 0) dispatch({ type: "TICK", settings: settingsRef.current, seconds })
     }, TICK_MS)
     return () => window.clearInterval(interval)
-  }, [state.running])
+  }, [enabled, state.running])
 
   // Both study modes use the same logged start/pause/resume/finish lifecycle.
   // Server-clock stamps keep devices with different clocks in agreement.
   useEffect(() => {
     const at = serverNow()
+    if (!enabled) {
+      pauseBlock(false, at)
+      if (state.running) dispatch({ type: "SET_RUNNING", running: false })
+      return
+    }
     if (state.studyOvertime || state.mode === "free") {
       // Pomodoro overtime begins after its block has closed; free study owns a block.
       if (state.freeStudy) {
@@ -257,19 +264,21 @@ export function useStudyTimer({
       return
     }
     closeBlock(at)
-  }, [state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
+  }, [enabled, state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
 
   // Reconcile the logged session with either timer mode after every state change.
   useEffect(() => {
+    if (!enabled) return
     syncSession(previousState.current, state, serverNow())
     previousState.current = state
-  }, [state, syncSession])
+  }, [enabled, state, syncSession])
 
   useEffect(() => () => sessionMirror.dispose(), [sessionMirror])
 
   // Announce the transition that just happened, once, at the moment it lands.
   const announcedRef = useRef<string>("")
   useEffect(() => {
+    if (!enabled) return
     const key = `${state.mode}:${state.cycles}:${state.studyOvertime}`
     if (state.mode === "free" || state.studyOvertime || state.secondsLeft > 1 || announcedRef.current === key) return
     announcedRef.current = key
@@ -278,7 +287,7 @@ export function useStudyTimer({
     if (settingsRef.current.notificationsEnabled) {
       notify(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`)
     }
-  }, [state.mode, state.cycles, state.secondsLeft, state.studyOvertime])
+  }, [enabled, state.mode, state.cycles, state.secondsLeft, state.studyOvertime])
 
   useEffect(() => {
     saveSettings(settings)
@@ -290,10 +299,10 @@ export function useStudyTimer({
 
   // Re-render once a second so "focused for 24m" style labels stay honest.
   useEffect(() => {
-    if (!state.running) return
+    if (!enabled || !state.running) return
     const interval = window.setInterval(() => setNow(Date.now()), 15_000)
     return () => window.clearInterval(interval)
-  }, [state.running])
+  }, [enabled, state.running])
 
   const updateSettings = useCallback((patch: Partial<TimerSettings>) => {
     setSettings((current) => {

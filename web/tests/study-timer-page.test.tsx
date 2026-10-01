@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import { StudyTimerPage } from "../src/components/study-timer-page"
 import type { ExamTimerModeProps } from "../src/components/exam-timer-mode"
+import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const noop = () => {}
 
@@ -19,7 +20,7 @@ const exam: ExamTimerModeProps = {
   onSave: noop,
 }
 
-function render(mode: "focus" | "exam" = "focus", subject = "") {
+function render(mode: "focus" | "exam" = "focus", subject = "", sessions?: CanonicalStudySession[]) {
   return renderToStaticMarkup(
     <StudyTimerPage
       subjects={["Chemistry", "Physics"]}
@@ -28,9 +29,26 @@ function render(mode: "focus" | "exam" = "focus", subject = "") {
       onModeChange={noop}
       onFocusSessionChange={noop}
       exam={exam}
+      sessions={sessions}
       focusPreset={subject ? { subject, intent: "" } : undefined}
     />,
   )
+}
+
+/** A sitting finished today, as Focal desktop would have written it to the shared record. */
+function sittingToday(): CanonicalStudySession {
+  const started = new Date()
+  started.setHours(started.getHours() - 1, 0, 0, 0)
+  const ended = new Date(started.getTime() + 45 * 60_000)
+  return {
+    id: "cs1", kind: "focus", state: "completed", phase: "focus", revision: 2,
+    title: "Redo the 2023 organic paper", subject_id: "mm", originating_app: "focal",
+    created_at: started.toISOString(), updated_at: ended.toISOString(),
+    started_at: started.toISOString(), paused_at: null, completed_at: ended.toISOString(),
+    cancelled_at: null, accumulated_active_ms: 45 * 60_000, segment_started_at: null,
+    metadata: { subjectIds: ["mm"], schedule: { blocks: [{ start: started.toISOString(), end: ended.toISOString() }] } },
+    segments: [{ id: "g1", session_id: "cs1", started_at: started.toISOString(), ended_at: ended.toISOString(), phase: null, source_device_id: null }],
+  }
 }
 
 /** The markup up to a control's closing tag, so a control can be asserted on
@@ -100,6 +118,19 @@ test("an empty day explains itself instead of showing a bare list", () => {
   expect(markup).toContain("Daily goal")
   expect(markup).toContain("0 / 4")
   expect(markup).toContain("Across 0 blocks")
+})
+
+// The timer's own blocks are mirrored into shared sittings, so today's record is the shared
+// one. That is also what makes study done in Focal show up here instead of a silent zero.
+test("today's focus counts study logged in another app, not just this browser's blocks", () => {
+  const markup = render("focus", "", [sittingToday()])
+
+  expect(markup).toContain("Redo the 2023 organic paper")
+  expect(markup).toContain("45 min")
+  expect(markup).toContain("Across 1 block")
+  expect(markup).toContain("1 / 4")
+  // It is a finished sitting, so the empty-day invitation is gone.
+  expect(markup).not.toContain("No blocks logged today")
 })
 
 test("every settings control is labelled and states its own on and off position", () => {

@@ -28,6 +28,9 @@ import { SubjectCombobox } from "@/components/subject-combobox"
 import { TimerReadout } from "@/components/timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
 import type { FocusSessionSink } from "@/lib/focus-session"
+import { sessionItem } from "@/lib/day-plan"
+import { localDate } from "@/lib/learning-workspace"
+import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 import { StudyPlanCard } from "@/components/study-plan-card"
 import type { StudyPlan } from "@/lib/study-plan"
 import {
@@ -106,12 +109,14 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions }: {
   subjects: string[]
   preferredSubjects: string[]
   onSessionChange?: FocusSessionSink
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
+  /** The shared sittings, so Focal's own study shows here as well as the calendar's. */
+  sessions?: CanonicalStudySession[]
 }) {
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
@@ -141,6 +146,28 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
     dayStart.setHours(0, 0, 0, 0)
     return blocks.filter((block) => block.endedAt >= dayStart.getTime()).reverse()
   }, [blocks])
+
+  // The timer mirrors each of its own work blocks into a shared sitting, so the sittings are
+  // a superset of these blocks and the local list would double every minute. Signed in, the
+  // shared record is the truth -- it also holds the study done in Focal or Folio. Signed out
+  // there is no shared record at all, so the local blocks are the only one that exists.
+  //
+  // ponytail: a block logged while signed out and never replayed is not in the shared record,
+  // so it drops off this list once the account signs in. Upgrade path: replay local blocks to
+  // the server on sign-in rather than letting the two records overlap.
+  const todaysSittings = useMemo(() => {
+    const today = localDate(new Date())
+    return (sessions ?? []).flatMap((session) => {
+      const projected = sessionItem(session)
+      if (!projected || projected.date !== today || projected.item.kind !== "session" || projected.item.status === "planned") return []
+      return [projected.item]
+    })
+  }, [sessions])
+  const todaysRecord = todaysSittings.length > 0 ? todaysSittings : null
+  const recordCount = todaysRecord?.length ?? blocksToday
+  const recordSeconds = todaysRecord
+    ? todaysRecord.reduce((total, item) => total + item.minutes * 60, 0)
+    : focusSecondsToday
 
   // One authored moment: the readout re-enters when the phase changes, and a
   // single status line carries it for anyone not watching the animation.
@@ -293,21 +320,35 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset }: {
           <SectionHeading
             id="today-title"
             title="Today's focus"
-            description="Blocks completed since midnight on this device."
+            description="Study logged since midnight, across every app on your account."
           />
           <MetricGrid>
-            <MetricCard label="Focus time" value={formatFocusTime(focusSecondsToday)}>
-              <span>Across {blocksToday} block{blocksToday === 1 ? "" : "s"}</span>
+            <MetricCard label="Focus time" value={formatFocusTime(recordSeconds)}>
+              <span>Across {recordCount} block{recordCount === 1 ? "" : "s"}</span>
             </MetricCard>
-            <MetricCard label="Daily goal" value={settings.dailyGoal ? `${blocksToday} / ${settings.dailyGoal}` : "Off"}>
-              <Progress value={settings.dailyGoal ? (blocksToday / settings.dailyGoal) * 100 : 0} />
+            <MetricCard label="Daily goal" value={settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}>
+              <Progress value={settings.dailyGoal ? (recordCount / settings.dailyGoal) * 100 : 0} />
             </MetricCard>
             <MetricCard label="Block length" value={`${settings.workMinutes}m`}>
               <span>{settings.breakMinutes}m break every {settings.longBreakEvery} blocks</span>
             </MetricCard>
           </MetricGrid>
 
-          {todaysBlocks.length ? (
+          {todaysRecord ? (
+            <div className="grid gap-2">
+              {todaysRecord.map((item) => (
+                <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between" key={item.id}>
+                  <div className="min-w-0">
+                    <p className="font-medium">{item.title || "Focus block"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {[item.detail || subject, `${item.minutes} min`].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                </div>
+              ))}
+            </div>
+          ) : todaysBlocks.length ? (
             <div className="grid gap-2">
               {todaysBlocks.map((block) => (
                 <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between" key={block.id}>
@@ -471,6 +512,7 @@ export function StudyTimerPage({
   preferredSubjects,
   mode,
   focusPreset,
+  sessions,
   onModeChange,
   onFocusSessionChange,
   exam,
@@ -480,6 +522,8 @@ export function StudyTimerPage({
   preferredSubjects: string[]
   mode: StudyTimerMode
   focusPreset?: { subject?: string; intent: string }
+  /** The shared sittings, so today's focus time includes study done in Focal or Folio. */
+  sessions?: CanonicalStudySession[]
   onModeChange: (mode: StudyTimerMode) => void
   /** Focus blocks mirror as `kind: "focus"`; a paper mirrors as `kind: "exam"`. */
   onFocusSessionChange: FocusSessionSink
@@ -502,7 +546,7 @@ export function StudyTimerPage({
         </div>
 
         <TabsContent className="mt-0" value="focus">
-          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} />
         </TabsContent>
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

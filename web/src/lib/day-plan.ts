@@ -160,7 +160,7 @@ function mergedMinutes(ranges: readonly { start: string; end: string }[]): numbe
  * never shown. Both apps then list the same sessions on the same days with the same
  * durations, from the one shared record.
  */
-function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
+export function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
   if (session.state === "cancelled") return null
   const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
   const legacy = isRecord(nested) ? nested : {}

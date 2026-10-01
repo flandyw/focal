@@ -117,7 +117,7 @@ export type MistakeAttachment = {
 
 export type Mistake = {
   id: string
-  attemptId: string
+  attemptId: string // Empty string means uncategorised (no exam).
   question: string
   questionText?: string
   category: MistakeCategory
@@ -897,7 +897,7 @@ export function isAppData(value: unknown): value is AppData {
       return (
         typeof mistake.id === "string" &&
         typeof mistake.attemptId === "string" &&
-        attemptIds.has(mistake.attemptId) &&
+        (mistake.attemptId === "" || attemptIds.has(mistake.attemptId)) &&
         typeof mistake.question === "string" &&
         (mistake.questionText === undefined || typeof mistake.questionText === "string") &&
         MISTAKE_CATEGORIES.includes(mistake.category) &&

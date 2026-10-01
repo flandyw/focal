@@ -74,8 +74,8 @@ function draftFromFields({
 }
 
 function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | null {
-  if (!draft.attemptId || !draft.question.trim() || (!draft.questionText.trim() && !imageCount) || !draft.explanation.trim() || !draft.correction.trim()) {
-    return "Exam, item label, a question (text or images), mistake, and improved response are required."
+  if (!draft.question.trim() || (!draft.questionText.trim() && !imageCount) || !draft.explanation.trim() || !draft.correction.trim()) {
+    return "Item label, a question (text or images), mistake, and improved response are required."
   }
   return validateMistakeMarks(draft.totalMarks, draft.marksLost)
 }
@@ -167,11 +167,11 @@ export function MistakeSheet({
     onOpenChange(next)
   }
 
-  const selectedAttempt = attemptId || initialAttemptId || ""
-  const attemptOptions = attempts.map((attempt) => ({
+  const selectedAttempt = attemptId
+  const attemptOptions = [{ value: "", label: "Uncategorised (no exam)" }, ...attempts.map((attempt) => ({
     value: attempt.id,
     label: `${attempt.title} · ${attempt.paper}`,
-  }))
+  }))]
   const selectedAttemptOption = attemptOptions.find((attempt) => attempt.value === selectedAttempt) ?? null
   const isBatchReview = importMode === "batch" && batchDrafts.length > 0
   const isEditingBatchDraft = isBatchReview && activeBatchIndex !== null
@@ -459,11 +459,11 @@ export function MistakeSheet({
                         setError(null)
                       }}
                     />
-                    <Button type="button" variant="secondary" disabled={!images.length || !selectedAttempt || analysing || batchDrafts.length > 0 || !auth.isAuthenticated} onClick={() => void analyse()}>
+                    <Button type="button" variant="secondary" disabled={!images.length || analysing || batchDrafts.length > 0 || !auth.isAuthenticated} onClick={() => void analyse()}>
                       <Sparkles />{analysing ? "Analysing…" : importMode === "batch" ? `Import ${images.length || ""} questions` : "Fill with AI"}
                     </Button>
                   </div>
-                  <FieldDescription>{importMode === "batch" ? "Choose the shared exam, then add 2–10 images. Each image becomes a separate mistake in the same order; each can be up to 3 MB and the batch up to 15 MB." : "Choose the exam, then upload one or more related images totalling up to 3 MB. Matching VCAA attempts also include the official exam PDF for context."}</FieldDescription>
+                  <FieldDescription>{importMode === "batch" ? "Optionally choose a shared exam, then add 2–10 images. Each image becomes a separate mistake in the same order; each can be up to 3 MB and the batch up to 15 MB." : "Optionally choose an exam, then upload one or more related images totalling up to 3 MB. Matching VCAA attempts also include the official exam PDF for context."}</FieldDescription>
                   {images.map((file, index) => <div key={index} className="flex items-center justify-between gap-2 text-sm"><span className="truncate">{index + 1}. {file.name}</span><Button type="button" size="icon-xs" variant="ghost" disabled={saving || analysing || batchDrafts.length > 0} aria-label={"Remove AI image " + (index + 1)} onClick={() => setImages((files) => files.filter((_, i) => i !== index))}><X /></Button></div>)}
                   {images.length ? (
                     <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
@@ -515,7 +515,7 @@ export function MistakeSheet({
               <div className="border-t pt-5"><h3 className="font-semibold">01 · The question</h3><p className="mt-1 text-sm text-muted-foreground">Keep the original task and exam context together.</p></div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel htmlFor="mistake-exam">Exam</FieldLabel>
+                  <FieldLabel htmlFor="mistake-exam">Exam (optional)</FieldLabel>
                   <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => setAttemptId(value?.value ?? "")} autoHighlight>
                     <ComboboxInput id="mistake-exam" className="w-full" placeholder="Search practice exams" />
                     <ComboboxContent>
@@ -631,7 +631,7 @@ export function MistakeSheet({
           {isBatchReview && !isEditingBatchDraft ? (
             <Button type="button" onClick={() => void saveBatch()} disabled={analysing || saving}>{saving ? "Saving…" : `Save all ${batchDrafts.length} mistakes`}</Button>
           ) : (
-            <Button type="submit" form="mistake-form" disabled={attempts.length === 0 || analysing || saving}>{saving ? "Saving…" : isEditingBatchDraft ? "Done editing" : initialMistake ? "Save changes" : "Save mistake"}</Button>
+            <Button type="submit" form="mistake-form" disabled={analysing || saving}>{saving ? "Saving…" : isEditingBatchDraft ? "Done editing" : initialMistake ? "Save changes" : "Save mistake"}</Button>
           )}
         </SheetFooter>
       </SheetContent>

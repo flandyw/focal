@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { MISTAKE_CATEGORIES } from "../src/lib/exam-data"
+import { EMPTY_APP_DATA, isAppData, migrateAppData, MISTAKE_CATEGORIES } from "../src/lib/exam-data"
 import { buildMistakeImportPrompt, createMistakesFromImport, parseMistakeImport } from "../src/lib/mistake-json"
 
 const validRecord = {
@@ -78,4 +78,14 @@ test("creates review-ready mistakes bound to the chosen attempt", () => {
   }
   expect(mistakes[0]?.areaOfStudy).toBe("Quadratics")
   expect(mistakes[1]?.areaOfStudy).toBeUndefined()
+})
+
+
+test("uncategorised chatbot imports survive validation and reload without exams", () => {
+  const mistakes = createMistakesFromImport(parseMistakeImport(JSON.stringify([validRecord])), "")
+  const data = { ...EMPTY_APP_DATA, mistakes }
+  expect(mistakes[0]?.attemptId).toBe("")
+  expect(isAppData(data)).toBe(true)
+  expect(migrateAppData(JSON.parse(JSON.stringify(data)))?.mistakes).toEqual(mistakes)
+  expect(isAppData({ ...data, mistakes: [{ ...mistakes[0], attemptId: "missing-exam" }] })).toBe(false)
 })

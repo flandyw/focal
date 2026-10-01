@@ -122,7 +122,7 @@ function ExamContext({ mistake, attempt, studies }: { mistake: Mistake; attempt?
   const exam = attempt ? findCachedVcaaExamForAttempt(attempt, studies) : undefined
   return (
     <CardDescription>
-      {attempt ? <>{attempt.title} · {attempt.paper}{exam ? <> · <a className="font-medium text-foreground underline underline-offset-4" href={exam.url} target="_blank" rel="noreferrer">Exam PDF</a></> : null}</> : "Deleted exam"}
+      {attempt ? <>{attempt.title} · {attempt.paper}{exam ? <> · <a className="font-medium text-foreground underline underline-offset-4" href={exam.url} target="_blank" rel="noreferrer">Exam PDF</a></> : null}</> : mistake.attemptId ? "Deleted exam" : "Uncategorised"}
       {mistake.totalMarks !== undefined && mistake.marksLost !== undefined ? <> · {mistake.marksLost}/{mistake.totalMarks} marks lost</> : null}
     </CardDescription>
   )
@@ -384,6 +384,7 @@ function BrowseRowInner({ mistake, active, selected, onOpen, onSelect }: {
           <span className="block truncate text-sm font-medium">{mistake.question}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
             <span className="truncate">{mistake.category}</span>
+            {!mistake.attemptId ? <><span aria-hidden="true">·</span><span>Uncategorised</span></> : null}
             {mistake.areaOfStudy ? <><span aria-hidden="true">·</span><span className="truncate">{mistake.areaOfStudy}</span></> : null}
             {mistake.marksLost !== undefined && mistake.totalMarks !== undefined ? <><span aria-hidden="true">·</span><span className="tabular-nums">{mistake.marksLost}/{mistake.totalMarks} lost</span></> : null}
           </span>
@@ -631,8 +632,8 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   return (
     <div className="grid min-w-0 gap-5 lg:gap-6">
       <PageHeader title="Mistakes" description="Review and practise missed questions.">
-        <Button variant="outline" onClick={() => setImportOpen(true)} disabled={!data.attempts.length}><FileJson />Import from chatbot</Button>
-        <Button onClick={onLog} disabled={!data.attempts.length}><Plus />Add mistake</Button>
+        <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import from chatbot</Button>
+        <Button onClick={onLog}><Plus />Add mistake</Button>
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More mistake tools" />}><MoreHorizontal /></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -692,7 +693,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
                                 {mistake.areaOfStudy ? <span className="break-words text-xs text-muted-foreground">{mistake.areaOfStudy}</span> : null}
                               </span>
                               <span className="grid min-w-0 gap-1">
-                                {attempt?.subject ? <span className="break-words text-sm">{attempt.subject}</span> : null}
+                                {attempt?.subject ? <span className="break-words text-sm">{attempt.subject}</span> : !mistake.attemptId ? <span className="break-words text-sm">Uncategorised</span> : null}
                                 {attempt?.title ? <span className="break-words text-xs text-muted-foreground">{attempt.title}</span> : null}
                               </span>
                               <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-between gap-3 xl:col-auto xl:row-auto xl:flex-row xl:items-center xl:justify-end">
@@ -756,7 +757,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
                     </div>
                   </div>) : null}
             </div>
-            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : data.attempts.length ? "Save a missed question here to review it later." : "Add an exam first, then save the questions you want to improve."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={() => { resetFilters(); setSubject("all"); setMathsExamFilter("all") }}>Clear filters</Button> : <Button onClick={onLog} disabled={!data.attempts.length}><Plus />Add mistake</Button>}</Empty>}
+            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : "Save a missed question here to review it later, with or without an exam."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={() => { resetFilters(); setSubject("all"); setMathsExamFilter("all") }}>Clear filters</Button> : <Button onClick={onLog}><Plus />Add mistake</Button>}</Empty>}
           </div>
         </TabsContent>
       </Tabs>

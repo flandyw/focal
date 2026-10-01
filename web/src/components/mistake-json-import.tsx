@@ -42,10 +42,10 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | null>(null)
   const prompt = buildMistakeImportPrompt()
-  const attemptOptions = attempts.map((attempt) => ({
+  const attemptOptions = [{ value: "", label: "Uncategorised (no exam)" }, ...attempts.map((attempt) => ({
     value: attempt.id,
     label: `${attempt.title} · ${attempt.paper}`,
-  }))
+  }))]
   const selectedAttemptOption = attemptOptions.find((attempt) => attempt.value === attemptId) ?? null
 
   async function copyPrompt() {
@@ -71,7 +71,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   }
 
   function importMistakes() {
-    if (!drafts?.length || !attemptId) return
+    if (!drafts?.length) return
     onSaveMistakes(createMistakesFromImport(drafts, attemptId))
     onOpenChange(false)
   }
@@ -117,7 +117,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
           <Field>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0 flex-1">
-                <FieldLabel htmlFor="mistake-import-exam">3. Link these mistakes to an exam</FieldLabel>
+                <FieldLabel htmlFor="mistake-import-exam">3. Choose an exam (optional)</FieldLabel>
                 <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => setAttemptId(value?.value ?? "")} autoHighlight>
                   <ComboboxInput id="mistake-import-exam" className="w-full" placeholder="Search practice exams" />
                   <ComboboxContent>
@@ -132,7 +132,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
                 <Button type="button" variant="outline" onClick={() => { setDrafts(null); setError(null) }}>Edit JSON</Button>
               )}
             </div>
-            <FieldDescription>Every imported mistake joins this logged exam so subject filters and insights keep working.</FieldDescription>
+            <FieldDescription>Choose Uncategorised to save these mistakes without an exam.</FieldDescription>
           </Field>
 
           {drafts ? (
@@ -166,7 +166,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
         <DialogFooter>
           <Button
             type="button"
-            disabled={!drafts?.length || !attemptId}
+            disabled={!drafts?.length}
             onClick={importMistakes}
           >
             <Check />

@@ -38,10 +38,10 @@ const mistake = {
 
 const data: AppData = { ...EMPTY_APP_DATA, attempts: [attempt], mistakes: [mistake] }
 
-function render() {
+function render(pageData = data) {
   return renderToStaticMarkup(
     <MistakesPage
-      data={data}
+      data={pageData}
       studies={[]}
       onLog={noop}
       onEdit={noop}
@@ -94,4 +94,16 @@ test("library falls back to a full-width empty state when nothing matches", () =
 
   expect(markup).toContain("No mistakes yet")
   expect(markup).not.toContain("Select all")
+})
+
+
+test("mistakes can be added or imported without any exams", () => {
+  const markup = render(EMPTY_APP_DATA)
+  const buttons = markup.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []
+  for (const label of ["Add mistake", "Import from chatbot"]) {
+    const button = buttons.find((button) => button.includes(label))
+    expect(button).toBeDefined()
+    expect(button?.split(">")[0]).not.toMatch(/\sdisabled(?:=|\s|$)/)
+  }
+  expect(render({ ...EMPTY_APP_DATA, mistakes: [{ ...mistake, attemptId: "" }] })).toContain("Uncategorised")
 })

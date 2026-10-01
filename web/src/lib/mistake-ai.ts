@@ -389,9 +389,9 @@ export async function analyseMistakeImages(
   const validationError = validateMistakeImages(files)
   if (validationError) throw new Error(validationError)
   const selectedAttempt = attempts.find((attempt) => attempt.id === selectedAttemptId)
-  if (!selectedAttempt) throw new Error("Choose the exam first so ChatGPT can use the correct paper.")
-  const examPdf = findVcaaExamForAttempt(selectedAttempt, studies)
-  if (selectedAttempt.provider.trim().toLowerCase() === "vcaa" && !examPdf) {
+  if (selectedAttemptId && !selectedAttempt) throw new Error("The selected exam no longer exists.")
+  const examPdf = selectedAttempt ? findVcaaExamForAttempt(selectedAttempt, studies) : undefined
+  if (selectedAttempt?.provider.trim().toLowerCase() === "vcaa" && !examPdf) {
     throw new Error("This attempt could not be matched to an exam PDF in the VCAA library.")
   }
 
@@ -399,7 +399,7 @@ export async function analyseMistakeImages(
   const { chatgpt, model, settings } = await getChatGPTModel()
 
   const mistakeProperties = {
-    attemptId: { type: "string", enum: ["", ...attempts.map((attempt) => attempt.id)] },
+    attemptId: { type: "string", enum: [selectedAttemptId] },
     question: { type: "string", description: "Short item identifier, such as Section B Question 4, Essay 1, or Task 2" },
     questionText: { type: "string", description: "A fully self-contained version of the complete question or task, including every stem, source, stimulus, diagram, table, definition and referenced context needed to answer it, in Markdown with LaTeX only where useful" },
     category: { type: "string", enum: [...MISTAKE_CATEGORIES] },
@@ -439,7 +439,7 @@ export async function analyseMistakeImages(
       content: [
         {
           type: "text",
-          text: `Read all attached images of the student's question or task, response, annotations, and feedback. The selected logged exam is ${JSON.stringify(selectedAttempt)}. ${examPdf ? "The attached official VCAA exam PDF is the source of truth: locate the exact item there and use it to restore anything cropped or omitted from the images." : "No official exam PDF is available, so use only the supplied images."} Fill every field for a study mistake log for this subject. questionText must stand alone without the original paper: include the full stem plus all sources, stimuli, diagrams, tables, definitions, subpart dependencies and other referenced context; describe non-text visuals precisely when needed. Never leave phrases such as 'using the information above' without including that information. Keep the explanation diagnostic and the correction actionable, preserve notation as Markdown LaTeX only where appropriate, use an exact schema category, and use 'Item unclear' instead of inventing an unreadable label. Available logged exams: ${JSON.stringify(examOptions)}.`,
+          text: `Read all attached images of the student's question or task, response, annotations, and feedback. ${selectedAttempt ? `The selected logged exam is ${JSON.stringify(selectedAttempt)}.` : "This mistake is uncategorised and does not belong to an exam."} ${examPdf ? "The attached official VCAA exam PDF is the source of truth: locate the exact item there and use it to restore anything cropped or omitted from the images." : "No official exam PDF is available, so use only the supplied images."} Fill every field for a study mistake log for this subject. questionText must stand alone without the original paper: include the full stem plus all sources, stimuli, diagrams, tables, definitions, subpart dependencies and other referenced context; describe non-text visuals precisely when needed. Never leave phrases such as 'using the information above' without including that information. Keep the explanation diagnostic and the correction actionable, preserve notation as Markdown LaTeX only where appropriate, use an exact schema category, and use 'Item unclear' instead of inventing an unreadable label. Available logged exams: ${JSON.stringify(examOptions)}.`,
         },
         ...(examPdf ? [{ type: "file" as const, data: new URL(examPdf.url), mediaType: "application/pdf", filename: examPdf.label }] : []),
         ...imageParts,
@@ -459,6 +459,7 @@ export async function analyseMistakeImages(
   }
   return {
     ...draft,
+    attemptId: selectedAttemptId,
     question: draft.question.trim(),
     questionText: draft.questionText.trim(),
     explanation: draft.explanation.trim(),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { reconcileSessionResult } from "../src/lib/study-session-sync"
+import { readCursorFor, reconcileSessionResult } from "../src/lib/study-session-sync"
 import type { FocusTimerSession } from "../src/lib/ongoing-timers"
 import type { CanonicalStudySession, StudySessionCommand, StudySessionMutationResult } from "../../../src/lib/sync/sessionContract"
 
@@ -111,5 +111,16 @@ describe("reconciling a server answer", () => {
     expect(projected.startedAt).toBeGreaterThanOrEqual(before - 1_200_000 - 1_000)
     expect(projected.startedAt).toBeLessThanOrEqual(Date.now() - 1_200_000)
     expect(projected.startedAt).not.toBe(0)
+  })
+})
+
+describe("reading the shared session feed", () => {
+  test("an empty history is re-read once from the whole state, never paged from a stale cursor", () => {
+    // A cursor past the sittings the account already has returns an empty tail forever.
+    expect(readCursorFor(4_096, 0, false)).toBe(-1)
+    // Once the whole state has been read, an empty history is a real one.
+    expect(readCursorFor(4_096, 0, true)).toBe(4_096)
+    // Sittings in hand means the cursor is good enough; polling stays cheap.
+    expect(readCursorFor(7, 2, false)).toBe(7)
   })
 })

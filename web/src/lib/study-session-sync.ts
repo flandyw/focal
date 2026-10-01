@@ -417,6 +417,20 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
   })
 }
 
+/**
+ * The sync feed only carries sittings *forward* from a cursor, so a cursor that was ever
+ * advanced past a sitting loses it for good: the calendar then shows an empty history and no
+ * amount of polling brings the sittings back. With nothing in hand there is no tail to page
+ * from, so read the whole state once. Only once: after that an empty history is a real one,
+ * and re-snapshotting every poll would be a full-table read every fifteen seconds.
+ *
+ * ponytail: -1 asks the server for its materialized state instead of a log range. Upgrade
+ * path if the server ever needs a cheaper "do you have any?" probe: add it there, not here.
+ */
+export function readCursorFor(cursor: number, knownSessions: number, readWholeState: boolean) {
+  return knownSessions === 0 && !readWholeState ? -1 : cursor
+}
+
 export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
@@ -425,6 +439,7 @@ export function useStudySessionSync(
   const dataRef = useRef(data)
   dataRef.current = data
   const initialized = useRef(false)
+  const readWholeState = useRef(false)
   const canonicalSessions = useRef(new Map<string, CanonicalStudySession>())
   const [sessions, setSessions] = useState<CanonicalStudySession[]>([])
 
@@ -447,6 +462,7 @@ export function useStudySessionSync(
       return
     }
     canonicalSessions.current = new Map()
+    readWholeState.current = false
     setSessions([])
     let cancelled = false
     let pulling = false
@@ -469,11 +485,13 @@ export function useStudySessionSync(
         let cursor = (await readSyncMeta(userId)).cursor
         for (;;) {
           const { data: raw, error } = await supabase!.rpc("sync_read_changes", {
-            p_after: cursor, p_limit: 1000, p_expected_user_id: userId,
+            p_after: readCursorFor(cursor, canonicalSessions.current.size, readWholeState.current),
+            p_limit: 1000, p_expected_user_id: userId,
           })
           if (error) throw error
           if (!isRecord(raw) || typeof raw.head !== "number" || typeof raw.server_now !== "string") throw new Error("Malformed sync_read_changes response")
           if (raw.mode !== "snapshot" && raw.mode !== "changes") throw new Error("Malformed sync_read_changes mode")
+          if (raw.mode === "snapshot") readWholeState.current = true
           clockAnchor = observeServerClock(raw.server_now, performance.now())
           const rows = raw.rows
           const sessions = Array.isArray(rows) ? rows.flatMap((item) => {

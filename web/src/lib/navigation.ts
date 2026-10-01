@@ -2,8 +2,8 @@ import {
   BookOpenText,
   Calculator,
   CalendarDays,
-  ChartNoAxesCombined,
   ClipboardCheck,
+  ClipboardList,
   LibraryBig,
   Map,
   NotebookPen,
@@ -18,8 +18,8 @@ import type { AppView } from "@/lib/app-view"
 type NavigationItem = { id: AppView; label: string; description: string; icon: LucideIcon }
 
 const ACTION_NAVIGATION: NavigationItem[] = [
-  { id: "dashboard" as const, label: "Dashboard", description: "Overview and exam results", icon: ChartNoAxesCombined },
   { id: "calendar" as const, label: "Calendar", description: "Day plan for any date", icon: CalendarDays },
+  { id: "exams" as const, label: "Exams", description: "Practice results and analysis", icon: ClipboardList },
   { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers", icon: Timer },
   { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue", icon: NotebookPen },
 ]

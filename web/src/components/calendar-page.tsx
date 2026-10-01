@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 
@@ -16,6 +16,7 @@ import {
   archiveTask,
   buildCalendarMonth,
   buildDayPlan,
+  isDayItemDone,
   moveTask,
   overdueTasks,
   setTaskStatus,
@@ -93,7 +94,9 @@ export function CalendarPage({
     [data.learning.tasks, selected],
   )
   const monthLabel = month.toLocaleDateString("en-AU", { month: "long", year: "numeric" })
-  const completion = plan.plannedMinutes ? Math.min(100, plan.completedMinutes / plan.plannedMinutes * 100) : 0
+  const completion = plan.totalCount ? plan.completedCount / plan.totalCount * 100 : 0
+  const open = plan.items.filter((item) => !isDayItemDone(item))
+  const banked = plan.items.filter(isDayItemDone)
 
   function commit(update: (current: LearningWorkspace) => LearningWorkspace) {
     onChange((current) => ({ ...update(current), updatedAt: new Date().toISOString() }))
@@ -128,8 +131,13 @@ export function CalendarPage({
       </PageHeader>
 
       <MetricGrid>
-        <MetricCard label="Planned" value={formatMinutes(plan.plannedMinutes)}><span>For {formatDayTitle(selected).split(" · ").at(-1)}</span></MetricCard>
-        <MetricCard label="Completed" value={formatMinutes(plan.completedMinutes)}><Progress value={completion} /></MetricCard>
+        <MetricCard label="Planned" value={formatMinutes(plan.plannedMinutes)}>
+          <span>{plan.plannedCount} item{plan.plannedCount === 1 ? "" : "s"} left · {formatDayTitle(selected).split(" · ").at(-1)}</span>
+        </MetricCard>
+        <MetricCard label="Completed" value={formatMinutes(plan.completedMinutes)}>
+          <Progress value={completion} />
+          <span>{plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing logged yet"}</span>
+        </MetricCard>
         <MetricCard label="Due for review" value={plan.dueMistakes}><span>{plan.dueMistakes ? "Mistakes ready" : "Queue is clear"}</span></MetricCard>
       </MetricGrid>
 
@@ -190,28 +198,47 @@ export function CalendarPage({
           <Card size="sm">
             <CardHeader>
               <CardTitle>{formatDayTitle(selected)}</CardTitle>
-              <CardDescription>{plan.items.length} item{plan.items.length === 1 ? "" : "s"} · {formatMinutes(plan.plannedMinutes)} planned</CardDescription>
+              <CardDescription>
+                {plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing planned"} · {formatMinutes(plan.plannedMinutes + plan.completedMinutes)} of study
+              </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-2">
-              {plan.items.length ? plan.items.map((item) => (
-                <DayItemRow
-                  item={item}
-                  key={`${item.kind}-${item.id}`}
-                  onArchive={(id) => commit((current) => archiveTask(current, id))}
-                  onMove={move}
-                  onNavigate={onNavigate}
-                  onStartFocus={onStartFocus}
-                  onStatus={changeStatus}
-                />
-              )) : (
-                <Empty className="min-h-40 border">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
-                    <EmptyTitle>Nothing planned</EmptyTitle>
-                    <EmptyDescription>Add a task below to plan this day.</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              )}
+            <CardContent className="grid gap-4">
+              <DaySection title="Planned" count={open.length}>
+                {open.length ? open.map((item) => (
+                  <DayItemRow
+                    item={item}
+                    key={`${item.kind}-${item.id}`}
+                    onArchive={(id) => commit((current) => archiveTask(current, id))}
+                    onMove={move}
+                    onNavigate={onNavigate}
+                    onStartFocus={onStartFocus}
+                    onStatus={changeStatus}
+                  />
+                )) : (
+                  <Empty className="border">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
+                      <EmptyTitle>Nothing planned</EmptyTitle>
+                      <EmptyDescription>Add a task below to plan this day.</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )}
+              </DaySection>
+              {banked.length ? (
+                <DaySection muted title="Completed" count={banked.length}>
+                  {banked.map((item) => (
+                    <DayItemRow
+                      item={item}
+                      key={`${item.kind}-${item.id}`}
+                      onArchive={(id) => commit((current) => archiveTask(current, id))}
+                      onMove={move}
+                      onNavigate={onNavigate}
+                      onStartFocus={onStartFocus}
+                      onStatus={changeStatus}
+                    />
+                  ))}
+                </DaySection>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -277,6 +304,19 @@ export function CalendarPage({
   )
 }
 
+function DaySection({ title, count, muted, children }: { title: string; count: number; muted?: boolean; children: ReactNode }) {
+  if (count === 0) return null
+  return (
+    <section aria-label={title} className={cn("grid gap-2", muted && "opacity-85")}>
+      <p className="flex items-baseline gap-2 px-0.5 text-xs font-semibold">
+        {title}
+        <span className="font-normal text-muted-foreground tabular-nums">{count} {count === 1 ? "item" : "items"}</span>
+      </p>
+      {children}
+    </section>
+  )
+}
+
 function DayItemRow({
   item,
   onArchive,
@@ -303,14 +343,14 @@ function DayItemRow({
         </div>
         <Badge variant="outline">{item.kind === "mistakes" ? "Review" : item.kind === "sac" ? "SAC" : item.kind === "session"
           ? item.status === "completed" ? "Studied" : item.status === "in-progress" ? "Studying" : "Planned"
-          : "Exam"}</Badge>
+          : item.kind === "logged-exam" ? "Logged" : "Exam"}</Badge>
         {item.kind === "mistakes" ? <Button onClick={() => onNavigate("mistakes")} size="sm" variant="ghost">Review</Button> : null}
         {item.kind === "sac" ? <Button onClick={() => onNavigate("sacs")} size="sm" variant="ghost">Open</Button> : null}
       </div>
     )
   }
 
-  const done = item.status === "completed"
+  const done = isDayItemDone(item)
   return (
     <div className="grid gap-2 rounded-lg border p-2">
       <div className="flex items-start gap-2">

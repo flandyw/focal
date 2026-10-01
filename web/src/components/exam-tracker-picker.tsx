@@ -67,7 +67,7 @@ function buildSections(entries: TimetableEntry[], now: Date, query: string): { u
   return {
     upcoming: {
       title: `${upcomingEntries.length} of ${allUpcomingCount} upcoming`,
-      description: "Tick the ones you're sitting. They'll surface on your dashboard with a countdown.",
+      description: "Tick the ones you're sitting. They'll surface on your Exams page with a countdown.",
       entries: upcomingEntries,
     },
     past: {
@@ -140,7 +140,7 @@ export function ExamTrackerPicker({
           <DialogTitle>Track VCE exams I'm doing</DialogTitle>
           <DialogDescription>
             {trackedCount === 0
-              ? "Pick the exams you're enrolled in — they'll appear on your dashboard with a countdown."
+              ? "Pick the exams you're enrolled in — they'll appear on your Exams page with a countdown."
               : `${trackedCount} exam${trackedCount === 1 ? "" : "s"} tracked. Toggle to update.`}
           </DialogDescription>
         </DialogHeader>

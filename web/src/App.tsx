@@ -65,8 +65,8 @@ const ExamSheet = lazy(() =>
 const MistakeSheet = lazy(() =>
   import("@/components/mistake-sheet").then((module) => ({ default: module.MistakeSheet })),
 )
-const Dashboard = lazy(() =>
-  import("@/components/dashboard").then((module) => ({ default: module.Dashboard })),
+const ExamsPage = lazy(() =>
+  import("@/components/exams-page").then((module) => ({ default: module.ExamsPage })),
 )
 const VcaaExplorer = lazy(() =>
   import("@/components/vcaa-explorer").then((module) => ({ default: module.VcaaExplorer })),
@@ -363,7 +363,7 @@ export default function App() {
 
   function saveTimedAttempt(attempt: ExamAttempt) {
     setData((current) => ({ ...current, attempts: [...current.attempts, attempt] }))
-    setView("dashboard")
+    setView("exams")
     if (attempt.provider.trim().toLowerCase() === "vcaa") {
       toast.success("Timed VCAA exam logged", {
         description: "Your mark is ready to compare with official grade distributions.",
@@ -597,9 +597,9 @@ export default function App() {
               <Button size="sm" variant="outline" onClick={reloadReferences}>Retry</Button>
             </Alert>
           ) : null}
-          {view === "dashboard" ? (
+          {view === "exams" ? (
             <Suspense fallback={<div className="h-96" />}>
-              <Dashboard
+              <ExamsPage
                 data={data}
                 references={references}
                 comparisonYear={comparisonYear}

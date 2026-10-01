@@ -313,7 +313,7 @@ function NextActionNotice({ action }: { action: NextAction | null }) {
 
 function StatRow({ data }: { data: AppData }) {
   const stats = useMemo(() => computeStats(data.attempts, data.examDifficulty), [data.attempts, data.examDifficulty])
-  // Count mastery with the shared scheduler, so the dashboard agrees with the
+  // Count mastery with the shared scheduler, so the exams page agrees with the
   // mistakes page, the calendar and the folio app rather than reading the raw flag.
   const mature = getMistakeProgress(data.mistakes).matureCards
   const total = data.mistakes.length
@@ -569,7 +569,7 @@ function RecentExams({
   )
 }
 
-export type DashboardProps = {
+export type ExamsPageProps = {
   data: AppData
   references: AssessmentReference[]
   comparisonYear: number
@@ -586,7 +586,7 @@ export type DashboardProps = {
   onDeleteExam: (attempt: ExamAttempt) => void
 }
 
-export function Dashboard(props: DashboardProps) {
+export function ExamsPage(props: ExamsPageProps) {
   const {
     data,
     references,
@@ -630,7 +630,7 @@ export function Dashboard(props: DashboardProps) {
     return (
       <WorkspacePage>
         <PageHeader
-          title="Dashboard"
+          title="Exams"
           description="Your practice exam results and the mistakes worth revisiting."
         >
           <Button onClick={onLogExam}>
@@ -665,7 +665,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <WorkspacePage>
       <PageHeader
-        title="Dashboard"
+        title="Exams"
         description="Your practice exam results and the mistakes worth revisiting."
       >
         <Button variant="outline" onClick={exportReport}>
@@ -679,7 +679,7 @@ export function Dashboard(props: DashboardProps) {
       </PageHeader>
 
       <Tabs value={section} onValueChange={(value) => setSection(value as "overview" | "insights")}>
-        <TabsList aria-label="Dashboard sections">
+        <TabsList aria-label="Exam sections">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
         </TabsList>

@@ -539,7 +539,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
   const counts = useMemo(() => getMistakeQueueCounts(visibleMistakes, now), [visibleMistakes, now])
   const progress = useMemo(() => getMistakeProgress(visibleMistakes), [visibleMistakes])
-  // The summary counts the whole collection, the way the dashboard, the sidebar badge
+  // The summary counts the whole collection, the way the Exams page, the sidebar badge
   // and the folio app do. The subject, paper and exam filters only narrow the library,
   // the tabs and the review queue below the summary.
   const summaryCounts = useMemo(() => getMistakeQueueCounts(data.mistakes, now), [data.mistakes, now])

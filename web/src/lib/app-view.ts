@@ -1,8 +1,8 @@
 export const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
 
 export const APP_VIEWS = [
-  "dashboard",
   "calendar",
+  "exams",
   "focus",
   "mistakes",
   "sacs",
@@ -30,12 +30,14 @@ export function loadAppView(
   if (timer === "calendar" || timer === "day") return "calendar"
   if (timer === "sac") return "sacs"
   if (timer === "focus" || timer === "study") return "focus"
-  if (!storage) return "dashboard"
+  if (!storage) return "calendar"
   try {
     const stored = storage.getItem(APP_VIEW_STORAGE_KEY)
-    return isAppView(stored) ? stored : "dashboard"
+    // The old dashboard view is the exams page now; land people where they were.
+    if (stored === "dashboard") return "exams"
+    return isAppView(stored) ? stored : "calendar"
   } catch {
-    return "dashboard"
+    return "calendar"
   }
 }
 

@@ -5,6 +5,7 @@ import {
   archiveTask,
   buildCalendarMonth,
   buildDayPlan,
+  isDayItemDone,
   moveTask,
   overdueTasks,
   setTaskStatus,
@@ -75,9 +76,12 @@ test("a day plan reads the records the app already keeps, in one ordered list", 
   const plan = buildDayPlan("2026-03-04", data, timetable)
 
   expect(plan.items.map((item) => item.kind)).toEqual(["task", "task", "sac", "exam", "mistakes"])
-  // Only open work counts as planned; a completed task no longer does.
-  expect(plan.plannedMinutes).toBe(50)
+  // Open work counts as planned, banked work as completed, and the exam marker as neither.
+  expect(plan.plannedMinutes).toBe(50 + 90)
   expect(plan.completedMinutes).toBe(20)
+  expect(plan.plannedCount).toBe(2)
+  expect(plan.completedCount).toBe(1)
+  expect(plan.totalCount).toBe(3)
   expect(plan.dueMistakes).toBe(2)
   expect(plan.items.at(-1)).toMatchObject({ kind: "mistakes", count: 2 })
 })
@@ -137,6 +141,38 @@ test("a study session appears on the desktop's day, with the desktop's minutes",
     status: "completed",
   })
   expect(buildDayPlan("2026-03-05", data, timetable).items.filter((entry) => entry.kind === "session")).toHaveLength(0)
+})
+
+// The sitting is the record of the work, so the day counts the minutes actually studied.
+test("a completed sitting counts as completed study time, not as nothing", () => {
+  const plan = buildDayPlan("2026-03-04", source({ sessions: [canonicalSession()] }), timetable)
+  expect(plan.completedMinutes).toBe(65)
+  expect(plan.completedCount).toBe(1)
+  expect(plan.plannedMinutes).toBe(0)
+  expect(isDayItemDone(plan.items[0])).toBe(true)
+})
+
+// Starting the timer from a task hands the timer that task's title, so the day must bill
+// the sitting once rather than the plan and the sitting twice.
+test("a task covered by its own sitting is counted once", () => {
+  const data = source({
+    sessions: [canonicalSession({ title: "Redo organic paper" })],
+    learning: { ...EMPTY_LEARNING_WORKSPACE, tasks: [task({ id: "t1", title: "Redo organic paper", durationMinutes: 50 })] },
+  })
+  const plan = buildDayPlan("2026-03-04", data, timetable)
+  expect(plan.completedMinutes).toBe(65)
+  expect(plan.plannedMinutes).toBe(0)
+  expect(plan.totalCount).toBe(1)
+  expect(plan.items.find((item) => item.kind === "task")).toMatchObject({ covered: true })
+  expect(plan.items.every(isDayItemDone)).toBe(true)
+})
+
+test("the month grid loads a day by everything it still owes plus everything it banked", () => {
+  const march = buildCalendarMonth(new Date(2026, 2, 1), source({
+    sessions: [canonicalSession()],
+    learning: { ...EMPTY_LEARNING_WORKSPACE, tasks: [task({ id: "t1", durationMinutes: 40 })] },
+  }), null, new Date(2026, 2, 4))
+  expect(march.find((day) => day.isToday)?.minutes).toBe(105)
 })
 
 test("a sitting is filed under its schedule day even when the server start differs", () => {

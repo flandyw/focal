@@ -21,7 +21,7 @@ export type DayPlanSource = {
  *  second calendar store: the day plan is a view over tasks, SACs, exams and
  *  the revision queue, so nothing can drift between two calendars. */
 export type DayItem =
-  | { kind: "task"; id: string; title: string; detail: string; subject?: string; minutes: number; status: StudyTaskStatus }
+  | { kind: "task"; id: string; title: string; detail: string; subject?: string; minutes: number; status: StudyTaskStatus; covered?: boolean }
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
   | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; status: "planned" | "in-progress" | "completed" }
@@ -31,8 +31,13 @@ export type DayItem =
 export type DayPlan = {
   date: string
   items: DayItem[]
+  /** Study time still to do and study time banked, counted from every kind of work
+   *  on the day -- tasks, shared study sittings, SACs and logged papers. */
   plannedMinutes: number
   completedMinutes: number
+  plannedCount: number
+  completedCount: number
+  totalCount: number
   dueMistakes: number
 }
 
@@ -43,6 +48,7 @@ export type CalendarDay = {
   isToday: boolean
   items: DayItem[]
   load: number
+  /** Total study load on the day: what is still to do plus what was banked. */
   minutes: number
 }
 
@@ -192,6 +198,27 @@ function sessionItem(session: CanonicalStudySession): { item: DayItem; date: str
   }
 }
 
+/** What a day owes and what it banked, in study minutes. Exam entries and the review
+ *  aggregate are markers rather than study, so they never move the totals, and neither
+ *  does a skipped task or one already counted through the sitting that covered it. */
+function workOf(item: DayItem): { minutes: number; done: boolean } | null {
+  if (item.kind === "task") {
+    if (item.status === "skipped" || item.covered === true) return null
+    return { minutes: item.minutes, done: item.status === "completed" }
+  }
+  if (item.kind === "sac") return { minutes: item.minutes, done: item.completed }
+  if (item.kind === "session") return { minutes: item.minutes, done: item.status === "completed" }
+  if (item.kind === "logged-exam") return { minutes: item.minutes, done: true }
+  return null
+}
+
+/** What the day has banked. A task covered by a sitting reads as done even though the
+ *  minutes are carried by that sitting. */
+export function isDayItemDone(item: DayItem) {
+  if (item.kind === "task") return item.status === "completed" || item.covered === true
+  return workOf(item)?.done ?? false
+}
+
 export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timetable | null): DayPlan {
   const items: DayItem[] = []
 
@@ -239,17 +266,34 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     })
   }
 
-  const plannedMinutes = items
-    .filter((item) => item.kind === "task" && item.status === "planned")
-    .reduce((total, item) => total + item.minutes, 0)
-  const completedMinutes = items
-    .filter((item) => item.kind === "task" && item.status === "completed")
-    .reduce((total, item) => total + item.minutes, 0)
+  // A sitting the timer ran from a day-plan task carries that task's title, so it is the
+  // same work twice. The sitting wins: the task reads as covered and the minutes are
+  // counted once, as the ones actually logged rather than the ones intended.
+  const sittings = new Set(items.filter((item) => item.kind === "session").map((item) => item.title))
+  for (const item of items) {
+    if (item.kind === "task" && sittings.has(item.title)) item.covered = true
+  }
+  const totals = items.reduce(
+    (total, item) => {
+      const work = workOf(item)
+      if (!work) return total
+      return work.done
+        ? { ...total, completedMinutes: total.completedMinutes + work.minutes, completedCount: total.completedCount + 1 }
+        : { ...total, plannedMinutes: total.plannedMinutes + work.minutes, plannedCount: total.plannedCount + 1 }
+    },
+    { plannedMinutes: 0, completedMinutes: 0, plannedCount: 0, completedCount: 0 },
+  )
 
   // Work first, then anything fixed in time, then what is already on record, then the queue.
   const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
   items.sort((a, b) => order[a.kind] - order[b.kind] || b.minutes - a.minutes)
-  return { date, items, plannedMinutes, completedMinutes, dueMistakes: dueMistakes.length }
+  return {
+    date,
+    items,
+    ...totals,
+    totalCount: totals.plannedCount + totals.completedCount,
+    dueMistakes: dueMistakes.length,
+  }
 }
 
 /** Six Monday-first weeks covering the month, so the grid never changes height. */
@@ -267,7 +311,7 @@ export function buildCalendarMonth(month: Date, data: DayPlanSource, timetable: 
       inMonth: date.getMonth() === month.getMonth(),
       items: plan.items,
       load: plan.items.length,
-      minutes: plan.plannedMinutes,
+      minutes: plan.plannedMinutes + plan.completedMinutes,
       isToday: key === today,
     }
   })

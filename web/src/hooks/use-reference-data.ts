@@ -78,8 +78,8 @@ export function useReferenceData() {
     setScalingStatus("loading")
     setTimetableStatus("loading")
 
-    // Dashboard-critical data first: grade distributions unblock the
-    // dashboard/library/VCAA views. Everything else is fetched after idle so
+    // Exams-critical data first: grade distributions unblock the
+    // exams/library/VCAA views. Everything else is fetched after idle so
     // first paint + interaction are not blocked parsing ~3MB of JSON.
     const fetchDeferred = (task: () => void) => {
       const win = window as Window & { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }

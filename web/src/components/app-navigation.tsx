@@ -47,7 +47,7 @@ export function AppSidebar({
         <button
           type="button"
           className="flex h-10 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          onClick={() => navigate("dashboard")}
+          onClick={() => navigate("calendar")}
         >
           <GraduationCap className="size-5 shrink-0" aria-hidden />
           <span className="font-semibold group-data-[collapsible=icon]:hidden">Focal</span>

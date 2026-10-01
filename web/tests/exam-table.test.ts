@@ -3,7 +3,7 @@ import { analyseAttempt, type ExamAttempt } from "../src/lib/exam-data"
 import { compareExamRows, type ExamSortKey } from "../src/lib/exam-sort"
 import { getExamIdFromHash, getExamTarget } from "../src/lib/exam-target"
 
-test("round-trips an exam id through its dashboard target", () => {
+test("round-trips an exam id through its exams-page target", () => {
   const id = "attempt/with spaces"
   const target = getExamTarget(id)
   expect(target).toBe("exam-attempt%2Fwith%20spaces")

@@ -19,11 +19,17 @@ describe("app view preferences", () => {
 
   test("restores a valid view and falls back safely", () => {
     expect(loadAppView({ getItem: () => "library" })).toBe("library")
-    expect(loadAppView({ getItem: () => "removed-view" })).toBe("dashboard")
-    expect(loadAppView({ getItem: () => { throw new Error("blocked") } })).toBe("dashboard")
-    expect(loadAppView(null)).toBe("dashboard")
+    expect(loadAppView({ getItem: () => "removed-view" })).toBe("calendar")
+    expect(loadAppView({ getItem: () => { throw new Error("blocked") } })).toBe("calendar")
+    expect(loadAppView(null)).toBe("calendar")
     expect(loadAppView(null, "?timer=exam")).toBe("focus")
     expect(loadAppView(null, "?timer=sac")).toBe("sacs")
+  })
+
+  test("the calendar is the landing view and the old dashboard view lands on exams", () => {
+    expect(loadAppView(null)).toBe(APP_VIEWS[0])
+    expect(APP_VIEWS[0]).toBe("calendar")
+    expect(loadAppView({ getItem: () => "dashboard" })).toBe("exams")
   })
 
   test("restores the collapsed sidebar from its cookie", () => {

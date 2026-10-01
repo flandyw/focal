@@ -1,9 +1,31 @@
 import { describe, expect, test } from "bun:test"
-import { EMPTY_APP_DATA } from "../src/lib/exam-data"
+import { EMPTY_APP_DATA, getDueMistakes, getOverdueMistakes, recordMistakeReview, type Mistake } from "../src/lib/exam-data"
 import { diffAppData, isTombstoned, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
-import { isSupersededSync } from "../src/lib/sync"
+import { equalAppData, isSupersededSync } from "../src/lib/sync"
 
 describe("Focal cursor sync", () => {
+  test("accepts Folio reviews when the mistake IDs and totals have not changed", () => {
+    const at = new Date(2026, 9, 1, 12)
+    const yesterday = new Date(2026, 8, 30, 12).toISOString()
+    const card: Mistake = {
+      id: "mistake-1", attemptId: "attempt-1", question: "Question 8b", category: "Algebra",
+      explanation: "", correction: "", resolved: false, dueAt: yesterday,
+      createdAt: yesterday, updatedAt: yesterday,
+    }
+    const current = { ...EMPTY_APP_DATA, mistakes: [card] }
+    const merged = { ...current, mistakes: [recordMistakeReview(card, "good", at.toISOString())] }
+
+    // Exercise the same decision that the sync hook uses to publish remote changes.
+    const displayed = equalAppData(current, merged) ? current : merged
+    expect(getDueMistakes(current.mistakes, at)).toHaveLength(1)
+    expect(getOverdueMistakes(current.mistakes, at)).toHaveLength(1)
+    expect(displayed).toBe(merged)
+    expect(getDueMistakes(displayed.mistakes, at)).toHaveLength(0)
+    expect(getOverdueMistakes(displayed.mistakes, at)).toHaveLength(0)
+    expect(diffAppData(merged, displayed)).toEqual([]) // Never upload the stale schedule back.
+    expect(equalAppData(merged, structuredClone(merged))).toBe(true)
+  })
+
   test("drops a projection that would resurrect a locally deleted attempt", () => {
     const beforeDelete = { ...EMPTY_APP_DATA, attempts: [{ id: "attempt-1" } as never] }
     const afterDelete = { ...EMPTY_APP_DATA, attempts: [] }

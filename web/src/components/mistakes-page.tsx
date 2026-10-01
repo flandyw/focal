@@ -563,7 +563,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); clearSelection() }
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
-    const startOfToday = new Date()
+    const startOfToday = new Date(now)
     startOfToday.setHours(0, 0, 0, 0)
     const upcoming = visibleMistakes
       .filter((mistake) => !mistake.suspended)
@@ -590,11 +590,11 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
       group.items.push(entry)
     }
     return [...groups.values()]
-  }, [visibleMistakes])
+  }, [visibleMistakes, now])
   const dueThisWeekCount = useMemo(() => {
-    const horizon = Date.now() + 7 * 24 * 60 * 60 * 1000
+    const horizon = now.getTime() + 7 * 24 * 60 * 60 * 1000
     return visibleMistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= horizon).length
-  }, [visibleMistakes])
+  }, [visibleMistakes, now])
 
   async function exportWorksheet() {
     setExporting(true)
@@ -648,7 +648,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section>
       {subjects.length > 1 || showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span>{subjects.length > 1 ? <Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : null}{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div> : null}
-      <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)}>
+      <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>
           <TabsTrigger value="study" className="px-3">Review{counts.due ? ` (${counts.due})` : ""}</TabsTrigger>
@@ -661,40 +661,51 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} />
         </TabsContent>
         <TabsContent value="study" className="mt-4"><StudyQueue key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
-        <TabsContent value="schedule" className="mt-4">
+        <TabsContent value="schedule" className="mt-4 min-w-0">
           {scheduleGroups.length ? (
-            <div className="grid gap-4">
-              <p className="text-sm text-muted-foreground">{dueThisWeekCount
-                ? `${dueThisWeekCount} card${dueThisWeekCount === 1 ? "" : "s"} to review in the next 7 days.`
-                : "Nothing scheduled for the next week — log mistakes after your next timed paper."}</p>
-              {/* Overdue, today and tomorrow read as three columns on a landscape screen. */}
-              <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
-              {scheduleGroups.map((group) => (
-                <section key={group.key} className="grid content-start gap-2" aria-label={`Reviews due ${group.label.toLowerCase()}`}>
-                  <div className="flex items-center gap-2">
-                    <h3 className={group.overdue ? "text-sm font-semibold text-destructive" : "text-sm font-semibold"}>{group.label}</h3>
-                    <Badge variant={group.overdue ? "destructive" : "secondary"}>{group.items.length}</Badge>
-                  </div>
-                  <div className="grid gap-1.5">
-                    {group.items.map(({ mistake }) => {
-                      const attempt = attemptMap.get(mistake.attemptId)
-                      return (
-                        <button
-                          key={mistake.id}
-                          type="button"
-                          onClick={() => onEdit(mistake)}
-                          className="flex flex-col gap-0.5 rounded-lg border bg-card px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-                        >
-                          <span className="truncate text-sm font-medium">{mistake.question}</span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {[attempt?.subject, attempt?.title, stateLabel(getMistakeSchedule(mistake).state, Boolean(mistake.resolved))].filter(Boolean).join(" · ")}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </section>
-              ))}
+            <div className="grid min-w-0 gap-6">
+              <div className="grid gap-1">
+                <h2 className="text-lg font-semibold">Review schedule</h2>
+                <p className="max-w-[68ch] text-sm text-muted-foreground">{dueThisWeekCount
+                  ? `${dueThisWeekCount} card${dueThisWeekCount === 1 ? "" : "s"} to review in the next 7 days.`
+                  : "Nothing scheduled for the next week — log mistakes after your next timed paper."}</p>
+              </div>
+              <div className="grid min-w-0 gap-6 lg:gap-8">
+                {scheduleGroups.map((group) => (
+                  <section key={group.key} className="grid min-w-0 gap-3 border-t pt-4 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-6" aria-label={`Reviews due ${group.label.toLowerCase()}`}>
+                    <div className="flex items-baseline justify-between gap-2 sm:flex-col sm:justify-start sm:gap-1">
+                      <h3 className={group.overdue ? "font-semibold text-destructive" : "font-semibold"}>{group.label}</h3>
+                      <p className="text-xs text-muted-foreground tabular-nums">{group.items.length} {group.items.length === 1 ? "card" : "cards"}</p>
+                    </div>
+                    <ul className="min-w-0 divide-y rounded-xl border bg-card">
+                      {group.items.map(({ mistake, schedule }) => {
+                        const attempt = attemptMap.get(mistake.attemptId)
+                        return (
+                          <li key={mistake.id} className="min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => onEdit(mistake)}
+                              className="grid min-h-16 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-4 py-3 text-left outline-none transition-colors hover:bg-accent focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-6"
+                            >
+                              <span className="grid min-w-0 gap-1">
+                                <span className="break-words text-sm font-medium">{mistake.question}</span>
+                                {mistake.areaOfStudy ? <span className="break-words text-xs text-muted-foreground">{mistake.areaOfStudy}</span> : null}
+                              </span>
+                              <span className="grid min-w-0 gap-1">
+                                {attempt?.subject ? <span className="break-words text-sm">{attempt.subject}</span> : null}
+                                {attempt?.title ? <span className="break-words text-xs text-muted-foreground">{attempt.title}</span> : null}
+                              </span>
+                              <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-between gap-3 xl:col-auto xl:row-auto xl:flex-row xl:items-center xl:justify-end">
+                                <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
+                                <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </section>
+                ))}
               </div>
             </div>
           ) : (

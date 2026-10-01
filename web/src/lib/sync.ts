@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { User } from "@supabase/supabase-js"
 import { EMPTY_APP_DATA, type AppData } from "@/lib/exam-data"
 import { supabase } from "@/lib/supabase"
-import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, syncAppData } from "@/lib/app-sync"
+import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, sameValue, syncAppData } from "@/lib/app-sync"
 
 const OWNER_KEY = "examtrack:sync:owner:v1"
 
@@ -12,34 +12,9 @@ function ownerBackupKey(owner: string) {
 
 export type SyncStatus = "unconfigured" | "signed-out" | "syncing" | "synced" | "pending" | "error"
 
-function snapshotVersion(data: AppData) {
-  return [
-    data.attempts.length,
-    data.mistakes.length,
-    data.sacRecords.length,
-    data.sacRecordsUpdatedAt,
-    data.subjectsUpdatedAt,
-    data.trackedExamIdsUpdatedAt,
-    data.completedExamIdsUpdatedAt,
-    data.atarEstimatesUpdatedAt,
-    data.learning.updatedAt,
-    data.mistakeInsights?.questionsGeneratedAt ?? data.mistakeInsights?.generatedAt ?? "",
-    data.alternativeMistakeDeck?.updatedAt ?? "",
-    data.examDifficulty?.updatedAt ?? "",
-    data.examProgression?.updatedAt ?? "",
-  ].join("|")
-}
-
-function shallowEqualAppData(first: AppData, second: AppData) {
-  if (first === second) return true
-  if (snapshotVersion(first) !== snapshotVersion(second)) return false
-  const sameIds = (a: { id: string }[], b: { id: string }[]) => {
-    if (a.length !== b.length) return false
-    if (a === b) return true
-    const ids = new Set(a.map((item) => item.id))
-    return b.every((item) => ids.has(item.id))
-  }
-  return sameIds(first.attempts, second.attempts) && sameIds(first.mistakes, second.mistakes)
+/** Folio reviews change scheduling payloads without changing collection IDs or counts. */
+export function equalAppData(first: AppData, second: AppData) {
+  return sameValue(first, second)
 }
 
 /** A projection started from an older snapshot must not overwrite a local edit queued while it ran. */
@@ -122,7 +97,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       setStatus(health.pending ? "pending" : "synced")
       if (isSupersededSync(data, latest.current)) return null
       previous.current = merged
-      setData((current) => shallowEqualAppData(current, merged) ? current : merged)
+      setData((current) => equalAppData(current, merged) ? current : merged)
       return merged
     })
     syncTask.current = task

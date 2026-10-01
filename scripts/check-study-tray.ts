@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { studyTrayItems } from "../src/features/timer/tray";
 import { DEFAULT_SETTINGS, timerReducer, type TimerState } from "../src/features/timer/model";
 
@@ -56,4 +57,9 @@ for (const snapshot of [state, active.state, free, pausedFree, breakState, overt
   assert.ok(menu({ state: snapshot, blocked: true }).every((entry) => !entry.enabled));
 }
 assert.equal(new Set(menu().map((entry) => entry.id)).size, menu().length);
+// Guard the native lock ordering: menu mutations wait for this callback's main thread.
+const nativeTray = readFileSync(new URL("../src-tauri/src/study_tray.rs", import.meta.url), "utf8");
+const clickHandler = nativeTray.slice(nativeTray.indexOf(".on_menu_event("), nativeTray.indexOf(".build(app)?"));
+assert.ok(clickHandler.includes("state.dirty.store(true"));
+assert.ok(!clickHandler.includes(".lock()"), "Menu clicks must not wait on the menu update lock");
 process.stdout.write("Study tray checks passed\n");

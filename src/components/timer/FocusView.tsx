@@ -134,7 +134,7 @@ export function FocusView({
   const resolvedCloseRef = closeButtonRef ?? fallbackCloseRef;
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const isFocus = mode === "work" || (isStudyOvertime && (!isFreeStudy || running));
+  const isFocus = isFreeStudy || mode === "work" || isStudyOvertime;
   const safeProgress = Number.isFinite(progress)
     ? Math.min(1, Math.max(0, progress))
     : 0;
@@ -152,7 +152,10 @@ export function FocusView({
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-    const focusTimeout = window.setTimeout(() => primaryButtonRef.current?.focus(), 50);
+    const focusTimeout = window.setTimeout(() => {
+      const primaryButton = primaryButtonRef.current;
+      (primaryButton && !primaryButton.disabled ? primaryButton : resolvedCloseRef.current)?.focus();
+    }, 50);
     document.body.style.overflow = "hidden";
 
     return () => {
@@ -160,7 +163,7 @@ export function FocusView({
       document.body.style.overflow = previousOverflow;
       previouslyFocusedRef.current?.focus();
     };
-  }, []);
+  }, [resolvedCloseRef]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -171,7 +174,7 @@ export function FocusView({
       }
       if (isTimerShortcutTarget(event.target) || saving || event.metaKey || event.ctrlKey || event.altKey) return;
       const key = event.key.toLowerCase();
-      if (event.code === "Space") {
+      if (event.code === "Space" && (!isFocus || activeSessionId || canStartFocus)) {
         event.preventDefault();
         onToggle();
       } else if (key === "s" && !event.shiftKey && !isFocus && !isFreeStudy) {
@@ -193,7 +196,7 @@ export function FocusView({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeSessionId, isFocus, isFreeStudy, isStudyOvertime, onAddTime, onClose, onFinish, onReset, onSkipBreak, onToggle, saving]);
+  }, [activeSessionId, canStartFocus, isFocus, isFreeStudy, isStudyOvertime, onAddTime, onClose, onFinish, onReset, onSkipBreak, onToggle, saving]);
 
   const openEnded = isFreeStudy || isStudyOvertime;
   const status = activeSessionId
@@ -215,7 +218,10 @@ export function FocusView({
       aria-modal="true"
       aria-label="Focus timer"
     >
-      <TitleBar onSearch={onSearch} onSettings={onSettings}>
+      <TitleBar
+        onSearch={onSearch ? () => { onClose(); onSearch(); } : undefined}
+        onSettings={onSettings ? () => { onClose(); onSettings(); } : undefined}
+      >
         <Button
           ref={resolvedCloseRef}
           variant="ghost"
@@ -302,7 +308,7 @@ export function FocusView({
                     className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
                       variant="outline"
                       onClick={onStartFreeStudy}
-                      disabled={saving || !canStartFocus}
+                      disabled={saving || running}
                     >
                       <Timer />
                       {isFreeStudy ? "Use Pomodoro" : "Free study"}
@@ -344,29 +350,6 @@ export function FocusView({
                       Return to break
                     </Button>
                   )}
-                </div>
-              ) : isFreeStudy ? (
-                <div className="flex w-full flex-wrap justify-center gap-2">
-                  <Button
-                    ref={primaryButtonRef}
-                    size="lg"
-                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
-                    onClick={onToggle}
-                    disabled={saving}
-                  >
-                    <Play />
-                    Continue
-                  </Button>
-                  <Button
-                    size="lg"
-                    className="h-12 rounded-full px-5 xl:h-14 xl:px-7 xl:text-base"
-                    variant="outline"
-                    onClick={onFinish}
-                    disabled={saving}
-                  >
-                    <Check />
-                    Finish &amp; save
-                  </Button>
                 </div>
               ) : (
                 <div className="flex w-full flex-wrap justify-center gap-2">
@@ -460,7 +443,7 @@ export function FocusView({
                       activeSessionId={null}
                       disabled={saving}
                       onSubjectClick={onSubjectClick}
-                      onManageSubjects={onManageSubjects}
+                      onManageSubjects={onManageSubjects ? () => { onClose(); onManageSubjects(); } : undefined}
                     />
                     {projectLabel && <p className="break-words text-xs text-muted-foreground">{projectLabel}</p>}
                     {!canStartFocus && <p className="text-xs text-muted-foreground">Choose a subject to begin your session.</p>}

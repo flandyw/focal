@@ -13,7 +13,10 @@ import {
   parseSettings,
   timerReducer,
 } from "../src/features/timer/model.ts";
-import { isTimerShortcutTarget } from "../src/components/timer/FocusView.tsx";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { TooltipProvider } from "../src/components/ui/tooltip.tsx";
+import { FocusView, isTimerShortcutTarget } from "../src/components/timer/FocusView.tsx";
 import {
   getPomodoroDescription,
   getPomodoroTitle,
@@ -145,6 +148,55 @@ check(isTimerShortcutTarget({ tagName: "BUTTON" }), true);
 check(isTimerShortcutTarget({ tagName: "SELECT" }), true);
 check(isTimerShortcutTarget({ tagName: "DIV", isContentEditable: true }), true);
 check(isTimerShortcutTarget({ tagName: "DIV" }), false);
+
+// Free study must offer the same setup, pause/resume and save flow as Pomodoro.
+const focusProps = {
+  running: false, mode: "free", isStudyOvertime: false, isFreeStudy: true,
+  secondsLeft: 0, totalSeconds: 0, progress: 0, timeDisplay: "0:00",
+  studyTimeDisplay: "0:00", modeLabel: "Free study", timerActionLabel: "Start study",
+  canStartFocus: true, saving: false, cycles: 0, activeSessionId: null,
+  todayBlocks: 0, todaySeconds: 0, dailyGoal: 6,
+  subjects: [{ id: "methods", name: "Mathematical Methods", shortCode: "MCM", color: "#6366f1" }],
+  selectedSubjectIds: ["methods"], subjectLabel: "MCM", intent: "Practice questions",
+  ...Object.fromEntries([
+    "onSubjectClick", "onIntentChange", "onToggle", "onFinish", "onReset",
+    "onReturnToBreak", "onSkipBreak", "onStartStudyOvertime", "onStartFreeStudy", "onAddTime", "onClose",
+  ].map((name) => [name, () => {}])),
+};
+function focusMarkup(overrides = {}) {
+  return renderToStaticMarkup(createElement(TooltipProvider, null,
+    createElement(FocusView, { ...focusProps, ...overrides })));
+}
+const readyFreeStudy = focusMarkup();
+check(readyFreeStudy.includes('id="focus-intent"'), true);
+check(readyFreeStudy.includes('aria-label="Selected Mathematical Methods"'), true);
+check(readyFreeStudy.includes("Start study"), true);
+check(readyFreeStudy.includes("Use Pomodoro"), true);
+check(readyFreeStudy.includes("Finish &amp; save"), false);
+check(readyFreeStudy.includes("Take a breather"), false);
+for (const running of [true, false]) {
+  const activeFreeStudy = focusMarkup({
+    running, activeSessionId: "active", timerActionLabel: running ? "Pause" : "Continue",
+  });
+  check(activeFreeStudy.includes("Practice questions"), true);
+  check(activeFreeStudy.includes("Finish &amp; save"), true);
+  check(activeFreeStudy.includes('id="focus-intent"'), false);
+  check(activeFreeStudy.includes(running ? "Logging to calendar" : "Paused — calendar stopped"), true);
+}
+const noSubject = focusMarkup({ canStartFocus: false, selectedSubjectIds: [] });
+check(/<button\b[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*Start study<\/button>/.test(noSubject), true);
+check(/<button\b(?![^>]*disabled="")[^>]*>(?:(?!<\/button>)[\s\S])*Use Pomodoro<\/button>/.test(noSubject), true);
+const readyPomodoro = focusMarkup({
+  mode: "work", isFreeStudy: false, modeLabel: "Focus", timerActionLabel: "Start Pomodoro",
+});
+check(readyPomodoro.includes('id="focus-intent"'), true);
+check(readyPomodoro.includes("Start Pomodoro"), true);
+check(readyPomodoro.includes("Free study</button>"), true);
+const breakProps = { mode: "break", isFreeStudy: false, modeLabel: "Break" };
+check(focusMarkup(breakProps).includes("Take a breather"), true);
+check(focusMarkup({ ...breakProps, activeSessionId: "unsaved" }).includes("Retry save"), true);
+check(focusMarkup({ ...breakProps, isStudyOvertime: true, activeSessionId: "overtime", running: false }).includes("Return to break"), true);
+
 check(getPomodoroTitle(["mm"], "Methods SAC 1"), "Methods SAC 1 — MCM · Focus");
 check(getPomodoroDescription(25), "Pomodoro — 25m focused study");
 

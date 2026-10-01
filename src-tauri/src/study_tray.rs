@@ -1,5 +1,8 @@
 use serde::Deserialize;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::TrayIconBuilder,
@@ -43,6 +46,7 @@ pub struct StudyTray {
     status: MenuItem<tauri::Wry>,
     summary: MenuItem<tauri::Wry>,
     items: Mutex<Option<Vec<TrayItem>>>,
+    dirty: AtomicBool,
 }
 
 fn build_menu(
@@ -115,6 +119,7 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         )?,
         summary: MenuItem::with_id(app, "timer-summary", "Today’s study", false, None::<&str>)?,
         items: Mutex::new(None),
+        dirty: AtomicBool::new(false),
     };
     let menu = build_menu(app.handle(), &state, &[])?;
     TrayIconBuilder::with_id("study-timer")
@@ -132,9 +137,8 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
             }
             if action.starts_with("timer-") {
                 if let Some(state) = app.try_state::<StudyTray>() {
-                    if let Ok(mut previous) = state.items.lock() {
-                        *previous = None;
-                    }
+                    // Menu updates wait for the main thread; its click handler must never wait for their lock.
+                    state.dirty.store(true, Ordering::Relaxed);
                 }
                 if let Err(error) = app.emit_to("main", "study-tray-action", action) {
                     eprintln!("Could not control study timer: {error}");
@@ -174,8 +178,13 @@ pub fn update_study_tray(
         state.summary.set_text(summary)?;
         if let Some(tray) = app.tray_by_id("study-timer") {
             // ponytail: only rebuild on control/subject/settings changes, never on clock ticks.
-            if previous.as_ref() != Some(&items) {
-                tray.set_menu(Some(build_menu(&app, &state, &items)?))?;
+            if state.dirty.swap(false, Ordering::Relaxed) || previous.as_ref() != Some(&items) {
+                if let Err(error) =
+                    build_menu(&app, &state, &items).and_then(|menu| tray.set_menu(Some(menu)))
+                {
+                    state.dirty.store(true, Ordering::Relaxed);
+                    return Err(error);
+                }
             }
             tray.set_title(Some(title))?;
         }

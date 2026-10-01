@@ -968,6 +968,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
   useEffect(() => {
     trayActionsRef.current = (action) => {
       if (action === "timer-open") {
+        if (isCollapsed) onExpand?.();
         setExpanded(true);
         return;
       }

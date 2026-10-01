@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   getDueMistakes,
   getMistakeSchedule,
+  localDayDifference,
   previewMistakeReview,
   type AppData,
   type ExamAttempt,
@@ -564,7 +565,6 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const scheduleGroups = useMemo(() => {
     const startOfToday = new Date()
     startOfToday.setHours(0, 0, 0, 0)
-    const dayMs = 24 * 60 * 60 * 1000
     const upcoming = visibleMistakes
       .filter((mistake) => !mistake.suspended)
       .map((mistake) => ({ mistake, schedule: getMistakeSchedule(mistake) }))
@@ -572,7 +572,8 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
     const groups = new Map<string, { key: string; label: string; overdue: boolean; items: typeof upcoming }>()
     for (const entry of upcoming) {
       const dueDate = new Date(entry.schedule.dueAt)
-      const dayIndex = Math.floor((new Date(dueDate).setHours(0, 0, 0, 0) - startOfToday.getTime()) / dayMs)
+      // Calendar days, not 24-hour chunks, so daylight saving cannot mislabel a day.
+      const dayIndex = localDayDifference(dueDate, startOfToday)
       const key = dayIndex <= -1 ? "overdue" : dayIndex === 0 ? "today" : dayIndex === 1 ? "tomorrow" : `day-${dayIndex}`
       let group = groups.get(key)
       if (!group) {

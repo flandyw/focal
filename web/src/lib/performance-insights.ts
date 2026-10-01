@@ -1,8 +1,6 @@
-import { getMistakeSchedule, type ExamAttempt, type Mistake } from "@/lib/exam-data"
+import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "@/lib/exam-data"
 import { getAttemptPerformance, type ExamDifficultySettings } from "@/lib/exam-difficulty"
 import { getMathsExamPaper, isTechSplitMathsSubject } from "@/lib/mistake-filters"
-
-const DAY_MS = 24 * 60 * 60 * 1000
 
 function clamp(value: number, minimum = 0, maximum = 100) {
   return Math.min(maximum, Math.max(minimum, value))
@@ -529,7 +527,8 @@ function formatLocalDate(date: Date) {
 export function buildReviewForecast(mistakes: Mistake[], now = new Date(), days = 14): ReviewForecastDay[] {
   const start = startOfLocalDay(now)
   const result = Array.from({ length: days }, (_, index) => {
-    const date = new Date(start.getTime() + index * DAY_MS)
+    // Calendar days from the month/day, so a daylight-saving 23- or 25-hour day stays one bucket.
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
     return {
       date: formatLocalDate(date),
       label: index === 0 ? "Today" : date.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
@@ -541,8 +540,7 @@ export function buildReviewForecast(mistakes: Mistake[], now = new Date(), days 
   for (const mistake of mistakes) {
     if (mistake.suspended) continue
     const dueAt = new Date(getMistakeSchedule(mistake).dueAt)
-    const dueDay = startOfLocalDay(dueAt)
-    const index = Math.floor((dueDay.getTime() - start.getTime()) / DAY_MS)
+    const index = localDayDifference(dueAt, start)
     if (index < 0) result[0].due += 1
     else if (index < result.length) result[index].due += 1
   }

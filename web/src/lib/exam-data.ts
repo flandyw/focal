@@ -400,6 +400,27 @@ export function getDueMistakes(mistakes: Mistake[], now = new Date()): Mistake[]
     .toSorted((first, second) => getMistakeSchedule(first).dueAt.localeCompare(getMistakeSchedule(second).dueAt))
 }
 
+/**
+ * Whole local calendar days from `from` to `date`; negative when `date` is earlier. Both
+ * instants are reduced to their local date first, so a 23- or 25-hour daylight-saving day
+ * still counts as one day. Dividing raw milliseconds by 24 hours does not.
+ */
+export function localDayDifference(date: Date, from: Date): number {
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate())
+  return Math.round((day.getTime() - start.getTime()) / DAY_MS)
+}
+
+/**
+ * Cards scheduled before today in the local calendar — not a rolling 24 hours. Suspended
+ * cards are excluded; mastered cards are not, matching the schedule grouping and the folio app.
+ */
+export function getOverdueMistakes(mistakes: Mistake[], now = new Date()): Mistake[] {
+  return mistakes
+    .filter((mistake) => !mistake.suspended && localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), now) < 0)
+    .toSorted((first, second) => getMistakeSchedule(first).dueAt.localeCompare(getMistakeSchedule(second).dueAt))
+}
+
 export type CoverageArea = {
   subject: string
   areaOfStudy: string

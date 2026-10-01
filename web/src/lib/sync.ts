@@ -94,7 +94,7 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       const health = await appSyncHealth(user.id)
       if (cancelled) return null
       setPendingCount(health.pending)
-      setStatus(health.pending ? "pending" : "synced")
+      setStatus(health.pending || health.cursor < health.head ? "pending" : "synced")
       if (isSupersededSync(data, latest.current)) return null
       previous.current = merged
       setData((current) => equalAppData(current, merged) ? current : merged)

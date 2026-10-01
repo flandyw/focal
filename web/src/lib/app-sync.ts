@@ -32,7 +32,7 @@ type PendingRow = AppRow & {
 type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean }
 type OwnerMeta = { key: string; accountId: string }
 type VersionedChange = {
-  seq: number; change_id: string; client_id: string; entity: Entity; row_id: string
+  seq: number; change_id: string; client_id: string; entity: string; row_id: string
   operation: Operation; payload: unknown; lamport: number; updated_at: string
 }
 
@@ -242,6 +242,7 @@ async function pull(userId: string): Promise<void> {
     if (!isRecord(data) || !Array.isArray(data.rows) || typeof data.head !== "number" || (data.mode !== "changes" && data.mode !== "snapshot"))
       throw new Error("Malformed sync_read_changes response")
     const rows = data.rows.flatMap(parseChange)
+    if (rows.length !== data.rows.length) throw new Error("Malformed sync feed row")
     cursor = data.mode === "snapshot" ? data.head : rows.reduce((value, row) => Math.max(value, row.seq), cursor)
     await persistFeedPage(userId, rows, cursor, data.head, data.mode === "snapshot")
     meta = await readMeta(userId)
@@ -249,14 +250,15 @@ async function pull(userId: string): Promise<void> {
   }
 }
 
-function parseChange(raw: unknown): VersionedChange[] {
-  if (!isRecord(raw) || !APP_ENTITIES.has(String(raw.entity)) ||
+export function parseChange(raw: unknown): VersionedChange[] {
+  // The cursor tails the shared feed, including Folio notebooks. Filter entities only when storing rows.
+  if (!isRecord(raw) || typeof raw.entity !== "string" ||
     (raw.operation !== "put" && raw.operation !== "delete") ||
     typeof raw.row_id !== "string" || !raw.row_id || !Number.isSafeInteger(raw.seq) ||
     !Number.isSafeInteger(raw.lamport) || typeof raw.client_id !== "string") return []
   if (raw.operation === "put" && raw.payload == null) return []
   return [{ seq: raw.seq as number, change_id: typeof raw.change_id === "string" ? raw.change_id : "",
-    client_id: raw.client_id, entity: raw.entity as Entity, row_id: raw.row_id, operation: raw.operation,
+    client_id: raw.client_id, entity: raw.entity, row_id: raw.row_id, operation: raw.operation,
     payload: raw.payload ?? null, lamport: raw.lamport as number,
     updated_at: typeof raw.updated_at === "string" ? raw.updated_at : typeof raw.created_at === "string" ? raw.created_at : "" }]
 }
@@ -276,10 +278,11 @@ async function persistFeedPage(accountId: string, changes: VersionedChange[], cu
     byKey.clear()
   }
   for (const change of changes.toSorted((a, b) => a.seq - b.seq)) {
+    if (!APP_ENTITIES.has(change.entity)) continue
     const key = rowKey(accountId, change.entity, change.row_id)
     const current = byKey.get(key)
     if (current && compareVersion(current, change) >= 0) continue
-    const applied: AppliedRow = { key, accountId, entity: change.entity, rowId: change.row_id,
+    const applied: AppliedRow = { key, accountId, entity: change.entity as Entity, rowId: change.row_id,
       operation: change.operation, payload: change.payload, seq: change.seq, lamport: change.lamport,
       clientId: change.client_id, updatedAt: change.updated_at }
     byKey.set(key, applied)

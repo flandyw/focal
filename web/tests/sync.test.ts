@@ -1,9 +1,23 @@
 import { describe, expect, test } from "bun:test"
 import { EMPTY_APP_DATA, getDueMistakes, getOverdueMistakes, recordMistakeReview, type Mistake } from "../src/lib/exam-data"
-import { diffAppData, isTombstoned, mergeMistakeConflict, rowsFromAppData, sameValue } from "../src/lib/app-sync"
+import { diffAppData, isTombstoned, mergeMistakeConflict, parseChange, rowsFromAppData, sameValue } from "../src/lib/app-sync"
 import { equalAppData, isSupersededSync } from "../src/lib/sync"
 
 describe("Focal cursor sync", () => {
+  test("advances through a full page of Folio notebook changes to reach later mistake reviews", () => {
+    const page = Array.from({ length: 500 }, (_, i) => ({
+      seq: 1001 + i, change_id: `ink-${i}`, client_id: "folio", entity: "notebooks",
+      row_id: "notebook-1", operation: "put", payload: { title: "Practice" }, lamport: 1001 + i,
+    }))
+    const rows = page.flatMap(parseChange)
+    const cursor = rows.reduce((value, row) => Math.max(value, row.seq), 1000)
+    expect(rows).toHaveLength(500) // A full page must keep the pull loop running.
+    expect(cursor).toBe(1500) // Skipped app entities must still advance the shared cursor.
+    const nextPage = parseChange({ ...page[0], seq: 1501, entity: "mistakes", row_id: "mistake-1" })
+    expect(nextPage[0].seq).toBeGreaterThan(cursor)
+    expect(parseChange({ ...page[0], seq: "bad" })).toEqual([])
+  })
+
   test("accepts Folio reviews when the mistake IDs and totals have not changed", () => {
     const at = new Date(2026, 9, 1, 12)
     const yesterday = new Date(2026, 8, 30, 12).toISOString()

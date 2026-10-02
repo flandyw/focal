@@ -108,7 +108,14 @@ export function findVcaaExamAttempt(exam: VcaaExamResource, attempts: ExamAttemp
 }
 
 export function isVcaaExamLogged(exam: VcaaExamResource, attempts: ExamAttempt[]) {
-  return Boolean(findVcaaExamAttempt(exam, attempts))
+  if (exam.year === null) return false
+  const paper = normaliseComparisonName(getVcaaExamPaper(exam))
+  const provider = normaliseComparisonName(getVcaaExamProvider(exam))
+  const subject = normaliseComparisonName(exam.studyName)
+  return attempts.some((attempt) => attempt.examYear === exam.year &&
+    normaliseComparisonName(attempt.provider) === provider &&
+    normaliseComparisonName(attempt.subject) === subject &&
+    (paper === "exam" || normaliseComparisonName(attempt.paper) === paper))
 }
 
 function companionScore(resource: VcaaResource, exam: VcaaExamResource) {

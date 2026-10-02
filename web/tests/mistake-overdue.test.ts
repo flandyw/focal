@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { getOverdueMistakes, localDayDifference, type Mistake } from "../src/lib/exam-data"
+import { getDueMistakes, getOverdueMistakes, localDayDifference, type Mistake } from "../src/lib/exam-data"
 
 function mistake(id: string, due: string, overrides: Partial<Mistake> = {}): Mistake {
   return {
@@ -38,6 +38,38 @@ describe("mistake overdue (calendar day, not a rolling 24 hours)", () => {
     const now = new Date(2026, 8, 16, 14)
     const mastered = mistake("mastered", at(2026, 9, 1), { resolved: true, reviewState: "review", intervalDays: 30 })
     expect(getOverdueMistakes([mastered], now).map((item) => item.id)).toEqual(["mastered"])
+  })
+
+  test("queues legacy and tied cards stably, retaining original references and local eligibility", () => {
+    const now = new Date(2026, 8, 16, 14)
+    const legacy = mistake("legacy", at(2026, 9, 12), {
+      dueAt: null, reviewHistory: [{ id: "r1", result: "correct", completedAt: at(2026, 9, 12) }],
+    })
+    const tied = mistake("tied", at(2026, 9, 15))
+    const today = mistake("today", at(2026, 9, 16, 13))
+    const older = mistake("older", at(2026, 9, 13))
+    const cards = [legacy, today, tied, older,
+      mistake("future", at(2026, 9, 17)),
+      mistake("suspended-invalid", "invalid", { suspended: true, dueAt: null }),
+    ]
+    const before = structuredClone(cards)
+    for (const [queue, expected] of [
+      [getDueMistakes(cards, now), [older, legacy, tied, today]],
+      [getOverdueMistakes(cards, now), [older, legacy, tied]],
+    ]) {
+      expect(queue).toEqual(expected)
+      queue.forEach((card, index) => expect(card).toBe(expected[index]))
+    }
+    expect(cards).toEqual(before)
+  })
+
+  test("sorts due strings lexically, not by their offset-adjusted timestamps", () => {
+    const earlier = mistake("earlier", "2026-09-14T00:00:00+10:00")
+    const later = mistake("later", "2026-09-13T23:00:00Z")
+    const now = new Date("2026-09-16T12:00:00Z")
+    for (const queue of [getDueMistakes, getOverdueMistakes]) {
+      expect(queue([earlier, later], now)).toEqual([later, earlier])
+    }
   })
 
   test("same local day is zero days apart whatever the hour", () => {

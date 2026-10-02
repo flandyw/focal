@@ -341,14 +341,6 @@ function computeStreaks(days: ConsistencyDay[]): ConsistencyStats {
   return { currentStreak, longestStreak, totalStudyDays, totalMinutes, averageMinutesPerDay }
 }
 
-export function getTimeOfDayAnalysis(
-  sessions: StudySession[],
-  range: AnalyticsRange,
-  projects: Project[] = [],
-): TimeOfDayBucket[] {
-  return aggregateTimeOfDay(getTimeOfDayBySubject(sessions, projects, range))
-}
-
 function aggregateTimeOfDay(subjectBuckets: SubjectTimeOfDayBucket[]): TimeOfDayBucket[] {
   const buckets: TimeOfDayBucket[] = Array.from({ length: 24 }, (_, hour) => ({ hour, minutes: 0 }))
   for (const bucket of subjectBuckets) buckets[bucket.hour].minutes += bucket.minutes

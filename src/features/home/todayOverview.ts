@@ -1,24 +1,7 @@
 import { addDays, format, parseISO } from "date-fns"
-import { getCompletedStudyMinutesBySubject } from "@/lib/planning"
-import { getPriorityItems } from "@/lib/studyPriority"
-import {
-  getEventTypeInfo,
-  getSessionEffectiveMinutes,
-  getSessionSubjectIds,
-  getSubjectById,
-} from "@/lib/utils"
+import { getSubjectById } from "@/lib/utils"
 import { VCE_SUBJECTS } from "@/lib/types"
 import type { CalendarEvent, Project, StudySession } from "@/lib/types"
-
-export interface RecentActivityItem {
-  id: string
-  title: string
-  subtitle: string
-  timestamp: string
-  kind: "session" | "event"
-  session?: StudySession
-  event?: CalendarEvent
-}
 
 export function buildTodayOverview(
   projects: Project[],
@@ -43,57 +26,12 @@ export function buildTodayOverview(
     )
     .sort((a, b) => parseISO(a.deadline!).getTime() - parseISO(b.deadline!).getTime())
 
-  const completedSessionItems = sessions.filter((session) => session.execution.state === "completed")
-  const totalStudyMinutes = completedSessionItems.reduce(
-    (total, session) => total + getSessionEffectiveMinutes(session),
-    0,
-  )
-
   const subjectsById = new Map(VCE_SUBJECTS.map((subject) => [subject.id, subject]))
   for (const project of projects) {
     if (!project.subjectId || subjectsById.has(project.subjectId)) continue
     const subject = getSubjectById(project.subjectId)
     if (subject) subjectsById.set(subject.id, subject)
   }
-
-  const recentSessions: RecentActivityItem[] = sessions
-    .filter((session) => session.execution.state === "completed")
-    .map((session) => {
-      const project = session.projectId
-        ? projects.find((candidate) => candidate.id === session.projectId)
-        : undefined
-      const subjectLabels = getSessionSubjectIds(session, project)
-        .map((subjectId) => getSubjectById(subjectId)?.shortCode ?? subjectId)
-        .join(", ")
-      return {
-        id: session.id,
-        title: session.title,
-        subtitle: project?.name ?? (subjectLabels || "Study session"),
-        timestamp: session.execution.state === "completed" ? session.execution.completedAt : session.updated_at!,
-        kind: "session",
-        session,
-      }
-    })
-  const recentEvents: RecentActivityItem[] = events
-    .filter((event) => event.isFinished && event.finishedAt)
-    .map((event) => ({
-      id: event.id,
-      title: event.title,
-      subtitle: getSubjectById(event.subjectId)?.shortCode ?? getEventTypeInfo(event.eventType).label,
-      timestamp: event.finishedAt!,
-      kind: "event",
-      event,
-    }))
-
-  const studyBySubject = Object.entries(getCompletedStudyMinutesBySubject(sessions, projects))
-    .map(([subjectId, minutes]) => {
-      const subject = getSubjectById(subjectId)
-      return [subjectId, {
-        minutes,
-        icon: subject?.icon ?? "",
-        shortCode: subject?.shortCode ?? subjectId,
-      }] as const
-    })
 
   const deadlinesByDate: Record<string, Project[]> = {}
   for (const project of projectsWithDeadlines) {
@@ -128,28 +66,7 @@ export function buildTodayOverview(
     projectsWithDeadlines,
     overdueProjects,
     dueThisWeek,
-    completedSessions: completedSessionItems.length,
-    totalStudyHours: Math.round((totalStudyMinutes / 60) * 10) / 10,
-    priorityItems: getPriorityItems({
-      projects,
-      sessions,
-      events,
-      now: now.getTime(),
-    }),
     planningSubjects: Array.from(subjectsById.values()),
-    recentActivity: [...recentSessions, ...recentEvents]
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 7),
-    topSubjects: studyBySubject
-      .filter(([, info]) => info.minutes > 0)
-      .sort(([, a], [, b]) => b.minutes - a.minutes)
-      .slice(0, 3),
-    upcomingSessions: sessions
-      .filter((session) => {
-        const start = new Date(session.schedule.blocks[0].start)
-        return start >= now && start <= nextWeek && session.execution.state === "planned"
-      })
-      .sort((a, b) => new Date(a.schedule.blocks[0].start).getTime() - new Date(b.schedule.blocks[0].start).getTime()),
     upcomingEvents: events
       .filter((event) => {
         const start = new Date(event.startTime)

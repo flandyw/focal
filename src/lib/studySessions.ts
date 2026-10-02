@@ -475,7 +475,3 @@ export function startPlannedStudySession(
     },
   }, input.startedAt)
 }
-
-export function studySessionPayload(session: StudySession): Record<string, unknown> {
-  return { ...normalizeStudySession(session) }
-}

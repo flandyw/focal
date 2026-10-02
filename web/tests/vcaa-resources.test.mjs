@@ -11,6 +11,22 @@ test("parses VCAA study pages and classifies official resources", () => {
     ])
 })
 
+test("deduplicates after selection, keeping the first eligible label and original order per call", () => {
+  const study = "/assessment/vce/examination-specifications-past-examinations-and-examination-reports/english"
+  const index = `<a href="${study}"></a><a href="${study}">English</a><a href="${study}">Renamed</a><a href="${study}-language">English Language</a>`
+  const html = '<a href="/files/2025-English.pdf"></a><a href="/files/2025-English.pdf">2025 Exam (1 MB)</a><a href="/files/2025-report.pdf">2025 report</a><a href="/files/2025-English.pdf">2025 report</a>'
+  for (let call = 0; call < 2; call++) {
+    expect(parseStudyIndex(index)).toEqual([
+      { studyName: "English", pageUrl: `https://www.vcaa.vic.edu.au${study}` },
+      { studyName: "English Language", pageUrl: `https://www.vcaa.vic.edu.au${study}-language` },
+    ])
+    expect(parseStudyResources(html)).toEqual([
+      { label: "2025 Exam", url: "https://www.vcaa.vic.edu.au/files/2025-English.pdf", kind: "exam", year: 2025 },
+      { label: "2025 report", url: "https://www.vcaa.vic.edu.au/files/2025-report.pdf", kind: "report", year: 2025 },
+    ])
+  }
+})
+
 test("does not classify presentation transcripts as exam papers", () => {
   expect(parseStudyResources('<a href="/sites/default/files/2025-04/VCE_Mathematical_Methods_Exam_1.docx">Mathematics Methods Examination 1 transcript</a>'))
     .toEqual([{

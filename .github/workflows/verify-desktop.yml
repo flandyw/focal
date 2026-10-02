@@ -69,4 +69,5 @@ jobs:
       - run: bun run test:logic
       - run: bun run build:chatgpt-sidecar
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: bun run build
+      # ponytail: `check` already typechecked this checkout; build only the bundle.
+      - run: bunx --no-install vite build

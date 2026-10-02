@@ -180,19 +180,6 @@ export function isPermanentError(error: unknown): boolean {
     || message.includes("jwt")
 }
 
-/** Rate limits and server faults are worth retrying, just not immediately. */
-export function isTransientError(error: unknown): boolean {
-  const message = errorMessage(error).toLowerCase()
-  return message.includes("rate limit")
-    || message.includes("too many requests")
-    || message.includes("429")
-    || message.includes("timeout")
-    || message.includes("service unavailable")
-    || message.includes("502")
-    || message.includes("503")
-    || message.includes("504")
-}
-
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   if (isObject(error) && typeof error.message === "string") return error.message

@@ -97,10 +97,15 @@ export function buildPerformanceContextAnalysis(
     })),
   ]
   const groupScores = new Map<string, number[]>()
-  for (const item of completed) groupScores.set(item.group, [...(groupScores.get(item.group) ?? []), item.score])
+  for (const item of completed) {
+    const bucket = groupScores.get(item.group) ?? []
+    bucket.push(item.score)
+    groupScores.set(item.group, bucket)
+  }
+  const groupMeans = new Map([...groupScores].map(([group, scores]) => [group, average(scores)]))
   const normalised = completed.map((item) => ({
     ...item,
-    score: item.score - average(groupScores.get(item.group)!),
+    score: item.score - groupMeans.get(item.group)!,
   }))
   const recordedAssessments = completed.filter((item) => hasPerformanceContext(item.context)).length
   const insights = FACTORS.flatMap((factor) => {
@@ -113,9 +118,10 @@ export function buildPerformanceContextAnalysis(
     const scores = observations.map((item) => item.score)
     const correlation = pearson(values, scores)
     const valueMean = average(values)
+    const scoreMean = average(scores)
     const denominator = values.reduce((total, value) => total + (value - valueMean) ** 2, 0)
     const slope = denominator
-      ? values.reduce((total, value, index) => total + (value - valueMean) * (scores[index] - average(scores)), 0) / denominator
+      ? values.reduce((total, value, index) => total + (value - valueMean) * (scores[index] - scoreMean), 0) / denominator
       : 0
     return [{
       key: factor.key,

@@ -97,14 +97,6 @@ export function daysUntil(entry: TimetableEntry, now: Date = new Date()): number
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 }
 
-export function loadTimetable(): Promise<Timetable | null> {
-  if (typeof fetch === "undefined") return Promise.resolve(null)
-  return fetch("/vce-2026-timetable.json")
-    .then((response) => (response.ok ? response.json() : null))
-    .then((value: unknown) => (isTimetable(value) ? value : null))
-    .catch(() => null)
-}
-
 export function formatExamLabel(entry: TimetableEntry): string {
   return entry.paper ? `${entry.subject} · ${entry.paper}` : entry.subject
 }

@@ -94,7 +94,9 @@ function buildOutlook(subject: string, attempts: ExamAttempt[], settings?: ExamD
 export function buildSubjectOutlooks(attempts: ExamAttempt[], settings?: ExamDifficultySettings): SubjectOutlook[] {
   const grouped = new Map<string, ExamAttempt[]>()
   for (const attempt of attempts) {
-    grouped.set(attempt.subject, [...(grouped.get(attempt.subject) ?? []), attempt])
+    const bucket = grouped.get(attempt.subject) ?? []
+    bucket.push(attempt)
+    grouped.set(attempt.subject, bucket)
   }
   return [...grouped.entries()]
     .map(([subject, subjectAttempts]) => buildOutlook(subject, subjectAttempts, settings))
@@ -447,7 +449,9 @@ export function buildLostMarksAttribution(attempts: ExamAttempt[], mistakes: Mis
   for (const mistake of mistakes) {
     if (!attemptMap.has(mistake.attemptId) || mistake.suspended) continue
     const key = `${mistake.attemptId}\u0000${normaliseQuestionLabel(mistake.question)}`
-    mistakesByQuestion.set(key, [...(mistakesByQuestion.get(key) ?? []), mistake])
+    const bucket = mistakesByQuestion.get(key) ?? []
+    bucket.push(mistake)
+    mistakesByQuestion.set(key, bucket)
   }
   const questionLoss = new Map<string, number>()
   for (const attempt of recentAttempts) {

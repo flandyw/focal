@@ -80,21 +80,6 @@ export const staggerItem: Variants = {
   exit: { opacity: 0, y: -4, transition: TRANSITION.exit },
 }
 
-/**
- * HomeView mount entrance — single subtle fade + 4px rise. Stays under
- * PRODUCT.md's "Faster ingress, no gratuitous animations" ceiling (~250ms via
- * TRANSITION.view). Reduced-motion users bypass these variants at the call
- * site by passing `initial={false}` so the mount renders paint-ready.
- *
- * Goal: orient the user to the calendar immediately on view. The visual work
- * is carried by the state-conditional halos on Overdue / current period /
- * selection toolbar — not by this single mount.
- */
-export const homeEnter: Variants = {
-  initial: { opacity: 0, y: 4 },
-  animate: { opacity: 1, y: 0, transition: TRANSITION.view },
-}
-
 /* -------------------------- Hover / Tap props -------------------------- */
 
 /** Pressable element feel — subtle lift on hover, gentle press on tap. */

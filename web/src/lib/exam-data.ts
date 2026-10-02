@@ -396,8 +396,11 @@ export function recordMistakeReview(
 
 export function getDueMistakes(mistakes: Mistake[], now = new Date()): Mistake[] {
   const timestamp = now.getTime()
-  return mistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= timestamp)
-    .toSorted((first, second) => getMistakeSchedule(first).dueAt.localeCompare(getMistakeSchedule(second).dueAt))
+  return mistakes.filter((mistake) => !mistake.suspended)
+    .map((mistake) => ({ mistake, dueAt: getMistakeSchedule(mistake).dueAt }))
+    .filter(({ dueAt }) => new Date(dueAt).getTime() <= timestamp)
+    .toSorted((first, second) => first.dueAt.localeCompare(second.dueAt))
+    .map(({ mistake }) => mistake)
 }
 
 /**
@@ -417,8 +420,11 @@ export function localDayDifference(date: Date, from: Date): number {
  */
 export function getOverdueMistakes(mistakes: Mistake[], now = new Date()): Mistake[] {
   return mistakes
-    .filter((mistake) => !mistake.suspended && localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), now) < 0)
-    .toSorted((first, second) => getMistakeSchedule(first).dueAt.localeCompare(getMistakeSchedule(second).dueAt))
+    .filter((mistake) => !mistake.suspended)
+    .map((mistake) => ({ mistake, dueAt: getMistakeSchedule(mistake).dueAt }))
+    .filter(({ dueAt }) => localDayDifference(new Date(dueAt), now) < 0)
+    .toSorted((first, second) => first.dueAt.localeCompare(second.dueAt))
+    .map(({ mistake }) => mistake)
 }
 
 export type CoverageArea = {

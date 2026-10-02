@@ -18,13 +18,19 @@ function anchors(html) {
 }
 
 export function parseStudyIndex(html) {
+  const seen = new Set()
   const prefix = `${BASE}/assessment/vce/examination-specifications-past-examinations-and-examination-reports/`
   return anchors(html).filter((link) => link.url.startsWith(prefix) && link.url !== INDEX && link.label)
-    .filter((link, index, all) => all.findIndex((item) => item.url === link.url) === index)
+    .filter((link) => {
+      if (seen.has(link.url)) return false
+      seen.add(link.url)
+      return true
+    })
     .map((link) => ({ studyName: link.label, pageUrl: link.url }))
 }
 
 export function parseStudyResources(html) {
+  const seen = new Set()
   return anchors(html).flatMap((link) => {
     if (!/\.(pdf|docx?|zip)(\?|$)/i.test(link.url) || !link.label) return []
     const label = link.label.replace(/\([^)]*\b(?:KB|MB)\b[^)]*\)/gi, "").trim()
@@ -40,7 +46,11 @@ export function parseStudyResources(html) {
     const shortYear = link.url.match(/(?:rep|nov|_)(\d{2})(?:\D|$)/i)?.[1]
     const year = Number(fullYear ?? (shortYear ? `20${shortYear}` : 0)) || null
     return [{ label, url: link.url, kind, year }]
-  }).filter((link, index, all) => all.findIndex((item) => item.url === link.url) === index)
+  }).filter((link) => {
+    if (seen.has(link.url)) return false
+    seen.add(link.url)
+    return true
+  })
 }
 
 async function main() {

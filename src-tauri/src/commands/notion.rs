@@ -245,62 +245,16 @@ pub async fn query_notion_calendar(token: String, data_source_id: String) -> Not
             Err(e) => return query_error("NETWORK_ERROR", &format!("Network error: {}", e)),
         };
 
-        let status = response.status();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            let body = response.text().await.unwrap_or_default();
-            let message = if body.is_empty() {
-                "Notion rejected the integration token".to_string()
-            } else {
-                format!("Notion rejected the integration token: {}", body)
-            };
-            return query_error("NOTION_UNAUTHORIZED", &message);
-        }
-
-        if !status.is_success() {
-            let retry_after_ms = response
-                .headers()
-                .get(reqwest::header::RETRY_AFTER)
-                .and_then(|value| value.to_str().ok())
-                .and_then(|value| value.parse::<f64>().ok())
-                .map(|seconds| (seconds * 1000.0).ceil() as u64);
-            let body = response.text().await.unwrap_or_default();
-            let notion_code = serde_json::from_str::<Value>(&body)
-                .ok()
-                .and_then(|v| {
-                    v.get("code")
-                        .and_then(|c| c.as_str())
-                        .map(|s| s.to_string())
-                })
-                .unwrap_or_else(|| {
-                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        "rate_limited"
-                    } else if status == reqwest::StatusCode::REQUEST_TIMEOUT {
-                        "gateway_timeout"
-                    } else if status.is_server_error() {
-                        "service_unavailable"
-                    } else {
-                        "NOTION_ERROR"
-                    }
-                    .to_string()
-                });
-            let message = if body.is_empty() {
-                format!("Notion returned {}", status)
-            } else {
-                format!("Notion returned {}: {}", status, body)
-            };
-            return NotionQueryResponse {
-                data: None,
-                error: Some(NotionError {
-                    code: notion_code,
-                    message,
-                    retry_after_ms,
-                }),
-            };
-        }
-
-        let json: Value = match response.json().await {
-            Ok(v) => v,
-            Err(e) => return query_error("NOTION_ERROR", &format!("Invalid response: {}", e)),
+        let parsed = parse_notion_response(response).await;
+        let json = match (parsed.data, parsed.error) {
+            (Some(data), None) => data,
+            (_, Some(error)) => {
+                return NotionQueryResponse {
+                    data: None,
+                    error: Some(error),
+                };
+            }
+            (None, None) => return query_error("NOTION_ERROR", "Invalid response: empty response"),
         };
 
         if let Some(results) = json.get("results").and_then(|v| v.as_array()) {
@@ -568,4 +522,73 @@ pub async fn delete_notion_page(token: String, page_id: String) -> NotionPageRes
     };
 
     parse_notion_response(response).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::TcpListener;
+
+    #[test]
+    fn parse_notion_response_success_and_errors() {
+        #[rustfmt::skip]
+        let cases = [
+            (200, r#"{"results":[{"id":"page"}],"next_cursor":null}"#, "", "", "", None),
+            (200, "not json", "", "NOTION_ERROR", "Invalid response: ", None),
+            (401, "", "", "NOTION_UNAUTHORIZED", "Notion rejected the integration token", None),
+            (401, "denied", "Retry-After: 2\r\n", "NOTION_UNAUTHORIZED", "Notion rejected the integration token: denied", None),
+            (429, "slow down", "Retry-After: 1.2501\r\n", "rate_limited", "Notion returned 429 Too Many Requests: slow down", Some(1251)),
+            (404, r#"{"code":"object_not_found"}"#, "", "object_not_found", "Notion returned 404 Not Found: {\"code\":\"object_not_found\"}", None),
+            (503, "", "", "service_unavailable", "Notion returned 503 Service Unavailable", None),
+            (408, "", "Retry-After: invalid\r\n", "gateway_timeout", "Notion returned 408 Request Timeout", None),
+            (400, "bad request", "", "NOTION_ERROR", "Notion returned 400 Bad Request: bad request", None),
+        ];
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for (status, body, headers, ..) in cases {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                for line in BufReader::new(&stream).lines() {
+                    if line.unwrap().is_empty() {
+                        break;
+                    }
+                }
+                write!(stream, "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}", body.len()).unwrap();
+            }
+        });
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                for (status, body, _, code, message, retry_after_ms) in cases {
+                    let parsed =
+                        parse_notion_response(client.get(&url).send().await.unwrap()).await;
+                    if code.is_empty() {
+                        assert!(parsed.error.is_none());
+                        assert_eq!(parsed.data, Some(serde_json::from_str(body).unwrap()));
+                    } else {
+                        assert!(parsed.data.is_none());
+                        let error = parsed.error.unwrap();
+                        assert_eq!(error.code, code, "status {status}");
+                        if status == 200 {
+                            assert!(error.message.starts_with(message));
+                        } else {
+                            assert_eq!(error.message, message);
+                        }
+                        assert_eq!(error.retry_after_ms, retry_after_ms);
+                    }
+                }
+            });
+        server.join().unwrap();
+    }
 }

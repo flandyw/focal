@@ -29,6 +29,18 @@ test("matches optional distributions and logged VCAA attempts", () => {
   expect(isVcaaExamLogged(exam, [{ ...attempt, paper: "Exam 2" }])).toBe(false)
 })
 
+test("logged existence matches latest-attempt lookup across normalization, papers and providers", () => {
+  const attempt = { provider: " vcaa ", examYear: 2006, subject: "Mathematical-Methods", paper: "WRITTEN EXAMINATION 1",
+    completedAt: "2026-07-01", updatedAt: "2026-07-01" } as ExamAttempt
+  for (const candidate of [exam, { ...exam, year: null }, { ...exam, label: "2006 examination" },
+    { ...exam, label: "2006 paper 2" }, { ...exam, pageUrl: "https://example.test/nht/methods" }]) {
+    for (const attempts of [[], [attempt], [attempt, { ...attempt, completedAt: "2026-08-01" }],
+      [{ ...attempt, provider: "VCAA NHT" }], [{ ...attempt, examYear: 2007 }], [{ ...attempt, subject: "English" }]]) {
+      expect(isVcaaExamLogged(candidate, attempts)).toBe(Boolean(findVcaaExamAttempt(candidate, attempts)))
+    }
+  }
+})
+
 test("excludes accessibility transcripts from the exam list", () => {
   expect(getVcaaExams([{ studyName: "English", pageUrl: exam.pageUrl, resources: [
     { label: "2025 VCE English examination", url: "https://example.test/exam.pdf", kind: "exam", year: 2025 },

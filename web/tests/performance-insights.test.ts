@@ -162,6 +162,59 @@ describe("performance insights", () => {
     expect(analysis.insights.find((item) => item.key === "stress")?.favourableChange).toBeGreaterThan(0)
   })
 
+  test("keeps baseline context arithmetic across subjects, assessment types and missing context", () => {
+    const attempts = [55, 80, 70, 90, 85, 100].map((score, index) => ({
+      ...makeAttempt(`exam-${index}`, score, "2026-07-01"),
+      subject: index % 2 ? "English" : " Mathematical Methods ",
+      performanceContext: index === 5 ? undefined : { sleepHours: 6 + index / 2, stress: (5 - index) as 1 | 2 | 3 | 4 | 5 },
+    }))
+    const sacs: SacRecord[] = [20, 30, 40, 50].map((score, index) => ({
+      id: `sac-${index}`, subject: index % 2 ? "English" : "mathematical methods", provider: "School", title: "SAC", unit: 3,
+      scheduledAt: "2026-07-01", durationMinutes: 50, score, maxScore: 50, createdAt: "2026-07-01", updatedAt: "2026-07-01",
+      performanceContext: index === 3 ? undefined : { sleepHours: 7 + index / 2, stress: (4 - index) as 1 | 2 | 3 | 4 | 5 },
+    }))
+    const before = structuredClone({ attempts, sacs })
+    // Exact output captured from 608a24f, without a duplicated implementation.
+    expect(buildPerformanceContextAnalysis(attempts, sacs)).toEqual({
+      completedAssessments: 10, recordedAssessments: 8,
+      insights: [
+        { key: "stress", label: "Stress", sampleSize: 8, average: 3, favourableChange: 18.333333333333332,
+          correlation: -0.7847140125070639, condition: "2 points less stress",
+          action: "Use gradual exam-condition exposure and a repeatable pre-start breathing routine." },
+        { key: "sleepHours", label: "Sleep", sampleSize: 8, average: 7.1875, favourableChange: 14.594594594594593,
+          correlation: 0.6717193849539869, condition: "an extra hour of sleep",
+          action: "Protect a consistent sleep window before important assessments." },
+      ],
+    })
+    expect({ attempts, sacs }).toEqual(before)
+  })
+
+  test("groups interleaved subjects and repeated question mistakes without changing inputs", () => {
+    const attempts = ["English", "Mathematical Methods", "English", "Mathematical Methods"].map((subject, index) => ({
+      ...makeAttempt(`exam-${index}`, 60, "2026-07-01"), subject,
+      questionResults: [{ id: "q1", label: "4b", marksAwarded: 0, maxMarks: 10 }],
+    }))
+    const mistakes = [
+      makeMistake({ attemptId: "exam-1", category: "Algebra" }),
+      makeMistake({ id: "m2", attemptId: "exam-1", category: "Calculator" }),
+      makeMistake({ id: "m3", attemptId: "exam-0", marksLost: 99 }),
+      makeMistake({ id: "m4", attemptId: "exam-1", marksLost: 99, suspended: true }),
+    ]
+    const before = structuredClone({ attempts, mistakes })
+    expect(buildSubjectOutlooks(attempts).map(({ subject, attempts, currentAverage }) => ({ subject, attempts, currentAverage }))).toEqual([
+      { subject: "English", attempts: 2, currentAverage: 60 },
+      { subject: "Mathematical Methods", attempts: 2, currentAverage: 60 },
+    ])
+    expect(buildLostMarksAttribution(attempts, mistakes, "Mathematical Methods")).toMatchObject({
+      attributedMarks: 10, categories: [
+        { category: "Unattributed", marks: 70, exam1: 70, exam2: 0, other: 0 },
+        { category: "Algebra", marks: 5, exam1: 5, exam2: 0, other: 0 },
+        { category: "Calculator", marks: 5, exam1: 5, exam2: 0, other: 0 },
+      ],
+    })
+    expect({ attempts, mistakes }).toEqual(before)
+  })
+
   test("requires valid optional context ratings", () => {
     expect(isPerformanceContext({ sleepHours: 7.5, energy: 4, stress: 2 })).toBe(true)
     expect(isPerformanceContext({ sleepHours: 25 })).toBe(false)

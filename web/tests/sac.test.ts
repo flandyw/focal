@@ -66,15 +66,19 @@ describe("SAC tracking", () => {
   test("computes weighted results, trends, time, and upcoming work", () => {
     const second = { ...base, id: "sac-2", title: "Probability SAC", scheduledAt: "2026-09-01", completedAt: "2026-09-01", score: 45, weighting: 30, timing: undefined }
     const upcoming = { ...base, id: "sac-3", title: "Statistics SAC", scheduledAt: "2026-10-01", score: undefined, maxScore: undefined, completedAt: undefined, timing: undefined }
-    const records = [base, second, upcoming]
+    const english = { ...base, id: "english", subject: "English" }
+    const records = [base, english, second, upcoming]
+    const before = structuredClone(records)
     const stats = computeSacStats(records, "2026-09-15")
 
     expect(sacPercentage(base)).toBe(80)
-    expect(stats).toMatchObject({ total: 3, completed: 2, upcoming: 1, average: 86, best: 90, totalTimedSeconds: 3120, trend: 10 })
+    expect(stats).toMatchObject({ total: 4, completed: 3, upcoming: 1, average: (80 * 20 + 80 * 20 + 90 * 30) / 70, best: 90, totalTimedSeconds: 6240, trend: 10 })
     expect(getUpcomingSacs(records, "2026-09-15")).toEqual([upcoming])
     expect(buildSacSubjectStats(records, "2026-09-15")).toEqual([
-      expect.objectContaining({ subject: "Mathematical Methods", completed: 2, upcoming: 1, average: 86, best: 90 }),
+      { subject: "Mathematical Methods", completed: 2, upcoming: 1, average: 86, best: 90 },
+      { subject: "English", completed: 1, upcoming: 0, average: 80, best: 80 },
     ])
+    expect(records).toEqual(before)
   })
 
   test("moves from countdown to overtime", () => {

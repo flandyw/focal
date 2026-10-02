@@ -171,11 +171,6 @@ export async function readRecords(kind: CoreRecordKind): Promise<unknown[]> {
   return parseStoredPayloads(await readRecordRows(kind))
 }
 
-// Import/export compatibility; normal row readers address records by kind.
-export async function readPersistedArray(fileName: CoreDataFile): Promise<unknown[]> {
-  return readRecords(coreRecordKind(fileName))
-}
-
 export async function writePersistedArray(fileName: CoreDataFile, items: unknown[]): Promise<void> {
   await ensureLegacyImport(fileName)
   await withWriteLock(fileName, async () => {

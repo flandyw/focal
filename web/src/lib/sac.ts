@@ -183,7 +183,11 @@ export function computeSacStats(records: SacRecord[], today = new Date().toISOSt
 
 export function buildSacSubjectStats(records: SacRecord[], today = new Date().toISOString().slice(0, 10)): SacSubjectStats[] {
   const subjects = new Map<string, SacRecord[]>()
-  for (const record of records) subjects.set(record.subject, [...(subjects.get(record.subject) ?? []), record])
+  for (const record of records) {
+    const bucket = subjects.get(record.subject) ?? []
+    bucket.push(record)
+    subjects.set(record.subject, bucket)
+  }
   return [...subjects.entries()].map(([subject, subjectRecords]) => {
     const completed = subjectRecords.filter(isCompletedSac)
     const percentages = completed.map((record) => sacPercentage(record)!)

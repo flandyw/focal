@@ -1,3 +1,5 @@
+import { deepStrictEqual } from "node:assert"
+import { format, parseISO } from "date-fns"
 import { getCompletedStudyMinutesBySubject } from "../src/lib/planning"
 import { createStudySession, updateStudySession } from "../src/lib/studySessions"
 import { buildTodayOverview } from "../src/features/home/todayOverview"
@@ -43,6 +45,27 @@ const overview = buildTodayOverview([{
   finishedAt: "2026-07-12T10:00:00Z",
   created_at: "2026-07-01T00:00:00Z",
 }, {
+  id: "multi-day",
+  title: "Study camp",
+  startTime: "2026-07-14T23:30:00",
+  endTime: "2026-07-16T00:00:00",
+  eventType: "other",
+  created_at: "2026-07-01T00:00:00Z",
+}, {
+  id: "finished-future",
+  title: "Finished event",
+  startTime: "2026-07-15T09:00:00Z",
+  eventType: "other",
+  isFinished: true,
+  finishedAt: "2026-07-12T10:00:00Z",
+  created_at: "2026-07-01T00:00:00Z",
+}, {
+  id: "beyond-next-week",
+  title: "Later exam",
+  startTime: "2026-07-21T09:00:00Z",
+  eventType: "exam",
+  created_at: "2026-07-01T00:00:00Z",
+}, {
   id: "event-2",
   title: "Methods exam",
   startTime: "2026-07-14T09:00:00Z",
@@ -50,17 +73,36 @@ const overview = buildTodayOverview([{
   created_at: "2026-07-01T00:00:00Z",
 }], new Date("2026-07-13T00:00:00Z"))
 
-if (overview.completedSessions !== 1 || overview.totalStudyHours !== 1) {
-  throw new Error(`Today overview counted study incorrectly: ${JSON.stringify(overview)}`)
-}
 if (overview.dueThisWeek[0]?.id !== "assessment-1") {
   throw new Error("Today overview lost the next assessment")
 }
 if (overview.activeProjects.some((project) => project.id === "archived-assessment")) {
   throw new Error("Today overview counted an archived assessment as active")
 }
-if (overview.recentActivity.find((item) => item.id === "event-1")?.subtitle !== "Other") {
-  throw new Error("Today overview exposed a raw event type")
+deepStrictEqual(overview.deadlinesByDate, {
+  [format(parseISO("2026-07-14T09:00:00Z"), "yyyy-MM-dd")]: [overview.activeProjects[0]],
+}, "Deadline index should exclude archived assessments")
+deepStrictEqual(overview.sessionsByDate, {
+  [format(parseISO(planned.schedule.blocks[0].start), "yyyy-MM-dd")]: [planned, completed],
+}, "Session index should retain planned and completed sessions in input order")
+deepStrictEqual(overview.upcomingEvents.map((event) => event.id), ["event-2", "multi-day"],
+  "Upcoming events should be sorted and exclude past, finished and out-of-window events")
+for (const date of ["2026-07-14", "2026-07-15", "2026-07-16"]) {
+  deepStrictEqual(overview.eventsByDate[date].filter((event) => event.id === "multi-day").map((event) => event.id),
+    ["multi-day"], "Multi-day events should include every local date, including a midnight end")
+}
+if (overview.eventsByDate["2026-07-13"]?.some((event) => event.id === "multi-day")
+  || overview.eventsByDate["2026-07-17"]?.some((event) => event.id === "multi-day")) {
+  throw new Error("Multi-day event index extended beyond the event dates")
+}
+for (const [eventId, startTime] of [
+  ["event-1", "2026-07-12T09:00:00Z"],
+  ["event-2", "2026-07-14T09:00:00Z"],
+  ["finished-future", "2026-07-15T09:00:00Z"],
+  ["beyond-next-week", "2026-07-21T09:00:00Z"],
+]) {
+  deepStrictEqual(overview.eventsByDate[format(parseISO(startTime), "yyyy-MM-dd")].filter((item) => item.id === eventId).map((item) => item.id),
+    [eventId], "Single-day events should remain indexed regardless of completion or upcoming status")
 }
 
 const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()

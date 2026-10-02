@@ -386,7 +386,7 @@ try {
   else if (command === "export") await runExport(args)
   else if (command === "import") await runImport(args)
   else if (command === undefined) {
-    // Bare invocation is what scripts/check-all.mjs runs, so default to the self-check.
+    // Bare invocation defaults to the self-check.
     selfTest()
     usage()
   } else {

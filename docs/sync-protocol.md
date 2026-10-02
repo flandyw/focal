@@ -122,15 +122,9 @@ representation.
 
 ## Checks
 
-- `bun run test:logic` runs the root protocol and migration checks.
-- `bun run typecheck` checks the shared TypeScript contract and Focal client.
-- `cd web && bun test && bun run build` checks ExamTrack behavior and production compilation.
-- `bun run check:study-sessions` and `bun run test:logic` check session migrations,
-  protocol behavior and shared conformance vectors; `bun run typecheck` checks the shared
-  TypeScript contract.
-- `supabase/tests/study_session_commands.test.sql` and
-  `supabase/tests/study_session_offline_timing.test.sql` exercise lifecycle, replay,
-  offline timing, terminal protection, cursor reads and RLS against local Supabase
-  (`supabase test db`). `supabase/tests/examtrack_cursor_sync.test.sql` covers revision
-  receipts, stale writes, compatibility projections and legacy timer cleanup.
-- `cd web && bun test && bun run build`; `cd ../folio && ./gradlew :app:testDebugUnitTest`.
+This repo has no test suite (see `AGENTS.md`). Verify changes with:
+
+- `bun run check` — typecheck (`tsc --noEmit`) + lint (`oxlint`) for the root app.
+- `bun run typecheck` — the shared TypeScript contract and Focal client only.
+- `cd web && bun run lint && bun run build` — ExamTrack production compilation.
+- `bunx --no-install vite build` — desktop bundle (needs `bun run check` first).

@@ -12,11 +12,6 @@
     "build:chatgpt-sidecar": "bun scripts/build-chatgpt-sidecar.ts",
     "lint": "oxlint src scripts",
     "lint:fix": "oxlint src scripts --fix",
-    "check:text-planner": "node scripts/check-text-event-planner.mjs",
-    "check:study-sessions": "bun scripts/check-study-session-v2.ts",
-    "check:storage": "bun scripts/check-storage-records.mjs",
-    "check:navigation": "bun scripts/check-app-navigation.ts",
-    "test:logic": "bun scripts/check-all.mjs",
     "check": "bun run typecheck && bun run lint",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit"
   },

@@ -104,13 +104,13 @@ bun run tauri dev    # Full Tauri desktop app in dev mode
 ```
 
 ```bash
-bun run check        # types + lint + every logic self-check
+bun run check        # types + lint
 bun run typecheck    # tsc --noEmit
 bun run lint         # oxlint
 bun run lint:fix     # oxlint auto-fix
 ```
 
-Focused self-checks live in `scripts/` and are collected by `bun run test:logic`. Adding a new AI provider is documented in [`PROVIDERS.md`](./PROVIDERS.md).
+Adding a new AI provider is documented in [`PROVIDERS.md`](./PROVIDERS.md). This repo has no test suite; `AGENTS.md` forbids writing one.
 
 Local SQLite migrations are immutable after release. Do not edit `src-tauri/migrations/0001_local_database.sql`; add version 2 or later and register it in `src-tauri/src/lib.rs`.
 

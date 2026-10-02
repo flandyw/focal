@@ -1,9 +1,7 @@
 /**
- * The pure core of sync protocol v3, and the only part of it that is worth testing
- * twice. Everything here is a total function of its arguments: no I/O, no clock, no
- * randomness. `scripts/check-sync-conformance.mjs` and Folio's `SyncConformanceTests`
- * run the same vectors against their own implementation, so a divergence between the
- * two clients fails a build instead of losing somebody's work.
+ * The pure core of sync protocol v3. Everything here is a total function of its
+ * arguments: no I/O, no clock, no randomness, so both Focal and Folio can run the
+ * same reduction over the same vectors and get the same answer.
  *
  * See `docs/sync-protocol.md` for the rules these functions implement.
  */

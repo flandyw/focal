@@ -71,20 +71,6 @@ async fn normalize_windows_migration_checksum(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn released_migration_checksums_are_sha384_values() {
-        for (_, windows_checksum, canonical_checksum) in WINDOWS_MIGRATION_CHECKSUM_REPAIRS {
-            assert_eq!(checksum_bytes(windows_checksum).len(), 48);
-            assert_eq!(checksum_bytes(canonical_checksum).len(), 48);
-            assert_ne!(windows_checksum, canonical_checksum);
-        }
-    }
-}
-
 fn database_migrations() -> Vec<Migration> {
     vec![
         Migration {

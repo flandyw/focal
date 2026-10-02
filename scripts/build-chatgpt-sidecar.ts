@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { execFileSync, spawnSync } from "node:child_process"
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"

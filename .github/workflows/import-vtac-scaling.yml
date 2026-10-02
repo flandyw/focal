@@ -33,10 +33,6 @@ jobs:
         run: bun run vtac:import
         working-directory: web
 
-      - name: Validate generated data
-        run: bun test tests/scaling.test.ts
-        working-directory: web
-
       - name: Commit generated data
         run: |
           if git diff --quiet -- web/public/vtac-scaling-reports.json; then

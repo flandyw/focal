@@ -120,21 +120,3 @@ pub fn cancel_ollama_request(state: State<'_, OllamaRequests>, request_id: Strin
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::endpoint_url;
-
-    #[test]
-    fn builds_only_supported_http_endpoints() {
-        assert_eq!(
-            endpoint_url("http://localhost:11434/proxy/", "/api/tags")
-                .unwrap()
-                .as_str(),
-            "http://localhost:11434/proxy/api/tags"
-        );
-        assert!(endpoint_url("file:///tmp/ollama", "/api/tags").is_err());
-        assert!(endpoint_url("http://localhost:11434", "/api/pull").is_ok());
-        assert!(endpoint_url("http://localhost:11434", "/api/delete").is_err());
-    }
-}

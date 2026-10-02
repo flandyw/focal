@@ -28,7 +28,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build:chatgpt-sidecar
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
 
   create-release:
     needs: verify

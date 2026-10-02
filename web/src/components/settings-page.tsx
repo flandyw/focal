@@ -165,7 +165,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           <div className="flex flex-wrap items-end gap-3">
             <Field className="w-full max-w-xs">
               <FieldLabel htmlFor="difficulty-strength">Adjustment strength</FieldLabel>
-              <Select value={difficulty.strength} onValueChange={(value) => updateDifficulty({ strength: (value ?? "balanced") as ExamDifficultySettings["strength"] })} disabled={!difficulty.enabled}>
+              <Select items={{ light: "Light · 1 point per rank", balanced: "Balanced · 1.5 points per rank", strong: "Strong · 2 points per rank" }} value={difficulty.strength} onValueChange={(value) => updateDifficulty({ strength: (value ?? "balanced") as ExamDifficultySettings["strength"] })} disabled={!difficulty.enabled}>
                 <SelectTrigger id="difficulty-strength" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="light">Light · 1 point per rank</SelectItem>

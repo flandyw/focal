@@ -52,7 +52,7 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
           <Field><FieldLabel htmlFor="edit-marks">Total marks</FieldLabel><Input id="edit-marks" type="number" min="0.5" max="500" step="0.5" value={marks} onChange={(event) => setMarks(event.target.value)} required /></Field>
         </div>
         {timer && preview ? <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-          <p className="font-medium">After saving: {timer.phase === "overtime" ? `${formatTimer(timer.overtimeSeconds)} overtime` : `${formatTimer(timer.remainingSeconds)} ${timer.phase} remaining`}</p>
+          <p className="font-medium">After saving: {timer.phase === "overtime" ? `${formatTimer(timer.overtimeSeconds)} overtime` : `${formatTimer(timer.remainingSeconds)} ${timer.phase === "reading" ? "reading time" : "writing time"} remaining`}</p>
           <p className="mt-1 text-muted-foreground">{(preview.writingMinutes / preview.marks).toFixed(2)} minutes per mark · {preview.marks} marks</p>
           {timer.phase === "overtime" ? <p className="mt-2">The new duration is shorter than the time already used. Your exam will record overtime.</p> : null}
         </div> : null}

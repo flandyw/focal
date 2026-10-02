@@ -130,7 +130,7 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="sac-unit">Unit</FieldLabel>
-                <Select value={unit === null ? null : String(unit)} onValueChange={(value) => setUnit(value === null ? null : Number(value) as SacUnit)}>
+                <Select items={SAC_UNITS.map((option) => ({ value: String(option), label: `Unit ${option}` }))} value={unit === null ? null : String(unit)} onValueChange={(value) => setUnit(value === null ? null : Number(value) as SacUnit)}>
                   <SelectTrigger id="sac-unit" className="w-full"><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>{SAC_UNITS.map((option) => <SelectItem key={option} value={String(option)}>Unit {option}</SelectItem>)}</SelectContent>
                 </Select>

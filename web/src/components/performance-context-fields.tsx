@@ -44,6 +44,7 @@ export function PerformanceContextFields({ value, onChange, idPrefix }: Performa
           <Field key={factor.key}>
             <FieldLabel htmlFor={`${idPrefix}-${factor.key}`}>{factor.label}</FieldLabel>
             <Select
+              items={[{ value: "unset", label: "Not recorded" }, ...ratingLabels.map((label, index) => ({ value: String(index + 1), label: `${index + 1} · ${label}` }))]}
               value={value[factor.key]?.toString() ?? "unset"}
               onValueChange={(next) => onChange({ ...value, [factor.key]: next === "unset" ? undefined : Number(next) as ContextRating })}
             >

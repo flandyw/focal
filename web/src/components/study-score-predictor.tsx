@@ -155,7 +155,7 @@ export function StudyScorePredictor({
                   <FieldLabel htmlFor="distribution-year">Grade distribution</FieldLabel>
                   <Select value={distributionYear} onValueChange={(value) => setDistributionYear(value ?? "automatic")}>
                     <SelectTrigger id="distribution-year" className="w-full">
-                      <SelectValue>{distributionYear === "automatic" ? "Automatic" : distributionYear}</SelectValue>
+                      <SelectValue>{distributionYear === "automatic" ? "Automatic (match exam year)" : distributionYear}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="automatic">Automatic (match exam year)</SelectItem>
@@ -222,7 +222,7 @@ export function StudyScorePredictor({
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scaled estimate</p>
                             <Select value={scalingYear} onValueChange={(value) => setScalingYear(value ?? "combined")}>
                               <SelectTrigger aria-label="Scaling report year" size="sm" className="w-auto min-w-32">
-                                <SelectValue>{scalingYear === "combined" ? "Combined" : scalingYear}</SelectValue>
+                                <SelectValue>{scalingYear === "combined" ? `Combined (${Math.min(...scalingYears)}–${Math.max(...scalingYears)})` : scalingYear}</SelectValue>
                               </SelectTrigger>
                               <SelectContent align="end">
                                 <SelectItem value="combined">Combined ({Math.min(...scalingYears)}–{Math.max(...scalingYears)})</SelectItem>

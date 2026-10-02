@@ -1,9 +1,9 @@
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "@/lib/exam-data"
 
 export type BrowserFilter = "all" | "due" | "new" | "learning" | "review" | "mature" | "suspended"
-export type LibraryFilters = { search: string; browserFilter: BrowserFilter; category: string; topic: string; sort: string }
+export type LibraryFilters = { search: string; browserFilter: BrowserFilter; category: string; topic: string; sort: string; examId?: string; provider?: string; resolution?: "all" | "unresolved" | "resolved" }
 
-export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string, ExamAttempt>, dueIds: Set<string>, { search, browserFilter, category, topic, sort }: LibraryFilters) {
+export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string, ExamAttempt>, dueIds: Set<string>, { search, browserFilter, category, topic, sort, examId = "all", provider = "all", resolution = "all" }: LibraryFilters) {
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const schedules = new Map(mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
   return mistakes.filter((mistake) => {
@@ -12,6 +12,9 @@ export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string
       const matchesSearch = !normalizedSearch || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, mistake.criterion, attempt?.title, attempt?.subject]
         .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch))
       if (!matchesSearch || !schedule || (category !== "all" && mistake.category !== category) || (topic !== "all" && mistake.areaOfStudy !== topic)) return false
+      if (examId !== "all" && (examId === "unlinked" ? Boolean(attempt) : mistake.attemptId !== examId)) return false
+      if (provider !== "all" && attempt?.provider !== provider) return false
+      if (resolution !== "all" && schedule.resolved !== (resolution === "resolved")) return false
       if (browserFilter === "all") return true
       if (browserFilter === "due") return dueIds.has(mistake.id)
       if (browserFilter === "suspended") return Boolean(mistake.suspended)

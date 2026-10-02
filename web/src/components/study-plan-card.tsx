@@ -113,6 +113,7 @@ export function StudyPlanCard({
           <Field className="w-56">
             <FieldLabel htmlFor="study-plan-model">Planning model</FieldLabel>
             <Select
+              items={options.map((option) => ({ value: option, label: `${option}${isCheapestModel(option) ? " · cheapest" : ""}` }))}
               disabled={!options.length}
               onValueChange={(value) => value && chooseModel(value)}
               value={options.includes(model) ? model : options[0]}

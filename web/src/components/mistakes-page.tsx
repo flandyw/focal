@@ -516,7 +516,10 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [category, setCategory] = useState("all")
   const [topic, setTopic] = useState("all")
   const [sort, setSort] = useState("due")
-  const [showFilters, setShowFilters] = useState(false)
+  const [examId, setExamId] = useState("all")
+  const [provider, setProvider] = useState("all")
+  const [resolution, setResolution] = useState<"all" | "unresolved" | "resolved">("all")
+  const [showFilters, setShowFilters] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [activeId, setActiveId] = useState<string | null>(null)
   const isWorkspace = useMinWidth(WORKSPACE_MIN_WIDTH)
@@ -528,13 +531,13 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [autofillProgress, setAutofillProgress] = useState<ChatGPTProgress | null>(null)
   const attemptMap = useMemo(() => new Map(data.attempts.map((attempt) => [attempt.id, attempt])), [data.attempts])
   const subjects = useMemo(() => [...new Set(data.attempts.map((attempt) => attempt.subject))].toSorted(), [data.attempts])
-  const activeSubject = subject === "all" || subjects.includes(subject) ? subject : "all"
+  const activeSubject = subject === "all" || subject === "unlinked" || subjects.includes(subject) ? subject : "all"
   const mathsSubject = activeSubject !== "all" ? activeSubject : subjects.length === 1 ? subjects[0] : null
   const showMathsExamFilter = mathsSubject !== null && isTechSplitMathsSubject(mathsSubject)
   const activeMathsExamFilter = showMathsExamFilter ? mathsExamFilter : "all"
   const visibleMistakes = useMemo(() => data.mistakes.filter((mistake) => {
     const attempt = attemptMap.get(mistake.attemptId)
-    const matchesSubject = activeSubject === "all" || attempt?.subject === activeSubject
+    const matchesSubject = activeSubject === "all" || (activeSubject === "unlinked" ? !attempt : attempt?.subject === activeSubject)
     return matchesSubject && matchesMathsExamFilter(attempt, activeMathsExamFilter)
   }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter])
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
@@ -550,8 +553,8 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const autofillCandidates = useMemo(() => data.mistakes.filter(hasEmptyMistakeFields), [data.mistakes])
   const hasMergeableFields = useMemo(() => data.mistakes.some((mistake) => Boolean(mistake.areaOfStudy?.trim() || mistake.criterion?.trim())), [data.mistakes])
   const browsedMistakes = useMemo(() => {
-    return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort })
-  }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort])
+    return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution })
+  }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution])
   const selectedMistakes = browsedMistakes.filter((mistake) => selected.has(mistake.id))
   // ponytail: the library renders at most this many rows; raise it when the list
   // pane gains virtualisation.
@@ -560,8 +563,13 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const worksheetMistakes = selectedMistakes.length ? selectedMistakes : browsedMistakes
   const categories = [...new Set(visibleMistakes.map((mistake) => mistake.category))].sort()
   const topics = [...new Set(visibleMistakes.flatMap((mistake) => mistake.areaOfStudy ? [mistake.areaOfStudy] : []))].sort()
+  const visibleAttemptIds = new Set(visibleMistakes.map((mistake) => mistake.attemptId))
+  const exams = data.attempts.filter((attempt) => visibleAttemptIds.has(attempt.id))
+  const providers = [...new Set(exams.map((attempt) => attempt.provider))].filter(Boolean).sort()
+  const activeFilterCount = [activeSubject !== "all", activeMathsExamFilter !== "all", Boolean(search), browserFilter !== "all", category !== "all", topic !== "all", examId !== "all", provider !== "all", resolution !== "all"].filter(Boolean).length
   function clearSelection() { setSelected(new Set()); setActiveId(null) }
-  function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); clearSelection() }
+  function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setExamId("all"); setProvider("all"); setResolution("all"); clearSelection() }
+  function clearAllFilters() { setSubject("all"); setMathsExamFilter("all"); resetFilters() }
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
     const startOfToday = new Date(now)
@@ -648,7 +656,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? `${summaryCounts.due} ${summaryCounts.due === 1 ? "mistake" : "mistakes"} ready to review` : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{data.mistakes.length} saved · {summaryProgress.matureCards} mastered</p></div></div>
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section>
-      {subjects.length > 1 || showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span>{subjects.length > 1 ? <Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : null}{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div> : null}
+      <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span><Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject === "unlinked" ? "No linked exam" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}<SelectItem value="unlinked">No linked exam</SelectItem></SelectContent></Select>{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div>
       <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>
@@ -720,19 +728,22 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
               <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
               <div className="flex gap-2 sm:shrink-0">
               <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); clearSelection() }}>
-                <SelectTrigger aria-label="Filter mistake cards by schedule"><SelectValue>{({ all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Paused" } as Record<BrowserFilter, string>)[browserFilter]}</SelectValue></SelectTrigger>
+                <SelectTrigger aria-label="Filter mistake cards by schedule"><SelectValue>{({ all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Reviews paused" } as Record<BrowserFilter, string>)[browserFilter]}</SelectValue></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All cards</SelectItem><SelectItem value="due">Due now</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="learning">Learning</SelectItem><SelectItem value="review">Review</SelectItem><SelectItem value="mature">Mature</SelectItem><SelectItem value="suspended">Reviews paused</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="ghost" className="flex-1 sm:flex-none" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters</Button>
+              <Button variant="ghost" className="flex-1 sm:flex-none" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}</Button>
               </div>
             </div>
             {showFilters ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3">
-              <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select value={topic} onValueChange={(value) => { setTopic(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by topic"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All topics</SelectItem>{topics.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select value={sort} onValueChange={(value) => setSort(value ?? "due")}><SelectTrigger aria-label="Sort mistakes"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="due">Due date</SelectItem><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="marks">Most marks lost</SelectItem><SelectItem value="question">Question order</SelectItem></SelectContent></Select>
-              {search || category !== "all" || topic !== "all" || browserFilter !== "all" ? <Button size="sm" variant="ghost" onClick={resetFilters}><X />Clear filters</Button> : null}
+              <Select items={[{ value: "all", label: "All exams" }, { value: "unlinked", label: "No linked exam" }, ...exams.map((exam) => ({ value: exam.id, label: `${exam.title} · ${exam.provider} · ${new Date(`${exam.completedAt}T00:00:00`).toLocaleDateString("en-AU")}` }))]} value={examId} onValueChange={(value) => { setExamId(value ?? "all"); clearSelection() }}><SelectTrigger className="w-full sm:w-auto sm:max-w-72" aria-label="Filter by linked exam"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="unlinked">No linked exam</SelectItem>{exams.map((exam) => <SelectItem key={exam.id} value={exam.id}>{exam.title} · {exam.provider} · {new Date(`${exam.completedAt}T00:00:00`).toLocaleDateString("en-AU")}</SelectItem>)}</SelectContent></Select>
+              <Select value={provider} onValueChange={(value) => { setProvider(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by exam provider"><SelectValue>{provider === "all" ? "All providers" : provider}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All providers</SelectItem>{providers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+              <Select items={{ all: "All progress", unresolved: "Unresolved", resolved: "Resolved" }} value={resolution} onValueChange={(value) => { setResolution((value ?? "all") as typeof resolution); clearSelection() }}><SelectTrigger aria-label="Filter by resolution"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All progress</SelectItem><SelectItem value="unresolved">Unresolved</SelectItem><SelectItem value="resolved">Resolved</SelectItem></SelectContent></Select>
+              <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue>{category === "all" ? "All categories" : category}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+              <Select value={topic} onValueChange={(value) => { setTopic(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by topic"><SelectValue>{topic === "all" ? "All topics" : topic}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All topics</SelectItem>{topics.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
+              <Select items={{ due: "Due date", newest: "Newest first", oldest: "Oldest first", marks: "Most marks lost", question: "Question order" }} value={sort} onValueChange={(value) => setSort(value ?? "due")}><SelectTrigger aria-label="Sort mistakes"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="due">Due date</SelectItem><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="marks">Most marks lost</SelectItem><SelectItem value="question">Question order</SelectItem></SelectContent></Select>
+              {activeFilterCount ? <Button size="sm" variant="ghost" onClick={clearAllFilters}><X />Clear filters</Button> : null}
             </div> : null}
             {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -757,7 +768,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
                     </div>
                   </div>) : null}
             </div>
-            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : "Save a missed question here to review it later, with or without an exam."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={() => { resetFilters(); setSubject("all"); setMathsExamFilter("all") }}>Clear filters</Button> : <Button onClick={onLog}><Plus />Add mistake</Button>}</Empty>}
+            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : "Save a missed question here to review it later, with or without an exam."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={clearAllFilters}>Clear filters</Button> : <Button onClick={onLog}><Plus />Add mistake</Button>}</Empty>}
           </div>
         </TabsContent>
       </Tabs>

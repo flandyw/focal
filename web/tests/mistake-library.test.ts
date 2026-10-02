@@ -13,7 +13,7 @@ const cards = [
   card("10", { areaOfStudy: "Calculus", marksLost: 4, createdAt: "2026-02-01", suspended: true }),
   card("3", { attemptId: "deleted", areaOfStudy: "Algebra", marksLost: 2, dueAt: "2026-01-01" }),
 ]
-const attempts = new Map([["exam", { title: "Trial paper", subject: "Methods" } as ExamAttempt]])
+const attempts = new Map([["exam", { title: "Trial paper", subject: "Methods", provider: "VCAA" } as ExamAttempt]])
 const filter = (overrides: Partial<LibraryFilters> = {}) => filterMistakeLibrary(cards, attempts, new Set(["2", "3"]), { ...defaults, ...overrides }).map((item) => item.id)
 
 describe("mistake library", () => {
@@ -29,6 +29,22 @@ describe("mistake library", () => {
   test("paused cards remain available for browsing but not active review views", () => {
     expect(filter({ browserFilter: "suspended" })).toEqual(["10"])
     expect(filter({ browserFilter: "new" })).not.toContain("10")
+  })
+  test("filters linked exams and providers while keeping unlinked cards accessible", () => {
+    expect(filter({ examId: "exam" })).toEqual(["2", "10"])
+    expect(filter({ examId: "unlinked" })).toEqual(["3"])
+    expect(filter({ provider: "VCAA", topic: "Algebra" })).toEqual(["2"])
+    expect(filter({ provider: "Other" })).toEqual([])
+    expect(filter({ examId: "unlinked", provider: "VCAA" })).toEqual([])
+  })
+  test("combines resolution with other library filters", () => {
+    const mistakes = [card("unresolved"), card("resolved", { resolved: true })]
+    const run = (resolution: LibraryFilters["resolution"], browserFilter: LibraryFilters["browserFilter"] = "all") =>
+      filterMistakeLibrary(mistakes, attempts, new Set(["unresolved"]), { ...defaults, resolution, browserFilter }).map((item) => item.id)
+    expect(run("all")).toEqual(["unresolved", "resolved"])
+    expect(run("unresolved")).toEqual(["unresolved"])
+    expect(run("resolved")).toEqual(["resolved"])
+    expect(run("resolved", "due")).toEqual([])
   })
   test("sorts marks, dates and question numbers without mutating stored order", () => {
     expect(filter({ sort: "marks" })).toEqual(["10", "3", "2"])

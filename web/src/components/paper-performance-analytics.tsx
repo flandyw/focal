@@ -131,7 +131,7 @@ export function PaperPerformanceAnalytics({ attempts, mistakes }: { attempts: Ex
               <CardTitle id="paper-analysis-title">Exam 1 vs Exam 2 weakness matrix</CardTitle>
               <CardDescription>Paper-aware mastery, technology dependence, confidence, repeat mistakes, and the exact questions behind each result.</CardDescription>
             </div>
-            {subjects.length > 1 ? <Select value={subject} onValueChange={(value) => setSelectedSubject(value ?? "")}><SelectTrigger aria-label="Choose mathematics subject"><SelectValue /></SelectTrigger><SelectContent>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : <Badge variant="outline">{subject}</Badge>}
+            {subjects.length > 1 ? <Select value={subject} onValueChange={(value) => setSelectedSubject(value ?? "")}><SelectTrigger aria-label="Choose mathematics subject"><SelectValue>{subject}</SelectValue></SelectTrigger><SelectContent>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : <Badge variant="outline">{subject}</Badge>}
           </div>
         </CardHeader>
         <CardContent className="grid gap-5">

@@ -198,6 +198,21 @@
   box-shadow: 0 0 0 0.4rem color-mix(in oklch, var(--slider-accent) 35%, transparent), 0 0.25rem 0.75rem oklch(0 0 0 / 22%);
 }
 
+/* Motion: pages fade up on navigation, their top-level bands stagger in, and
+   cards/buttons respond to hover and press. Reduced motion is handled below. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+.page-enter > * { animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.page-enter > :nth-child(2) { animation-delay: 60ms; }
+.page-enter > :nth-child(3) { animation-delay: 120ms; }
+.page-enter > :nth-child(4) { animation-delay: 180ms; }
+.page-enter > :nth-child(n+5) { animation-delay: 240ms; }
+[data-slot="card"] { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+[data-slot="card"]:hover { box-shadow: 0 2px 12px oklch(0 0 0 / 6%); }
+[data-slot="skeleton"] { animation-duration: 1.6s; }
+button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: color, background-color, border-color, box-shadow, transform, opacity; transition-duration: 0.15s; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;

@@ -2213,7 +2213,6 @@ function App() {
                         onMoveEvent={handleMoveEvent}
                         onNewSession={handleOpenNewSession}
                         onNewEvent={handleOpenNewEvent}
-                        onNewProject={handleNewProject}
                         onCreateEvents={handleCreateEvents}
                         onCreateStudySessions={handleCreateStudySessions}
                         onDeleteCalendarItems={handleDeleteCalendarItems}
@@ -2225,7 +2224,6 @@ function App() {
                         onGoTimetable={handleSelectTimetable}
                         timetableConfig={timetableConfig}
                         onOpenAiAssistant={handleOpenAiAssistant}
-                        onStartFocus={handleStartFocus}
                         />
                       </Suspense>
                     ) : selectedProject ? (

@@ -1,29 +1,16 @@
-import {
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-  memo,
-  Fragment,
-} from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { format, parseISO } from "date-fns";
 import {
-  Clock,
   MapPin,
   Trash2,
   X,
   CheckCircle2,
   Combine,
-  Check,
   Wand2,
   ArrowRight,
-  ArrowDown,
-  ArrowUp,
-  ChevronDown,
-  Pin,
-  Settings2,
+  Plus,
   Sparkles,
 } from "lucide-react";
 import {
@@ -33,21 +20,12 @@ import {
 } from "@/lib/timetable";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   getSubjectById,
   getSessionEffectiveMinutes,
@@ -58,15 +36,9 @@ import {
 import { TextEventPlanner } from "@/components/planning/TextEventPlanner";
 import { buildTodayOverview } from "@/features/home/todayOverview";
 import { shiftCalendarPeriod } from "@/lib/calendarNavigation";
-import {
-  FOCUS_PRIORITIES_KEY,
-  getPriorityItems,
-  readFocusPriorities,
-} from "@/lib/studyPriority";
 import type { TimetableConfig } from "@/lib/settings";
 import type {
   CalendarEvent,
-  PriorityItem,
   Project,
   StudySession,
   StudySessionDraft,
@@ -74,7 +46,6 @@ import type {
 import { CalendarGrid } from "@/components/home/CalendarGrid";
 import { DayDetail } from "@/components/home/DayDetail";
 import { QuickLinks } from "@/components/home/QuickLinks";
-import { StudyPriorities } from "@/components/home/StudyPriorities";
 
 interface HomeViewProps {
   projects: Project[];
@@ -86,7 +57,6 @@ interface HomeViewProps {
   onConvertToSession?: (event: CalendarEvent) => void;
   onNewSession: (initialDate?: Date) => void;
   onNewEvent: (initialDate?: Date) => void;
-  onNewProject: () => void;
   onCreateEvents: (
     events: Omit<CalendarEvent, "id" | "created_at">[],
   ) => Promise<void>;
@@ -109,19 +79,9 @@ interface HomeViewProps {
     newEndTime?: string,
   ) => void;
   onOpenAiAssistant?: () => void;
-  onStartFocus: (item: PriorityItem) => void;
 }
 
-const STUDY_NEXT_EXPANDED_KEY = "focal-study-next-expanded";
 const CALENDAR_VIEW_KEY = "focal-calendar-view";
-
-function readStudyNextExpanded() {
-  try {
-    return localStorage.getItem(STUDY_NEXT_EXPANDED_KEY) !== "false";
-  } catch {
-    return true;
-  }
-}
 
 function readCalendarView(): "month" | "week" {
   try {
@@ -129,6 +89,50 @@ function readCalendarView(): "month" | "week" {
   } catch {
     return "month";
   }
+}
+
+function formatHours(minutes: number) {
+  return minutes < 60 ? `${Math.round(minutes)}m` : `${(minutes / 60).toFixed(1)}h`;
+}
+
+function formatDaysUntil(deadline: string, now: Date) {
+  const days = Math.round(
+    (parseISO(format(parseISO(deadline), "yyyy-MM-dd")).getTime() -
+      parseISO(getLocalDateValue(now)).getTime()) /
+      86_400_000,
+  );
+  if (days < 0) return `${-days}d late`;
+  if (days === 0) return "Today";
+  if (days === 1) return "Tmrw";
+  return format(parseISO(deadline), "EEE d");
+}
+
+function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "danger" }) {
+  const empty = value === 0 || value === "0m";
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <dt className="order-2 text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "order-1 text-sm font-semibold tabular-nums",
+          empty ? "text-muted-foreground" : tone === "danger" ? "text-destructive" : "text-foreground",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function RailHeading({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="mb-1.5 flex h-7 items-center justify-between gap-2">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {children}
+      </h2>
+      {action}
+    </div>
+  );
 }
 
 export const HomeView = memo(function HomeView({
@@ -141,7 +145,6 @@ export const HomeView = memo(function HomeView({
   onConvertToSession,
   onNewSession,
   onNewEvent,
-  onNewProject: _onNewProject,
   onCreateEvents,
   onCreateStudySessions,
   onDeleteCalendarItems,
@@ -152,7 +155,6 @@ export const HomeView = memo(function HomeView({
   onMoveEvent,
   timetableConfig,
   onOpenAiAssistant,
-  onStartFocus,
 }: HomeViewProps) {
   const [clockNow, setClockNow] = useState(() => new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -165,13 +167,6 @@ export const HomeView = memo(function HomeView({
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [eventBatchSaving, setEventBatchSaving] = useState(false);
   const [textPlannerOpen, setTextPlannerOpen] = useState(false);
-  const [textPlannerTitle, setTextPlannerTitle] = useState("Text to Events");
-  const [textPlannerDescription, setTextPlannerDescription] = useState(
-    "Paste a notice, rough plan, or teacher message. Review drafts before adding them.",
-  );
-  const [textPlannerInitialText, setTextPlannerInitialText] = useState("");
-  const [focusPriorities, setFocusPriorities] = useState(readFocusPriorities);
-  const [studyNextExpanded, setStudyNextExpanded] = useState(readStudyNextExpanded);
 
   useEffect(() => {
     const refreshNow = () => setClockNow(new Date());
@@ -182,18 +177,6 @@ export const HomeView = memo(function HomeView({
       window.removeEventListener("focus", refreshNow);
     };
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(FOCUS_PRIORITIES_KEY, JSON.stringify(focusPriorities));
-  }, [focusPriorities]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STUDY_NEXT_EXPANDED_KEY, String(studyNextExpanded));
-    } catch {
-      // The section still works when browser storage is unavailable.
-    }
-  }, [studyNextExpanded]);
 
   useEffect(() => {
     try {
@@ -220,7 +203,6 @@ export const HomeView = memo(function HomeView({
     : undefined;
 
   const {
-    activeProjects,
     overdueProjects,
     dueThisWeek,
     planningSubjects,
@@ -234,67 +216,13 @@ export const HomeView = memo(function HomeView({
     [clockNow, events, projects, sessions],
   );
 
-  const prioritySubjectIds = useMemo(() => {
-    const ids = new Set<string>();
-    activeProjects.forEach((project) => {
-      if (project.subjectId) ids.add(project.subjectId);
-    });
-    events.forEach((event) => {
-      if (!event.isFinished && event.subjectId) ids.add(event.subjectId);
-    });
-    return ids;
-  }, [activeProjects, events]);
-  const prioritySubjects = useMemo(
-    () => planningSubjects.filter((subject) => prioritySubjectIds.has(subject.id)),
-    [planningSubjects, prioritySubjectIds],
+  const deadlines = useMemo(
+    () =>
+      [...overdueProjects, ...dueThisWeek].sort(
+        (a, b) => parseISO(a.deadline!).getTime() - parseISO(b.deadline!).getTime(),
+      ),
+    [overdueProjects, dueThisWeek],
   );
-  const effectiveSubjectOrder = useMemo(() => {
-    const available = new Set(prioritySubjects.map((subject) => subject.id));
-    const saved = focusPriorities.subjectOrder.filter((subjectId) => available.has(subjectId));
-    return [
-      ...saved,
-      ...prioritySubjects.map((subject) => subject.id).filter((subjectId) => !saved.includes(subjectId)),
-    ];
-  }, [focusPriorities.subjectOrder, prioritySubjects]);
-  const priorityItems = useMemo(
-    () => getPriorityItems({
-      projects,
-      sessions,
-      events,
-      now: now.getTime(),
-      subjectOrder: effectiveSubjectOrder,
-      pinnedEventIds: focusPriorities.pinnedEventIds,
-    }),
-    [effectiveSubjectOrder, events, focusPriorities.pinnedEventIds, now, projects, sessions],
-  );
-  const pinnableEvents = useMemo(() => {
-    const cutoff = now.getTime() + 30 * 24 * 60 * 60 * 1000;
-    return events
-      .filter((event) => {
-        const start = parseISO(event.startTime).getTime();
-        return !event.isFinished && start >= now.getTime() && start <= cutoff;
-      })
-      .sort((a, b) => parseISO(a.startTime).getTime() - parseISO(b.startTime).getTime())
-      .slice(0, 8);
-  }, [events, now]);
-
-  const movePrioritySubject = (subjectId: string, direction: -1 | 1) => {
-    const index = effectiveSubjectOrder.indexOf(subjectId);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= effectiveSubjectOrder.length) return;
-    const next = [...effectiveSubjectOrder];
-    [next[index], next[target]] = [next[target], next[index]];
-    setFocusPriorities((current) => ({ ...current, subjectOrder: next }));
-  };
-
-  const togglePinnedEvent = (eventId: string) => {
-    setFocusPriorities((current) => ({
-      ...current,
-      pinnedEventIds: current.pinnedEventIds.includes(eventId)
-        ? current.pinnedEventIds.filter((id) => id !== eventId)
-        : [...current.pinnedEventIds, eventId],
-    }));
-  };
 
   const selectedEventIdSet = useMemo(
     () => new Set(selectedEventIds),
@@ -316,9 +244,10 @@ export const HomeView = memo(function HomeView({
   const todayDateKey = getLocalDateValue(now);
   const headingDateKey = selectedDate ?? todayDateKey;
   const headingDate = parseISO(headingDateKey);
-  const selectedStudyHours = (sessionsByDate[headingDateKey] ?? [])
+  const isHeadingToday = headingDateKey === todayDateKey;
+  const studiedMinutes = (sessionsByDate[headingDateKey] ?? [])
     .filter((session) => session.execution.state === "completed")
-    .reduce((total, session) => total + getSessionEffectiveMinutes(session), 0) / 60;
+    .reduce((total, session) => total + getSessionEffectiveMinutes(session), 0);
   const selectedBatchEvents = selectedDayEvents.filter((event) =>
     selectedEventIdSet.has(event.id),
   );
@@ -381,49 +310,20 @@ export const HomeView = memo(function HomeView({
     setSelectedSessionIds(selectedDaySessions.map((session) => session.id));
   };
 
-  const handleDeleteSelectedEvents = async () => {
+  const runBatch = async (action: () => Promise<void>) => {
     if (selectedBatchCount === 0) return;
     setEventBatchSaving(true);
     try {
-      const eventIds = selectedBatchEvents.map((event) => event.id);
-      const sessionIds = selectedBatchSessions.map((session) => session.id);
-      await onDeleteCalendarItems({ eventIds, sessionIds });
+      await action();
       clearEventSelection();
     } finally {
       setEventBatchSaving(false);
     }
   };
-
-  const handleMergeSelectedEvents = async () => {
-    if (!canMergeSelectedItems) return;
-    setEventBatchSaving(true);
-    try {
-      if (canMergeSelectedEvents) {
-        await onMergeEvents(selectedBatchEvents.map((event) => event.id));
-      } else if (canMergeSelectedSessions) {
-        await onMergeStudySessions(
-          selectedBatchSessions.map((session) => session.id),
-        );
-      }
-      clearEventSelection();
-    } finally {
-      setEventBatchSaving(false);
-    }
-  };
-
-  const handleToggleSelectedEventsComplete = async () => {
-    if (selectedBatchCount === 0) return;
-    setEventBatchSaving(true);
-    try {
-      const eventIds = selectedBatchEvents.map((event) => event.id);
-      const sessionIds = selectedBatchSessions.map((session) => session.id);
-      const nextComplete = !allSelectedItemsComplete;
-      await onSetCalendarItemsCompleted({ eventIds, sessionIds }, nextComplete);
-      clearEventSelection();
-    } finally {
-      setEventBatchSaving(false);
-    }
-  };
+  const batchIds = () => ({
+    eventIds: selectedBatchEvents.map((event) => event.id),
+    sessionIds: selectedBatchSessions.map((session) => session.id),
+  });
 
   const handlePrevPeriod = () =>
     setCurrentMonth((prev) => shiftCalendarPeriod(prev, calendarView, -1));
@@ -435,116 +335,84 @@ export const HomeView = memo(function HomeView({
     setSelectedDate(getLocalDateValue(today));
   };
 
-  const handleOpenTextPlanner = useCallback(() => {
-    setTextPlannerTitle("Text to Events");
-    setTextPlannerDescription(
-      "Paste a notice, rough plan, or teacher message. Review drafts before adding them.",
+  const timetable = (() => {
+    if (!timetableConfig?.enabled) return null;
+    const dayLabel = getDayLabelForDate(
+      now,
+      timetableConfig.day1Starts,
+      timetableConfig.holidays,
     );
-
-    setTextPlannerInitialText("");
-    setTextPlannerOpen(true);
-  }, []);
-
-  const handlePrioritySelect = (item: PriorityItem) => {
-    if (item.sessionId) {
-      const session = sessions.find(
-        (candidate) => candidate.id === item.sessionId,
-      );
-      if (session) {
-        onSelectSession(session);
-        return;
-      }
-    }
-    if (item.eventId) {
-      const event = events.find((candidate) => candidate.id === item.eventId);
-      if (event) {
-        onSelectEvent(event);
-        return;
-      }
-    }
-    if (item.projectId) {
-      onSelectProject(item.projectId);
-      return;
-    }
-    onNewSession(selectedCalendarDate);
-  };
+    if (dayLabel === null) return null;
+    const periods = getTimetableEntriesForDay(dayLabel, timetableConfig.entries)
+      .flatMap((e) => e.periods)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    if (periods.length === 0) return null;
+    return { dayLabel, periods, info: getCurrentPeriodInfo(periods, now) };
+  })();
 
   const eventBatchToolbar =
     selectedBatchCount > 0
       ? createPortal(
           <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-2 min-[900px]:px-4">
-            <div className="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-2 rounded-t-lg border border-b-0 bg-popover px-3 py-2 text-popover-foreground shadow-md">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                  <Check className="h-3.5 w-3.5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">
-                    Calendar selection
-                  </p>
-                  <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
-                    {eventBatchSaving ? (
-                      "Saving changes…"
-                    ) : (
-                      <>
-                        {selectedBatchCount} selected from{" "}
-                        {selectedDate
-                          ? format(parseISO(selectedDate), "MMM d")
-                          : "calendar"}
-                        {selectedBatchSessions.length > 0 &&
-                        selectedBatchEvents.length > 0
-                          ? ` (${selectedBatchEvents.length} events, ${selectedBatchSessions.length} sessions)`
-                          : ""}
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5 rounded-md px-2.5 text-xs"
-                  onClick={clearEventSelection}
-                  disabled={eventBatchSaving}
-                >
-                  <X className="h-3.5 w-3.5" />
+            <div
+              role="toolbar"
+              aria-label="Selected calendar items"
+              className="pointer-events-auto flex w-full max-w-2xl flex-wrap items-center justify-between gap-2 rounded-t-lg border border-b-0 bg-popover px-3 py-2 text-popover-foreground shadow-md"
+            >
+              <p className="text-sm tabular-nums" aria-live="polite">
+                {eventBatchSaving ? (
+                  "Saving…"
+                ) : (
+                  <>
+                    <span className="font-semibold">{selectedBatchCount} selected</span>
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {selectedDate ? format(parseISO(selectedDate), "EEE d MMM") : "calendar"}
+                    </span>
+                  </>
+                )}
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={clearEventSelection} disabled={eventBatchSaving}>
+                  <X />
                   Cancel
                 </Button>
                 {canMergeSelectedItems && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-1.5 rounded-md px-2.5 text-xs"
-                    onClick={handleMergeSelectedEvents}
                     disabled={eventBatchSaving}
+                    onClick={() =>
+                      runBatch(() =>
+                        canMergeSelectedEvents
+                          ? onMergeEvents(batchIds().eventIds)
+                          : onMergeStudySessions(batchIds().sessionIds),
+                      )
+                    }
                   >
-                    <Combine className="h-3.5 w-3.5" />
+                    <Combine />
                     Merge
                   </Button>
                 )}
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="h-8 gap-1.5 rounded-md px-2.5 text-xs"
-                  onClick={handleDeleteSelectedEvents}
                   disabled={eventBatchSaving}
+                  onClick={() => runBatch(() => onDeleteCalendarItems(batchIds()))}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 />
                   Delete
                 </Button>
                 <Button
-                  variant="default"
                   size="sm"
-                  className="h-8 gap-1.5 rounded-md px-2.5 text-xs"
-                  onClick={handleToggleSelectedEventsComplete}
                   disabled={eventBatchSaving}
+                  onClick={() =>
+                    runBatch(() =>
+                      onSetCalendarItemsCompleted(batchIds(), !allSelectedItemsComplete),
+                    )
+                  }
                 >
-                  {allSelectedItemsComplete ? (
-                    <X className="h-3.5 w-3.5" />
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  )}
+                  {allSelectedItemsComplete ? <X /> : <CheckCircle2 />}
                   {allSelectedItemsComplete ? "Reopen" : "Complete"}
                 </Button>
               </div>
@@ -559,280 +427,82 @@ export const HomeView = memo(function HomeView({
       <ScrollArea className="h-full">
         <div
           className={cn(
-            "px-4 pt-4 min-[1200px]:px-6 min-[1200px]:pt-5",
-            selectedBatchCount > 0
-              ? "pb-24 min-[1200px]:pb-24"
-              : "pb-6 min-[1200px]:pb-8",
+            "px-4 pt-3 min-[1200px]:px-6",
+            selectedBatchCount > 0 ? "pb-24" : "pb-6",
           )}
         >
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-border/70 pb-5">
-            <div className="min-w-0">
-              <p className="mb-1 text-xs font-medium text-foreground/60 tabular-nums">
-                {format(headingDate, "EEEE · d MMMM")}
-              </p>
-              <h1 className="text-xl font-semibold tracking-tight">
-                {headingDateKey === todayDateKey
-                  ? "Today"
-                  : format(headingDate, "d MMMM")}
-              </h1>
-              {(() => {
-                const meta: [string, ReactNode][] = [];
-                if (selectedStudyHours > 0)
-                  meta.push([
-                    "studied",
-                    <span className="font-medium text-foreground/80 tabular-nums">
-                      {selectedStudyHours.toFixed(1)}h studied
-                    </span>,
-                  ]);
-                if (overdueProjects.length > 0)
-                  meta.push([
-                    "overdue",
-                    <span className="font-medium text-destructive">
-                      {overdueProjects.length} overdue
-                    </span>,
-                  ]);
-                if (dueThisWeek.length > 0)
-                  meta.push([
-                    "due",
-                    <span>{dueThisWeek.length} due this week</span>,
-                  ]);
-                if (upcomingEvents.length > 0)
-                  meta.push([
-                    "events",
-                    <span>
-                      {upcomingEvents.length} event
-                      {upcomingEvents.length !== 1 ? "s" : ""} this week
-                    </span>,
-                  ]);
-                return (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {meta.length > 0 ? (
-                      meta.map(([key, part], i) => (
-                        <Fragment key={key}>
-                          {i > 0 && (
-                            <span className="text-muted-foreground/40">
-                              {" · "}
-                            </span>
-                          )}
-                          {part}
-                        </Fragment>
-                      ))
-                    ) : (
-                      <span>No urgent deadlines. Keep the workspace tidy.</span>
-                    )}
-                  </p>
-                );
-              })()}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-muted-foreground">
-                  <Sparkles />
-                  Tools
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {onOpenAiAssistant && (
-                  <DropdownMenuItem onSelect={onOpenAiAssistant}>
+          <header className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border/70 pb-3">
+            <h1 className="flex items-baseline gap-2 text-lg font-semibold tracking-tight">
+              {isHeadingToday ? "Today" : format(headingDate, "EEEE")}
+              <span className="text-sm font-normal text-muted-foreground tabular-nums">
+                {format(headingDate, isHeadingToday ? "EEE d MMM" : "d MMM yyyy")}
+              </span>
+            </h1>
+            <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <Stat label="studied" value={formatHours(studiedMinutes)} />
+              <Stat label="overdue" value={overdueProjects.length} tone="danger" />
+              <Stat label="due in 7d" value={dueThisWeek.length} />
+              <Stat label="events in 7d" value={upcomingEvents.length} />
+            </dl>
+            <div className="ml-auto flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => onNewSession(selectedCalendarDate)}>
+                <Plus />
+                Session
+              </Button>
+              <Button size="sm" onClick={() => onNewEvent(selectedCalendarDate)}>
+                <Plus />
+                Event
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label="Tools">
                     <Sparkles />
-                    AI Assistant
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onOpenAiAssistant && (
+                    <DropdownMenuItem onSelect={onOpenAiAssistant}>
+                      <Sparkles />
+                      AI Assistant
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => setTextPlannerOpen(true)}>
+                    <Wand2 />
+                    Text to events
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onSelect={handleOpenTextPlanner}>
-                  <Wand2 />
-                  Text to events
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <section aria-labelledby="study-next-heading" className={studyNextExpanded ? "mb-7" : "mb-5"}>
-            <div className={cn("flex flex-wrap items-end justify-between gap-3", studyNextExpanded && "mb-3")}>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                  Study
-                </p>
-                <div className="mt-1 flex items-center gap-1">
-                  <h2
-                    id="study-next-heading"
-                    className="text-lg font-semibold tracking-tight"
-                  >
-                    Study next
-                  </h2>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground"
-                    onClick={() => setStudyNextExpanded((expanded) => !expanded)}
-                    aria-label={`${studyNextExpanded ? "Collapse" : "Expand"} Study next`}
-                    aria-controls="study-next-content"
-                    aria-expanded={studyNextExpanded}
-                    title={`${studyNextExpanded ? "Collapse" : "Expand"} Study next`}
-                  >
-                    <ChevronDown className={cn("transition-transform motion-reduce:transition-none", !studyNextExpanded && "-rotate-90")} />
-                  </Button>
-                </div>
-                {studyNextExpanded && (
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    Start the highest-impact work now; tune the queue when priorities change.
-                  </p>
-                )}
-              </div>
-              {studyNextExpanded && <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Settings2 />
-                    Tune queue
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-[min(26rem,calc(100vw-2rem))] p-3">
-                  <PopoverHeader>
-                    <PopoverTitle>Focus priorities</PopoverTitle>
-                    <PopoverDescription>
-                      Ranked subjects and pinned events influence the next-focus queue; urgent work still stays visible.
-                    </PopoverDescription>
-                  </PopoverHeader>
-                  <div className="mt-2 space-y-4">
-                    <section aria-labelledby="priority-subjects-heading">
-                      <h3 id="priority-subjects-heading" className="mb-2 text-sm font-semibold">
-                        Subjects
-                      </h3>
-                      {effectiveSubjectOrder.length > 0 ? (
-                        <div className="space-y-1">
-                          {effectiveSubjectOrder.map((subjectId, index) => {
-                            const subject = prioritySubjects.find((item) => item.id === subjectId);
-                            if (!subject) return null;
-                            return (
-                              <div key={subjectId} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
-                                <span className="w-5 text-center text-sm font-semibold tabular-nums text-muted-foreground">
-                                  {index + 1}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-sm">{subject.name}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  disabled={index === 0}
-                                  onClick={() => movePrioritySubject(subjectId, -1)}
-                                  aria-label={`Move ${subject.name} up`}
-                                >
-                                  <ArrowUp />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-xs"
-                                  disabled={index === effectiveSubjectOrder.length - 1}
-                                  onClick={() => movePrioritySubject(subjectId, 1)}
-                                  aria-label={`Move ${subject.name} down`}
-                                >
-                                  <ArrowDown />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No active subjects yet.</p>
-                      )}
-                    </section>
-                    <section aria-labelledby="priority-events-heading">
-                      <h3 id="priority-events-heading" className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                        <Pin className="size-4" />
-                        Pinned events
-                      </h3>
-                      {pinnableEvents.length > 0 ? (
-                        <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
-                          {pinnableEvents.map((event) => {
-                            const checked = focusPriorities.pinnedEventIds.includes(event.id);
-                            return (
-                              <label key={event.id} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent">
-                                <Checkbox
-                                  checked={checked}
-                                  onCheckedChange={() => togglePinnedEvent(event.id)}
-                                  aria-label={`Prioritise ${event.title}`}
-                                  className="mt-0.5"
-                                />
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-sm font-medium">{event.title}</span>
-                                  <span className="block text-sm text-muted-foreground">
-                                    {format(parseISO(event.startTime), "EEE d MMM")}
-                                  </span>
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No events in the next 30 days.</p>
-                      )}
-                    </section>
-                  </div>
-                </PopoverContent>
-              </Popover>}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <div id="study-next-content" hidden={!studyNextExpanded}>
-              <StudyPriorities
-                items={priorityItems}
-                onSelectItem={handlePrioritySelect}
-                onStartItem={onStartFocus}
-                onPlanSession={() => onNewSession(selectedCalendarDate)}
+          </header>
+
+          <div className="grid grid-cols-1 gap-x-6 gap-y-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="min-w-0">
+              <CalendarGrid
+                currentMonth={currentMonth}
+                calendarView={calendarView}
+                selectedDate={selectedDate}
+                deadlinesByDate={deadlinesByDate}
+                sessionsByDate={sessionsByDate}
+                eventsByDate={eventsByDate}
+                events={events}
+                projects={projects}
+                onMoveEvent={onMoveEvent}
+                onSetCalendarView={handleSetCalendarView}
+                onPrevPeriod={handlePrevPeriod}
+                onNextPeriod={handleNextPeriod}
+                onToday={handleToday}
+                onSelectDate={handleSelectCalendarDate}
+                onSelectProject={onSelectProject}
+                onSelectSession={onSelectSession}
+                onSelectEvent={onSelectEvent}
+                onConvertToSession={onConvertToSession}
+                onNewEvent={onNewEvent}
+                onDeleteCalendarItems={onDeleteCalendarItems}
+                onSetCalendarItemsCompleted={onSetCalendarItemsCompleted}
               />
             </div>
-          </section>
 
-          <section
-            aria-labelledby="planning-heading"
-            className="border-t border-border/70 pt-5"
-          >
-            <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Planning
-              </p>
-              <h2
-                id="planning-heading"
-                className="mt-1 text-lg font-semibold tracking-tight"
-              >
-                Calendar and day plan
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Make time for the queue, then coordinate everything around it.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-x-7 gap-y-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(18rem,0.85fr)]">
-              <div className="min-w-0">
-                <div className="flex h-full flex-col gap-4">
-                <CalendarGrid
-                  currentMonth={currentMonth}
-                  calendarView={calendarView}
-                  selectedDate={selectedDate}
-                  deadlinesByDate={deadlinesByDate}
-                  sessionsByDate={sessionsByDate}
-                  eventsByDate={eventsByDate}
-                  events={events}
-                  projects={projects}
-                  onMoveEvent={onMoveEvent}
-                  onSetCalendarView={handleSetCalendarView}
-                  onPrevPeriod={handlePrevPeriod}
-                  onNextPeriod={handleNextPeriod}
-                  onToday={handleToday}
-                  onSelectDate={handleSelectCalendarDate}
-                  onSelectProject={onSelectProject}
-                  onSelectSession={onSelectSession}
-                  onSelectEvent={onSelectEvent}
-                  onConvertToSession={onConvertToSession}
-                  onNewEvent={onNewEvent}
-                  onDeleteCalendarItems={onDeleteCalendarItems}
-                  onSetCalendarItemsCompleted={onSetCalendarItemsCompleted}
-                />
-
-                </div>
-              </div>
-
-            <div className="space-y-6">
-              <QuickLinks />
-
+            <aside className="min-w-0 space-y-5" aria-label="Day overview">
               {selectedDate && (
                 <DayDetail
                   selectedDate={selectedDate}
@@ -868,148 +538,124 @@ export const HomeView = memo(function HomeView({
                 />
               )}
 
-              {timetableConfig?.enabled &&
-                (() => {
-                  const dayLabel = getDayLabelForDate(
-                    now,
-                    timetableConfig.day1Starts,
-                    timetableConfig.holidays,
-                  );
-                  if (dayLabel === null) return null;
-                  const entries = getTimetableEntriesForDay(
-                    dayLabel,
-                    timetableConfig.entries,
-                  );
-                  if (entries.length === 0) return null;
-                  const periods = entries
-                    .flatMap((e) => e.periods)
-                    .sort((a, b) => a.startTime.localeCompare(b.startTime));
-                  const periodInfo = getCurrentPeriodInfo(periods, now);
-                  return (
-                    <section className="border-t border-border/70 pt-4">
-                      <h3 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        Today&apos;s Timetable · Day {dayLabel}
-                        <Button
-                          onClick={onGoTimetable}
-                          variant="link"
-                          size="xs"
-                          className="ml-auto text-muted-foreground"
-                        >
-                          View timetable
-                          <ArrowRight />
-                        </Button>
-                      </h3>
-                      <div className="divide-y divide-border/50 border-y border-border/60">
-                        {periods.map((period, idx) => {
-                          const subject = getSubjectById(period.subject);
-                          const isCurrent =
-                            periodInfo.current?.startTime ===
-                              period.startTime &&
-                            periodInfo.current?.subject === period.subject;
-                          const isNext =
-                            periodInfo.next?.startTime === period.startTime &&
-                            periodInfo.next?.subject === period.subject;
-                          return (
-                            <div
-                              key={idx}
+              {deadlines.length > 0 && (
+                <section aria-labelledby="home-deadlines-heading">
+                  <RailHeading>
+                    <span id="home-deadlines-heading">Deadlines · {deadlines.length}</span>
+                  </RailHeading>
+                  <ul className="divide-y divide-border/50 border-y border-border/60">
+                    {deadlines.map((project) => {
+                      const subject = getSubjectById(project.subjectId);
+                      const late = parseISO(project.deadline!).getTime() < now.getTime();
+                      return (
+                        <li key={project.id}>
+                          <button
+                            type="button"
+                            onClick={() => onSelectProject(project.id)}
+                            className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40"
+                              style={subject ? { backgroundColor: subject.color } : undefined}
+                              aria-hidden="true"
+                            />
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {project.icon} {project.name}
+                            </span>
+                            {subject && (
+                              <span className="shrink-0 text-muted-foreground">{subject.shortCode}</span>
+                            )}
+                            <span
                               className={cn(
-                                "relative flex items-center gap-2 px-2.5 py-2",
-                                isCurrent
-                                  ? "bg-primary/10"
-                                  : "bg-transparent",
+                                "w-14 shrink-0 text-right tabular-nums",
+                                late ? "font-medium text-destructive" : "text-muted-foreground",
                               )}
                             >
-                              {/* Subject color accent bar */}
-                              {subject && (
-                                <div
-                                  className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
-                                  style={{ backgroundColor: subject.color }}
-                                />
-                              )}
-
-                              {/* Current period pulsing dot */}
-                              {isCurrent && (
-                                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary motion-safe:animate-pulse" />
-                              )}
-
-                              {/* Time */}
-                              <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                                {formatTime12(period.startTime)}
-                              </span>
-
-                              {/* Subject name */}
-                              <span
-                                className="min-w-0 truncate text-xs"
-                                style={{ color: subject?.color }}
-                              >
-                                {subject ? subject.name : period.subject}
-                              </span>
-
-                              {/* End time or Up next badge */}
-                              <span className="ml-auto shrink-0 text-xs tabular-nums">
-                                {isNext && !isCurrent ? (
-                                  <span className="rounded border border-foreground/10 bg-foreground/[0.06] px-1.5 py-0.5 text-xs font-medium text-foreground/80">
-                                    Up next
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground/70">
-                                    {formatTime12(period.endTime)}
-                                  </span>
-                                )}
-                              </span>
-
-                              {/* Location */}
-                              {period.location && (
-                                <span className="hidden shrink-0 items-center gap-0.5 truncate text-xs text-muted-foreground/70 sm:flex">
-                                  <MapPin className="h-2.5 w-2.5" />
-                                  {period.location}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Next period countdown */}
-                      {periodInfo.current &&
-                        periodInfo.remainingMinutes > 0 && (
-                          <div className="mt-2 flex items-center gap-2 rounded-md bg-primary/10 px-2.5 py-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-                            <span className="text-xs text-muted-foreground">
-                              {periodInfo.next ? (
-                                <>
-                                  <span className="font-medium text-foreground">
-                                    {periodInfo.remainingMinutes}m
-                                  </span>{" "}
-                                  remaining —{" "}
-                                  <span className="text-muted-foreground">
-                                    {getSubjectById(periodInfo.next.subject)
-                                      ?.name ?? periodInfo.next.subject}
-                                  </span>{" "}
-                                  at{" "}
-                                  <span className="tabular-nums">
-                                    {formatTime12(periodInfo.next.startTime)}
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <span className="font-medium text-foreground">
-                                    {periodInfo.remainingMinutes}m
-                                  </span>{" "}
-                                  remaining
-                                </>
-                              )}
+                              {formatDaysUntil(project.deadline!, now)}
                             </span>
-                          </div>
-                        )}
-                    </section>
-                  );
-                })()}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
 
-              </div>
-            </div>
-          </section>
+              {timetable && (
+                <section aria-labelledby="home-timetable-heading">
+                  <RailHeading
+                    action={
+                      <Button
+                        onClick={onGoTimetable}
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground"
+                        aria-label="Open timetable"
+                      >
+                        <ArrowRight />
+                      </Button>
+                    }
+                  >
+                    <span id="home-timetable-heading">
+                      Timetable · Day {timetable.dayLabel}
+                      {timetable.info.current && timetable.info.remainingMinutes > 0 && (
+                        <span className="ml-1.5 font-normal normal-case tracking-normal text-foreground tabular-nums">
+                          {timetable.info.remainingMinutes}m left
+                        </span>
+                      )}
+                    </span>
+                  </RailHeading>
+                  <ol className="divide-y divide-border/50 border-y border-border/60">
+                    {timetable.periods.map((period, idx) => {
+                      const subject = getSubjectById(period.subject);
+                      const isCurrent =
+                        timetable.info.current?.startTime === period.startTime &&
+                        timetable.info.current?.subject === period.subject;
+                      const isNext =
+                        !isCurrent &&
+                        timetable.info.next?.startTime === period.startTime &&
+                        timetable.info.next?.subject === period.subject;
+                      return (
+                        <li
+                          key={idx}
+                          aria-current={isCurrent ? "time" : undefined}
+                          className={cn(
+                            "flex items-center gap-2 px-2 py-1.5 text-xs",
+                            isCurrent && "bg-primary/10",
+                          )}
+                        >
+                          <span
+                            className="h-3 w-0.5 shrink-0 rounded-full bg-muted-foreground/40"
+                            style={subject ? { backgroundColor: subject.color } : undefined}
+                            aria-hidden="true"
+                          />
+                          <span className="w-24 shrink-0 tabular-nums text-muted-foreground">
+                            {formatTime12(period.startTime)}–{formatTime12(period.endTime)}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-medium">
+                            {subject ? subject.name : period.subject}
+                          </span>
+                          {period.location && (
+                            <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground">
+                              <MapPin className="h-3 w-3" aria-hidden="true" />
+                              {period.location}
+                            </span>
+                          )}
+                          {(isCurrent || isNext) && (
+                            <span className="shrink-0 rounded bg-foreground/[0.06] px-1 font-medium text-foreground/80">
+                              {isCurrent ? "Now" : "Next"}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+              )}
+
+              <QuickLinks />
+            </aside>
+          </div>
         </div>
       </ScrollArea>
 
@@ -1017,9 +663,9 @@ export const HomeView = memo(function HomeView({
         key={textPlannerOpen ? "planner-open" : "planner-closed"}
         open={textPlannerOpen}
         onOpenChange={setTextPlannerOpen}
-        title={textPlannerTitle}
-        description={textPlannerDescription}
-        initialText={textPlannerInitialText}
+        title="Text to Events"
+        description="Paste a notice or plan, then review drafts before adding."
+        initialText=""
         projects={projects}
         planningSubjects={planningSubjects}
         onCreateEvents={onCreateEvents}

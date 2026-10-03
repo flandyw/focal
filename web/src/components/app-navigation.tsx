@@ -1,10 +1,28 @@
 import {
   GraduationCap,
+  LogIn,
+  LogOut,
+  MonitorPlay,
+  Pause,
+  Play,
+  Check,
+  Trash2,
   Search,
+  Settings2,
   UserRound,
 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Sidebar,
   SidebarContent,
@@ -17,10 +35,55 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { AppView } from "@/lib/app-view"
 import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "@/lib/navigation"
+import type { useStudySessionSync } from "@/lib/study-session-sync"
+
+type SessionSync = ReturnType<typeof useStudySessionSync>
+
+function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessions"]; onControl: SessionSync["control"] }) {
+  const active = sessions.filter((session) => session.originating_app !== "examtrack" && (session.state === "running" || session.state === "paused"))
+  if (active.length === 0) return null
+
+  // ponytail: no per-row pending state; the menu closes on click and sync polls the
+  // canonical session list. Upgrade path if that latency ever matters: track busy ids.
+  function control(session: SessionSync["sessions"][number], action: "pause" | "resume" | "complete" | "cancel") {
+    void onControl(session, action).catch((error: unknown) => {
+      toast.error(error instanceof Error ? error.message : "Could not save the session action.")
+    })
+  }
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Shared study sessions" />}>
+            <MonitorPlay aria-hidden />
+            <span>Shared sessions</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            {active.map((session) => (
+              <div key={session.id}>
+                <DropdownMenuLabel className="truncate">{session.title}</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  {session.state === "paused"
+                    ? <DropdownMenuItem onClick={() => control(session, "resume")}><Play aria-hidden />Resume</DropdownMenuItem>
+                    : <DropdownMenuItem onClick={() => control(session, "pause")}><Pause aria-hidden />Pause</DropdownMenuItem>}
+                  <DropdownMenuItem onClick={() => control(session, "complete")}><Check aria-hidden />Finish</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}><Trash2 aria-hidden />Cancel</DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
 
 export function AppSidebar({
   view,
@@ -28,19 +91,25 @@ export function AppSidebar({
   plannedTasks,
   syncLabel,
   user,
+  sessions,
   onViewChange,
+  onSignOut,
+  onControlSession,
 }: {
   view: AppView
   dueMistakes: number
   plannedTasks: number
   syncLabel: string
   user: { email?: string } | null
+  sessions: SessionSync["sessions"]
   onViewChange: (view: AppView) => void
+  onSignOut: () => void
+  onControlSession: SessionSync["control"]
 }) {
   const { setOpenMobile } = useSidebar()
   const accountLabel = user?.email || "Account"
   const accountStatus = user ? "Signed in" : "Not signed in"
-  const accountTooltip = `${accountLabel} · ${accountStatus}. Open account settings`
+  const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
 
   function navigate(nextView: AppView) {
     onViewChange(nextView)
@@ -87,32 +156,32 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>)}
       </SidebarContent>
-      <SidebarFooter className="gap-1 pt-1">
+      <SidebarFooter className="gap-3 pt-3">
+        <SharedSessions sessions={sessions} onControl={onControlSession} />
+        <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              isActive={view === SETTINGS_ITEM.id}
-              aria-current={view === SETTINGS_ITEM.id ? "page" : undefined}
-              tooltip={SETTINGS_ITEM.label}
-              onClick={() => navigate(SETTINGS_ITEM.id)}
-            >
-              <SETTINGS_ITEM.icon />
-              <span>{SETTINGS_ITEM.label}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip={accountTooltip}
-              aria-label={accountTooltip}
-              onClick={() => navigate("settings")}
-            >
-              <UserRound aria-hidden />
-              <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
-                <span className="truncate">{accountLabel}</span>
-                <span className="text-xs text-muted-foreground">{accountStatus}</span>
-              </span>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
+                <UserRound aria-hidden />
+                <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
+                  <span className="truncate">{accountLabel}</span>
+                  <span className="text-xs text-muted-foreground">{accountStatus}</span>
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="truncate">{accountLabel}</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>
+                    <Settings2 aria-hidden />
+                    Settings
+                  </DropdownMenuItem>
+                  {user
+                    ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}><LogOut aria-hidden />Sign out</DropdownMenuItem>
+                    : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}><LogIn aria-hidden />Sign in</DropdownMenuItem>}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
         <span className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">{syncLabel}</span>

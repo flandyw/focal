@@ -54,7 +54,7 @@ import {
 } from "@/components/app-navigation"
 import { getViewLabel } from "@/lib/navigation"
 import { useReferenceData } from "@/hooks/use-reference-data"
-import { SharedStudySessions } from "@/components/shared-study-sessions"
+
 import { localDate, materialiseTask, type LearningWorkspaceUpdate, type StudyGoal } from "@/lib/learning-workspace"
 import { applyMistakeAutofills, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeFieldMergePlan } from "@/lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "@/components/vcaa-explorer"
@@ -544,7 +544,10 @@ export default function App() {
         plannedTasks={dueStudyTaskCount}
         user={sync.user}
         syncLabel={sync.status === "synced" ? "Synced with Supabase" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync needs retry" : "Stored on this device"}
+        sessions={view === "focus" && timerMode === "focus" ? studySessionSync.sessions.filter((session) => session.kind !== "focus") : studySessionSync.sessions}
         onViewChange={setView}
+        onSignOut={() => { void sync.signOut().catch((error: unknown) => { toast.error(error instanceof Error ? error.message : "Could not sign out.") }) }}
+        onControlSession={studySessionSync.control}
       />
       <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-4 lg:px-6 2xl:px-8">
@@ -580,7 +583,7 @@ export default function App() {
               }} />}
             </DialogContent>
           </Dialog>
-          <SharedStudySessions userId={sync.user?.id} sessions={view === "focus" && timerMode === "focus" ? studySessionSync.sessions.filter((session) => session.kind !== "focus") : studySessionSync.sessions} onControl={studySessionSync.control} />
+          
           {data.activeExamTimer && view !== "focus" ? (
             <Alert className="mb-6">
               <AlertTitle>{data.activeExamTimer.pausedAt !== undefined ? "Saved exam" : "Exam in progress"} · {data.activeExamTimer.title}</AlertTitle>

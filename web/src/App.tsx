@@ -102,6 +102,22 @@ const CalendarPage = lazy(() =>
   import("@/components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
 
+// Warm the page chunks once the browser is idle so navigating is instant.
+function prefetchPages() {
+  const warm = () => {
+    for (const load of [
+      () => import("@/components/exams-page"), () => import("@/components/study-timer-page"),
+      () => import("@/components/mistakes-page"), () => import("@/components/calendar-page"),
+      () => import("@/components/goals-page"), () => import("@/components/mastery-page"),
+      () => import("@/components/exam-library"), () => import("@/components/vcaa-explorer"),
+      () => import("@/components/sac-page"), () => import("@/components/study-score-predictor"),
+      () => import("@/components/settings-page"), () => import("@/components/app-command-menu"),
+    ]) load().catch(() => {})
+  }
+  if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 4000 })
+  else setTimeout(warm, 2000)
+}
+
 export default function App() {
   const [view, setView] = useState<AppView>(() => loadAppView(
     typeof localStorage === "undefined" ? null : localStorage,
@@ -174,6 +190,7 @@ export default function App() {
     const id = window.setTimeout(() => saveAppData(data), 400)
     return () => window.clearTimeout(id)
   }, [data])
+  useEffect(prefetchPages, [])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => {
     const openCommandMenu = (event: KeyboardEvent) => {

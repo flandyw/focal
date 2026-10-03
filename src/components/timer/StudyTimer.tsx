@@ -1018,24 +1018,34 @@ const StudyTimerInner = memo(function StudyTimerInner({
       disposed = true;
       stopListening?.();
       void invoke("update_study_tray", {
-        title: "Focal", status: "Open Focal to use the study timer", summary: "", items: [],
+        title: "", status: "Open Focal to use the study timer", summary: "", items: [], clock: null,
       }).catch((error: unknown) => console.error("Could not disconnect menu bar timer:", error));
     };
   }, []);
 
   useEffect(() => {
     if (!trayReady) return;
+    const subjectNames = selectedSubjects.map((subject) => subject.name).join(", ") || "Choose a subject below";
+    const live = !recoveryDialogOpen && !sharedSession && (running || !!activeSessionId || mode !== "work");
     void invoke("update_study_tray", {
-      title: running || activeSessionId || mode !== "work"
-        ? `${running ? "" : "Ⅱ "}${timeDisplay}`
-        : "Focal",
+      title: "",
       status: recoveryDialogOpen ? "Open Focal to recover your study session"
         : sharedSession ? "Shared session active"
-        : `${modeLabel} · ${timeDisplay} · ${selectedSubjects.map((subject) => subject.name).join(", ") || "Choose a subject below"}`,
+        : `${modeLabel} · ${timeDisplay} · ${subjectNames}`,
       summary: `Today: ${formatFocusTime(todayStats.seconds)} · ${todayStats.blocks}${settings.dailyGoal ? ` / ${settings.dailyGoal}` : ""} focus blocks`,
       items: trayItems,
+      // The tray advances this clock natively; the webview only re-anchors it.
+      clock: live ? {
+        seconds: isFreeStudy || isStudyOvertime ? overtimeSeconds : secondsLeft,
+        direction: !running ? 0 : isFreeStudy || isStudyOvertime ? 1 : -1,
+        prefix: `${running ? "" : "Ⅱ "}${isStudyOvertime ? "+" : ""}`,
+        label: modeLabel,
+        detail: subjectNames,
+        anchorMs: Date.now(),
+      } : null,
     }).catch((error: unknown) => console.error("Could not update menu bar timer:", error));
-  }, [trayReady, trayRevision, trayItems, running, activeSessionId, mode, timeDisplay, modeLabel,
+  }, [trayReady, trayRevision, trayItems, running, activeSessionId, mode, secondsLeft, overtimeSeconds,
+    isFreeStudy, isStudyOvertime, timeDisplay, modeLabel,
     selectedSubjects, todayStats, settings.dailyGoal, recoveryDialogOpen, sharedSession]);
 
   const focusPortal = focusViewOpen

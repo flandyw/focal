@@ -1,7 +1,10 @@
 use serde::Deserialize;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -42,7 +45,48 @@ pub struct TrayItem {
     group: TrayGroup,
 }
 
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// A running clock the tray advances itself, so the menu bar keeps counting
+/// even when the hidden webview's timers are throttled by macOS.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayClock {
+    /// Displayed seconds at `anchor_ms`.
+    seconds: i64,
+    /// -1 counts down, 1 counts up, 0 is paused.
+    direction: i8,
+    /// Shown before the time in the menu bar, e.g. "+" or "Ⅱ ".
+    prefix: String,
+    label: String,
+    detail: String,
+    /// Epoch milliseconds when `seconds` was displayed in the webview.
+    anchor_ms: u64,
+}
+
+impl TrayClock {
+    fn text(&self) -> (String, String) {
+        let now = now_ms();
+        let elapsed = if self.direction == 0 {
+            0
+        } else {
+            (now.saturating_sub(self.anchor_ms) / 1000) as i64 * i64::from(self.direction)
+        };
+        let value = (self.seconds + elapsed).max(0);
+        let time = format!("{}:{:02}", value / 60, value % 60);
+        (
+            format!("{}{time}", self.prefix),
+            format!("{} · {time} · {}", self.label, self.detail),
+        )
+    }
+}
+
 pub struct StudyTray {
+    clock: Mutex<Option<(TrayClock, String)>>,
     status: MenuItem<tauri::Wry>,
     summary: MenuItem<tauri::Wry>,
     items: Mutex<Option<Vec<TrayItem>>>,
@@ -120,10 +164,14 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         summary: MenuItem::with_id(app, "timer-summary", "Today’s study", false, None::<&str>)?,
         items: Mutex::new(None),
         dirty: AtomicBool::new(false),
+        clock: Mutex::new(None),
     };
     let menu = build_menu(app.handle(), &state, &[])?;
     TrayIconBuilder::with_id("study-timer")
-        .title("Focal")
+        .icon(tauri::include_image!("icons/tray.png"))
+        // Template images are tinted by macOS to match the menu bar (white on dark, black on light).
+        .icon_as_template(true)
+        .title("")
         .tooltip("Focal study timer")
         .menu(&menu)
         .on_menu_event(|app, event| {
@@ -148,6 +196,39 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
         })
         .build(app)?;
     app.manage(state);
+    let handle = app.handle().clone();
+    std::thread::spawn(move || loop {
+        let Some(state) = handle.try_state::<StudyTray>() else {
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        };
+        // Sleep to the next second boundary of the anchored clock; poll slowly while idle.
+        let wait = {
+            let Ok(clock) = state.clock.lock() else { return };
+            match clock.as_ref().filter(|(clock, _)| clock.direction != 0) {
+                Some((clock, _)) => 1000 - now_ms().saturating_sub(clock.anchor_ms) % 1000 + 2,
+                None => 500,
+            }
+        };
+        std::thread::sleep(Duration::from_millis(wait));
+        let (title, status) = {
+            let Ok(mut clock) = state.clock.lock() else { return };
+            let Some((clock, shown)) = clock.as_mut() else { continue };
+            if clock.direction == 0 {
+                continue;
+            }
+            let (title, status) = clock.text();
+            if *shown == title {
+                continue;
+            }
+            shown.clone_from(&title);
+            (title, status)
+        };
+        let _ = state.status.set_text(status);
+        if let Some(tray) = handle.tray_by_id("study-timer") {
+            let _ = tray.set_title(Some(title));
+        }
+    });
     Ok(())
 }
 
@@ -158,6 +239,7 @@ pub fn update_study_tray(
     status: String,
     summary: String,
     items: Vec<TrayItem>,
+    clock: Option<TrayClock>,
 ) -> Result<(), String> {
     let Some(state) = app.try_state::<StudyTray>() else {
         return Ok(());
@@ -173,6 +255,9 @@ pub fn update_study_tray(
         return Err("Invalid timer menu".into());
     }
     let mut previous = state.items.lock().map_err(|error| error.to_string())?;
+    let (title, status) = clock.as_ref().map_or((title, status), TrayClock::text);
+    *state.clock.lock().map_err(|error| error.to_string())? =
+        clock.map(|clock| (clock, title.clone()));
     let update = || -> tauri::Result<()> {
         state.status.set_text(status)?;
         state.summary.set_text(summary)?;

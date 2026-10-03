@@ -1,3 +1,4 @@
+import { Fragment } from "react"
 import {
   GraduationCap,
   LogIn,
@@ -65,18 +66,18 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
             <span>Shared sessions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
-            {active.map((session) => (
-              <div key={session.id}>
-                <DropdownMenuLabel className="truncate">{session.title}</DropdownMenuLabel>
+            {active.map((session, index) => (
+              <Fragment key={session.id}>
                 <DropdownMenuGroup>
+                  <DropdownMenuLabel className="truncate">{session.title}</DropdownMenuLabel>
                   {session.state === "paused"
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}><Play aria-hidden />Resume</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => control(session, "pause")}><Pause aria-hidden />Pause</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => control(session, "complete")}><Check aria-hidden />Finish</DropdownMenuItem>
                   <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}><Trash2 aria-hidden />Cancel</DropdownMenuItem>
                 </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-              </div>
+                {index < active.length - 1 ? <DropdownMenuSeparator /> : null}
+              </Fragment>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -170,8 +171,8 @@ export function AppSidebar({
                 </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="truncate">{accountLabel}</DropdownMenuLabel>
                 <DropdownMenuGroup>
+                  <DropdownMenuLabel className="truncate">{accountLabel}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>
                     <Settings2 aria-hidden />
                     Settings

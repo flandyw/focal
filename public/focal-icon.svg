@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="900" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172330"/>
+      <stop offset=".52" stop-color="#0B121A"/>
+      <stop offset="1" stop-color="#070B11"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(630 520) rotate(137) scale(520)">
+      <stop stop-color="#2563EB" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rear" x1="260" y1="220" x2="620" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#89A8D9" stop-opacity=".68"/>
+      <stop offset=".5" stop-color="#34527D" stop-opacity=".52"/>
+      <stop offset="1" stop-color="#0D213F" stop-opacity=".9"/>
+    </linearGradient>
+    <linearGradient id="front" x1="430" y1="330" x2="790" y2="810" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#52A0FF"/>
+      <stop offset=".42" stop-color="#246EF5"/>
+      <stop offset="1" stop-color="#0E4FC9"/>
+    </linearGradient>
+    <linearGradient id="rearStroke" x1="260" y1="220" x2="620" y2="720">
+      <stop stop-color="#C9E1FF" stop-opacity=".82"/>
+      <stop offset="1" stop-color="#5B8BC7" stop-opacity=".28"/>
+    </linearGradient>
+    <linearGradient id="frontStroke" x1="430" y1="330" x2="790" y2="810">
+      <stop stop-color="#A9D4FF" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#2D75FF" stop-opacity=".55"/>
+    </linearGradient>
+    <filter id="shadowRear" x="-35%" y="-35%" width="170%" height="190%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#000" flood-opacity=".46"/>
+    </filter>
+    <filter id="shadowFront" x="-35%" y="-35%" width="170%" height="190%">
+      <feDropShadow dx="0" dy="32" stdDeviation="34" flood-color="#001A55" flood-opacity=".54"/>
+    </filter>
+  </defs>
+  <rect x="34" y="34" width="956" height="956" rx="220" fill="url(#bg)"/>
+  <rect x="35" y="35" width="954" height="954" rx="219" fill="none" stroke="#354353" stroke-opacity=".72" stroke-width="2"/>
+  <rect x="34" y="34" width="956" height="956" rx="220" fill="url(#halo)"/>
+  <g transform="rotate(-8 433 486)" filter="url(#shadowRear)">
+    <rect x="260" y="238" width="346" height="496" rx="66" fill="url(#rear)" stroke="url(#rearStroke)" stroke-width="8"/>
+    <path d="M300 286 C392 250 476 252 560 281" fill="none" stroke="#D7EAFF" stroke-opacity=".16" stroke-width="22" stroke-linecap="round"/>
+  </g>
+  <g transform="rotate(-8 606 585)" filter="url(#shadowFront)">
+    <rect x="430" y="340" width="352" height="500" rx="68" fill="url(#front)" stroke="url(#frontStroke)" stroke-width="8"/>
+    <path d="M471 388 C563 352 650 354 734 383" fill="none" stroke="#D7ECFF" stroke-opacity=".22" stroke-width="22" stroke-linecap="round"/>
+  </g>
+  <path d="M426 437 C463 418 512 408 559 411 C602 414 635 431 658 459 C627 497 593 535 553 573 C516 609 478 640 439 666 C426 600 420 516 426 437Z" fill="#8EB9FF" fill-opacity=".09"/>
+  <circle cx="706" cy="402" r="9" fill="#E6F3FF" fill-opacity=".72"/>
+</svg>

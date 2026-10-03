@@ -42,8 +42,17 @@ import {
 import type { AppView } from "@/lib/app-view"
 import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "@/lib/navigation"
 import type { useStudySessionSync } from "@/lib/study-session-sync"
+import type { SyncStatus } from "@/lib/sync"
+import { cn } from "@/lib/utils"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
+
+/** Minutes actually spent in a sitting: finished segments plus the one in progress. */
+function workedLabel(session: SessionSync["sessions"][number]) {
+  const minutes = session.segments.reduce((total, segment) => total + (new Date(segment.ended_at ?? Date.now()).getTime() - new Date(segment.started_at).getTime()) / 60_000, 0)
+  const rounded = Math.max(0, Math.round(minutes))
+  return `${Math.floor(rounded / 60)}h ${rounded % 60}m`
+}
 
 function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessions"]; onControl: SessionSync["control"] }) {
   const active = sessions.filter((session) => session.originating_app !== "examtrack" && (session.state === "running" || session.state === "paused"))
@@ -51,6 +60,7 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
 
   // ponytail: no per-row pending state; the menu closes on click and sync polls the
   // canonical session list. Upgrade path if that latency ever matters: track busy ids.
+  // Worked minutes are read at render, so they tick as often as the sync poll does.
   function control(session: SessionSync["sessions"][number], action: "pause" | "resume" | "complete" | "cancel") {
     void onControl(session, action).catch((error: unknown) => {
       toast.error(error instanceof Error ? error.message : "Could not save the session action.")
@@ -69,7 +79,10 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
             {active.map((session, index) => (
               <Fragment key={session.id}>
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel className="truncate">{session.title}</DropdownMenuLabel>
+                  <DropdownMenuLabel className="truncate">
+                    {session.title}
+                    <span className="ml-1 text-muted-foreground">{workedLabel(session)}</span>
+                  </DropdownMenuLabel>
                   {session.state === "paused"
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}><Play aria-hidden />Resume</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => control(session, "pause")}><Pause aria-hidden />Pause</DropdownMenuItem>}
@@ -86,11 +99,36 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
   )
 }
 
+const SYNC_LABELS: Record<SyncStatus, string> = {
+  synced: "Synced with your account",
+  syncing: "Syncing…",
+  pending: "Changes queued to sync",
+  error: "Sync failed. Retry from settings",
+  "signed-out": "Not signed in. Stored on this device",
+  unconfigured: "Cloud sync is not configured. Stored on this device",
+}
+
+function SyncIndicator({ status }: { status: SyncStatus }) {
+  return (
+    <span
+      role="status"
+      title={SYNC_LABELS[status]}
+      aria-label={SYNC_LABELS[status]}
+      className={cn(
+        "size-2 shrink-0 rounded-full bg-muted-foreground/40",
+        status === "synced" && "bg-primary",
+        status === "error" && "bg-destructive",
+        (status === "syncing" || status === "pending") && "animate-pulse bg-primary",
+      )}
+    />
+  )
+}
+
 export function AppSidebar({
   view,
   dueMistakes,
   plannedTasks,
-  syncLabel,
+  syncStatus,
   user,
   sessions,
   onViewChange,
@@ -100,7 +138,7 @@ export function AppSidebar({
   view: AppView
   dueMistakes: number
   plannedTasks: number
-  syncLabel: string
+  syncStatus: SyncStatus
   user: { email?: string } | null
   sessions: SessionSync["sessions"]
   onViewChange: (view: AppView) => void
@@ -126,7 +164,10 @@ export function AppSidebar({
           onClick={() => navigate("calendar")}
         >
           <GraduationCap className="size-5 shrink-0" aria-hidden />
-          <span className="font-semibold group-data-[collapsible=icon]:hidden">Focal</span>
+          <span className="flex items-center gap-1.5 font-semibold group-data-[collapsible=icon]:hidden">
+            Focal
+            <SyncIndicator status={syncStatus} />
+          </span>
         </button>
       </SidebarHeader>
       <SidebarContent className="gap-1 px-1">
@@ -185,7 +226,6 @@ export function AppSidebar({
             </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
-        <span className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">{syncLabel}</span>
       </SidebarFooter>
     </Sidebar>
   )

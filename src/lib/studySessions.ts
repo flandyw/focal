@@ -1,6 +1,6 @@
 import type {
   ConfidenceScore,
-  ExamTrackSource,
+  FocalWebSource,
   FolioSource,
   NotionSource,
   NotionSyncSnapshot,
@@ -160,7 +160,7 @@ function parseNotionSource(value: unknown): NotionSource | undefined {
   }
 }
 
-function parseExamTrackSource(value: unknown): ExamTrackSource | undefined {
+function parseFocalWebSource(value: unknown): FocalWebSource | undefined {
   if (
     !isRecord(value) || value.type !== "examtrack" || typeof value.id !== "string" ||
     (value.kind !== "exam" && value.kind !== "sac" && value.kind !== "focus") || typeof value.subject !== "string"
@@ -182,7 +182,7 @@ function parseFolioSource(value: unknown): FolioSource | undefined {
   }
 }
 
-function examTrackSubjectId(source?: ExamTrackSource): string | undefined {
+function focalWebSubjectId(source?: FocalWebSource): string | undefined {
   if (!source) return undefined
   // ponytail: Built-in VCE subjects share stable names; custom cross-app subjects
   // stay unassigned until both apps persist a shared subject id.
@@ -255,11 +255,11 @@ export function normalizeStudySession(raw: unknown): StudySession {
   const hasReflection = Object.values(reflection).some((item) => item !== undefined)
   const integrationsValue = isRecord(value.integrations) ? value.integrations : undefined
   const notion = parseNotionSource(integrationsValue?.notion ?? value.source)
-  const examtrack = parseExamTrackSource(integrationsValue?.examtrack)
+  const focalWebSource = parseFocalWebSource(integrationsValue?.examtrack)
   const folio = parseFolioSource(integrationsValue?.folio)
   // Older web sessions (including cached rows) used display names instead of stable IDs.
   const rawSubjectIds = [...new Set(stringArray(value.subjectIds).map((id) => studySubjectId(id)))]
-  const integratedSubjectId = rawSubjectIds.length === 0 ? examTrackSubjectId(examtrack) : undefined
+  const integratedSubjectId = rawSubjectIds.length === 0 ? focalWebSubjectId(focalWebSource) : undefined
 
   return {
     schemaVersion: STUDY_SESSION_SCHEMA_VERSION,
@@ -274,7 +274,7 @@ export function normalizeStudySession(raw: unknown): StudySession {
     execution,
     reflection: hasReflection ? reflection : undefined,
     createdVia: inferCreatedVia(value, notion),
-    integrations: notion || examtrack || folio ? { notion, examtrack, folio } : undefined,
+    integrations: notion || focalWebSource || folio ? { notion, examtrack: focalWebSource, folio } : undefined,
     created_at: optionalString(value.created_at) ?? now,
     updated_at: optionalString(value.updated_at) ?? now,
     deleted_at: typeof value.deleted_at === "string" || value.deleted_at === null ? value.deleted_at : null,

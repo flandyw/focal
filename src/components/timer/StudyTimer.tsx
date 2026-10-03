@@ -50,10 +50,10 @@ import {
 import { cn } from "@/lib/utils";
 import { setCachedPreference } from "@/lib/storage/preferences";
 import {
-  getActiveExamTrackTimer,
-  getExamTrackElapsedSeconds,
-  getExamTrackTimerUrl,
-} from "@/lib/examtrack";
+  getActiveFocalWebTimer,
+  getFocalWebElapsedSeconds,
+  getFocalWebTimerUrl,
+} from "@/lib/focal-web";
 import {
   clampDailyGoal,
   clampLongBreakInterval,
@@ -192,7 +192,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     }
   });
   const externalSession = useMemo(
-    () => getActiveExamTrackTimer(sessions),
+    () => getActiveFocalWebTimer(sessions),
     [sessions],
   );
   const otherActiveSession = useMemo(
@@ -902,9 +902,9 @@ const StudyTimerInner = memo(function StudyTimerInner({
       const now = new Date();
       const nowIso = now.toISOString();
       const intervals = session.execution.state === "planned" ? [] : [...session.execution.intervals];
-      const examtrackSource = session.integrations?.examtrack;
+      const focalWebSource = session.integrations?.examtrack;
       const folioSource = session.integrations?.folio;
-      const source = examtrackSource ?? folioSource;
+      const source = focalWebSource ?? folioSource;
       const last = intervals[intervals.length - 1];
       const running = source?.phase
         ? source.phase !== "paused"
@@ -937,10 +937,10 @@ const StudyTimerInner = memo(function StudyTimerInner({
       }
       await onUpdateSession(session.id, {
         execution,
-        ...(examtrackSource ? {
+        ...(focalWebSource ? {
           integrations: {
             ...session.integrations,
-            examtrack: { ...examtrackSource, ...(phase ? { phase } : {}), ...(phaseBeforePause ? { phaseBeforePause } : { phaseBeforePause: undefined }) },
+            examtrack: { ...focalWebSource, ...(phase ? { phase } : {}), ...(phaseBeforePause ? { phaseBeforePause } : { phaseBeforePause: undefined }) },
           },
         } : folioSource ? {
           integrations: {
@@ -1085,20 +1085,20 @@ const StudyTimerInner = memo(function StudyTimerInner({
     : null;
 
   if (sharedSession) {
-    const examtrackSource = sharedSession.integrations?.examtrack;
+    const focalWebSource = sharedSession.integrations?.examtrack;
     const folioSource = sharedSession.integrations?.folio;
-    const source = examtrackSource ?? folioSource;
+    const source = focalWebSource ?? folioSource;
     const lastInterval = sharedSession.execution.state === "planned"
       ? undefined
       : sharedSession.execution.intervals[sharedSession.execution.intervals.length - 1];
     const sharedRunning = source?.phase
       ? source.phase !== "paused"
       : Boolean(lastInterval && !lastInterval.end);
-    const elapsedSeconds = getExamTrackElapsedSeconds(sharedSession, externalNow);
+    const elapsedSeconds = getFocalWebElapsedSeconds(sharedSession, externalNow);
     const elapsed = formatTimer(elapsedSeconds);
-    const externalUrl = examtrackSource ? getExamTrackTimerUrl(examtrackSource.kind) : null;
+    const externalUrl = focalWebSource ? getFocalWebTimerUrl(focalWebSource.kind) : null;
     const openTimer = () => {
-      if (externalUrl) void openUrl(externalUrl).catch((error) => console.error("Could not open ExamTrack timer:", error));
+      if (externalUrl) void openUrl(externalUrl).catch((error) => console.error("Could not open Focal Web timer:", error));
     };
 
     if (isCollapsed) {
@@ -1113,7 +1113,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           >
             <Timer />
           </Button>
-          {examtrackSource ? <Button variant="ghost" size="icon" onClick={openTimer} disabled={!externalUrl} aria-label="Open timer in ExamTrack"><ExternalLink /></Button> : null}
+          {focalWebSource ? <Button variant="ghost" size="icon" onClick={openTimer} disabled={!externalUrl} aria-label="Open timer in Focal Web"><ExternalLink /></Button> : null}
         </div>
       );
     }
@@ -1122,7 +1122,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
       <section className={cn("min-w-0 border-t border-sidebar-border/70", prominent && "h-full overflow-y-auto")} aria-label="Shared study session">
         <div className={cn("space-y-3 p-3", prominent && "flex min-h-full flex-col justify-center")}>
           <div className="flex items-center gap-2">
-            <Badge variant={sharedRunning ? "success" : "secondary"}>{examtrackSource ? "ExamTrack" : folioSource ? "Folio" : "Shared session"}</Badge>
+            <Badge variant={sharedRunning ? "success" : "secondary"}>{focalWebSource ? "Focal Web" : folioSource ? "Folio" : "Shared session"}</Badge>
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {source?.phase === "reading" ? "Reading time" : source?.phase === "writing" ? "Writing time" : sharedRunning ? "In progress" : "Paused"}
             </span>
@@ -1131,8 +1131,8 @@ const StudyTimerInner = memo(function StudyTimerInner({
             <p className="truncate text-sm font-medium">{sharedSession.title}</p>
             <p className="mt-1 font-heading text-3xl font-semibold tabular-nums">{elapsed}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {examtrackSource
-                ? `${examtrackSource.kind === "exam" ? "Exam timer" : examtrackSource.kind === "sac" ? "SAC timer" : "Study timer"} · ${examtrackSource.subject}`
+              {focalWebSource
+                ? `${focalWebSource.kind === "exam" ? "Exam timer" : focalWebSource.kind === "sac" ? "SAC timer" : "Study timer"} · ${focalWebSource.subject}`
                 : folioSource ? `Folio ${folioSource.kind} session${folioSource.subject ? ` · ${folioSource.subject}` : ""}`
                 : sharedSession.description ?? "Study session shared from Folio"}
             </p>
@@ -1143,7 +1143,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
             </Button>
             <Button onClick={() => void controlSharedSession("finish")} disabled={saving}><Check />Finish</Button>
             <Button variant="ghost" onClick={() => void controlSharedSession("discard")} disabled={saving || !onDeleteSession}><Trash2 />Discard</Button>
-            {examtrackSource ? <Button variant="outline" onClick={openTimer} disabled={!externalUrl}><ExternalLink />Open in ExamTrack</Button> : null}
+            {focalWebSource ? <Button variant="outline" onClick={openTimer} disabled={!externalUrl}><ExternalLink />Open in Focal Web</Button> : null}
           </div>
         </div>
       </section>

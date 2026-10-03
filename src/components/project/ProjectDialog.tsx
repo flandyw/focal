@@ -76,23 +76,13 @@ export function ProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{isEditMode ? "Assessment Details" : "New Assessment"}</DialogTitle>
-          <DialogDescription>
-            {isEditMode
-              ? "Edit the subject, date, files label, and status for this assessment."
-              : "Create a SAC, test, exam, or assessment folder to organise your files."}
+      <DialogContent className="gap-0 p-0 sm:max-w-xl sm:p-0">
+        <DialogHeader className="gap-0 border-b py-2.5 pl-4 pr-12">
+          <DialogTitle className="text-sm">{isEditMode ? "Assessment details" : "New assessment"}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {isEditMode ? "Edit the subject, date and status for this assessment." : "Create a SAC, test, exam or assignment folder to organise your files."}
           </DialogDescription>
         </DialogHeader>
-        {existingProject?.isLinked && (
-          <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary">
-            <Link className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>
-              This assessment uses an existing folder inside your projects directory. Files stay in place instead of being copied.
-            </p>
-          </div>
-        )}
         <AssessmentForm
           key={`${isEditMode ? `edit-${existingProject?.id}` : `new-${open ? "open" : "closed"}`}`}
           customSubjects={customSubjects}
@@ -109,32 +99,30 @@ export function ProjectDialog({
             isArchived: existingProject.isArchived,
             isFinished: existingProject.isFinished,
           } : undefined}
-          submitLabel={isEditMode ? "Save" : "Create Assessment"}
+          submitLabel={isEditMode ? "Save" : "Create"}
           showStatusControls={isEditMode}
           onCancel={() => onOpenChange(false)}
           onSubmit={handleSubmit}
-        />
-        {isEditMode && existingProject && (
-          <div className="mt-4 space-y-2">
-            <div className="text-sm font-medium text-muted-foreground">Folder</div>
-            <div className="flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1.5 text-sm font-mono" title={existingProject.folder_path}>
-                {existingProject.folder_path}
-              </code>
-              {onChangeFolder && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 gap-1.5 shrink-0"
-                  onClick={() => onChangeFolder(existingProject.id)}
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                  Change
-                </Button>
-              )}
+        >
+          {existingProject && (
+            <div className="grid gap-1">
+              <span className="text-micro font-medium uppercase tracking-wide text-muted-foreground">
+                Folder{existingProject.isLinked ? " · linked, files stay in place" : ""}
+              </span>
+              <div className="flex items-center gap-2">
+                {existingProject.isLinked && <Link className="size-3.5 shrink-0 text-primary" aria-hidden="true" />}
+                <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 text-xs font-mono" title={existingProject.folder_path}>
+                  {existingProject.folder_path}
+                </code>
+                {onChangeFolder && (
+                  <Button type="button" variant="outline" size="xs" className="shrink-0" onClick={() => onChangeFolder(existingProject.id)}>
+                    <FolderOpen />Change
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </AssessmentForm>
       </DialogContent>
     </Dialog>
   )

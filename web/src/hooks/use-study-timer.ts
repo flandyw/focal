@@ -173,8 +173,8 @@ export function useStudyTimer({
         dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current })
       } else dispatch({ type: "SET_RUNNING", running: session !== undefined && session.pausedAt === undefined })
     }
-    window.addEventListener("examtrack:focus-session-remote", onRemoteChange)
-    return () => window.removeEventListener("examtrack:focus-session-remote", onRemoteChange)
+    window.addEventListener("focal-web:focus-session-remote", onRemoteChange)
+    return () => window.removeEventListener("focal-web:focus-session-remote", onRemoteChange)
   }, [sessionMirror, closeBlock])
 
   /** Pausing must not inflate the block: the log and Supabase's session

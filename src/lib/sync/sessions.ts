@@ -15,7 +15,7 @@ export function sharedTimerNotice(previous: StudySession | undefined, next: Stud
   const session = next ?? previous
   const source = session?.integrations?.examtrack ?? session?.integrations?.folio
   if (!session || !source) return null
-  const app = source.type === "examtrack" ? "ExamTrack" : "Folio"
+  const app = source.type === "examtrack" ? "Focal Web" : "Folio"
   const body = session.title
   if (!next) return previous?.execution.state === "in-progress" ? { title: `${app} timer discarded`, body } : null
   if (next.execution.state === "completed") {
@@ -82,7 +82,7 @@ export function repairDuplicateSessions(raw: unknown[]): {
 }
 
 export function sessionDuplicateKey(session: StudySession): string {
-  // Folio/ExamTrack updates keep a stable source id even when an older client generated
+  // Folio/Focal Web updates keep a stable source id even when an older client generated
   // a new local row id for each checkpoint. Treat those rows as one logical sitting.
   // Notion page ids are intentionally not used here: two pages can legitimately describe
   // the same-looking study block and are repaired by the existing fingerprint instead.

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { StudySession, Subject } from "@/lib/types"
 import { isRecord } from "@/lib/utils"
 
-export interface ExamTrackAttemptSummary {
+export interface FocalWebAttemptSummary {
   id: string
   subject: string
   title: string
@@ -11,15 +11,15 @@ export interface ExamTrackAttemptSummary {
   percentage: number
 }
 
-export interface ExamTrackSubjectSummary {
+export interface FocalWebSubjectSummary {
   subject: string
   attempts: number
   averagePercentage: number
 }
 
-export interface ExamTrackSnapshot {
-  attempts: ExamTrackAttemptSummary[]
-  subjects: ExamTrackSubjectSummary[]
+export interface FocalWebSnapshot {
+  attempts: FocalWebAttemptSummary[]
+  subjects: FocalWebSubjectSummary[]
   averagePercentage: number | null
   dueMistakes: number
   totalMistakes: number
@@ -34,7 +34,7 @@ function asValidDate(value: unknown): string | null {
   return candidate && Number.isFinite(new Date(candidate).getTime()) ? candidate : null
 }
 
-function parseAttempt(value: unknown): ExamTrackAttemptSummary | null {
+function parseAttempt(value: unknown): FocalWebAttemptSummary | null {
   if (!isRecord(value)) return null
   const id = asNonEmptyString(value.id)
   const subject = asNonEmptyString(value.subject)
@@ -83,14 +83,14 @@ function mistakeIsDue(value: unknown, now: Date): boolean | null {
   return new Date(base).getTime() + intervalDays * 86_400_000 <= now.getTime()
 }
 
-export function summariseExamTrackData(
+export function summariseWebData(
   attemptPayloads: unknown[],
   mistakePayloads: unknown[],
   now = new Date(),
-): ExamTrackSnapshot {
+): FocalWebSnapshot {
   const attempts = attemptPayloads
     .map(parseAttempt)
-    .filter((attempt): attempt is ExamTrackAttemptSummary => Boolean(attempt))
+    .filter((attempt): attempt is FocalWebAttemptSummary => Boolean(attempt))
     .sort((first, second) => second.completedAt.localeCompare(first.completedAt))
   const mistakes = mistakePayloads
     .map((mistake) => mistakeIsDue(mistake, now))
@@ -120,10 +120,10 @@ export function summariseExamTrackData(
   }
 }
 
-export async function fetchExamTrackSnapshot(
+export async function fetchFocalWebSnapshot(
   client: SupabaseClient,
   userId: string,
-): Promise<ExamTrackSnapshot> {
+): Promise<FocalWebSnapshot> {
   const [attemptResult, mistakeResult] = await Promise.all([
     client.from("attempts").select("payload").eq("user_id", userId).is("deleted_at", null),
     client.from("mistakes").select("payload").eq("user_id", userId).is("deleted_at", null),
@@ -135,7 +135,7 @@ export async function fetchExamTrackSnapshot(
     ? rows.flatMap((row) => isRecord(row) && "payload" in row ? [row.payload] : [])
     : []
 
-  return summariseExamTrackData(
+  return summariseWebData(
     payloads(attemptResult.data),
     payloads(mistakeResult.data),
   )
@@ -152,10 +152,11 @@ export function matchFocalSubjectId(name: string, subjects: Subject[]): string |
   )?.id
 }
 
-export function getExamTrackUrl(
-  hash = "",
-  configured = import.meta.env.VITE_EXAMTRACK_URL,
-): string | null {
+// ponytail: the one place the hosted web URL lives. To move the site, change this line
+// (or set VITE_FOCAL_WEB_URL at build time, e.g. for a staging deploy).
+export const FOCAL_WEB_URL = import.meta.env.VITE_FOCAL_WEB_URL ?? "https://focalvce.vercel.app/"
+
+export function getFocalWebUrl(hash = "", configured = FOCAL_WEB_URL): string | null {
   if (!configured) return null
   try {
     const url = new URL(configured)
@@ -167,24 +168,24 @@ export function getExamTrackUrl(
   }
 }
 
-export function getExamTrackTimerUrl(
+export function getFocalWebTimerUrl(
   kind: "exam" | "sac" | "focus",
-  configured = import.meta.env.VITE_EXAMTRACK_URL,
+  configured = FOCAL_WEB_URL,
 ): string | null {
-  const base = getExamTrackUrl("", configured)
+  const base = getFocalWebUrl("", configured)
   if (!base) return null
   const url = new URL(base)
   url.searchParams.set("timer", kind)
   return url.toString()
 }
 
-export function getActiveExamTrackTimer(sessions: StudySession[]): StudySession | undefined {
+export function getActiveFocalWebTimer(sessions: StudySession[]): StudySession | undefined {
   return sessions
     .filter((session) => session.execution.state === "in-progress" && session.integrations?.examtrack)
     .sort((first, second) => (second.updated_at ?? second.created_at).localeCompare(first.updated_at ?? first.created_at))[0]
 }
 
-export function getExamTrackElapsedSeconds(session: StudySession, now = new Date()): number {
+export function getFocalWebElapsedSeconds(session: StudySession, now = new Date()): number {
   if (session.execution.state === "planned") return 0
   return Math.floor(session.execution.intervals.reduce((total, interval) => {
     const start = new Date(interval.start).getTime()

@@ -533,7 +533,7 @@ export function useStudySessionSync(
     }
     void start()
 
-    const channel = supabase.channel(`examtrack-study-sessions-${userId}`)
+    const channel = supabase.channel(`focal-study-sessions-${userId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sync_log", filter: `user_id=eq.${userId}` }, () => {
         window.dispatchEvent(new Event("examtrack:sync-wakeup"))
         void pull()
@@ -662,7 +662,7 @@ function adoptRemoteFocusSessionChange(session: CanonicalStudySession, nowMs: nu
   const projected = closed ? undefined : projectTimerSession(session, local, "focus")
   adoptRemoteFocusSession(projected, nowMs)
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent("examtrack:focus-session-remote", {
+    window.dispatchEvent(new CustomEvent("focal-web:focus-session-remote", {
       detail: { id: session.id, session: projected },
     }))
   }

@@ -4,31 +4,34 @@
 
 # Focal
 
-## ExamTrack integration
+## Focal Web integration
 
-Focal includes a first-class ExamTrack workspace with practice summaries, due-mistake counts, secure drill-through to the hosted app, and an action that schedules a targeted review session in Focal.
+Focal includes a first-class workspace for the hosted web app (Focal Web, deployed from `web/`) with practice summaries, due-mistake counts, secure drill-through to it, and an action that schedules a targeted review session in Focal.
 
-ExamTrack exam, SAC, and study-timer blocks also mirror their lifecycle into Focal. Starting one creates an in-progress study session, pause/resume preserves exact active intervals, completion feeds normal Focal analytics, and discard removes the mirrored session. While ExamTrack owns a timer, Focal shows it in the study-timer slot and prevents a second local timer from starting. The study timer is two-way: pause, resume, or finish it from Focal and the web countdown follows.
+Focal Web exam, SAC, and study-timer blocks also mirror their lifecycle into Focal. Starting one creates an in-progress study session, pause/resume preserves exact active intervals, completion feeds normal Focal analytics, and discard removes the mirrored session. While Focal Web owns a timer, Focal shows it in the study-timer slot and prevents a second local timer from starting. The study timer is two-way: pause, resume, or finish it from Focal and the web countdown follows.
 
-Folio and ExamTrack timer changes reach Focal through the existing Supabase Realtime sync-log subscription. Start, pause, resume, writing-phase, finish, and discard changes show an in-app notice; the study timer's desktop-notification setting controls native alerts. Focal reads the sync cursor on each Realtime wakeup and on reconnect, with polling as a fallback.
+Folio and Focal Web timer changes reach Focal through the existing Supabase Realtime sync-log subscription. Start, pause, resume, writing-phase, finish, and discard changes show an in-app notice; the study timer's desktop-notification setting controls native alerts. Focal reads the sync cursor on each Realtime wakeup and on reconnect, with polling as a fallback.
+
+The web app used to be a separate product called ExamTrack, with its own repository and Supabase project. The name is gone; the identifiers it left behind in storage keys, Supabase columns and the sync protocol are frozen, because rows already in the database and the Folio Android app still use them. See [`docs/sync-protocol.md`](docs/sync-protocol.md).
 
 ## Repository layout
 
 | Path | What it is |
 | --- | --- |
 | `src/` | Focal desktop and Android UI, built by Vite and bundled by Tauri |
-| `web/` | ExamTrack, the web app. Its own `package.json`, `bun.lock` and Vercel deployment |
+| `web/` | Focal Web, the web app. Its own `package.json`, `bun.lock` and Vercel deployment |
 | `android-native/` | The native Android app |
 | `supabase/migrations/` | The one Supabase project shared by every app |
-| `docs/examtrack-merge.md` | Moving ExamTrack's data and second client into this project |
+| `docs/examtrack-merge.md` | Moving the old standalone ExamTrack data into this project (historical) |
 
-ExamTrack used to be a separate repository with its own Supabase project. Both now live
+Focal Web used to be a separate repository with its own Supabase project. Both now live
 here. `attempts`, `mistakes` and `user_state` are in this project's database, and all clients
 share one account. Study sessions use one shared `study_sessions` table, with actual intervals
 inside each row, and one authenticated mutation RPC. Both apps' calendars read those same
 rows. Apply migration `0018` to consolidate existing intervals; timer durations still use server-clock estimates and monotonic
-elapsed deltas. `VITE_EXAMTRACK_URL` remains the drill-through link to the hosted app, not a
-database.
+elapsed deltas.
+
+The hosted web URL lives in one place, `FOCAL_WEB_URL` in [`src/lib/focal-web.ts`](src/lib/focal-web.ts). It defaults to `https://focalvce.vercel.app/`; set `VITE_FOCAL_WEB_URL` at build time to override it, for example for a preview deployment. It is only the drill-through link, never a database selector.
 
 
 **A fast, minimal desktop study organiser for VCE students.**
@@ -147,7 +150,7 @@ Focal works locally without signing in. To enable multi-device sync:
 1. Create a Supabase project.
 2. Apply every file in `supabase/migrations/` in numeric order (or run them with the Supabase CLI).
 3. Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`.
-4. Confirm `sync_log` is in the `supabase_realtime` publication. Migrations `0011`–`0013` install canonical study sessions, cursor-based ExamTrack sync, and offline session timing on top of the append-only feed. Clients publish session lifecycle commands only through `study_session_mutate`; `sync_read_changes` is their cursor API. See [`docs/sync-protocol.md`](docs/sync-protocol.md) for the shared contract.
+4. Confirm `sync_log` is in the `supabase_realtime` publication. Migrations `0011`–`0013` install canonical study sessions, cursor-based Focal Web sync, and offline session timing on top of the append-only feed. Clients publish session lifecycle commands only through `study_session_mutate`; `sync_read_changes` is their cursor API. See [`docs/sync-protocol.md`](docs/sync-protocol.md) for the shared contract.
 5. Run `bun run dev` or `bun run tauri dev`, then sign in from Settings → Account.
 
 The protocol itself — the rules, the per-entity merge policy, the latency budget, and the conformance vectors both clients run — is written down in [`docs/sync-protocol.md`](docs/sync-protocol.md).

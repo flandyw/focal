@@ -1,6 +1,8 @@
 export type StudySessionKind = "focus" | "exam" | "sac"
 export type StudySessionState = "planned" | "running" | "paused" | "completed" | "cancelled"
 export type StudySessionPhase = "focus" | "reading" | "writing"
+// ponytail: "examtrack" is the historical app id for Focal Web. It is frozen: Folio and the
+// web build send it, and Postgres rows already store it.
 export type StudySessionApp = "focal" | "examtrack" | "folio"
 export type StudySessionAction =
   | "log" | "create" | "start" | "pause" | "resume" | "phase_change"

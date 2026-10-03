@@ -46,7 +46,7 @@ export function DesignPreview() {
           plannerSelected={false}
           inboxSelected
           analyticsSelected={false}
-          examTrackSelected={false}
+          focalWebSelected={false}
           isCollapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}
           onSelectHome={noop}
@@ -55,7 +55,7 @@ export function DesignPreview() {
           onSelectPlanner={noop}
           onSelectInbox={noop}
           onSelectAnalytics={noop}
-          onSelectExamTrack={noop}
+          onSelectFocalWeb={noop}
           onSearch={noop}
           onStartStudySession={createSession}
           onUpdateStudySession={() => Promise.resolve()}

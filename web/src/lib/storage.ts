@@ -1,8 +1,8 @@
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "@/lib/exam-data"
 
-// ponytail: storage keys, IndexedDB names and the `examtrack` app ids in the sync
-// contract keep the old prefix on purpose — renaming them would orphan every
-// existing user's local data and break cross-app sessions with the desktop build.
+// ponytail: this `examtrack` prefix is load-bearing. Renaming it would orphan every
+// browser's existing localStorage entries and IndexedDB database, and the sync
+// protocol's app ids are a shared wire contract with the desktop build. It stays.
 const STORAGE_KEY = "examtrack:data:v1"
 
 export function loadAppData(): AppData {
@@ -35,7 +35,7 @@ export function downloadAppData(data: AppData) {
   )
   const link = document.createElement("a")
   link.href = url
-  link.download = `examtrack-${new Date().toISOString().slice(0, 10)}.json`
+  link.download = `focal-${new Date().toISOString().slice(0, 10)}.json`
   link.click()
   URL.revokeObjectURL(url)
 }

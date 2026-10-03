@@ -11,7 +11,7 @@ interface ShortcutHandlers {
   onGoPlanner?: () => void
   onGoInbox?: () => void
   onGoAnalytics?: () => void
-  onGoExamTrack?: () => void
+  onGoFocalWeb?: () => void
   onOpenFocus?: () => void
   onGoSettings?: () => void
   onOpenAiAssistant?: () => void
@@ -111,7 +111,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
           "3": handlersRef.current.onGoPlanner,
           "4": handlersRef.current.onGoTimetable,
           "5": handlersRef.current.onGoInbox,
-          "6": handlersRef.current.onGoExamTrack,
+          "6": handlersRef.current.onGoFocalWeb,
           "7": handlersRef.current.onGoAnalytics,
         }[key]
         if (destination) {
@@ -176,7 +176,7 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
       // E: Go to Exam practice
       if (key === "e" && !meta && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        handlersRef.current.onGoExamTrack?.()
+        handlersRef.current.onGoFocalWeb?.()
         return
       }
 

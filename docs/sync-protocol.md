@@ -1,6 +1,6 @@
 # Shared sync protocol
 
-Focal desktop, ExamTrack web, and Folio use the same Supabase Auth project and the same
+Focal desktop, Focal Web, and Folio use the same Supabase Auth project and the same
 user-scoped change feed. Realtime is a wakeup; the feed cursor is the durable source of
 changes. Session lifecycle is a separate transactional protocol over canonical session rows.
 
@@ -24,7 +24,7 @@ accumulated_active_ms + max(0, estimated_server_now - segment_started_at)
 ```
 
 The shared DTO and validator live in `src/lib/sync/sessionContract.ts`. Root Focal and
-ExamTrack web import this exact module. Folio uses the same JSON field names and calls
+Focal Web import this exact module. Folio uses the same JSON field names and calls
 `study_session_mutate`; it must not write `study_sessions` through `sync_apply_changes` or
 the `sync_changes` compatibility view.
 
@@ -65,7 +65,7 @@ after that cursor. It returns a snapshot only when `after` is negative or below 
 feed floor. A current cursor is not invalidated merely because older rows exist.
 
 Study-session feed rows carry the current canonical session DTO, including its segments;
-ordinary entities keep their own merge behavior. ExamTrack attempts and mistakes are stable
+ordinary entities keep their own merge behavior. Focal Web attempts and mistakes are stable
 `row_id` records; settings use one `user_state` row per setting key. Web changes include
 `expected_seq`, so the server either commits against the version the client read or returns
 the canonical row for a field-aware rebase. Mistake rebases preserve non-overlapping question
@@ -80,13 +80,13 @@ Focal desktop stores local records and ordered session commands in SQLite. Nativ
 uses the same mutation/cursor APIs and a durable non-coalescing session-command queue. The
 server does not impose a single-active-session constraint; clients may have concurrent
 canonical sessions. Android timers persist elapsed-realtime deadlines and boot counts; a
-reboot cuts continuity instead of inventing study time. ExamTrack web stores session commands and ordinary app changes in
+reboot cuts continuity instead of inventing study time. Focal Web stores session commands and ordinary app changes in
 account-scoped IndexedDB before publishing. Lifecycle commands stay ordered; unsent
 `save_progress` commands may coalesce by session. Ordinary writes coalesce only within the
 same stable entity and row. Replayed RPC requests keep the same UUID until a receipt arrives;
 stale revisions/sequences are rebased only when the requested transition remains valid.
 
-ExamTrack timer metadata (year, provider, paper, marks, reading/writing limits, workspace
+Focal Web timer metadata (year, provider, paper, marks, reading/writing limits, workspace
 items, and SAC details) remains in canonical session metadata. Live timer state and its old
 updated-at markers are no longer written into the `user_state` payload. The one-time
 backfill in migration `0011` moves legacy active timers and their known intervals into the
@@ -95,20 +95,20 @@ intervals into the session row without changing any session IDs or client APIs.
 
 Migration `0012_examtrack_cursor_sync.sql` backfills existing attempts, mistakes and setting
 keys into the feed, then keeps `attempts`, `mistakes` and `user_state` as compatibility
-projections. Folio reads shared mistake and ExamTrack attempt rows through account-scoped
+projections. Folio reads shared mistake and Focal Web attempt rows through account-scoped
 cursor reads; queued mistake edits use versioned `sync_apply_changes` writes with durable
 expected sequences. Scheduling edits preserve remote question content and review history is
 unioned by stable ID. Folio's notebook practice attempts remain local. Custom subjects use
 the same cursor RPC. The web client no longer reads or writes whole tables.
 
 The portable command sequence in `src/lib/sync/vectors/session-command-sequence.json` is
-run by ExamTrack's TypeScript test and copied into Folio's Android test resources. Both clients
+run by Focal Web's TypeScript test and copied into Folio's Android test resources. Both clients
 exercise the same start, pause and resume revisions with one stable device ID.
 
 ## Security and migrations
 
 Apply Supabase migrations in order. Migration `0011_canonical_study_sessions.sql` retains
-user records, backfills the latest materialized study-session row, imports embedded ExamTrack
+user records, backfills the latest materialized study-session row, imports embedded Focal Web
 timers only when no canonical session with that ID already exists, and removes the old
 study-session LWW materialized rows. Migration `0013_study_session_offline_timing.sql` adds
 monotonic/server-anchored offline timing while retaining the same command RPC and receipt
@@ -126,5 +126,5 @@ This repo has no test suite (see `AGENTS.md`). Verify changes with:
 
 - `bun run check` — typecheck (`tsc --noEmit`) + lint (`oxlint`) for the root app.
 - `bun run typecheck` — the shared TypeScript contract and Focal client only.
-- `cd web && bun run lint && bun run build` — ExamTrack production compilation.
+- `cd web && bun run lint && bun run build` — Focal Web production compilation.
 - `bunx --no-install vite build` — desktop bundle (needs `bun run check` first).

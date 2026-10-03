@@ -100,7 +100,7 @@ function groupByDate(entries: TimetableEntry[]): Array<{ dateLabel: string; entr
   }))
 }
 
-export function ExamTrackerPicker({
+export function ExamPicker({
   open,
   onOpenChange,
   entries,

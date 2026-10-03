@@ -509,7 +509,7 @@ export function saveFocusSession(session: FocusTimerSession | undefined) {
 /** Another device moved this session on the server. The row is the timer now: it is
  *  stored here and the persisted countdown is moved to match, because a countdown that
  *  disagrees with its session immediately owes a boundary that would undo the change.
- *  A mounted timer follows through the `examtrack:focus-session-remote` event; this is
+ *  A mounted timer follows through the `focal-web:focus-session-remote` event; this is
  *  what makes the change survive a reload with the timer page closed. */
 export function adoptRemoteFocusSession(session: FocusTimerSession | undefined, now = Date.now()) {
   saveFocusSession(session)

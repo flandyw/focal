@@ -16,24 +16,24 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  fetchExamTrackSnapshot,
-  getExamTrackUrl,
+  fetchFocalWebSnapshot,
+  getFocalWebUrl,
   matchFocalSubjectId,
-  type ExamTrackSnapshot,
-} from "@/lib/examtrack"
+  type FocalWebSnapshot,
+} from "@/lib/focal-web"
 import { isSupabaseConfigured, supabase } from "@/lib/supabase/client"
 import type { StudySessionDraft, Subject } from "@/lib/types"
 
 type LoadState =
   | { status: "idle" | "loading"; snapshot: null; error: null }
-  | { status: "ready"; snapshot: ExamTrackSnapshot; error: null }
+  | { status: "ready"; snapshot: FocalWebSnapshot; error: null }
   | { status: "error"; snapshot: null; error: string }
 
 function formatPercentage(value: number | null) {
   return value === null ? "—" : `${Math.round(value)}%`
 }
 
-export function ExamTrackView({
+export function FocalWebView({
   subjects,
   userId,
   loading: authLoading,
@@ -53,14 +53,14 @@ export function ExamTrackView({
     if (!userId || !supabase) return
     setState({ status: "loading", snapshot: null, error: null })
     try {
-      const snapshot = await fetchExamTrackSnapshot(supabase, userId)
+      const snapshot = await fetchFocalWebSnapshot(supabase, userId)
       setState({ status: "ready", snapshot, error: null })
     } catch (error) {
-      console.error("ExamTrack integration failed:", error)
+      console.error("Focal Web integration failed:", error)
       setState({
         status: "error",
         snapshot: null,
-        error: "ExamTrack data is unavailable. Check your connection and the row-level-security policies on attempts and mistakes.",
+        error: "Focal Web data is unavailable. Check your connection and the row-level-security policies on attempts and mistakes.",
       })
     }
   }, [userId])
@@ -82,18 +82,18 @@ export function ExamTrackView({
     () => weakest ? matchFocalSubjectId(weakest.subject, subjects) : undefined,
     [subjects, weakest],
   )
-  const examTrackUrl = getExamTrackUrl()
+  const focalWebUrl = getFocalWebUrl()
 
   const launch = useCallback(async (hash = "") => {
-    const url = getExamTrackUrl(hash)
+    const url = getFocalWebUrl(hash)
     if (!url) {
-      toast.error("Set VITE_EXAMTRACK_URL to the HTTPS production URL first.")
+      toast.error("Focal Web is unavailable. Check that VITE_FOCAL_WEB_URL is an HTTPS URL.")
       return
     }
     try {
       await openUrl(url)
     } catch (error) {
-      toast.error(`Could not open ExamTrack: ${String(error)}`)
+      toast.error(`Could not open Focal Web: ${String(error)}`)
     }
   }, [])
 
@@ -105,8 +105,8 @@ export function ExamTrackView({
     try {
       await onCreateStudySessions([{
         subjectIds: weakestSubjectId ? [weakestSubjectId] : [],
-        title: `ExamTrack review · ${weakest.subject}`,
-        description: "Review due mistakes and complete a targeted practice set in ExamTrack.",
+        title: `Focal review · ${weakest.subject}`,
+        description: "Review due mistakes and complete a targeted practice set in Focal Web.",
         topics: ["Exam review", "Mistake correction"],
         startTime: start.toISOString(),
         endTime: end.toISOString(),
@@ -123,7 +123,7 @@ export function ExamTrackView({
           <div>
             <div className="flex items-center gap-2">
               <GraduationCap className="size-5 text-primary" aria-hidden />
-              <h1 className="text-xl font-semibold tracking-tight">ExamTrack</h1>
+              <h1 className="text-xl font-semibold tracking-tight">Focal Web</h1>
               <Badge variant="secondary">Web app</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -137,9 +137,9 @@ export function ExamTrackView({
                 Refresh
               </Button>
             )}
-            <Button size="sm" disabled={!examTrackUrl} onClick={() => void launch()}>
+            <Button size="sm" disabled={!focalWebUrl} onClick={() => void launch()}>
               <ExternalLink />
-              Open ExamTrack
+              Open Focal Web
             </Button>
           </div>
         </header>
@@ -149,7 +149,7 @@ export function ExamTrackView({
             <CardContent className="py-6">
               <div>
                 <p className="font-medium">Supabase is not configured</p>
-                <p className="mt-1 text-sm text-muted-foreground">Set the Supabase URL and publishable key in the Focal build. ExamTrack data lives in the same project.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Set the Supabase URL and publishable key in the Focal build. Practice data lives in the same project.</p>
               </div>
             </CardContent>
           </Card>
@@ -161,11 +161,11 @@ export function ExamTrackView({
         ) : !userId ? (
           <Card>
             <CardHeader>
-              <CardTitle>Sign in to see your ExamTrack data</CardTitle>
+              <CardTitle>Sign in to see your practice data</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                ExamTrack and Focal share one account and one database. Sign in under Settings, then come back here.
+                The web app and Focal desktop share one account and one database. Sign in under Settings, then come back here.
               </p>
               <div className="mt-3"><Button onClick={onOpenSettings}><ExternalLink />Open account settings</Button></div>
             </CardContent>
@@ -173,7 +173,7 @@ export function ExamTrackView({
         ) : state.status === "loading" || state.status === "idle" ? (
           <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            Loading ExamTrack data…
+            Loading practice data…
           </div>
         ) : state.status === "error" ? (
           <Card className="border-destructive/30">
@@ -187,7 +187,7 @@ export function ExamTrackView({
           </Card>
         ) : (
           <>
-            <section aria-label="ExamTrack summary" className="grid gap-3 sm:grid-cols-3">
+            <section aria-label="Focal Web summary" className="grid gap-3 sm:grid-cols-3">
               <Card>
                 <CardHeader><CardTitle className="text-sm text-muted-foreground">Average practice score</CardTitle></CardHeader>
                 <CardContent className="text-3xl font-semibold tabular-nums">{formatPercentage(snapshot!.averagePercentage)}</CardContent>
@@ -241,7 +241,7 @@ export function ExamTrackView({
                         </div>
                       ))}
                     </div>
-                  ) : <p className="text-sm text-muted-foreground">Complete a practice exam in ExamTrack to see subject performance.</p>}
+                  ) : <p className="text-sm text-muted-foreground">Complete a practice exam in Focal Web to see subject performance.</p>}
                 </CardContent>
               </Card>
 

@@ -50,7 +50,7 @@ interface SidebarProps {
   plannerSelected: boolean;
   inboxSelected: boolean;
   analyticsSelected: boolean;
-  examTrackSelected: boolean;
+  focalWebSelected: boolean;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onSelectHome: () => void;
@@ -59,7 +59,7 @@ interface SidebarProps {
   onSelectPlanner: () => void;
   onSelectInbox: () => void;
   onSelectAnalytics: () => void;
-  onSelectExamTrack: () => void;
+  onSelectFocalWeb: () => void;
   onStartStudySession: (data: {
     subjectIds: string[];
     durationSeconds: number;
@@ -134,7 +134,7 @@ export const Sidebar = memo(function Sidebar({
   plannerSelected,
   inboxSelected,
   analyticsSelected,
-  examTrackSelected,
+  focalWebSelected,
   isCollapsed,
   onToggleCollapse,
   onSelectHome,
@@ -143,7 +143,7 @@ export const Sidebar = memo(function Sidebar({
   onSelectPlanner,
   onSelectInbox,
   onSelectAnalytics,
-  onSelectExamTrack,
+  onSelectFocalWeb,
   onStartStudySession,
   onUpdateStudySession,
   onDeleteStudySession,
@@ -194,7 +194,7 @@ export const Sidebar = memo(function Sidebar({
         <DestinationButton label="Planner" accessibleLabel="Adaptive planner" icon={CalendarClock} selected={plannerSelected} collapsed={isCollapsed} onClick={onSelectPlanner} shortcut={`${WORKSPACE_MODIFIER}3`} />
         <DestinationButton label="Schedule" icon={CalendarIcon} selected={timetableSelected} collapsed={isCollapsed} onClick={onSelectTimetable} shortcut={`${WORKSPACE_MODIFIER}4`} />
         <DestinationButton label="Inbox" accessibleLabel="Academic inbox" icon={InboxIcon} selected={inboxSelected} collapsed={isCollapsed} onClick={onSelectInbox} shortcut={`${WORKSPACE_MODIFIER}5`} />
-        <DestinationButton label="Exams" accessibleLabel="Exam practice" icon={GraduationCap} selected={examTrackSelected} collapsed={isCollapsed} onClick={onSelectExamTrack} shortcut={`${WORKSPACE_MODIFIER}6`} />
+        <DestinationButton label="Exams" accessibleLabel="Exam practice" icon={GraduationCap} selected={focalWebSelected} collapsed={isCollapsed} onClick={onSelectFocalWeb} shortcut={`${WORKSPACE_MODIFIER}6`} />
         <DestinationButton label="Progress" icon={BarChart3} selected={analyticsSelected} collapsed={isCollapsed} onClick={onSelectAnalytics} shortcut={`${WORKSPACE_MODIFIER}7`} />
       </nav>
 

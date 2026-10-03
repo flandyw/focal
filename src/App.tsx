@@ -116,9 +116,9 @@ const AnalyticsView = lazy(() =>
     default: m.AnalyticsView,
   })),
 );
-const ExamTrackView = lazy(() =>
-  import("@/components/examtrack/ExamTrackView").then((m) => ({
-    default: m.ExamTrackView,
+const FocalWebView = lazy(() =>
+  import("@/components/focal-web/FocalWebView").then((m) => ({
+    default: m.FocalWebView,
   })),
 );
 const AIAssistantPanel = lazy(() =>
@@ -260,7 +260,7 @@ function App() {
     assessmentsView,
     settingsView,
     analyticsView,
-    examTrackView,
+    focalWebView,
     timetableView,
     plannerView,
     inboxView,
@@ -537,8 +537,8 @@ function App() {
     navigation.selectAnalytics();
   }, [navigation]);
 
-  const handleSelectExamTrack = useCallback(() => {
-    navigation.selectExamTrack();
+  const handleSelectFocalWeb = useCallback(() => {
+    navigation.selectFocalWeb();
   }, [navigation]);
 
   const handleSelectSettings = useCallback(() => {
@@ -575,7 +575,7 @@ function App() {
     onGoPlanner: handleSelectPlanner,
     onGoInbox: handleSelectInbox,
     onGoAnalytics: handleSelectAnalytics,
-    onGoExamTrack: handleSelectExamTrack,
+    onGoFocalWeb: handleSelectFocalWeb,
     onGoSettings: handleSelectSettings,
     onOpenAiAssistant: handleOpenAiAssistant,
     onShowShortcuts: () => setShortcutsOpen(true),
@@ -1907,8 +1907,8 @@ function App() {
     ? "settings"
     : assessmentsView
       ? "assessments"
-    : examTrackView
-      ? "examtrack"
+    : focalWebView
+      ? "focal-web"
     : plannerView
       ? "planner"
     : inboxView
@@ -1926,7 +1926,7 @@ function App() {
     ? "Settings"
     : assessmentsView
       ? "Assessments"
-    : examTrackView
+    : focalWebView
       ? "Exam practice"
       : plannerView
         ? "Planner"
@@ -2015,7 +2015,7 @@ function App() {
                   plannerSelected={plannerView}
                   inboxSelected={inboxView}
                   analyticsSelected={analyticsView}
-                  examTrackSelected={examTrackView}
+                  focalWebSelected={focalWebView}
                   isCollapsed={sidebarCollapsed}
                   onToggleCollapse={handleToggleCollapse}
                   onSelectHome={handleSelectHome}
@@ -2023,7 +2023,7 @@ function App() {
                   onSelectPlanner={handleSelectPlanner}
                   onSelectInbox={handleSelectInbox}
                   onSelectAnalytics={handleSelectAnalytics}
-                  onSelectExamTrack={handleSelectExamTrack}
+                  onSelectFocalWeb={handleSelectFocalWeb}
                   onStartStudySession={handleStartStudySession}
                   onUpdateStudySession={handleUpdateStudySession}
                   onDeleteStudySession={handleDiscardTimerSession}
@@ -2147,9 +2147,9 @@ function App() {
                           onBulkDelete={handleBulkDelete}
                         />
                       </Suspense>
-                    ) : examTrackView ? (
-                      <Suspense fallback={<ViewFallback label="ExamTrack" />}>
-                        <ExamTrackView
+                    ) : focalWebView ? (
+                      <Suspense fallback={<ViewFallback label="Exams" />}>
+                        <FocalWebView
                           subjects={allSubjects}
                           userId={supabaseAuth.user?.id}
                           loading={supabaseAuth.loading}
@@ -2421,7 +2421,7 @@ function App() {
               onGoPlanner={handleSelectPlanner}
               onGoInbox={handleSelectInbox}
               onGoAnalytics={handleSelectAnalytics}
-              onGoExamTrack={handleSelectExamTrack}
+              onGoFocalWeb={handleSelectFocalWeb}
               onGoSettings={handleSelectSettings}
               onOpenAiAssistant={handleOpenAiAssistant}
               onShowShortcuts={() => setShortcutsOpen(true)}

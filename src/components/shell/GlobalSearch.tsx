@@ -70,7 +70,7 @@ interface GlobalSearchProps {
  onGoPlanner?: () => void;
  onGoInbox?: () => void;
  onGoAnalytics?: () => void;
- onGoExamTrack?: () => void;
+ onGoFocalWeb?: () => void;
  onGoSettings?: () => void;
  onOpenAiAssistant?: () => void;
  onShowShortcuts?: () => void;
@@ -159,7 +159,7 @@ export function GlobalSearch({
  onGoPlanner,
  onGoInbox,
  onGoAnalytics,
- onGoExamTrack,
+ onGoFocalWeb,
  onGoSettings,
  onOpenAiAssistant,
  onShowShortcuts,
@@ -275,15 +275,15 @@ export function GlobalSearch({
  icon: BarChart3,
  run: onGoAnalytics,
  },
- onGoExamTrack && {
+ onGoFocalWeb && {
  type:"action" as const,
- id:"go-examtrack",
+ id:"go-focal-web",
  label:"Open exam practice",
  hint:"Review practice attempts and due mistakes",
  aliases: ["exam","practice","mistakes","examtrack","revision"],
  shortcut:"E",
  icon: GraduationCap,
- run: onGoExamTrack,
+ run: onGoFocalWeb,
  },
  onGoSettings && {
  type:"action" as const,
@@ -322,7 +322,7 @@ export function GlobalSearch({
  modKeyLabel,
 	 onGoAnalytics,
 	 onGoAssessments,
- onGoExamTrack,
+ onGoFocalWeb,
  onGoHome,
  onGoInbox,
  onGoPlanner,

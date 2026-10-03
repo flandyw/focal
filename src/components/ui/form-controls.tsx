@@ -250,4 +250,29 @@ function FormSection({ title, icon, className, children, ...props }: FormSection
   )
 }
 
-export { ChoiceGrid, DatePickerField, EmojiPicker, FormField, FormSection, SelectField, ToggleChip }
+// Dense dialog primitives: tiny caps label above a control, and a toggleable pill.
+function CompactField({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <label className={cn("grid min-w-0 content-start gap-1", className)}>
+      <span className="text-micro font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function Pill({ active, className, ...props }: ComponentProps<"button"> & { active?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50",
+        active ? "border-primary/40 bg-primary/12 text-foreground" : "border-input text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { CompactField, Pill, ChoiceGrid, DatePickerField, EmojiPicker, FormField, FormSection, SelectField, ToggleChip }

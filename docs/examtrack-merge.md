@@ -1,6 +1,6 @@
-# ExamTrack and Focal data merge
+# Legacy ExamTrack data merge
 
-ExamTrack now lives in this repository under `web/`, and ExamTrack, Focal desktop/native
+ExamTrack (now Focal Web) lives in this repository under `web/`, and ExamTrack, Focal desktop/native
 Android and Folio use the same Supabase project and authenticated account. This document
 records the completed project merge; it is not an instruction to reset or recreate production
 data.
@@ -29,14 +29,14 @@ See [`sync-protocol.md`](./sync-protocol.md) for the current contract and valida
 
 ## Current clients
 
-- ExamTrack web and Focal desktop share the same Supabase client and account. Session commands
+- Focal Web and Focal desktop share the same Supabase client and account. Session commands
   are durably queued in account-scoped IndexedDB; ordinary rows use the cursor/change RPCs.
 - Focal native Android uses `study_session_mutate` and `sync_read_changes`, with a durable
   ordered session-command queue and elapsed-realtime timer recovery.
 - Folio shares Focal Auth. Its session lifecycle uses the canonical session RPC; mistake and
   attempt sync uses cursor reads and versioned `sync_apply_changes` changes.
 
-`VITE_EXAMTRACK_URL` is only the hosted-app drill-through URL. It does not select a database.
+`VITE_FOCAL_WEB_URL` is only the hosted-app drill-through URL. It does not select a database.
 
 ## Operational safety
 

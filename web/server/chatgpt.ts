@@ -10,8 +10,8 @@ export function createChatGPTAuth() {
   if (process.env.NODE_ENV === "production" && !secret) {
     throw new Error("LWC_SECRET is required in production.")
   }
-  const sessionStore = createRedisStore<StoredSession>("examtrack:chatgpt:session:")
-  const rateLimitStore = createRedisStore<RateLimitBucket>("examtrack:chatgpt:rate:")
+  const sessionStore = createRedisStore<StoredSession>("focal:chatgpt:session:")
+  const rateLimitStore = createRedisStore<RateLimitBucket>("focal:chatgpt:rate:")
   if (process.env.VERCEL && (!sessionStore || !rateLimitStore)) {
     throw new Error("Upstash Redis environment variables are required on Vercel.")
   }

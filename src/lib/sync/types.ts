@@ -16,7 +16,7 @@ export type SyncTable = (typeof SYNC_TABLES)[number]
 /**
  * Every entity either Supabase project accepts. A client applies only the seven it
  * understands; the rest sit in its applied-state table and cost it nothing, which is what
- * lets one log carry Focal, ExamTrack and Folio data side by side.
+ * lets one log carry Focal, Focal Web and Folio data side by side.
  */
 export const SYNC_ENTITIES = [
   "projects",

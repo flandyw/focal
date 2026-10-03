@@ -41,7 +41,7 @@ import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/l
 import { useSupabaseSync } from "@/lib/sync"
 import { saveTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
 import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
-import { ExamTrackerPicker } from "@/components/exam-tracker-picker"
+import { ExamPicker } from "@/components/exam-picker"
 import type { ExamTimerPreset } from "@/components/exam-timer-mode"
 import type { StudyTimerMode } from "@/components/study-timer-page"
 import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
@@ -644,7 +644,7 @@ export default function App() {
         </Suspense>
       ) : null}
       {timetable ? (
-        <ExamTrackerPicker
+        <ExamPicker
           open={trackerOpen}
           onOpenChange={setTrackerOpen}
           entries={timetable.exams}

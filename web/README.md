@@ -11,7 +11,7 @@ supabase db push
 
 There is no second project and no second sign-in. The second Supabase client, the separate-account settings card and the `VITE_FOCAL_SUPABASE_*` variables are gone; `web/` writes with the same client as the rest of the app.
 
-Study sessions use one shared `study_sessions` table through `study_session_mutate` and `sync_read_changes`. Desktop and web write the same rows, and both calendars read them. Actual study intervals live in each row's `segments` JSON array; migration `0018` preserves existing intervals and removes the old interval table and RPC wrappers. Timer commands retain monotonic elapsed deltas and server-clock estimates. Ordinary ExamTrack records continue through the generic cursor/change protocol.
+Study sessions use one shared `study_sessions` table through `study_session_mutate` and `sync_read_changes`. Desktop and web write the same rows, and both calendars read them. Actual study intervals live in each row's `segments` JSON array; migration `0018` preserves existing intervals and removes the old interval table and RPC wrappers. Timer commands retain monotonic elapsed deltas and server-clock estimates. Ordinary Focal Web records continue through the generic cursor/change protocol.
 
 A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recharts, and KaTeX.
 
@@ -28,7 +28,7 @@ bun run dev
 1. Use the Focal Supabase project. Run every SQL file in `focal/supabase/migrations` in numeric order.
 2. Copy `.env.example` to `.env.local` and add that project's URL and publishable key from the Connect dialog.
 3. In Authentication → Providers → Email, disable **Confirm email** for password-only signup without callbacks.
-4. To move existing data across from the old ExamTrack project, run `scripts/examtrack-merge.mjs` from the repository root. See `docs/examtrack-merge.md`.
+4. To move existing data across from the old standalone ExamTrack project, run `scripts/examtrack-merge.mjs` from the repository root. See `docs/examtrack-merge.md`.
 
 Attempts, mistakes, review history, question-level results, timing evidence, and tracked official exams stay available in local storage and sync after email/password sign-in. Never put a secret or service-role key in the Vite environment variables.
 

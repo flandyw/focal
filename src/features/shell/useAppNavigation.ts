@@ -9,7 +9,7 @@ export type AppDestination =
   | { kind: "planner" }
   | { kind: "inbox" }
   | { kind: "analytics" }
-  | { kind: "examtrack" }
+  | { kind: "focal-web" }
   | { kind: "settings" }
 
 const HOME: AppDestination = { kind: "home" }
@@ -21,7 +21,7 @@ const RESTORABLE_DESTINATIONS = new Set<AppDestination["kind"]>([
   "planner",
   "inbox",
   "analytics",
-  "examtrack",
+  "focal-web",
 ])
 
 export function normaliseStoredDestination(value: string | null): AppDestination {
@@ -82,7 +82,7 @@ export function useAppNavigation() {
   const selectPlanner = useCallback(() => navigate({ kind: "planner" }), [navigate])
   const selectInbox = useCallback(() => navigate({ kind: "inbox" }), [navigate])
   const selectAnalytics = useCallback(() => navigate({ kind: "analytics" }), [navigate])
-  const selectExamTrack = useCallback(() => navigate({ kind: "examtrack" }), [navigate])
+  const selectFocalWeb = useCallback(() => navigate({ kind: "focal-web" }), [navigate])
   const openSettings = useCallback(() => navigate({ kind: "settings" }), [navigate])
   const closeSettings = useCallback(() => {
     setState(closeSettingsDestination)
@@ -95,7 +95,7 @@ export function useAppNavigation() {
   const plannerView = destination.kind === "planner"
   const inboxView = destination.kind === "inbox"
   const analyticsView = destination.kind === "analytics"
-  const examTrackView = destination.kind === "examtrack"
+  const focalWebView = destination.kind === "focal-web"
   const settingsView = destination.kind === "settings"
 
   return useMemo(() => ({
@@ -107,7 +107,7 @@ export function useAppNavigation() {
     plannerView,
     inboxView,
     analyticsView,
-    examTrackView,
+    focalWebView,
     settingsView,
     selectProject,
     selectHome,
@@ -116,7 +116,7 @@ export function useAppNavigation() {
     selectPlanner,
     selectInbox,
     selectAnalytics,
-    selectExamTrack,
+    selectFocalWeb,
     openSettings,
     closeSettings,
   }), [
@@ -126,9 +126,9 @@ export function useAppNavigation() {
     destination,
     homeSelected,
     openSettings,
-    examTrackView,
+    focalWebView,
     selectAnalytics,
-    selectExamTrack,
+    selectFocalWeb,
     selectHome,
     selectAssessments,
     selectProject,

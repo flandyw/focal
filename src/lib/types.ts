@@ -58,7 +58,9 @@ export interface NotionSource {
   syncSnapshot?: NotionSyncSnapshot;
 }
 
-export interface ExamTrackSource {
+// ponytail: the brand is Focal, but the persisted keys stay "examtrack". They are a wire
+// contract with the web build, the Folio Android app and rows already in Postgres.
+export interface FocalWebSource {
   type: "examtrack";
   id: string;
   kind: "exam" | "sac" | "focus";
@@ -102,7 +104,7 @@ export interface StudySession {
     nextAction?: string;
   };
   createdVia: "manual" | "planner" | "assistant" | "notion" | "examtrack";
-  integrations?: { notion?: NotionSource; examtrack?: ExamTrackSource; folio?: FolioSource };
+  integrations?: { notion?: NotionSource; examtrack?: FocalWebSource; folio?: FolioSource };
   created_at: string;
   updated_at?: string;
   deleted_at?: string | null;

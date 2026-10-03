@@ -1,36 +1,22 @@
 import { useMemo, useRef, useState, type FormEvent } from "react"
-import { ExamProgressionPanel, type ExamProgressionProps } from "@/components/exam-progression"
 import { Button } from "@/components/ui/button"
 import { SubjectCombobox } from "@/components/subject-combobox"
 import { DiscardChangesDialog } from "@/components/discard-changes-dialog"
+import { ArrowLeft } from "lucide-react"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { QuestionResultsEditor } from "@/components/question-results-editor"
 import { PerformanceContextFields } from "@/components/performance-context-fields"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { analyseAttempt, findAttemptReferenceForYear, formatExamTitle, formatReferenceName, validateAttempt, validateQuestionResults, type AssessmentReference, type ExamAttempt, type QuestionResult } from "@/lib/exam-data"
-import { buildCompanyExamSuggestions, buildExamSuggestions, findLatestAttempt, type ExamSuggestion } from "@/lib/exam-suggestions"
-import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
+import { getKnownExamMarks } from "@/lib/exam-conditions"
 import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "@/lib/performance-context"
-import type { VcaaStudyResources } from "@/lib/vcaa-resources"
 
-type ExamSheetProps = ExamProgressionProps & {
-  open: boolean
+type ExamEntryProps = {
   references: AssessmentReference[]
-  attempts: ExamAttempt[]
-  studies: VcaaStudyResources[]
   preferredSubjects: string[]
   comparisonYear: number
-  difficultySettings?: ExamDifficultySettings
   initialAttempt?: ExamAttempt | null
   onOpenChange: (open: boolean) => void
   onSave: (attempt: ExamAttempt, logMistake: boolean) => void
@@ -38,31 +24,7 @@ type ExamSheetProps = ExamProgressionProps & {
 
 const today = new Date().toISOString().slice(0, 10)
 
-function SuggestionButton({ suggestion, selected, onClick, showProvider = false }: {
-  suggestion: ExamSuggestion
-  selected: boolean
-  onClick: (suggestion: ExamSuggestion) => void
-  showProvider?: boolean
-}) {
-  return (
-    <Button
-      type="button"
-      variant={selected ? "secondary" : "outline"}
-      className="h-auto justify-start whitespace-normal px-3 py-2.5 text-left"
-      aria-pressed={selected}
-      onClick={() => onClick(suggestion)}
-    >
-      <span className="grid gap-0.5">
-        <span className="font-medium">{showProvider ? `${suggestion.provider} · ${suggestion.paper}` : `${suggestion.examYear} · ${suggestion.paper}`}</span>
-        <span className="text-xs font-normal text-muted-foreground">
-          {showProvider ? `${suggestion.examYear} · ${suggestion.subject}` : suggestion.subject} · {suggestion.marks} marks
-        </span>
-      </span>
-    </Button>
-  )
-}
-
-export function ExamSheet({ progression, onProgressionChange, open, references, attempts, studies, preferredSubjects, comparisonYear, difficultySettings, initialAttempt, onOpenChange, onSave }: ExamSheetProps) {
+export function ExamSheet({ references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
   const subjects = useMemo(
     () => prioritiseSubjects(references.map((item) => item.studyName), preferredSubjects),
     [references, preferredSubjects],
@@ -96,16 +58,6 @@ export function ExamSheet({ progression, onProgressionChange, open, references, 
     }
     onOpenChange(next)
   }
-  const suggestions = useMemo(
-    () => initialAttempt ? [] : buildExamSuggestions(attempts, references, preferredSubjects, 4, studies),
-    [attempts, initialAttempt, preferredSubjects, references, studies],
-  )
-  const companySuggestions = useMemo(
-    () => initialAttempt ? [] : buildCompanyExamSuggestions(attempts, references, preferredSubjects, difficultySettings, 4),
-    [attempts, difficultySettings, initialAttempt, preferredSubjects, references],
-  )
-  const latestAttempt = useMemo(() => findLatestAttempt(attempts), [attempts])
-
   const paperOptions = useMemo(
     () => [...new Set(references
       .filter((item) => item.studyName.toLowerCase() === subject.trim().toLowerCase())
@@ -114,17 +66,10 @@ export function ExamSheet({ progression, onProgressionChange, open, references, 
   )
   const reference = findAttemptReferenceForYear({ subject, paper }, references, comparisonYear)
   const scaled = reference && rawMax > 0 ? analyseAttempt({ rawScore, rawMax }, reference) : null
-  function applySuggestion(suggestion: ExamSuggestion) {
-    setSubject(suggestion.subject)
-    setProvider(suggestion.provider)
-    setExamYear(suggestion.examYear)
-    setPaper(suggestion.paper)
-    setRawMax(suggestion.marks)
-    setError(null)
-  }
-
-  function isSelected(suggestion: ExamSuggestion) {
-    return subject === suggestion.subject && provider === suggestion.provider && examYear === suggestion.examYear && paper === suggestion.paper
+  function changePaper(next: string) {
+    setPaper(next)
+    const marks = getKnownExamMarks(subject, next)
+    if (marks) setRawMax(marks)
   }
 
   function reset() {
@@ -179,62 +124,52 @@ export function ExamSheet({ progression, onProgressionChange, open, references, 
     onOpenChange(false)
   }
 
+  const percent = rawMax > 0 && Number.isFinite(rawScore) ? Math.round((rawScore / rawMax) * 100) : null
+
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent resizable className="w-full">
-        <SheetHeader>
-          <SheetTitle>{initialAttempt ? "Edit practice exam" : "Log practice exam"}</SheetTitle>
-          <SheetDescription>
-            Record a completed practice exam and its raw mark.
-          </SheetDescription>
-        </SheetHeader>
-        <form id="exam-form" className="px-4 pb-4" onSubmit={submit}>
-          <FieldGroup>
-            {!initialAttempt ? (
-              <section className="grid gap-4 rounded-lg border bg-muted/20 p-4" aria-labelledby="log-exam-suggestions-title">
-                <div>
-                  <h3 id="log-exam-suggestions-title" className="text-sm font-medium">Suggested next exams</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {latestAttempt
-                      ? `Based on your latest logged paper: ${latestAttempt.examYear} ${latestAttempt.subject} · ${latestAttempt.paper}.`
-                      : "Based on your preferred subjects and available VCAA papers."}
-                    {" "}Choose one to fill the details below.
-                  </p>
-                </div>
-                <ExamProgressionPanel progression={progression} onProgressionChange={onProgressionChange} attempts={attempts} subjects={preferredSubjects} onSelect={applySuggestion} />
-                {suggestions.length ? <div className="grid gap-2"><p className="text-xs font-medium text-muted-foreground">Official VCAA papers</p><div className="grid gap-2 sm:grid-cols-2">{suggestions.map((suggestion) => <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} selected={isSelected(suggestion)} onClick={applySuggestion} />)}</div></div> : null}
-                {companySuggestions.length ? <div className="grid gap-2"><p className="text-xs font-medium text-muted-foreground">Company exam progression</p><div className="grid gap-2 sm:grid-cols-2">{companySuggestions.map((suggestion) => <SuggestionButton key={`${suggestion.subject}-${suggestion.provider}-${suggestion.examYear}-${suggestion.paper}`} suggestion={suggestion} selected={isSelected(suggestion)} onClick={applySuggestion} showProvider />)}</div></div> : null}
-              </section>
-            ) : null}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+      <form id="exam-form" className="mx-auto grid max-w-3xl gap-8 p-4 sm:p-6 lg:py-10" onSubmit={submit}>
+        <header className="grid gap-3">
+          <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back to exams</Button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Two steps: which paper, then your mark. Everything else is optional.</p>
+          </div>
+        </header>
+
+        <FieldGroup>
+          <section className="grid gap-5" aria-labelledby="exam-step-paper">
+            <h2 id="exam-step-paper" className="text-base font-medium">1. Paper</h2>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="subject">Subject</FieldLabel>
                 <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="subject" allowCustom placeholder="Search or enter a subject" />
               </Field>
               <Field>
+                <FieldLabel htmlFor="paper">Paper</FieldLabel>
+                <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" />
+                <datalist id="exam-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
+              </Field>
+              <Field>
                 <FieldLabel htmlFor="provider">Provider</FieldLabel>
                 <Input id="provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
               </Field>
+              <div className="grid grid-cols-2 gap-5">
+                <Field>
+                  <FieldLabel htmlFor="exam-year">Year</FieldLabel>
+                  <Input id="exam-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="completed-at">Completed</FieldLabel>
+                  <Input id="completed-at" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} />
+                </Field>
+              </div>
             </div>
+          </section>
 
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="exam-year">Exam year</FieldLabel>
-                <Input id="exam-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="paper">Paper</FieldLabel>
-                <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="Exam, paper, or assessment name" />
-                <datalist id="exam-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
-              </Field>
-            </div>
-
-            <Field>
-              <FieldLabel htmlFor="completed-at">Completed</FieldLabel>
-              <Input id="completed-at" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} />
-            </Field>
-
-            <div className="grid gap-5 sm:grid-cols-2">
+          <section className="grid gap-5 border-t pt-8" aria-labelledby="exam-step-result">
+            <h2 id="exam-step-result" className="text-base font-medium">2. Result</h2>
+            <div className="grid items-end gap-5 sm:grid-cols-[1fr_1fr_auto]">
               <Field data-invalid={error ? true : undefined}>
                 <FieldLabel htmlFor="raw-score">Mark</FieldLabel>
                 <Input id="raw-score" type="number" min="0" step="0.5" value={rawScore} onChange={(event) => setRawScore(event.target.valueAsNumber)} />
@@ -243,31 +178,47 @@ export function ExamSheet({ progression, onProgressionChange, open, references, 
                 <FieldLabel htmlFor="raw-max">Out of</FieldLabel>
                 <Input id="raw-max" type="number" min="0.5" step="0.5" value={rawMax} onChange={(event) => setRawMax(event.target.valueAsNumber)} />
               </Field>
+              <p className="pb-1.5 text-3xl font-semibold tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
             </div>
             {scaled && reference ? (
               <FieldDescription>
                 VCAA {comparisonYear} scaled mark: {scaled.scaledScore.toFixed(1)}/{reference.maxScore} ({formatReferenceName(reference.name)}).
               </FieldDescription>
             ) : null}
-            <Field>
-              <FieldLabel htmlFor="exam-comment">Overall comment <span className="text-muted-foreground">(optional)</span></FieldLabel>
-              <Textarea id="exam-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What went well or what to improve next time?" />
-            </Field>
-            <PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="exam-context" />
-            <QuestionResultsEditor value={questionResults} onChange={setQuestionResults} />
             <FieldError>{error}</FieldError>
-          </FieldGroup>
-        </form>
-        <SheetFooter>
-          <Button type="submit" name="next" value="mistake" form="exam-form" variant="outline">Save & log mistake</Button>
-          <Button type="submit" form="exam-form">{initialAttempt ? "Save changes" : "Save exam"}</Button>
-        </SheetFooter>
-      </SheetContent>
+          </section>
+
+          <section className="grid gap-2 border-t pt-8" aria-label="Optional details">
+            <h2 className="text-base font-medium">Optional details</h2>
+            <details className="group rounded-lg border px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium">Comment{comment ? " ·" : ""} <span className="font-normal text-muted-foreground">{comment ? "added" : "what went well or what to improve"}</span></summary>
+              <Field className="mt-3">
+                <FieldLabel htmlFor="exam-comment" className="sr-only">Overall comment</FieldLabel>
+                <Textarea id="exam-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What went well or what to improve next time?" />
+              </Field>
+            </details>
+            <details className="rounded-lg border px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium">Conditions and headspace <span className="font-normal text-muted-foreground">{hasPerformanceContext(performanceContext) ? "· recorded" : "sleep, focus, stress"}</span></summary>
+              <div className="mt-3"><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="exam-context" /></div>
+            </details>
+            <details className="rounded-lg border px-4 py-3">
+              <summary className="cursor-pointer text-sm font-medium">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${questionResults.length} items` : "reveal coverage gaps"}</span></summary>
+              <div className="mt-3"><QuestionResultsEditor value={questionResults} onChange={setQuestionResults} /></div>
+            </details>
+          </section>
+        </FieldGroup>
+
+        <footer className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
+          <Button type="submit" name="next" value="mistake" variant="outline">Save & log mistake</Button>
+          <Button type="submit">{initialAttempt ? "Save changes" : "Save exam"}</Button>
+        </footer>
+      </form>
       <DiscardChangesDialog
         open={confirmingClose}
         onKeep={() => setConfirmingClose(false)}
         onDiscard={() => { setConfirmingClose(false); onOpenChange(false) }}
       />
-    </Sheet>
+    </div>
   )
 }

@@ -1,6 +1,7 @@
 import {
   GraduationCap,
   Search,
+  UserRound,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -26,15 +27,20 @@ export function AppSidebar({
   dueMistakes,
   plannedTasks,
   syncLabel,
+  user,
   onViewChange,
 }: {
   view: AppView
   dueMistakes: number
   plannedTasks: number
   syncLabel: string
+  user: { email?: string } | null
   onViewChange: (view: AppView) => void
 }) {
   const { setOpenMobile } = useSidebar()
+  const accountLabel = user?.email || "Account"
+  const accountStatus = user ? "Signed in" : "Not signed in"
+  const accountTooltip = `${accountLabel} · ${accountStatus}. Open account settings`
 
   function navigate(nextView: AppView) {
     onViewChange(nextView)
@@ -92,6 +98,20 @@ export function AppSidebar({
             >
               <SETTINGS_ITEM.icon />
               <span>{SETTINGS_ITEM.label}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              tooltip={accountTooltip}
+              aria-label={accountTooltip}
+              onClick={() => navigate("settings")}
+            >
+              <UserRound aria-hidden />
+              <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
+                <span className="truncate">{accountLabel}</span>
+                <span className="text-xs text-muted-foreground">{accountStatus}</span>
+              </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

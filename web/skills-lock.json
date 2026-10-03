@@ -7,6 +7,18 @@
       "skillPath": ".agents/skills/impeccable/SKILL.md",
       "computedHash": "f7c4e03bef91154273d2dc3b62aff829cf4ab1b1f16e6b98c8c6a31be4405318"
     },
+    "migrate-radix-to-base": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/migrate-radix-to-base/SKILL.md",
+      "computedHash": "e1f2030ee5059be3dff0812ca0e4b995ee9fa3132176f049ebe6c90346a6755e"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

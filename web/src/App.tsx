@@ -542,6 +542,7 @@ export default function App() {
         view={view}
         dueMistakes={dueMistakeCount}
         plannedTasks={dueStudyTaskCount}
+        user={sync.user}
         syncLabel={sync.status === "synced" ? "Synced with Supabase" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync needs retry" : "Stored on this device"}
         onViewChange={setView}
       />

@@ -58,7 +58,7 @@ tauri-dev:
 # Build
 # ---------------------------------------------------------------------------
 bump-version:
-	@bun scripts/bump-version.js
+	@bun scripts/bump-version.cjs
 
 build: lint-fix bump-version
 	VERSION=$$(bun -e "const fs = require('fs'); console.log(JSON.parse(fs.readFileSync('package.json', 'utf8')).version)") && \

@@ -10,19 +10,10 @@ const tauriText = fs.readFileSync(tauriPath, "utf8")
 const cargoTomlPath = "src-tauri/Cargo.toml"
 const cargoToml = fs.readFileSync(cargoTomlPath, "utf8")
 
-let [major, minor, patch] = pkg.version.split(".").map(Number)
-
-patch += 1
-if (patch >= 10) {
-  patch = 0
-  minor += 1
-}
-if (minor >= 10) {
-  minor = 0
-  major += 1
-}
-
-const newVersion = major + "." + minor + "." + patch
+// Version is derived from the commit count: 593 commits -> 5.9.3.
+// ponytail: wraps nothing — the major just keeps growing past 9 (1000 commits -> 10.0.0).
+const count = Number(process.argv[2] ?? require("child_process").execSync("git rev-list --count HEAD").toString())
+const newVersion = [Math.floor(count / 100), Math.floor(count / 10) % 10, count % 10].join(".")
 
 pkg.version = newVersion
 

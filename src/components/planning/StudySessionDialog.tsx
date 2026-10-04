@@ -28,13 +28,6 @@ interface Block { start: string; end: string }
 const getMinutes = (time: string) => { const [h, m] = time.split(":").map(Number); return h * 60 + m }
 const fromMinutes = (min: number) => { const c = Math.max(0, Math.min(min, 1439)); return `${String(Math.floor(c / 60)).padStart(2, "0")}:${String(c % 60).padStart(2, "0")}` }
 const formatDurationStr = (totalMin: number) => totalMin >= 60 ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m` : `${totalMin}m`
-// Logged study defaults to the hour that just finished.
-const pastHour = (): Block[] => {
-  const now = new Date()
-  const end = Math.floor((now.getHours() * 60 + now.getMinutes()) / 5) * 5
-  return [{ start: fromMinutes(Math.max(0, end - 60)), end: fromMinutes(end) }]
-}
-
 interface StudySessionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -43,7 +36,6 @@ interface StudySessionDialogProps {
   availableSubjects?: Subject[]
   session?: StudySession | null
   initialDate?: Date
-  initialMode?: "plan" | "log"
   initialValues?: StudySessionDraft
   onSubmit: (data: {
     id?: string
@@ -74,14 +66,12 @@ export function StudySessionDialog({
   availableSubjects,
   session,
   initialDate,
-  initialMode = "plan",
   initialValues,
   onSubmit,
   onDelete,
   onPlanAgain,
 }: StudySessionDialogProps) {
   const isEdit = Boolean(session)
-  const [logging, setLogging] = useState(!session && !initialValues && initialMode === "log")
   const [projectId, setProjectId] = useState("")
   const [subjectIds, setSubjectIds] = useState<string[]>(initialValues?.subjectIds ?? [])
   const [subjectFilter, setSubjectFilter] = useState("")
@@ -101,7 +91,7 @@ export function StudySessionDialog({
   const [segments, setSegments] = useState<Block[]>(() =>
     initialValues
       ? [{ start: format(parseISO(initialValues.startTime), "HH:mm"), end: format(parseISO(initialValues.endTime), "HH:mm") }]
-      : !session && initialMode === "log" ? pastHour() : [{ start: "14:00", end: "15:00" }])
+      : [{ start: "14:00", end: "15:00" }])
   const initializedSessionIdRef = useRef<string | null>(null)
 
   const requestClose = (next: boolean) => { if (!savingRef.current) onOpenChange(next) }
@@ -141,12 +131,13 @@ export function StudySessionDialog({
     d.setHours(Math.floor(getMinutes(time) / 60), getMinutes(time) % 60, 0, 0)
     return d
   }
-  const logEndsInFuture = logging && Boolean(startDate) && segments.some((seg) => dateAt(seg.end).getTime() > Date.now())
+  // A new session whose blocks have all finished is logged as completed study instead of planned.
+  const logging = !isEdit && !initialValues && Boolean(startDate) && segments.every((seg) => dateAt(seg.end).getTime() <= Date.now())
   const effectiveTitle = title.trim() || (logging && selectedSubjects[0] ? `${selectedSubjects[0].name} study` : "")
   const canSave = !saving && effectiveTitle.length > 0 && subjectIds.length > 0 && Boolean(startDate)
-    && Number.isFinite(totalActive) && totalActive > 0 && blocksValid && !logEndsInFuture
+    && Number.isFinite(totalActive) && totalActive > 0 && blocksValid
   const showReview = isEdit || logging
-  const issue = !blocksValid ? "Blocks must end after they start and not overlap" : logEndsInFuture ? "Logged study must have already finished" : ""
+  const issue = !blocksValid ? "Blocks must end after they start and not overlap" : ""
 
   useEffect(() => {
     if (!session) return
@@ -180,13 +171,6 @@ export function StudySessionDialog({
     }
   }, [projects, session])
 
-  const switchMode = (nextLogging: boolean) => {
-    setLogging(nextLogging)
-    if (!nextLogging) return
-    if (segments.length === 1) setSegments(pastHour())
-    setStartDate((current) => current && current <= new Date() ? current : new Date())
-  }
-
   const addSegment = () => setSegments((prev) => {
     const start = (prev.length ? Math.max(...prev.map((seg) => getMinutes(seg.end))) : 540) + restDuration
     return [...prev, { start: fromMinutes(start), end: fromMinutes(start + 30) }]
@@ -210,7 +194,7 @@ export function StudySessionDialog({
   }
 
   const buildSubmitData = (nextStatus: StudySessionStatus = logging ? "completed" : status) => {
-    if (!effectiveTitle || !startDate || subjectIds.length === 0 || !blocksValid || logEndsInFuture) return null
+    if (!effectiveTitle || !startDate || subjectIds.length === 0 || !blocksValid) return null
     const topics = topicsInput.split(",").map((topic) => topic.trim()).filter(Boolean)
     const segStart = dateAt(segments[0].start)
     const segEnd = unchangedInitialTimes ? new Date(segStart.getTime() + totalActive * 60000) : dateAt(lastEnd)
@@ -256,7 +240,7 @@ export function StudySessionDialog({
     }
   }
 
-  const heading = isEdit ? "Edit session" : initialValues ? "Plan from event" : logging ? "Log past study" : "New session"
+  const heading = isEdit ? "Edit session" : initialValues ? "Plan from event" : "New session"
 
   return (
     <Dialog open={open} onOpenChange={requestClose}>
@@ -264,15 +248,9 @@ export function StudySessionDialog({
         <DialogHeader className="shrink-0 flex-row flex-wrap items-center gap-x-3 gap-y-1 border-b py-2.5 pl-4 pr-12">
           <DialogTitle className="text-sm">{heading}</DialogTitle>
           <DialogDescription className="sr-only">
-            {logging ? "Record study you have already done. It counts toward your study history, not your plan." : "Plan study blocks for a subject and optionally link an assessment."}
+            {logging ? "Record study you have already done. It counts toward your study history, not your plan." : "Plan study blocks, or enter past times to log study you have already done."}
             {initialValues ? " Saving replaces the original event." : ""}
           </DialogDescription>
-          {!isEdit && !initialValues && (
-            <div className="flex gap-1" role="group" aria-label="Session type">
-              <Pill active={!logging} onClick={() => switchMode(false)}>Plan</Pill>
-              <Pill active={logging} onClick={() => switchMode(true)}>Log past</Pill>
-            </div>
-          )}
           {isEdit && (
             <span className={cn(
               "rounded-md border px-1.5 py-0.5 text-micro font-semibold uppercase",
@@ -305,7 +283,6 @@ export function StudySessionDialog({
                   label="Date"
                   date={startDate}
                   onDateChange={setStartDate}
-                  disabledDays={logging ? { after: new Date() } : undefined}
                   formatPattern="EEE d MMM yyyy"
                   labelClassName={fieldLabelClass}
                   buttonClassName={controlClass}

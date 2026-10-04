@@ -177,7 +177,7 @@ try {
 type PlanningDialog =
   | { kind: "closed" }
   | { kind: "event"; id?: string; initialDate?: Date }
-  | { kind: "session"; id?: string; initialDate?: Date; mode: "plan" | "log" }
+  | { kind: "session"; id?: string; initialDate?: Date }
   | { kind: "convert"; eventId: string; draft: StudySessionDraft; sourceUpdatedAt?: string };
 
 function App() {
@@ -547,7 +547,7 @@ function App() {
 
   // ponytail: keyboard re-open preserves an unsaved form; close it to start another.
   const handleOpenNewSession = useCallback((initialDate?: Date) => {
-    setPlanningDialog((current) => current.kind === "closed" ? { kind: "session", mode: "plan", initialDate } : current);
+    setPlanningDialog((current) => current.kind === "closed" ? { kind: "session", initialDate } : current);
   }, []);
 
   const handleOpenNewEvent = useCallback((initialDate?: Date) => {
@@ -1525,7 +1525,7 @@ function App() {
   );
 
   const handleSelectSession = useCallback((session: StudySession) => {
-    setPlanningDialog({ kind: "session", id: session.id, mode: "plan" });
+    setPlanningDialog({ kind: "session", id: session.id });
   }, []);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
@@ -1980,9 +1980,6 @@ function App() {
               onSettings={navigation.openSettings}
               onHelp={() => setShortcutsOpen(true)}
             >
-              {!settingsView && <Button size="sm" variant="outline" onClick={() => {
-                setPlanningDialog({ kind: "session", mode: "log" });
-              }}>Log past study</Button>}
               {!settingsView && <NotionSyncIndicator
                 status={syncStatus}
                 lastSyncTime={lastSyncTime}
@@ -2353,14 +2350,13 @@ function App() {
             </Suspense>}
             {(planningDialog.kind === "session" || planningDialog.kind === "convert") && <Suspense fallback={null}>
               <StudySessionDialog
-              key={planningDialog.kind === "convert" ? `convert-${planningDialog.eventId}` : planningDialog.id ?? `new-${planningDialog.mode}`}
+              key={planningDialog.kind === "convert" ? `convert-${planningDialog.eventId}` : planningDialog.id ?? "new-session"}
               open
               onOpenChange={closePlanningDialog}
               projects={projects}
               customSubjects={customSubjects}
               availableSubjects={availableSubjects}
               session={selectedSession}
-              initialMode={planningDialog.kind === "session" ? planningDialog.mode : "plan"}
               initialValues={planningDialog.kind === "convert" ? planningDialog.draft : undefined}
               initialDate={planningDialog.kind === "session" ? planningDialog.initialDate : undefined}
               onSubmit={

@@ -83,7 +83,7 @@ export function AssessmentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid min-h-0">
+    <form onSubmit={handleSubmit} className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
       <div className="grid gap-3 overflow-y-auto p-4">
         <div className="flex items-center gap-2">
           <Popover>

@@ -253,7 +253,7 @@ function EventForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid min-h-0">
+    <form onSubmit={handleSubmit} className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
       <div className="grid gap-3 overflow-y-auto p-4">
         <Input
           aria-label="Event title"
@@ -470,7 +470,7 @@ finish(await onSubmit(values))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 p-0 sm:max-w-xl sm:p-0">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-xl sm:p-0">
         <DialogHeader className="gap-0 border-b py-2.5 pl-4 pr-12">
           <DialogTitle className="text-sm">{isEditMode ? "Edit event" : "New event"}</DialogTitle>
           <DialogDescription className="sr-only">

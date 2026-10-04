@@ -7,6 +7,8 @@
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
 
 @theme inline {
     /* Font tokens — Tailwind v4 maps these to `font-sans`, `font-display`, `font-mono`. */

@@ -595,7 +595,6 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
         </header>
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.label}</Button>)}
-          {onOpenSettings && <Button size="sm" variant="ghost" onClick={onOpenSettings}>Account settings</Button>}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">

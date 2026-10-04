@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ArrowRight, BookOpenCheck, FileDown, FileJson, Merge, MoreHorizontal, NotebookPen, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
+import { ArrowRight, BookOpenCheck, FileDown, FileJson, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { useMinWidth } from "../hooks/use-mobile"
@@ -13,7 +13,7 @@ import { MistakeInsights } from "./mistake-insights"
 import { PageHeader } from "./page-header"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
@@ -21,7 +21,6 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { Separator } from "./ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import {
   getDueMistakes,
@@ -128,6 +127,16 @@ function ExamContext({ mistake, attempt, studies }: { mistake: Mistake; attempt?
   )
 }
 
+function AnswerPanel({ label, value, tone }: { label: string; value?: string; tone: "problem" | "fix" | "neutral" }) {
+  const border = tone === "problem" ? "border-l-destructive/60" : tone === "fix" ? "border-l-primary" : "border-l-border"
+  return (
+    <section className={"min-w-0 rounded-lg border border-l-4 bg-muted/20 p-4 " + border}>
+      <SectionLabel>{label}</SectionLabel>
+      {value?.trim() ? <MarkdownPreview unframed>{value}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Not recorded yet.</p>}
+    </section>
+  )
+}
+
 function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onToggleSuspend }: { mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void; onEdit: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
   const [revealed, setRevealed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -161,66 +170,62 @@ function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onToggleSuspend
   }, [onRate, revealed, submitting])
 
   return (
-    <Card className="w-full min-w-0" aria-live="polite">
-      <CardHeader className="border-b">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="text-balance">{mistake.question}</CardTitle>
+    <article className="grid min-w-0 gap-5" aria-live="polite">
+      <div className="rounded-xl border bg-card">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b p-4 sm:px-6">
+          <div className="grid min-w-0 flex-1 gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
+              <Badge variant="outline">{mistake.category}</Badge>
+              {mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}
+            </div>
             <ExamContext mistake={mistake} attempt={attempt} studies={studies} />
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5">
-            <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
-            <Badge variant="outline">{mistake.category}</Badge>
-            {mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={() => onEdit(mistake)}><Pencil />Edit</Button>
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label={`More actions for ${mistake.question}`} />}><MoreHorizontal /></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(mistake)}>Edit this card</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onToggleSuspend(mistake)}>{mistake.suspended ? "Resume reviews" : "Pause reviews"}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="grid min-h-80 content-start gap-6">
-        <section>
-          <SectionLabel>Question</SectionLabel>
+        </header>
+        <div className="grid min-h-72 content-start gap-3 p-4 sm:p-6">
+          <h2 className="text-xl leading-snug font-semibold text-balance">{mistake.question}</h2>
           <MarkdownPreview unframed>{mistake.questionText?.trim() || mistake.question}</MarkdownPreview>
           <MistakeAttachments attachments={mistake.attachments} />
-        </section>
-        {revealed ? <>
-          <Separator />
-          {/* Landscape desktop has the width to read the diagnosis and the fix as a pair. */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ProseField label="What went wrong" value={mistake.explanation} />
-            <ProseField label="Improved response or method" value={mistake.correction} />
-            {mistake.criterion ? <div className="lg:col-span-2"><ProseField label="Assessment criterion" value={mistake.criterion} /></div> : null}
-          </div>
-        </> : null}
-      </CardContent>
-      <CardFooter className="block">
+        </div>
+      </div>
+      {revealed ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" />
+          <AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" />
+          {mistake.criterion ? <div className="lg:col-span-2"><AnswerPanel label="Assessment criterion" value={mistake.criterion} tone="neutral" /></div> : null}
+        </div>
+      ) : null}
+      {/* Pinned so the answer controls never scroll away from a long worked solution. */}
+      <div className="sticky bottom-0 z-10 -mx-1 border-t bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         {!revealed ? (
-          <div className="flex flex-col items-center gap-2">
-            <Button size="lg" onClick={() => setRevealed(true)}>Show answer</Button>
-            <p className="text-xs text-muted-foreground">Space or Enter</p>
-          </div>
+          <Button size="lg" className="w-full" onClick={() => setRevealed(true)}>Show answer <kbd className="ml-1 rounded border border-primary-foreground/30 px-1.5 text-xs font-normal">Space</kbd></Button>
         ) : (
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {RATING_OPTIONS.map((option) => (
-              <Button key={option.rating} variant={option.variant} className="h-auto flex-col gap-0.5 py-2" disabled={submitting} onClick={() => rate(option.rating)}>
-                <span>{option.label} <span className="text-xs opacity-60">{option.shortcut}</span></span>
-                <span className="text-xs font-normal opacity-70">{formatReviewInterval(previews[option.rating].dueAt)}</span>
+              <Button key={option.rating} variant={option.variant} size="lg" className="h-auto flex-col gap-0.5 py-2.5" disabled={submitting} onClick={() => rate(option.rating)}>
+                <span className="font-medium">{option.label} <kbd className="ml-0.5 text-xs font-normal opacity-60">{option.shortcut}</kbd></span>
+                <span className="text-xs font-normal opacity-70 tabular-nums">{formatReviewInterval(previews[option.rating].dueAt)}</span>
               </Button>
             ))}
           </div>
         )}
-      </CardFooter>
-    </Card>
+      </div>
+    </article>
   )
 }
 
 function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, onToggleSuspend }: { onEdit: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating) => void; onBrowse: () => void }) {
-  const [reviewed, setReviewed] = useState(0)
+  const [ratings, setRatings] = useState<Record<ReviewRating, number>>({ again: 0, hard: 0, good: 0, easy: 0 })
+  const reviewed = ratings.again + ratings.hard + ratings.good + ratings.easy
   const [now, setNow] = useState(() => new Date())
   const attemptMap = useMemo(() => new Map(attempts.map((attempt) => [attempt.id, attempt])), [attempts])
   const due = getDueMistakes(mistakes, now)
@@ -253,7 +258,7 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
     if (!current) return
     onReview(current, rating)
     setQueueIds((ids) => ids.filter((id) => id !== current.id))
-    setReviewed((value) => value + 1)
+    setRatings((value) => ({ ...value, [rating]: value[rating] + 1 }))
   }
 
   function shuffleQueue() {
@@ -279,6 +284,11 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
           <EmptyTitle>{reviewed ? "Review complete" : "Nothing due right now"}</EmptyTitle>
           <EmptyDescription>{nextScheduled ? `Next card is due in ${formatReviewInterval(nextScheduled, now)}.` : mistakes.length ? "All active cards are reviewed." : "Log a mistake after your next practice exam to create your first card."}</EmptyDescription>
         </EmptyHeader>
+        {reviewed ? (
+          <dl className="flex flex-wrap justify-center gap-6 text-center">
+            {RATING_OPTIONS.map(({ rating, label }) => <div key={rating}><dd className="text-2xl font-semibold tabular-nums">{ratings[rating]}</dd><dt className="text-xs text-muted-foreground">{label}</dt></div>)}
+          </dl>
+        ) : null}
         {mistakes.length ? <Button variant="outline" onClick={onBrowse}>Browse cards</Button> : null}
       </Empty>
     )
@@ -286,24 +296,17 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2">
+      <div className="grid gap-2 rounded-xl border bg-card p-3 sm:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm">
-            <span className="font-medium">Study session</span>
-            <span className="ml-2 text-muted-foreground tabular-nums">{reviewed} reviewed · {due.length} remaining</span>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={onBrowse}>End session</Button>
-            <Button size="sm" variant="outline" onClick={shuffleQueue} disabled={due.length < 2}><Shuffle />Shuffle</Button>
-            <Button size="sm" variant="outline" onClick={skipCard} disabled={due.length < 2}><SkipForward />Skip</Button>
+          <p className="text-sm tabular-nums"><span className="text-lg font-semibold">{due.length}</span> <span className="text-muted-foreground">left · {reviewed} done</span></p>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={shuffleQueue} disabled={due.length < 2}><Shuffle />Shuffle</Button>
+            <Button size="sm" variant="ghost" onClick={skipCard} disabled={due.length < 2}><SkipForward />Skip</Button>
+            <Button size="sm" variant="outline" onClick={onBrowse}>End session</Button>
           </div>
         </div>
-        <Progress value={sessionTotal ? reviewed / sessionTotal * 100 : 0} />
-        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span><span className="font-medium text-foreground tabular-nums">{counts.new}</span> new</span>
-          <span><span className="font-medium text-foreground tabular-nums">{counts.learning + counts.relearning}</span> learning</span>
-          <span><span className="font-medium text-foreground tabular-nums">{counts.review}</span> review</span>
-        </div>
+        <Progress value={sessionTotal ? reviewed / sessionTotal * 100 : 0} aria-label="Session progress" />
+        <p className="text-xs text-muted-foreground tabular-nums">{counts.new} new · {counts.learning + counts.relearning} learning · {counts.review} review</p>
       </div>
       <ReviewCard key={current.id + current.updatedAt} mistake={current} attempt={attemptMap.get(current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onToggleSuspend={onToggleSuspend} />
     </div>

@@ -58,6 +58,27 @@ type MistakeSheetProps = {
   onSave: (mistake: Mistake | Mistake[]) => void
 }
 
+// One textarea with its own Write/Preview switch, so a long answer can be proofread
+// without flipping every field in the form.
+function MarkdownField({ id, label, hint, value, rows, placeholder, onChange }: { id: string; label: string; hint?: string; value: string; rows: number; placeholder: string; onChange: (value: string) => void }) {
+  const [preview, setPreview] = useState(false)
+  return (
+    <Field>
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        <div className="flex rounded-md bg-muted p-0.5" role="group" aria-label={`${label} mode`}>
+          <Button type="button" size="xs" variant={preview ? "ghost" : "secondary"} aria-pressed={!preview} onClick={() => setPreview(false)}>Write</Button>
+          <Button type="button" size="xs" variant={preview ? "secondary" : "ghost"} aria-pressed={preview} onClick={() => setPreview(true)}>Preview</Button>
+        </div>
+      </div>
+      {preview ? (
+        <div className="min-h-24 rounded-lg border bg-muted/20 p-3">{value.trim() ? <MarkdownPreview unframed>{value}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}</div>
+      ) : <Textarea id={id} rows={rows} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />}
+      {hint ? <FieldDescription>{hint}</FieldDescription> : null}
+    </Field>
+  )
+}
+
 function draftFromFields({
   attemptId,
   question,
@@ -119,7 +140,6 @@ export function MistakeSheet({
   onSave,
 }: MistakeSheetProps) {
   const auth = useLoginWithChatGPT()
-  const [showPreviews, setShowPreviews] = useState(false)
   const [attemptId, setAttemptId] = useState(initialMistake?.attemptId ?? initialAttemptId ?? "")
   const [question, setQuestion] = useState(initialMistake?.question ?? "")
   const [questionText, setQuestionText] = useState(initialMistake?.questionText ?? "")
@@ -173,6 +193,7 @@ export function MistakeSheet({
     label: `${attempt.title} · ${attempt.paper}`,
   }))]
   const selectedAttemptOption = attemptOptions.find((attempt) => attempt.value === selectedAttempt) ?? null
+  const marksError = Number.isNaN(totalMarks) || Number.isNaN(marksLost) || (totalMarks === 0 && marksLost === 0) ? null : validateMistakeMarks(totalMarks, marksLost)
   const isBatchReview = importMode === "batch" && batchDrafts.length > 0
   const isEditingBatchDraft = isBatchReview && activeBatchIndex !== null
 
@@ -418,9 +439,8 @@ export function MistakeSheet({
             <FieldError>{error}</FieldError>
           </div>
         ) : (
-          <form id="mistake-form" className="overflow-y-auto px-4 pb-6 sm:px-6" onSubmit={submit}>
+          <form id="mistake-form" className="overflow-y-auto px-4 pb-6 sm:px-6" onSubmit={submit} onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.currentTarget.requestSubmit() } }}>
             <FieldGroup>
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 p-3"><p className="text-sm text-muted-foreground">Capture the question. Understand the gap. Save a better approach.</p><Button type="button" size="sm" variant="outline" aria-pressed={showPreviews} onClick={() => setShowPreviews(!showPreviews)}>{showPreviews ? "Hide previews" : "Show formatted previews"}</Button></div>
               {isEditingBatchDraft ? (
                 <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-2">
                   <Button type="button" size="sm" variant="ghost" onClick={returnToBatchGrid}><ArrowLeft />All questions</Button>
@@ -530,22 +550,20 @@ export function MistakeSheet({
                 </Field>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field>
+              <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-total-marks">Total marks</FieldLabel>
-                  <Input id="mistake-total-marks" type="number" min="0.5" step="0.5" value={totalMarks || ""} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
+                  <Input id="mistake-total-marks" type="number" inputMode="decimal" min="0.5" step="0.5" value={totalMarks || ""} aria-invalid={Boolean(marksError)} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
                 </Field>
-                <Field>
+                <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-marks-lost">Marks lost</FieldLabel>
-                  <Input id="mistake-marks-lost" type="number" min="0" step="0.5" value={marksLost} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
+                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="0.5" value={marksLost} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
                 </Field>
+                <Button type="button" variant="outline" disabled={!(totalMarks > 0)} onClick={() => setMarksLost(totalMarks)}>All marks</Button>
+                {marksError ? <FieldError className="sm:col-span-3">{marksError}</FieldError> : null}
               </div>
 
-              <Field>
-                <FieldLabel htmlFor="question-text">Prompt or task</FieldLabel>
-                <Textarea id="question-text" rows={4} value={questionText} onChange={(event) => setQuestionText(event.target.value)} placeholder="Enter the full question, essay prompt, stimulus task, or practical requirement." />
-                {showPreviews ? <div className="rounded-lg border bg-muted/20 p-3"><MarkdownPreview>{questionText}</MarkdownPreview></div> : null}
-              </Field>
+              <MarkdownField id="question-text" label="Prompt or task" rows={4} value={questionText} onChange={setQuestionText} placeholder="Enter the full question, essay prompt, stimulus task, or practical requirement." hint="Markdown and LaTeX ($x^2$) are supported." />
 
               {!isEditingBatchDraft ? <Field>
                 <FieldLabel htmlFor="question-images">Question images</FieldLabel>
@@ -609,24 +627,15 @@ export function MistakeSheet({
               </div>
 
               <div className="border-t pt-5"><h3 className="font-semibold">03 · The takeaway</h3><p className="mt-1 text-sm text-muted-foreground">Write the lesson you want to remember next time.</p></div>
-              <Field>
-                <FieldLabel htmlFor="explanation">What went wrong?</FieldLabel>
-                <Textarea id="explanation" rows={5} value={explanation} onChange={(event) => setExplanation(event.target.value)} placeholder="Describe the gap: what was misunderstood, omitted, unsupported, unclear, or done inaccurately?" />
-                <FieldDescription>Describe the error precisely enough to recognise it next time.</FieldDescription>
-                {showPreviews ? <div className="rounded-lg border bg-muted/20 p-3"><MarkdownPreview>{explanation}</MarkdownPreview></div> : null}
-              </Field>
+              <MarkdownField id="explanation" label="What went wrong?" rows={5} value={explanation} onChange={setExplanation} placeholder="Describe the gap: what was misunderstood, omitted, unsupported, unclear, or done inaccurately?" hint="Describe the error precisely enough to recognise it next time." />
 
-              <Field>
-                <FieldLabel htmlFor="correction">Improved response or method</FieldLabel>
-                <Textarea id="correction" rows={5} value={correction} onChange={(event) => setCorrection(event.target.value)} placeholder="Write the correct idea, evidence, structure, process, or answer you should use next time." />
-                {showPreviews ? <div className="rounded-lg border bg-muted/20 p-3"><MarkdownPreview>{correction}</MarkdownPreview></div> : null}
-              </Field>
-              <FieldError>{error}</FieldError>
+              <MarkdownField id="correction" label="Improved response or method" rows={5} value={correction} onChange={setCorrection} placeholder="Write the correct idea, evidence, structure, process, or answer you should use next time." />
             </FieldGroup>
           </form>
         )}
 
         <SheetFooter className="border-t bg-background">
+          {error && !(isBatchReview && !isEditingBatchDraft) ? <FieldError className="sm:mr-auto sm:self-center">{error}</FieldError> : null}
           <Button type="button" variant="outline" disabled={saving || analysing} onClick={() => handleOpenChange(false)}>Cancel</Button>
           {isBatchReview && !isEditingBatchDraft ? (
             <Button type="button" onClick={() => void saveBatch()} disabled={analysing || saving}>{saving ? "Saving…" : `Save all ${batchDrafts.length} mistakes`}</Button>

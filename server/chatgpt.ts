@@ -1,5 +1,7 @@
 /// <reference types="node" />
 
+import { handleMistakesPdf } from "../web/server/mistakes-pdf"
+
 import {
   createChatGPTHandler,
   type ChatGPTHandler,
@@ -66,7 +68,9 @@ export async function handleChatGPTRequest(
       headers: corsHeaders(allowed),
     })
   }
-  const response = await normalizeChatGPTErrorResponse(await auth.handler(request))
+  const worksheet = new URL(request.url).pathname === "/api/mistakes-pdf"
+  if (worksheet && !allowed) return new Response("Forbidden", { status: 403 })
+  const response = worksheet ? await handleMistakesPdf(request) : await normalizeChatGPTErrorResponse(await auth.handler(request))
   if (!allowed) return response
   const headers = new Headers(response.headers)
   for (const [key, value] of corsHeaders(allowed)) headers.set(key, value)

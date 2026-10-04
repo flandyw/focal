@@ -1,3 +1,4 @@
+import { downloadExamFile } from "../lib/host"
 import { useMemo } from "react"
 import { ArrowRight, CalendarDays, CheckCircle2, Download, Plus } from "lucide-react"
 import { Badge } from "./ui/badge"
@@ -50,12 +51,7 @@ export function UpcomingExamsCard({
 
   function downloadCalendar() {
     const calendar = buildTimetableCalendar(entries.filter((entry) => trackedSet.has(entry.id)), sourceUrl)
-    const url = URL.createObjectURL(new Blob([calendar], { type: "text/calendar;charset=utf-8" }))
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "vce-2026-exams.ics"
-    link.click()
-    URL.revokeObjectURL(url)
+    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "vce-2026-exams.ics")
   }
 
   return (

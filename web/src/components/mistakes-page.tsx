@@ -608,8 +608,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   async function exportWorksheet() {
     setExporting(true)
     try {
-      await downloadMistakesPdf(worksheetMistakes, data.attempts, activeSubject === "all" ? "mistakes" : activeSubject)
-      toast.success("Worksheet downloaded")
+      if (await downloadMistakesPdf(worksheetMistakes, data.attempts, activeSubject === "all" ? "mistakes" : activeSubject)) toast.success("Worksheet downloaded")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not export worksheet.")
     } finally {

@@ -69,6 +69,8 @@ Manage coursework files, plan sessions around a configurable timetable, and trac
 
 ### Focus & Review
 
+- **Exams workspace** — the main app includes the shared `web/` exam tracker, timed papers, VCAA library, mistake review, SACs, study-score estimates, and analytics. It uses the desktop account and ChatGPT sidecar, with native export dialogs. VCAA/VTAC reference files ship with the desktop build; the standalone web app remains available.
+
 - **Customisable Pomodoro** — work / break / long-break durations, full-screen Focus view, recovery dialog on reopen, overtime study mode, post-session reflection (confidence 1–5, blockers, next-action).
 - **VCE prep packs** — add type-specific SAC, exam, or assignment preparation steps to an assessment, with checklist progress, completed study time, deadline countdown, and latest confidence in one place.
 - **Results and topic mastery** — record marks, feedback, and topic evidence so weak areas can influence the next adaptive plan.

@@ -1,278 +1,51 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { openUrl } from "@tauri-apps/plugin-opener"
-import {
-  AlertCircle,
-  ArrowRight,
-  BookOpenCheck,
-  ExternalLink,
-  GraduationCap,
-  Loader2,
-  RefreshCw,
-  Target,
-} from "lucide-react"
+import { useEffect } from "react"
+import { isTauri } from "@tauri-apps/api/core"
+import { save } from "@tauri-apps/plugin-dialog"
+import { writeFile } from "@tauri-apps/plugin-fs"
+import { openPath, openUrl } from "@tauri-apps/plugin-opener"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  fetchFocalWebSnapshot,
-  getFocalWebUrl,
-  matchFocalSubjectId,
-  type FocalWebSnapshot,
-} from "@/lib/focal-web"
-import { isSupabaseConfigured, supabase } from "@/lib/supabase/client"
-import type { StudySessionDraft, Subject } from "@/lib/types"
+import { examHost } from "../../../web/src/lib/host"
+import ExamsApp from "../../../web/src/App"
+import { AppErrorBoundary } from "../../../web/src/components/error-boundary"
+import { setSupabaseClient } from "../../../web/src/lib/supabase"
+import { supabase } from "@/lib/supabase/client"
 
-type LoadState =
-  | { status: "idle" | "loading"; snapshot: null; error: null }
-  | { status: "ready"; snapshot: FocalWebSnapshot; error: null }
-  | { status: "error"; snapshot: null; error: string }
+setSupabaseClient(supabase)
 
-function formatPercentage(value: number | null) {
-  return value === null ? "—" : `${Math.round(value)}%`
+if (isTauri()) {
+  examHost.download = async (blob, name) => {
+    const path = await save({ defaultPath: name })
+    if (!path) return false
+    await writeFile(path, new Uint8Array(await blob.arrayBuffer()))
+    return true
+  }
+  examHost.report = async (html) => {
+    const path = await save({ defaultPath: "exam-progress.html", filters: [{ name: "HTML report", extensions: ["html"] }] })
+    if (!path) return
+    await writeFile(path, new TextEncoder().encode(html))
+    await openPath(path)
+  }
 }
 
-export function FocalWebView({
-  subjects,
-  userId,
-  loading: authLoading,
-  onCreateStudySessions,
-  onOpenSettings,
-}: {
-  subjects: Subject[]
-  userId: string | undefined
-  loading: boolean
-  onCreateStudySessions: (sessions: StudySessionDraft[]) => Promise<void>
-  onOpenSettings: () => void
-}) {
-  const [state, setState] = useState<LoadState>({ status: "idle", snapshot: null, error: null })
-  const [planning, setPlanning] = useState(false)
-
-  const refresh = useCallback(async () => {
-    if (!userId || !supabase) return
-    setState({ status: "loading", snapshot: null, error: null })
-    try {
-      const snapshot = await fetchFocalWebSnapshot(supabase, userId)
-      setState({ status: "ready", snapshot, error: null })
-    } catch (error) {
-      console.error("Focal Web integration failed:", error)
-      setState({
-        status: "error",
-        snapshot: null,
-        error: "Focal Web data is unavailable. Check your connection and the row-level-security policies on attempts and mistakes.",
-      })
-    }
-  }, [userId])
-
+export function FocalWebView({ onOpenSettings }: { onOpenSettings: () => void }) {
   useEffect(() => {
-    if (!userId || !supabase) {
-      setState({ status: "idle", snapshot: null, error: null })
-      return
+    if (!isTauri()) return
+    const openExternal = (event: MouseEvent) => {
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null
+      if (!(link instanceof HTMLAnchorElement) || link.target !== "_blank") return
+      const url = new URL(link.href)
+      if (url.protocol !== "https:" && url.protocol !== "http:") return
+      event.preventDefault()
+      void openUrl(url.href).catch((error) => toast.error(`Could not open link: ${String(error)}`))
     }
-    void refresh()
-    const refreshOnFocus = () => void refresh()
-    window.addEventListener("focus", refreshOnFocus)
-    return () => window.removeEventListener("focus", refreshOnFocus)
-  }, [refresh, userId])
-
-  const snapshot = state.status === "ready" ? state.snapshot : null
-  const weakest = snapshot?.subjects[0]
-  const weakestSubjectId = useMemo(
-    () => weakest ? matchFocalSubjectId(weakest.subject, subjects) : undefined,
-    [subjects, weakest],
-  )
-  const focalWebUrl = getFocalWebUrl()
-
-  const launch = useCallback(async (hash = "") => {
-    const url = getFocalWebUrl(hash)
-    if (!url) {
-      toast.error("Focal Web is unavailable. Check that VITE_FOCAL_WEB_URL is an HTTPS URL.")
-      return
-    }
-    try {
-      await openUrl(url)
-    } catch (error) {
-      toast.error(`Could not open Focal Web: ${String(error)}`)
-    }
+    document.addEventListener("click", openExternal, true)
+    return () => document.removeEventListener("click", openExternal, true)
   }, [])
-
-  const planReview = useCallback(async () => {
-    if (!weakest) return
-    setPlanning(true)
-    const start = new Date(Math.ceil(Date.now() / 900_000) * 900_000)
-    const end = new Date(start.getTime() + 30 * 60_000)
-    try {
-      await onCreateStudySessions([{
-        subjectIds: weakestSubjectId ? [weakestSubjectId] : [],
-        title: `Focal review · ${weakest.subject}`,
-        description: "Review due mistakes and complete a targeted practice set in Focal Web.",
-        topics: ["Exam review", "Mistake correction"],
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      }])
-    } finally {
-      setPlanning(false)
-    }
-  }, [onCreateStudySessions, weakest, weakestSubjectId])
-
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto grid w-full max-w-6xl gap-5 p-4 pb-8 min-[1200px]:p-6">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border/70 pb-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <GraduationCap className="size-5 text-primary" aria-hidden />
-              <h1 className="text-xl font-semibold tracking-tight">Focal Web</h1>
-              <Badge variant="secondary">Web app</Badge>
-            </div>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Practice performance and planning, synced through your Focal account.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {userId && (
-              <Button variant="outline" size="sm" disabled={state.status === "loading"} onClick={() => void refresh()}>
-                <RefreshCw className={state.status === "loading" ? "animate-spin" : ""} />
-                Refresh
-              </Button>
-            )}
-            <Button size="sm" disabled={!focalWebUrl} onClick={() => void launch()}>
-              <ExternalLink />
-              Open Focal Web
-            </Button>
-          </div>
-        </header>
-
-        {!isSupabaseConfigured ? (
-          <Card>
-            <CardContent className="py-6">
-              <div>
-                <p className="font-medium">Supabase is not configured</p>
-                <p className="mt-1 text-sm text-muted-foreground">Set the Supabase URL and publishable key in the Focal build. Practice data lives in the same project.</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : authLoading ? (
-          <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
-            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            Restoring your account…
-          </div>
-        ) : !userId ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign in to see your practice data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                The web app and Focal desktop share one account and one database. Sign in under Settings, then come back here.
-              </p>
-              <div className="mt-3"><Button onClick={onOpenSettings}><ExternalLink />Open account settings</Button></div>
-            </CardContent>
-          </Card>
-        ) : state.status === "loading" || state.status === "idle" ? (
-          <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
-            <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-            Loading practice data…
-          </div>
-        ) : state.status === "error" ? (
-          <Card className="border-destructive/30">
-            <CardContent className="flex gap-3 py-6">
-              <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
-              <div>
-                <p className="font-medium">Connection needs setup</p>
-                <p className="mt-1 text-sm text-muted-foreground">{state.error}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <section aria-label="Focal Web summary" className="grid gap-3 sm:grid-cols-3">
-              <Card>
-                <CardHeader><CardTitle className="text-sm text-muted-foreground">Average practice score</CardTitle></CardHeader>
-                <CardContent className="text-3xl font-semibold tabular-nums">{formatPercentage(snapshot!.averagePercentage)}</CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-sm text-muted-foreground">Practice exams</CardTitle></CardHeader>
-                <CardContent className="text-3xl font-semibold tabular-nums">{snapshot!.attempts.length}</CardContent>
-              </Card>
-              <Card>
-                <CardHeader><CardTitle className="text-sm text-muted-foreground">Mistakes due</CardTitle></CardHeader>
-                <CardContent className="flex items-end justify-between gap-3">
-                  <span className="text-3xl font-semibold tabular-nums">{snapshot!.dueMistakes}</span>
-                  <span className="text-xs text-muted-foreground">of {snapshot!.totalMistakes}</span>
-                </CardContent>
-              </Card>
-            </section>
-
-            {weakest && (
-              <Card>
-                <CardContent className="flex flex-wrap items-center justify-between gap-4 py-5">
-                  <div className="flex items-start gap-3">
-                    <Target className="mt-0.5 size-5 text-primary" aria-hidden />
-                    <div>
-                      <p className="font-medium">Next review: {weakest.subject}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Lowest current subject average at {formatPercentage(weakest.averagePercentage)} across {weakest.attempts} attempt{weakest.attempts === 1 ? "" : "s"}.
-                      </p>
-                    </div>
-                  </div>
-                  <Button disabled={planning} onClick={() => void planReview()}>
-                    {planning ? <Loader2 className="animate-spin" /> : <BookOpenCheck />}
-                    Plan 30-minute review
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="grid gap-5 lg:grid-cols-2">
-              <Card>
-                <CardHeader><CardTitle>Subject performance</CardTitle></CardHeader>
-                <CardContent>
-                  {snapshot!.subjects.length ? (
-                    <div className="divide-y">
-                      {snapshot!.subjects.map((subject) => (
-                        <div key={subject.subject} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{subject.subject}</p>
-                            <p className="text-xs text-muted-foreground">{subject.attempts} attempt{subject.attempts === 1 ? "" : "s"}</p>
-                          </div>
-                          <span className="text-sm font-semibold tabular-nums">{formatPercentage(subject.averagePercentage)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="text-sm text-muted-foreground">Complete a practice exam in Focal Web to see subject performance.</p>}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle>Recent practice exams</CardTitle></CardHeader>
-                <CardContent>
-                  {snapshot!.attempts.length ? (
-                    <div className="divide-y">
-                      {snapshot!.attempts.slice(0, 5).map((attempt) => (
-                        <button
-                          key={attempt.id}
-                          type="button"
-                          className="flex w-full items-center gap-3 py-3 text-left outline-none first:pt-0 last:pb-0 focus-visible:ring-2 focus-visible:ring-ring"
-                          onClick={() => void launch(`exam-${encodeURIComponent(attempt.id)}`)}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{attempt.title}</p>
-                            <p className="truncate text-xs text-muted-foreground">{attempt.provider} · {new Date(attempt.completedAt).toLocaleDateString("en-AU")}</p>
-                          </div>
-                          <span className="text-sm font-semibold tabular-nums">{formatPercentage(attempt.percentage)}</span>
-                          <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
-                        </button>
-                      ))}
-                    </div>
-                  ) : <p className="text-sm text-muted-foreground">No practice exams yet.</p>}
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
-      </div>
-    </ScrollArea>
+    <div className="h-full overflow-auto">
+      <AppErrorBoundary>
+        <ExamsApp embedded onOpenSettings={onOpenSettings} />
+      </AppErrorBoundary>
+    </div>
   )
 }

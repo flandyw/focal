@@ -1,3 +1,4 @@
+import { chatGPTOptions } from "./ai-settings"
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { jsonSchema, Output, streamText } from "ai"
 import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
@@ -70,7 +71,7 @@ export function formatMistakeAIError(error: unknown) {
 }
 
 async function getChatGPTModel() {
-  const chatgpt = createChatGPTProxyProvider()
+  const chatgpt = createChatGPTProxyProvider(chatGPTOptions)
   let models: string[]
   try {
     models = await chatgpt.listModels()

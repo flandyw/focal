@@ -1,3 +1,4 @@
+import { chatGPTOptions } from "./ai-settings"
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { jsonSchema, Output, streamText } from "ai"
 
@@ -142,7 +143,7 @@ export async function planStudySession(
   context: PlanContext,
   preferredModel: string,
 ): Promise<{ plan: StudyPlan; model: string }> {
-  const chatgpt = createChatGPTProxyProvider()
+  const chatgpt = createChatGPTProxyProvider(chatGPTOptions)
   let models: string[]
   try {
     models = await chatgpt.listModels()

@@ -1,3 +1,4 @@
+import { examHost } from "./host"
 import {
   analyseAttempt,
   findAttemptReferenceForYear,
@@ -138,8 +139,9 @@ ${priorityRows ? `<table>
 </html>`
 }
 
-export function openProgressReport(data: AppData, references: AssessmentReference[], difficulty?: ExamDifficultySettings) {
+export async function openProgressReport(data: AppData, references: AssessmentReference[], difficulty?: ExamDifficultySettings) {
   const html = buildReportHtml(data, references, difficulty)
+  if (examHost.report) return examHost.report(html)
   const windowHandle = window.open("", "_blank", "width=800,height=900")
   if (!windowHandle) throw new Error("Allow pop-ups to export the progress report.")
   windowHandle.document.write(html)

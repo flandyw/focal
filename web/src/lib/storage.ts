@@ -1,3 +1,4 @@
+import { downloadExamFile } from "./host"
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "./exam-data"
 
 // ponytail: this `examtrack` prefix is load-bearing. Renaming it would orphan every
@@ -30,12 +31,5 @@ export function parseAppDataFile(text: string): AppData {
 }
 
 export function downloadAppData(data: AppData) {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
-  )
-  const link = document.createElement("a")
-  link.href = url
-  link.download = `focal-${new Date().toISOString().slice(0, 10)}.json`
-  link.click()
-  URL.revokeObjectURL(url)
+  return downloadExamFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `focal-${new Date().toISOString().slice(0, 10)}.json`)
 }

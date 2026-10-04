@@ -1,3 +1,5 @@
+import { downloadExamFile } from "./host"
+import { chatGPTOptions } from "./ai-settings"
 import type { ExamAttempt, Mistake } from "./exam-data"
 
 const TEX_SPECIALS = /[#$%&_{}~^\\]/g
@@ -191,17 +193,12 @@ ${pages.join("\n\\newpage\n")}` : ""}
 }
 
 export async function downloadMistakesPdf(mistakes: Mistake[], attempts: ExamAttempt[], subject = "mistakes") {
-  const response = await fetch("/api/mistakes-pdf", {
+  const response = await fetch(chatGPTOptions.basePath.replace(/\/chatgpt$/, "/mistakes-pdf"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ tex: buildMistakesTex(mistakes, attempts) }),
   })
   if (!response.ok) throw new Error((await response.text()).slice(0, 500) || "PDF compilation failed.")
 
-  const url = URL.createObjectURL(await response.blob())
-  const link = document.createElement("a")
-  link.href = url
-  link.download = `${subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "mistakes"}-worksheet.pdf`
-  link.click()
-  URL.revokeObjectURL(url)
+  return downloadExamFile(await response.blob(), `${subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "mistakes"}-worksheet.pdf`)
 }

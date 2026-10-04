@@ -2147,10 +2147,6 @@ function App() {
                     ) : focalWebView ? (
                       <Suspense fallback={<ViewFallback label="Exams" />}>
                         <FocalWebView
-                          subjects={allSubjects}
-                          userId={supabaseAuth.user?.id}
-                          loading={supabaseAuth.loading}
-                          onCreateStudySessions={handleCreateStudySessions}
                           onOpenSettings={navigation.openSettings}
                         />
                       </Suspense>

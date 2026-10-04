@@ -1,3 +1,4 @@
+import { chatGPTOptions } from "../lib/ai-settings"
 import { useEffect, useState } from "react"
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
@@ -37,7 +38,7 @@ export function StudyPlanCard({
   timerMode: string
   minutesLeft: number
 }) {
-  const auth = useLoginWithChatGPT()
+  const auth = useLoginWithChatGPT(chatGPTOptions)
   const [request, setRequest] = useState("")
   const [models, setModels] = useState<string[]>([])
   const [model, setModel] = useState(loadPlannerModel)
@@ -54,7 +55,7 @@ export function StudyPlanCard({
       return
     }
     let cancelled = false
-    createChatGPTProxyProvider().listModels()
+    createChatGPTProxyProvider(chatGPTOptions).listModels()
       .then((available) => { if (!cancelled) setModels(available.filter(supportsStreamedAnalysis)) })
       .catch(() => { if (!cancelled) setModels([]) })
     return () => { cancelled = true }

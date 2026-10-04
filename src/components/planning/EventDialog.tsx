@@ -217,9 +217,17 @@ function EventForm({
   const timetableClasses = eventDate && timetableConfig
     ? getTimetablePeriodsForDate(eventDate, timetableConfig).map((period) => ({ period, subject: resolveTimetableSubject(period.subject, subjects) }))
     : []
-  const suggestions = subjectId ? timetableClasses.filter(({ subject }) => subject?.id === subjectId) : timetableClasses
-  const usingTimetable = suggestions.some(({ period }) => period.startTime === startTime && period.endTime === endTime)
+  const suggestions = timetableClasses.filter(({ subject }) => subject && (!subjectId || subject.id === subjectId))
+  const usingTimetable = !multiDay && suggestions.some(({ period }) => period.startTime === startTime && period.endTime === endTime)
   const use24Hour = timetableConfig?.viewSettings?.use24Hour ?? false
+
+  const applyTimetablePeriod = (period: (typeof timetableClasses)[number]["period"], selectedSubjectId?: string) => {
+    if (selectedSubjectId) setSubjectId(selectedSubjectId)
+    setStartTime(period.startTime)
+    setEndTime(period.endTime)
+    setMultiDay(false)
+    setEndDate(undefined)
+  }
 
   const changeStart = (value: string) => {
     // Keep the duration when the start moves on a single-day event.
@@ -304,25 +312,34 @@ function EventForm({
         </div>
 
         {!usingTimetable && suggestions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <Clock className="size-3.5 text-primary" aria-hidden="true" />
-            <span className="mr-1 text-xs text-muted-foreground">Timetable</span>
-            {suggestions.map(({ period, subject }) => (
-              <Pill
-                key={`${period.subject}-${period.period}-${period.startTime}-${period.endTime}`}
-                className="h-6 px-1.5"
-                title={subject ? `Use ${subject.name} class time and subject` : "Use class time"}
-                onClick={() => {
-                  if (subject) setSubjectId(subject.id)
-                  setStartTime(period.startTime)
-                  setEndTime(period.endTime)
-                  setMultiDay(false)
-                  setEndDate(undefined)
-                }}
-              >
-                {subject?.shortCode ?? (period.subject.trim() || period.period)} · {formatTime(period.startTime, use24Hour)}–{formatTime(period.endTime, use24Hour)}
-              </Pill>
-            ))}
+          <div className="grid gap-2 rounded-lg border border-primary/20 bg-primary/8 px-3 py-2.5">
+            <p className="flex items-start gap-2 text-xs text-muted-foreground">
+              <Clock className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+              {subjectId
+                ? "This subject is on the timetable for this day. Align the event to its class time?"
+                : "Timetable classes on this day. Choose one to align the event time."}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {suggestions.map(({ period, subject }) => (
+                <div key={`${period.subject}-${period.period}-${period.startTime}-${period.endTime}`} className="flex">
+                  <Pill
+                    className="rounded-r-none"
+                    title={`Use ${subject!.name} class time and subject`}
+                    onClick={() => applyTimetablePeriod(period, subject!.id)}
+                  >
+                    {subject!.shortCode} · {period.period} · {formatTime(period.startTime, use24Hour)}–{formatTime(period.endTime, use24Hour)}
+                  </Pill>
+                  <Pill
+                    className="rounded-l-none border-l-0 px-1.5"
+                    aria-label={`Use ${subject!.name} ${period.period} class time only`}
+                    title="Use time only"
+                    onClick={() => applyTimetablePeriod(period)}
+                  >
+                    <Clock className="size-3.5" aria-hidden="true" />
+                  </Pill>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

@@ -1,3 +1,5 @@
+import "./settings-page.css"
+import { chatGPTOptions } from "../lib/ai-settings"
 import { useEffect, useState } from "react"
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
@@ -36,7 +38,8 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
+export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
+  onOpenSettings?: () => void
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
@@ -45,7 +48,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   onSubjectsChange: (subjects: string[]) => void
   onExamDifficultyChange: (settings: ExamDifficultySettings) => void
 }) {
-  const auth = useLoginWithChatGPT()
+  const auth = useLoginWithChatGPT(chatGPTOptions)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [accountLoading, setAccountLoading] = useState(false)
@@ -72,7 +75,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     setLoadingModels(true)
     setModelError(null)
     try {
-      setModels(await createChatGPTProxyProvider().listModels())
+      setModels(await createChatGPTProxyProvider(chatGPTOptions).listModels())
     } catch {
       setModels([])
       setModelError("Could not load models for this account.")
@@ -314,8 +317,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 Connecting lets Focal spend from your ChatGPT plan for AI requests. Prompts and mistake photos pass through this server; Focal never receives your password. Disconnecting deletes the server session.
               </p>
               <div>
-                <Button disabled={auth.isConnecting} onClick={() => void auth.login({ popup: window.open("about:blank", "_blank") })}>
-                  <Sparkles />{auth.isConnecting ? "Connecting…" : "I understand, connect ChatGPT"}
+                <Button disabled={auth.isConnecting} onClick={() => onOpenSettings ? onOpenSettings() : void auth.login({ popup: window.open("about:blank", "_blank") })}>
+                  <Sparkles />{onOpenSettings ? "Connect in account settings" : auth.isConnecting ? "Connecting…" : "I understand, connect ChatGPT"}
                 </Button>
               </div>
               {auth.error ? <p role="alert" className="text-sm text-destructive">{auth.error}</p> : null}

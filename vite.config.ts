@@ -5,6 +5,8 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import { readFileSync } from "fs";
 
+const examReferenceFiles = ["vcaa-grade-distributions.json", "vcaa-exam-resources.json", "vtac-scaling-reports.json", "vce-2026-timetable.json"];
+
 const host = process.env.TAURI_DEV_HOST;
 
 function getVersion(): string {
@@ -21,10 +23,25 @@ function getVersion(): string {
 export default defineConfig(() => ({
   define: {
     __APP_VERSION__: JSON.stringify(getVersion()),
+    "import.meta.env.VITE_EMBEDDED_EXAMS": "true",
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), {
+    name: "exam-reference-data",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const name = request.url?.split("?")[0]?.slice(1);
+        if (!name || !examReferenceFiles.includes(name)) return next();
+        response.setHeader("Content-Type", "application/json");
+        response.end(readFileSync(path.resolve(import.meta.dirname, "web/public", name)));
+      });
+    },
+    generateBundle() {
+      for (const name of examReferenceFiles) this.emitFile({ type: "asset", fileName: name, source: readFileSync(path.resolve(import.meta.dirname, "web/public", name)) });
+    },
+  }],
 
   resolve: {
+    dedupe: ["react", "react-dom", "sonner", "@supabase/supabase-js"],
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
     },

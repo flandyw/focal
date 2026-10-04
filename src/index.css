@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "katex/dist/katex.min.css";
+@import "../web/src/typeset.css";
+@source "../web/src";
 @import "@fontsource-variable/sora";
 @import "@fontsource-variable/geist";
 
@@ -71,6 +74,9 @@
 :root {
     color-scheme: light;
     --radius: 0.625rem;
+    --chart-mean: var(--chart-1);
+    --chart-median: var(--chart-2);
+    --chart-deviation: var(--chart-4);
     --background: oklch(0.982 0.005 250);
     --foreground: oklch(0.18 0.015 250);
     --card: oklch(0.997 0.002 250);

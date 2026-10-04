@@ -609,9 +609,9 @@ export function ExamsPage(props: ExamsPageProps) {
     [data, onLogExam, onLogMistakeForLatest, onOpenMistakes, onOpenLibrary, onOpenCalendar],
   )
 
-  function exportReport() {
+  async function exportReport() {
     try {
-      openProgressReport(data, references, data.examDifficulty)
+      await openProgressReport(data, references, data.examDifficulty)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not open the progress report.")
     }

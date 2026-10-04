@@ -18,9 +18,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SectionHeading, WorkspacePage } from "@/components/workspace-layout"
@@ -260,101 +259,78 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       : "Stay with one task until the block ends."
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="min-w-0 gap-0">
-        <CardHeader className="border-b pb-4">
-          <CardTitle>What you are working on</CardTitle>
-          <CardDescription>A subject is required to start. Each session is filed in its study record.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 py-4 sm:grid-cols-2">
-          {sharedSession ? <>
-            <div><p className="text-sm text-muted-foreground">Subject</p><p className="font-medium">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</p></div>
-            <div><p className="text-sm text-muted-foreground">Intent</p><p className="font-medium">{sharedSession.title}</p></div>
-          </> : <>
-            <Field>
-              <FieldLabel htmlFor="timer-subject">Subject</FieldLabel>
-              <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder="Search or type a subject" preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
-              <FieldDescription>{subjectChosen ? "Your subjects come first." : "Pick one to unlock the timer."}</FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="timer-intent">Intent</FieldLabel>
-              <Input id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Redo the 2023 organic paper" value={intent} />
-              <FieldDescription>Up to 120 characters.</FieldDescription>
-            </Field>
-          </>}
-        </CardContent>
-        <div className="border-t">
-          <CardContent className="py-4">
-            <div className="mb-4 flex gap-2" aria-label="Study mode">
-              <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} variant={isFreeStudy ? "secondary" : "ghost"}>Free study</Button>
-              <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} variant={!isFreeStudy ? "secondary" : "ghost"}>Pomodoro</Button>
+    <div className="grid gap-6 lg:gap-8">
+      <Card className="min-w-0 gap-0 py-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
+          <div className="flex gap-1 rounded-lg bg-muted p-1" aria-label="Study mode" role="group">
+            <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
+            <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
+          </div>
+          {sharedSession ? (
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</span>
+              {sharedSession.title ? ` · ${sharedSession.title}` : ""}
+            </p>
+          ) : (
+            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[16rem_18rem]">
+              <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
+              <Input aria-label="Intent" id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Intent, e.g. redo the 2023 organic paper" value={intent} />
             </div>
-            <TimerReadout
-              animationKey={`${displayMode}:${state.cycles}`}
-              caption={caption}
-              countUp={isFreeStudy}
-              display={readout}
-              marks={isFreeStudy ? undefined : { total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
-              mode={displayMode}
-              onCaption={announcement}
-              overtime={state.studyOvertime && !state.freeStudy}
-              progress={progress}
-              status={isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
-            >
+          )}
+        </div>
+        <CardContent className="px-4 py-10 sm:px-6 sm:py-14">
+          <TimerReadout
+            animationKey={`${displayMode}:${state.cycles}`}
+            caption={caption}
+            countUp={isFreeStudy}
+            display={readout}
+            marks={isFreeStudy ? undefined : { total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
+            mode={displayMode}
+            onCaption={announcement}
+            overtime={state.studyOvertime && !state.freeStudy}
+            progress={progress}
+            status={isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              {/* A lifecycle command is one transaction with the server: its button
+                  stays down until the server has answered for the boundary. */}
+              <Button className="min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
+                {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
+              </Button>
+              {isFreeStudy ? (
+                <Button disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
+              ) : null}
+              <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
+              {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
+            </div>
+            {!state.studyOvertime && !isFreeStudy ? (
               <div className="flex flex-wrap items-center gap-2">
-                {/* A lifecycle command is one transaction with the server: its button
-                    stays down until the server has answered for the boundary. */}
-                <Button className="min-w-32 flex-1 sm:flex-none" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
-                  {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
-                </Button>
-                <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
-                {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
-                {!state.studyOvertime && !isFreeStudy ? (
-                  <>
-                    <Button onClick={() => actions.addTime(5)} size="lg" variant="ghost"><Plus />5 min</Button>
-                    <Button onClick={() => actions.addTime(10)} size="lg" variant="ghost"><Plus />10 min</Button>
-                  </>
-                ) : null}
+                <Button onClick={() => actions.addTime(5)} variant="ghost"><Plus />5 min</Button>
+                <Button onClick={() => actions.addTime(10)} variant="ghost"><Plus />10 min</Button>
+                {onBreak ? <Button disabled={!subjectChosen} onClick={actions.startOvertime} variant="ghost"><Coffee />Keep studying</Button> : null}
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-                {isFreeStudy ? (
-                  <Button disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="sm"><Square />Finish free study</Button>
-                ) : state.studyOvertime ? (
-                  <Button onClick={actions.returnToBreak} size="sm" variant="outline"><Coffee />Back to break</Button>
-                ) : onBreak ? (
-                  <Button disabled={!subjectChosen} onClick={actions.startOvertime} size="sm" variant="outline"><Coffee />Keep studying</Button>
-                ) : (
-                  <Button disabled={sessionBusy || state.running || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant="outline"><TimerIcon />Start free study</Button>
-                )}
-                <p className="text-xs text-pretty text-muted-foreground">
-                  {isFreeStudy
-                    ? "Ending it banks the time under its subject and stops the clock."
-                    : state.studyOvertime
-                      ? "Overtime and free study still count towards today's focus time."
-                      : "Sticking with the plan? Let the break run its course."}
-                </p>
+            ) : state.studyOvertime ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={actions.returnToBreak} variant="ghost"><Coffee />Back to break</Button>
               </div>
-            </TimerReadout>
-            {sharedError && <p role="alert" className="mt-4 text-sm text-destructive">{sharedError}</p>}
-          </CardContent>
+            ) : null}
+          </TimerReadout>
+          {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
+        </CardContent>
+        <div className="grid grid-cols-3 divide-x border-t text-center">
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="text-xl font-semibold tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="text-xl font-semibold tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="text-xl font-semibold tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
 
+      <div className="grid items-start gap-6 lg:gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="grid min-w-0 gap-3" aria-labelledby="today-title">
           <SectionHeading
             id="today-title"
-            title="Today's focus"
+            title="Today's log"
             description="Study logged since midnight, across every app on your account."
           />
-          <div className={`grid gap-4 rounded-xl border px-4 py-3 ${isFreeStudy ? "" : "grid-cols-2 sm:grid-cols-3"}`}>
-            <div><p className="text-xs text-muted-foreground">Focus time</p><p className="text-xl font-semibold tabular-nums">{formatFocusTime(recordSeconds)}</p><p className="text-xs text-muted-foreground">Across {recordCount} {isFreeStudy ? "session" : "block"}{recordCount === 1 ? "" : "s"}</p></div>
-            {!isFreeStudy && <>
-              <div><p className="text-xs text-muted-foreground">Daily goal</p><p className="mb-2 text-xl font-semibold tabular-nums">{settings.dailyGoal ? `${recordCount} / ${settings.dailyGoal}` : "Off"}</p><Progress aria-label="Daily goal progress" value={settings.dailyGoal ? (recordCount / settings.dailyGoal) * 100 : 0} /></div>
-              <div><p className="text-xs text-muted-foreground">Block length</p><p className="text-xl font-semibold tabular-nums">{settings.workMinutes}m</p><p className="text-xs text-muted-foreground">{settings.breakMinutes}m break every {settings.longBreakEvery} blocks</p></div>
-            </>}
-          </div>
-
           {todaysRecord ? (
             <div className="grid gap-2">
               {todaysRecord.map((item) => (
@@ -397,7 +373,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </Empty>
           )}
         </section>
-      <aside className="grid min-w-0 gap-4 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+      <aside className="grid min-w-0 gap-4">
         {renderSettings()}
         {!isFreeStudy && <details className="rounded-xl border bg-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Plan a session</summary>
@@ -414,6 +390,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           />
         </details>}
       </aside>
+      </div>
     </div>
   )
 

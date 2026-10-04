@@ -195,7 +195,7 @@ export function AutoRenameButton({ files, onApplyRenames }: AutoRenameButtonProp
           aria-busy={loading || applying}
           className="flex h-[min(86dvh,44rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-3xl"
         >
-          <div className="border-b px-5 pb-4 pt-5">
+          <div className="shrink-0 border-b px-5 pb-4 pt-5">
             <DialogHeader>
               <DialogTitle>Auto Rename Files</DialogTitle>
               <DialogDescription>
@@ -204,7 +204,7 @@ export function AutoRenameButton({ files, onApplyRenames }: AutoRenameButtonProp
             </DialogHeader>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-5 py-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-5 py-4">
             {providerMissing && (
               <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
                 {`${getActiveProvider().displayName} is not configured. Go to `}
@@ -333,7 +333,7 @@ export function AutoRenameButton({ files, onApplyRenames }: AutoRenameButtonProp
                     Deselect all
                   </Button>
                 </div>
-                <ScrollArea className="min-h-0 flex-1 rounded-lg border">
+                <ScrollArea className="min-h-32 flex-1 rounded-lg border">
                   <div className="grid grid-cols-1 gap-px bg-border/30 md:grid-cols-2">
                     {files.map((file) => {
                       const isSelected = selectedPaths.has(file.path)
@@ -377,7 +377,7 @@ export function AutoRenameButton({ files, onApplyRenames }: AutoRenameButtonProp
 
             {/* Rename review list (after generation) */}
             {entries.length > 0 && (
-              <ScrollArea className="min-h-0 flex-1 rounded-lg border">
+              <ScrollArea className="min-h-32 flex-1 rounded-lg border">
                 <div className="grid grid-cols-1 gap-px bg-border/30 md:grid-cols-2">
                   {entries.map((entry, i) => {
                     const isChanged = entry.newName !== entry.file.name

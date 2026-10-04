@@ -385,7 +385,7 @@ export function StudySessionDialog({
               )}
             </div>
 
-            <aside className="flex min-h-0 flex-col gap-2 border-t bg-muted/20 p-3 md:border-l md:border-t-0">
+            <aside className="flex min-h-max flex-col gap-2 border-t bg-muted/20 p-3 md:min-h-0 md:border-l md:border-t-0">
               <div className="flex items-center justify-between gap-2">
                 <h3 className={cn(fieldLabelClass, "text-muted-foreground")}>Subjects</h3>
                 <span className={cn("text-xs", subjectIds.length ? "text-muted-foreground" : "text-destructive")}>
@@ -397,7 +397,7 @@ export function StudySessionDialog({
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input aria-label="Filter subjects" placeholder="Filter subjects" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)} className={cn(controlClass, "pl-8")} />
               </div>
-              <div className="grid max-h-48 content-start gap-0.5 overflow-y-auto md:max-h-none md:flex-1" role="group" aria-label="Subjects">
+              <div className="grid max-h-48 shrink-0 content-start gap-0.5 overflow-y-auto md:max-h-none md:flex-1 md:shrink" role="group" aria-label="Subjects">
                 {visibleSubjects.map((subject) => {
                   const selected = subjectIds.includes(subject.id)
                   return (

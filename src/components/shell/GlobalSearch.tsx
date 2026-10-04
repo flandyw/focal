@@ -583,7 +583,7 @@ export function GlobalSearch({
  return ( <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent
  showCloseButton={false}
- className="top-[14vh] block max-w-2xl translate-y-0 gap-0 rounded-xl border-border/70 p-0 shadow-md sm:top-[18vh]"
+ className="top-[14dvh] block max-h-[calc(86dvh-1rem)] max-w-2xl translate-y-0 gap-0 rounded-xl border-border/70 p-0 shadow-md sm:top-[18dvh] sm:max-h-[calc(82dvh-1rem)]"
  onKeyDown={handleKeyDown}
  >
  <DialogTitle id={titleId} className="sr-only">

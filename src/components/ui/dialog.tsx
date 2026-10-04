@@ -55,13 +55,14 @@ function DialogContent({
   showCloseButton?: boolean
   closeClassName?: string
 }) {
+  // ponytail: one padding utility lets p-0 override both viewport sizes.
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-popover text-popover-foreground border rounded-xl shadow-xl fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-1rem)] w-full max-w-[calc(100%-1rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto p-5 text-sm duration-150 outline-none sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:p-6 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none motion-reduce:duration-0",
+          "bg-popover text-popover-foreground border rounded-xl shadow-xl fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain p-(--dialog-padding) text-sm duration-150 outline-none [--dialog-padding:--spacing(5)] sm:w-[calc(100%-2rem)] sm:[--dialog-padding:--spacing(6)] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 motion-reduce:animate-none motion-reduce:duration-0",
           className
         )}
         {...props}
@@ -89,7 +90,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 pr-10 pb-1", className)}
+      className={cn("flex shrink-0 flex-col gap-2 pr-10 pb-1", className)}
       {...props}
     />
   )
@@ -99,7 +100,7 @@ function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-body"
-      className={cn("min-h-0 overflow-y-auto overscroll-contain", className)}
+      className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)}
       {...props}
     />
   )
@@ -117,7 +118,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-5 -mb-5 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/45 px-5 py-3.5 sm:-mx-6 sm:-mb-6 sm:flex-row sm:items-center sm:justify-end sm:px-6",
+        "-mx-(--dialog-padding) -mb-(--dialog-padding) flex shrink-0 flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/45 px-(--dialog-padding) py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end",
         className
       )}
       {...props}

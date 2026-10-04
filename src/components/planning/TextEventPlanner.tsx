@@ -620,7 +620,7 @@ export function TextEventPlanner({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 pb-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
           {plannerError && (
             <div className="flex shrink-0 items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -687,7 +687,7 @@ export function TextEventPlanner({
           </div>
 
           {hasDrafts && (
-            <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/60">
+            <ScrollArea className="min-h-32 flex-1 rounded-lg border border-border/60">
               <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border/60 bg-muted/40 px-3 py-2 backdrop-blur-sm">
                 <Checkbox
                   onCheckedChange={handleToggleAll}

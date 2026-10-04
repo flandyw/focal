@@ -144,7 +144,7 @@ export function ExamPicker({
               : `${trackedCount} exam${trackedCount === 1 ? "" : "s"} tracked. Toggle to update.`}
           </DialogDescription>
         </DialogHeader>
-        <div className="border-b bg-muted/30 px-6 py-3">
+        <div className="shrink-0 border-b bg-muted/30 px-6 py-3">
           <div className="relative">
             <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -156,7 +156,7 @@ export function ExamPicker({
             />
           </div>
         </div>
-        <div className="max-h-[55vh] overflow-y-auto overscroll-contain">
+        <div className="min-h-0 max-h-[55dvh] flex-1 overflow-y-auto overscroll-contain">
           {groupedUpcoming.length === 0 && groupedPast.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground">
               <ListFilter className="size-5" aria-hidden />
@@ -187,7 +187,7 @@ export function ExamPicker({
             </div>
           )}
         </div>
-        <DialogFooter className="border-t bg-muted/30 px-6 py-4 sm:justify-between">
+        <DialogFooter className="m-0 border-t bg-muted/30 px-6 py-4 sm:justify-between">
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={onTrackSubjects} disabled={subjectMatchCount === 0}>
               Track my subjects{subjectMatchCount > 0 ? ` (${subjectMatchCount})` : ""}

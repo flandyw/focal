@@ -106,10 +106,10 @@ fn build_menu(
             &PredefinedMenuItem::separator(app)?,
         ],
     )?;
-    for item in items
-        .iter()
-        .filter(|item| item.group == TrayGroup::Controls)
-    {
+    // Only offer what applies right now; the toggle always stays as the primary action.
+    for item in items.iter().filter(|item| {
+        item.group == TrayGroup::Controls && (item.enabled || item.id == "timer-toggle")
+    }) {
         menu.append(&MenuItem::with_id(
             app,
             &item.id,
@@ -119,16 +119,10 @@ fn build_menu(
         )?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    for (group, label) in [
-        (TrayGroup::Subjects, "Subject"),
-        (TrayGroup::Presets, "Timer preset"),
-        (TrayGroup::WorkMinutes, "Focus duration"),
-        (TrayGroup::BreakMinutes, "Short break duration"),
-        (TrayGroup::LongBreakMinutes, "Long break duration"),
-        (TrayGroup::Preferences, "Preferences"),
-    ] {
-        let entries: Vec<_> = items.iter().filter(|item| item.group == group).collect();
-        let submenu = Submenu::new(app, label, entries.iter().any(|item| item.enabled))?;
+    let checks = |group: TrayGroup| -> Vec<&TrayItem> {
+        items.iter().filter(|item| item.group == group).collect()
+    };
+    let fill = |submenu: &Submenu<tauri::Wry>, entries: &[&TrayItem]| -> tauri::Result<()> {
         for item in entries {
             submenu.append(&CheckMenuItem::with_id(
                 app,
@@ -139,8 +133,39 @@ fn build_menu(
                 None::<&str>,
             )?)?;
         }
-        menu.append(&submenu)?;
+        Ok(())
+    };
+    let subjects = checks(TrayGroup::Subjects);
+    let picked: Vec<_> = subjects
+        .iter()
+        .filter(|item| item.checked == Some(true))
+        .map(|item| item.label.as_str())
+        .collect();
+    let label = match picked.as_slice() {
+        [] => "Choose subject".to_string(),
+        [one] => format!("Subject: {one}"),
+        many => format!("Subjects: {}", many.len()),
+    };
+    let subject_menu = Submenu::new(app, label, subjects.iter().any(|item| item.enabled))?;
+    fill(&subject_menu, &subjects)?;
+    menu.append(&subject_menu)?;
+
+    let settings = Submenu::new(app, "Timer settings", true)?;
+    fill(&settings, &checks(TrayGroup::Presets))?;
+    settings.append(&PredefinedMenuItem::separator(app)?)?;
+    for (group, label) in [
+        (TrayGroup::WorkMinutes, "Focus duration"),
+        (TrayGroup::BreakMinutes, "Short break"),
+        (TrayGroup::LongBreakMinutes, "Long break"),
+    ] {
+        let entries = checks(group);
+        let submenu = Submenu::new(app, label, entries.iter().any(|item| item.enabled))?;
+        fill(&submenu, &entries)?;
+        settings.append(&submenu)?;
     }
+    settings.append(&PredefinedMenuItem::separator(app)?)?;
+    fill(&settings, &checks(TrayGroup::Preferences))?;
+    menu.append(&settings)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
     for (id, label) in [
         ("timer-focus-view", "Open focus view"),
@@ -258,6 +283,7 @@ pub fn update_study_tray(
     let (title, status) = clock.as_ref().map_or((title, status), TrayClock::text);
     *state.clock.lock().map_err(|error| error.to_string())? =
         clock.map(|clock| (clock, title.clone()));
+    let status_text = status.clone();
     let update = || -> tauri::Result<()> {
         state.status.set_text(status)?;
         state.summary.set_text(summary)?;
@@ -272,6 +298,7 @@ pub fn update_study_tray(
                 }
             }
             tray.set_title(Some(title))?;
+            tray.set_tooltip(Some(status_text))?;
         }
         Ok(())
     };

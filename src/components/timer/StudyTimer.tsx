@@ -1038,7 +1038,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
       clock: live ? {
         seconds: isFreeStudy || isStudyOvertime ? overtimeSeconds : secondsLeft,
         direction: !running ? 0 : isFreeStudy || isStudyOvertime ? 1 : -1,
-        prefix: `${running ? "" : "Ⅱ "}${isStudyOvertime ? "+" : ""}`,
+        prefix: `${running ? "" : "‖ "}${isStudyOvertime ? "+" : mode !== "work" && !isFreeStudy ? "Break " : ""}`,
         label: modeLabel,
         detail: subjectNames,
         anchorMs: Date.now(),

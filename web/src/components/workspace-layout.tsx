@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { cn } from "../lib/utils"
 
 export function WorkspacePage({ children, className }: { children: ReactNode; className?: string }) {
   // Fluid by design: the page never caps at a measure. Extra width is spent on

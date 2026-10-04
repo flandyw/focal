@@ -1,14 +1,14 @@
 import { useId, useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { SubjectCombobox } from "@/components/subject-combobox"
-import { buildProgressionPrompt, parseExamProgression, previewProgressionImport, progressionBySubject, type ProgressionImportMode, type ExamProgression, type ProgressionExam } from "@/lib/exam-progression"
-import type { ExamAttempt } from "@/lib/exam-data"
-import type { ExamSuggestion } from "@/lib/exam-suggestions"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Textarea } from "./ui/textarea"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
+import { SubjectCombobox } from "./subject-combobox"
+import { buildProgressionPrompt, parseExamProgression, previewProgressionImport, progressionBySubject, type ProgressionImportMode, type ExamProgression, type ProgressionExam } from "../lib/exam-progression"
+import type { ExamAttempt } from "../lib/exam-data"
+import type { ExamSuggestion } from "../lib/exam-suggestions"
 
 export type ExamProgressionProps = {
   progression?: ExamProgression

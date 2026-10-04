@@ -1,7 +1,7 @@
-import { getMistakeSchedule, type ExamAttempt, type Mistake } from "@/lib/exam-data"
-import { isCompletedSac, type SacRecord } from "@/lib/sac"
-import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "@/lib/timetable"
-import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "@/lib/learning-workspace"
+import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
+import { isCompletedSac, type SacRecord } from "./sac"
+import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable"
+import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace"
 import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 import { VCE_SUBJECTS } from "../../../src/lib/types"
 

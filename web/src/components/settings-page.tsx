@@ -2,24 +2,24 @@ import { useEffect, useState } from "react"
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
 import { ArrowDown, ArrowUp, CheckCircle2, Cloud, Copy, ExternalLink, LogOut, Plus, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
-import { PageHeader } from "@/components/page-header"
-import { SubjectCombobox } from "@/components/subject-combobox"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeader } from "./page-header"
+import { SubjectCombobox } from "./subject-combobox"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Field, FieldDescription, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Skeleton } from "./ui/skeleton"
 import {
   loadAISettings,
   saveAISettings,
   supportsStreamedAnalysis,
   type AISettings,
   type ReasoningEffort,
-} from "@/lib/ai-settings"
-import type { useSupabaseSync } from "@/lib/sync"
-import { DEFAULT_PROVIDER_DIFFICULTY, MATHEMATICS_PROVIDER_DIFFICULTY, resolveDifficultySettings, type ExamDifficultySettings } from "@/lib/exam-difficulty"
+} from "../lib/ai-settings"
+import type { useSupabaseSync } from "../lib/sync"
+import { DEFAULT_PROVIDER_DIFFICULTY, MATHEMATICS_PROVIDER_DIFFICULTY, resolveDifficultySettings, type ExamDifficultySettings } from "../lib/exam-difficulty"
 
 const REASONING_LABELS: Record<ReasoningEffort, string> = {
   none: "None",

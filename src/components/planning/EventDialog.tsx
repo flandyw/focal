@@ -253,8 +253,8 @@ function EventForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
-      <div className="grid gap-3 overflow-y-auto p-4">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
         <Input
           aria-label="Event title"
           placeholder="Event title, e.g. Methods exam"
@@ -364,7 +364,7 @@ function EventForm({
         </CompactField>
       </div>
 
-      <DialogFooter className={cn("m-0 rounded-none px-4 py-2.5", footerStart && "sm:justify-between")}>
+      <DialogFooter className={cn("m-0 shrink-0 rounded-none px-4 py-2.5", footerStart && "sm:justify-between")}>
         {footerStart}
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
@@ -470,8 +470,8 @@ finish(await onSubmit(values))
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-xl sm:p-0">
-        <DialogHeader className="gap-0 border-b py-2.5 pl-4 pr-12">
+      <DialogContent closeClassName="top-1.5 right-2 sm:top-1.5 sm:right-2" className="flex flex-col gap-0 p-0 sm:max-w-xl sm:p-0">
+        <DialogHeader className="shrink-0 gap-0 border-b py-2.5 pl-4 pr-12">
           <DialogTitle className="text-sm">{isEditMode ? "Edit event" : "New event"}</DialogTitle>
           <DialogDescription className="sr-only">
             {format(start, "EEEE, MMMM d")}{end ? ` · ${format(start, "h:mm a")} to ${format(end, "h:mm a")}` : ""}

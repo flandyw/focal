@@ -15,25 +15,25 @@ import {
   VolumeX,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SectionHeading, WorkspacePage } from "@/components/workspace-layout"
-import { SubjectCombobox } from "@/components/subject-combobox"
-import { TimerReadout } from "@/components/timer-readout"
-import { requestTimerNotifications, useStudyTimer } from "@/hooks/use-study-timer"
-import type { FocusSessionSink } from "@/lib/focus-session"
-import { sessionItem } from "@/lib/day-plan"
-import { localDate } from "@/lib/learning-workspace"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Field, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Skeleton } from "./ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
+import { SectionHeading, WorkspacePage } from "./workspace-layout"
+import { SubjectCombobox } from "./subject-combobox"
+import { TimerReadout } from "./timer-readout"
+import { requestTimerNotifications, useStudyTimer } from "../hooks/use-study-timer"
+import type { FocusSessionSink } from "../lib/focus-session"
+import { sessionItem } from "../lib/day-plan"
+import { localDate } from "../lib/learning-workspace"
 import { studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
-import { canonicalNow } from "@/lib/study-session-sync"
+import { canonicalNow } from "../lib/study-session-sync"
 import { VCE_SUBJECTS } from "../../../src/lib/types"
-import { StudyPlanCard } from "@/components/study-plan-card"
-import type { StudyPlan } from "@/lib/study-plan"
+import { StudyPlanCard } from "./study-plan-card"
+import type { StudyPlan } from "../lib/study-plan"
 import {
   DEFAULT_SETTINGS,
   loadFocusSession,
@@ -46,13 +46,13 @@ import {
   formatFocusTime,
   formatTimer,
   type FocusBlock,
-} from "@/lib/study-timer"
-import type { ExamTimerModeProps } from "@/components/exam-timer-mode"
+} from "../lib/study-timer"
+import type { ExamTimerModeProps } from "./exam-timer-mode"
 
 export type StudyTimerMode = "focus" | "exam"
 
 const ExamTimerMode = lazy(() =>
-  import("@/components/exam-timer-mode").then((module) => ({ default: module.ExamTimerMode })),
+  import("./exam-timer-mode").then((module) => ({ default: module.ExamTimerMode })),
 )
 
 function ToggleRow({ label, description, pressed, onToggle, icon }: {

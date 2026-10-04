@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Check, ListFilter, Search } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "./ui/button"
 import {
   Dialog,
   DialogContent,
@@ -8,8 +8,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+} from "./ui/dialog"
+import { Input } from "./ui/input"
 import {
   daysUntil,
   formatExamDate,
@@ -18,9 +18,9 @@ import {
   isPast,
   isUpcoming,
   type TimetableEntry,
-} from "@/lib/timetable"
-import { useTickingNow } from "@/hooks/use-ticking-now"
-import { cn } from "@/lib/utils"
+} from "../lib/timetable"
+import { useTickingNow } from "../hooks/use-ticking-now"
+import { cn } from "../lib/utils"
 
 type Section = {
   title: string

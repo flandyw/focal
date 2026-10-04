@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
 import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Images, LogOut, Pencil, Sparkles, X } from "lucide-react"
-import { MistakeAttachments } from "@/components/mistake-attachments"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DiscardChangesDialog } from "@/components/discard-changes-dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import { MistakeAttachments } from "./mistake-attachments"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
 import {
   Combobox,
   ComboboxContent,
@@ -15,7 +15,7 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from "@/components/ui/combobox"
+} from "./ui/combobox"
 import {
   Select,
   SelectContent,
@@ -24,7 +24,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "./ui/select"
 import {
   Sheet,
   SheetContent,
@@ -32,9 +32,9 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet"
-import { Textarea } from "@/components/ui/textarea"
-import { MarkdownPreview } from "@/components/markdown-preview"
+} from "./ui/sheet"
+import { Textarea } from "./ui/textarea"
+import { MarkdownPreview } from "./markdown-preview"
 import {
   GENERAL_MISTAKE_CATEGORIES,
   MATHEMATICS_MISTAKE_CATEGORIES,
@@ -42,10 +42,10 @@ import {
   type Mistake,
   type MistakeCategory,
   validateMistakeMarks,
-} from "@/lib/exam-data"
-import { formatChatGPTProgress, validateMistakeBatchImages, validateMistakeImages, type ChatGPTProgress, type MistakeDraft } from "@/lib/mistake-ai-core"
-import { removeMistakeAttachments, uploadMistakeAttachments, validateSavedMistakeImages } from "@/lib/mistake-attachments"
-import type { VcaaStudyResources } from "@/lib/vcaa-resources"
+} from "../lib/exam-data"
+import { formatChatGPTProgress, validateMistakeBatchImages, validateMistakeImages, type ChatGPTProgress, type MistakeDraft } from "../lib/mistake-ai-core"
+import { removeMistakeAttachments, uploadMistakeAttachments, validateSavedMistakeImages } from "../lib/mistake-attachments"
+import type { VcaaStudyResources } from "../lib/vcaa-resources"
 
 type MistakeSheetProps = {
   open: boolean
@@ -241,7 +241,7 @@ export function MistakeSheet({
     setAnalysing(true)
     setError(null)
     try {
-      const { analyseMistakeImageBatch, analyseMistakeImages } = await import("@/lib/mistake-ai")
+      const { analyseMistakeImageBatch, analyseMistakeImages } = await import("../lib/mistake-ai")
       if (importMode === "batch") {
         const drafts = await analyseMistakeImageBatch(images, attempts, selectedAttempt, studies, setProgress)
         setBatchDrafts(drafts)

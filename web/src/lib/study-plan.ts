@@ -1,8 +1,8 @@
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { jsonSchema, Output, streamText } from "ai"
 
-import { pickPlannerModel } from "@/lib/ai-settings"
-import { clampLongBreakInterval, clampMinutes, formatFocusTime, type TimerSettings } from "@/lib/study-timer"
+import { pickPlannerModel } from "./ai-settings"
+import { clampLongBreakInterval, clampMinutes, formatFocusTime, type TimerSettings } from "./study-timer"
 
 export const MAX_INTENT_LENGTH = 120
 export const MAX_SUBJECT_LENGTH = 60

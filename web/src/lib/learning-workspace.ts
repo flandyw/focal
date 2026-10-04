@@ -1,5 +1,5 @@
-import type { AppData, AssessmentReference, ExamAttempt } from "@/lib/exam-data"
-import { predictStudyScore } from "@/lib/study-score"
+import type { AppData, AssessmentReference, ExamAttempt } from "./exam-data"
+import { predictStudyScore } from "./study-score"
 
 export type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
 export type StudyTaskStatus = "planned" | "completed" | "skipped"

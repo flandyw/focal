@@ -244,7 +244,7 @@ export function StudySessionDialog({
 
   return (
     <Dialog open={open} onOpenChange={requestClose}>
-      <DialogContent className="flex max-h-[min(92dvh,46rem)] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-3xl sm:p-0">
+      <DialogContent closeClassName="top-1.5 right-2 sm:top-1.5 sm:right-2" className="flex max-h-[min(92dvh,46rem)] w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-2rem)] sm:max-w-3xl sm:p-0">
         <DialogHeader className="shrink-0 flex-row flex-wrap items-center gap-x-3 gap-y-1 border-b py-2.5 pl-4 pr-12">
           <DialogTitle className="text-sm">{heading}</DialogTitle>
           <DialogDescription className="sr-only">

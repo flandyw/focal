@@ -1,4 +1,4 @@
-import { EMPTY_APP_DATA, migrateAppData, type AppData } from "@/lib/exam-data"
+import { EMPTY_APP_DATA, migrateAppData, type AppData } from "./exam-data"
 
 // ponytail: this `examtrack` prefix is load-bearing. Renaming it would orphan every
 // browser's existing localStorage entries and IndexedDB database, and the sync

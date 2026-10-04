@@ -1,4 +1,4 @@
-import { ATAR_AGGREGATE_REFERENCES, type AtarAggregateReference } from "@/lib/atar-data"
+import { ATAR_AGGREGATE_REFERENCES, type AtarAggregateReference } from "./atar-data"
 
 export type AtarStudyResult = {
   id: string

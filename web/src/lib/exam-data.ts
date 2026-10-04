@@ -1,9 +1,9 @@
-import { isExamProgression, type ExamProgression } from "@/lib/exam-progression"
-import { isExamDifficultySettings, type ExamDifficultySettings } from "@/lib/exam-difficulty"
-import { isSacRecord, migrateSacRecords, type SacRecord } from "@/lib/sac"
-import { isPerformanceContext, type PerformanceContext } from "@/lib/performance-context"
-import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "@/lib/ongoing-timers"
-import { EMPTY_LEARNING_WORKSPACE, isLearningWorkspace, migrateLearningWorkspace, type LearningWorkspace } from "@/lib/learning-workspace"
+import { isExamProgression, type ExamProgression } from "./exam-progression"
+import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-difficulty"
+import { isSacRecord, migrateSacRecords, type SacRecord } from "./sac"
+import { isPerformanceContext, type PerformanceContext } from "./performance-context"
+import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "./ongoing-timers"
+import { EMPTY_LEARNING_WORKSPACE, isLearningWorkspace, migrateLearningWorkspace, type LearningWorkspace } from "./learning-workspace"
 
 export const GENERAL_MISTAKE_CATEGORIES = [
   "Concept",

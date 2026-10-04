@@ -1,6 +1,6 @@
-import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "@/lib/exam-data"
-import { getAttemptPerformance, type ExamDifficultySettings } from "@/lib/exam-difficulty"
-import { getMathsExamPaper, isTechSplitMathsSubject } from "@/lib/mistake-filters"
+import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "./exam-data"
+import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty"
+import { getMathsExamPaper, isTechSplitMathsSubject } from "./mistake-filters"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
   return Math.min(maximum, Math.max(minimum, value))

@@ -2,15 +2,15 @@ import { useMemo, useState, type ReactNode } from "react"
 import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
-import { PageHeader } from "@/components/page-header"
-import { WorkspacePage } from "@/components/workspace-layout"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Field, FieldError, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Progress } from "./ui/progress"
+import { PageHeader } from "./page-header"
+import { WorkspacePage } from "./workspace-layout"
 import {
   addTask,
   archiveTask,
@@ -25,10 +25,10 @@ import {
   type DayItem,
   type DayPlan,
   type DayPlanSource,
-} from "@/lib/day-plan"
-import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "@/lib/learning-workspace"
-import type { Timetable } from "@/lib/timetable"
-import { cn } from "@/lib/utils"
+} from "../lib/day-plan"
+import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
+import type { Timetable } from "../lib/timetable"
+import { cn } from "../lib/utils"
 import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const today = () => localDate(new Date())

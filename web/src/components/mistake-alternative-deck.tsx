@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Shuffle, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
-import { MarkdownPreview } from "@/components/markdown-preview"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Progress } from "@/components/ui/progress"
-import { Separator } from "@/components/ui/separator"
-import type { AlternativeMistakeDeck, ExamAttempt, Mistake } from "@/lib/exam-data"
-import { formatChatGPTProgress, type ChatGPTProgress } from "@/lib/mistake-ai-core"
+import { MarkdownPreview } from "./markdown-preview"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Progress } from "./ui/progress"
+import { Separator } from "./ui/separator"
+import type { AlternativeMistakeDeck, ExamAttempt, Mistake } from "../lib/exam-data"
+import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 
 type MistakeAlternativeDeckProps = {
   mistakes: Mistake[]
@@ -45,7 +45,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
     setGenerating(true)
     setGenerationProgress(null)
     try {
-      const { generateAlternativeMistakeQuestions } = await import("@/lib/mistake-ai")
+      const { generateAlternativeMistakeQuestions } = await import("../lib/mistake-ai")
       const generated = await generateAlternativeMistakeQuestions(mistakes, attempts, setGenerationProgress)
       const generatedAt = new Date().toISOString()
       const replacedIds = new Set(mistakes.map((mistake) => mistake.id))

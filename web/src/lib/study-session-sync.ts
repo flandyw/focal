@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
-import type { AppData } from "@/lib/exam-data"
-import { saveAppData } from "@/lib/storage"
-import { supabase } from "@/lib/supabase"
-import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "@/lib/ongoing-timers"
-import { SessionRefusedError } from "@/lib/focus-session"
+import type { AppData } from "./exam-data"
+import { saveAppData } from "./storage"
+import { supabase } from "./supabase"
+import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "./ongoing-timers"
+import { SessionRefusedError } from "./focus-session"
 import type { PastStudyLog } from "../../../src/lib/pastStudy"
-import { adoptRemoteFocusSession, loadFocusSession } from "@/lib/study-timer"
+import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
 import {
   estimateServerNow,
   observeServerClock,

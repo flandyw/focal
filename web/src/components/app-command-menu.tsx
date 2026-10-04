@@ -8,9 +8,9 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from "@/components/ui/command"
-import type { AppView } from "@/lib/app-view"
-import { ALL_NAVIGATION } from "@/lib/navigation"
+} from "./ui/command"
+import type { AppView } from "../lib/app-view"
+import { ALL_NAVIGATION } from "../lib/navigation"
 
 export function AppCommandMenu({
   open,

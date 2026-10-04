@@ -1,4 +1,4 @@
-import { validateMistakeMarks, type Mistake } from "@/lib/exam-data"
+import { validateMistakeMarks, type Mistake } from "./exam-data"
 
 export const MISTAKE_AUTOFILL_FIELDS = [
   "question",

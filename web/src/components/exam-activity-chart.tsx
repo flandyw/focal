@@ -1,7 +1,7 @@
 import { useMemo } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { buildExamActivity, type ExamActivityDay, type ExamActivityLevel } from "@/lib/exam-activity"
-import type { ExamAttempt } from "@/lib/exam-data"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { buildExamActivity, type ExamActivityDay, type ExamActivityLevel } from "../lib/exam-activity"
+import type { ExamAttempt } from "../lib/exam-data"
 
 const LEVEL_CLASSES: Record<ExamActivityLevel, string> = {
   0: "bg-muted",

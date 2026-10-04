@@ -1,4 +1,4 @@
-import { normaliseComparisonName } from "@/lib/exam-data"
+import { normaliseComparisonName } from "./exam-data"
 
 export type KnownExamConditions = {
   readingMinutes: number

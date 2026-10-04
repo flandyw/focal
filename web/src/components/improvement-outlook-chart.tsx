@@ -1,11 +1,11 @@
 import { useMemo } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "@/components/ui/chart"
-import type { ExamAttempt } from "@/lib/exam-data"
-import { buildSubjectOutlooks, type SubjectOutlook } from "@/lib/performance-insights"
-import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
+import { Badge } from "./ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
+import type { ExamAttempt } from "../lib/exam-data"
+import { buildSubjectOutlooks, type SubjectOutlook } from "../lib/performance-insights"
+import type { ExamDifficultySettings } from "../lib/exam-difficulty"
 
 const chartConfig = {
   currentAverage: { label: "Recent average", color: "#2563eb" },

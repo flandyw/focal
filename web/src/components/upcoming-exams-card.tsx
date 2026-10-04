@@ -1,8 +1,8 @@
 import { useMemo } from "react"
 import { ArrowRight, CalendarDays, CheckCircle2, Download, Plus } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import {
   daysUntil,
   buildTimetableCalendar,
@@ -12,8 +12,8 @@ import {
   isPast,
   isUpcoming,
   type TimetableEntry,
-} from "@/lib/timetable"
-import { useTickingNow } from "@/hooks/use-ticking-now"
+} from "../lib/timetable"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 const MAX_VISIBLE = 5
 

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react"
 
-import type { AssessmentReference } from "@/lib/exam-data"
-import type { ScalingReference } from "@/lib/scaling"
-import { isTimetable, type Timetable } from "@/lib/timetable"
-import type { VcaaStudyResources } from "@/lib/vcaa-resources"
+import type { AssessmentReference } from "../lib/exam-data"
+import type { ScalingReference } from "../lib/scaling"
+import { isTimetable, type Timetable } from "../lib/timetable"
+import type { VcaaStudyResources } from "../lib/vcaa-resources"
 
 export type ResourceStatus = "loading" | "ready" | "error"
 

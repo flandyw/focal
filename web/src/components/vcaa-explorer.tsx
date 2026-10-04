@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react"
 import { ExternalLink, FileCheck2, Play } from "lucide-react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PageHeader } from "@/components/page-header"
-import { SubjectCombobox } from "@/components/subject-combobox"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./ui/chart"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import { PageHeader } from "./page-header"
+import { SubjectCombobox } from "./subject-combobox"
 import {
   buildVcaaYearInsights,
   formatOrdinal,
@@ -18,11 +18,11 @@ import {
   normaliseComparisonName,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
-import type { ExamTimerPreset } from "@/components/exam-timer-mode"
-import { getKnownExamConditions } from "@/lib/exam-conditions"
-import { getCachedVcaaExams, getVcaaExamCompanions, getVcaaExamPaper, getVcaaExamProvider, type VcaaStudyResources } from "@/lib/vcaa-resources"
+} from "../lib/exam-data"
+import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
+import type { ExamTimerPreset } from "./exam-timer-mode"
+import { getKnownExamConditions } from "../lib/exam-conditions"
+import { getCachedVcaaExams, getVcaaExamCompanions, getVcaaExamPaper, getVcaaExamProvider, type VcaaStudyResources } from "../lib/vcaa-resources"
 
 const chartConfig = {
   aPlusCutoffPercentage: { label: "A+ cutoff", color: "#dc2626" },

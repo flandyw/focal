@@ -2,9 +2,9 @@ import { useRef, useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import {
   Dialog,
   DialogContent,
@@ -12,8 +12,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+} from "./ui/dialog"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import {
   Combobox,
   ComboboxContent,
@@ -21,10 +21,10 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from "@/components/ui/combobox"
-import { Textarea } from "@/components/ui/textarea"
-import type { ExamAttempt, Mistake } from "@/lib/exam-data"
-import { buildMistakeImportPrompt, createMistakesFromImport, parseMistakeImport, type ParsedMistakeDraft } from "@/lib/mistake-json"
+} from "./ui/combobox"
+import { Textarea } from "./ui/textarea"
+import type { ExamAttempt, Mistake } from "../lib/exam-data"
+import { buildMistakeImportPrompt, createMistakesFromImport, parseMistakeImport, type ParsedMistakeDraft } from "../lib/mistake-json"
 
 type MistakeJsonImportDialogProps = {
   open: boolean

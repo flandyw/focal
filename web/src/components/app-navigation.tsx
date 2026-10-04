@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
+import { Button } from "./ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +23,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "./ui/dropdown-menu"
 import {
   Sidebar,
   SidebarContent,
@@ -38,12 +38,12 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
   useSidebar,
-} from "@/components/ui/sidebar"
-import type { AppView } from "@/lib/app-view"
-import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "@/lib/navigation"
-import type { useStudySessionSync } from "@/lib/study-session-sync"
-import type { SyncStatus } from "@/lib/sync"
-import { cn } from "@/lib/utils"
+} from "./ui/sidebar"
+import type { AppView } from "../lib/app-view"
+import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "../lib/navigation"
+import type { useStudySessionSync } from "../lib/study-session-sync"
+import type { SyncStatus } from "../lib/sync"
+import { cn } from "../lib/utils"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
 

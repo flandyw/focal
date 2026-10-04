@@ -1,9 +1,9 @@
 import { useMemo } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import type { Mistake } from "@/lib/exam-data"
-import { buildRevisionPriorities } from "@/lib/mistake-review"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
+import type { Mistake } from "../lib/exam-data"
+import { buildRevisionPriorities } from "../lib/mistake-review"
 
 const chartConfig = {
   unresolved: { label: "Unresolved", color: "#dc2626" },

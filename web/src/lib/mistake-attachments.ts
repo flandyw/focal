@@ -1,5 +1,5 @@
-import type { MistakeAttachment } from "@/lib/exam-data"
-import { supabase } from "@/lib/supabase"
+import type { MistakeAttachment } from "./exam-data"
+import { supabase } from "./supabase"
 
 export const MISTAKE_ATTACHMENTS_BUCKET = "mistake-attachments"
 export const MAX_MISTAKE_ATTACHMENTS = 5

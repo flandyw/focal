@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react"
 import { ExternalLink, Flag, ListChecks, Plus, Sparkles, Trash2 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { ExamWorkspaceItem, ExamWorkspaceStatus } from "@/lib/ongoing-timers"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Field, FieldError, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Progress } from "./ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import type { ExamWorkspaceItem, ExamWorkspaceStatus } from "../lib/ongoing-timers"
 
 const nextStatus: Record<ExamWorkspaceStatus, ExamWorkspaceStatus> = {
   "not-started": "in-progress",

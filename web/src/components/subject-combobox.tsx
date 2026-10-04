@@ -6,8 +6,8 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from "@/components/ui/combobox"
-import { isPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
+} from "./ui/combobox"
+import { isPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 
 const ALL_SUBJECTS = "All subjects"
 

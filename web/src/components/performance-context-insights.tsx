@@ -1,9 +1,9 @@
 import { useMemo } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import type { ExamAttempt } from "@/lib/exam-data"
-import { buildPerformanceContextAnalysis } from "@/lib/performance-context"
-import type { SacRecord } from "@/lib/sac"
+import { Badge } from "./ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import type { ExamAttempt } from "../lib/exam-data"
+import { buildPerformanceContextAnalysis } from "../lib/performance-context"
+import type { SacRecord } from "../lib/sac"
 
 type PerformanceContextInsightsProps = {
   attempts: ExamAttempt[]

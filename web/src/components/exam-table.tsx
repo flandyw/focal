@@ -1,20 +1,20 @@
 import { Fragment, lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react"
 import { ChevronDown, ChevronUp, ChevronsUpDown, CircleAlert, MoreHorizontal } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { analyseAttempt, findAttemptReferenceForYear, type AssessmentReference, type ExamAttempt } from "@/lib/exam-data"
-import { compareExamRows, type ExamSortKey, type SortDirection } from "@/lib/exam-sort"
-import { getExamIdFromHash, getExamTarget } from "@/lib/exam-target"
-import { formatTimer } from "@/lib/exam-timer"
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu"
+import { Input } from "./ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Skeleton } from "./ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import { analyseAttempt, findAttemptReferenceForYear, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
+import { compareExamRows, type ExamSortKey, type SortDirection } from "../lib/exam-sort"
+import { getExamIdFromHash, getExamTarget } from "../lib/exam-target"
+import { formatTimer } from "../lib/exam-timer"
 
 const AttemptDistributionChart = lazy(() =>
-  import("@/components/attempt-distribution-chart").then((module) => ({ default: module.AttemptDistributionChart })),
+  import("./attempt-distribution-chart").then((module) => ({ default: module.AttemptDistributionChart })),
 )
 
 function SortableHead({ column, label, sortKey, direction, onSort }: {

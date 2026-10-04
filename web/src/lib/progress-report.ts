@@ -5,10 +5,10 @@ import {
   type AppData,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { getMistakeProgress } from "@/lib/mistake-review"
-import { buildFocusPriorities, type FocusPriority } from "@/lib/performance-insights"
-import { weightedPerformanceAverage, type ExamDifficultySettings } from "@/lib/exam-difficulty"
+} from "./exam-data"
+import { getMistakeProgress } from "./mistake-review"
+import { buildFocusPriorities, type FocusPriority } from "./performance-insights"
+import { weightedPerformanceAverage, type ExamDifficultySettings } from "./exam-difficulty"
 
 function escapeHtml(value: string) {
   return value

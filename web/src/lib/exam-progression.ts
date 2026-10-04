@@ -1,5 +1,5 @@
-import type { ExamAttempt } from "@/lib/exam-data"
-import type { ExamSuggestion } from "@/lib/exam-suggestions"
+import type { ExamAttempt } from "./exam-data"
+import type { ExamSuggestion } from "./exam-suggestions"
 
 export type ProgressionExam = ExamSuggestion & { phase: string }
 export type ExamProgression = { version: 1; name: string; exams: ProgressionExam[]; updatedAt: string }

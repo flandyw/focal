@@ -1,7 +1,7 @@
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { ContextRating, PerformanceContext } from "@/lib/performance-context"
+import { Field, FieldDescription, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import type { ContextRating, PerformanceContext } from "../lib/performance-context"
 
 type PerformanceContextFieldsProps = {
   value: PerformanceContext

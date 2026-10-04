@@ -1,10 +1,10 @@
-import type { AppData } from "@/lib/exam-data"
-import { EMPTY_APP_DATA, migrateAppData } from "@/lib/exam-data"
-import { isExamDifficultySettings } from "@/lib/exam-difficulty"
-import { isExamProgression } from "@/lib/exam-progression"
-import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "@/lib/learning-workspace"
-import { migrateSacRecords } from "@/lib/sac"
-import { supabase } from "@/lib/supabase"
+import type { AppData } from "./exam-data"
+import { EMPTY_APP_DATA, migrateAppData } from "./exam-data"
+import { isExamDifficultySettings } from "./exam-difficulty"
+import { isExamProgression } from "./exam-progression"
+import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
+import { migrateSacRecords } from "./sac"
+import { supabase } from "./supabase"
 
 const DB_NAME = "examtrack-app-sync"
 const DB_VERSION = 1

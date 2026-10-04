@@ -4,8 +4,8 @@ import {
   normaliseComparisonName,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { normaliseScalingStudyName } from "@/lib/scaling"
+} from "./exam-data"
+import { normaliseScalingStudyName } from "./scaling"
 
 export type StudyScoreEvidence = {
   attempt: ExamAttempt

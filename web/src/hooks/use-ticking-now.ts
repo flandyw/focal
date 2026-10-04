@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { canonicalNow } from "@/lib/study-session-sync"
+import { canonicalNow } from "../lib/study-session-sync"
 
 /**
  * Returns a Date that auto-refreshes on the given interval (default 60s).

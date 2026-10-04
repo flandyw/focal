@@ -3,14 +3,14 @@ import {
   normaliseComparisonName,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { getCachedVcaaExams, getVcaaExamPaper, type VcaaStudyResources } from "@/lib/vcaa-resources"
+} from "./exam-data"
+import { getCachedVcaaExams, getVcaaExamPaper, type VcaaStudyResources } from "./vcaa-resources"
 import {
   identifyDifficultyProvider,
   resolveDifficultySettings,
   type ExamDifficultySettings,
-} from "@/lib/exam-difficulty"
-import { getKnownExamMarks } from "@/lib/exam-conditions"
+} from "./exam-difficulty"
+import { getKnownExamMarks } from "./exam-conditions"
 
 export type ExamSuggestion = {
   subject: string

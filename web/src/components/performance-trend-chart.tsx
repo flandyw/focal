@@ -1,18 +1,18 @@
 import { useEffect, useId, useMemo, useState } from "react"
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "@/components/ui/chart"
-import { SubjectCombobox } from "@/components/subject-combobox"
+import { Badge } from "./ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
+import { SubjectCombobox } from "./subject-combobox"
 import {
   analyseAttempt,
   computeDistributionStats,
   findAttemptReference,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { firstPreferredSubject, prioritiseSubjects } from "@/lib/subjects"
-import { getAttemptPerformance, type ExamDifficultySettings } from "@/lib/exam-difficulty"
+} from "../lib/exam-data"
+import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
+import { getAttemptPerformance, type ExamDifficultySettings } from "../lib/exam-difficulty"
 
 const chartConfig = {
   percentage: { label: "VCAA-aligned %", color: "#16a34a" },

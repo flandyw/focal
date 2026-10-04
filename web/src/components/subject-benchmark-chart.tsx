@@ -1,14 +1,14 @@
 import { useMemo } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "@/components/ui/chart"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
 import {
   buildSubjectBenchmarks,
   type AssessmentReference,
   type ExamAttempt,
   type Mistake,
   type SubjectBenchmark,
-} from "@/lib/exam-data"
+} from "../lib/exam-data"
 
 const chartConfig = {
   averageMark: { label: "Your average", color: "#16a34a" },

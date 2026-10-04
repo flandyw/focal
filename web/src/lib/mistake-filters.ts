@@ -1,4 +1,4 @@
-import { normaliseComparisonName, type ExamAttempt } from "@/lib/exam-data"
+import { normaliseComparisonName, type ExamAttempt } from "./exam-data"
 
 export type MathsExamFilter = "all" | "exam-1" | "exam-2"
 

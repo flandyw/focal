@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
-import { Button } from "@/components/ui/button"
-import { downloadAppData, loadAppData } from "@/lib/storage"
+import { Button } from "./ui/button"
+import { downloadAppData, loadAppData } from "../lib/storage"
 
 type ErrorBoundaryProps = { children: ReactNode }
 type ErrorBoundaryState = { error: Error | null }

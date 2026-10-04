@@ -19,16 +19,16 @@ import {
   type OpenBlock,
   type TimerSettings,
   type TimerState,
-} from "@/lib/study-timer"
+} from "../lib/study-timer"
 import {
   createFocusSessionMirror,
   decideFocusSession,
   owedFocusBoundary,
   type FocusSessionMirror,
   type FocusSessionSink,
-} from "@/lib/focus-session"
-import { canonicalNow } from "@/lib/study-session-sync"
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
+} from "../lib/focus-session"
+import { canonicalNow } from "../lib/study-session-sync"
+import type { FocusTimerSession } from "../lib/ongoing-timers"
 
 const TICK_MS = 1000
 

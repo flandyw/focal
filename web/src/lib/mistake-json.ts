@@ -1,4 +1,4 @@
-import { MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory } from "@/lib/exam-data"
+import { MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory } from "./exam-data"
 
 export type ParsedMistakeDraft = {
   question: string

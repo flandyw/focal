@@ -1,4 +1,4 @@
-import { getMistakeSchedule, type ExamAttempt, type Mistake } from "@/lib/exam-data"
+import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 
 export type BrowserFilter = "all" | "due" | "new" | "learning" | "review" | "mature" | "suspended"
 export type LibraryFilters = { search: string; browserFilter: BrowserFilter; category: string; topic: string; sort: string; examId?: string; provider?: string; resolution?: "all" | "unresolved" | "resolved" }

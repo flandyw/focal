@@ -76,8 +76,8 @@ export function ProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-xl sm:p-0">
-        <DialogHeader className="gap-0 border-b py-2.5 pl-4 pr-12">
+      <DialogContent closeClassName="top-1.5 right-2 sm:top-1.5 sm:right-2" className="flex flex-col gap-0 p-0 sm:max-w-xl sm:p-0">
+        <DialogHeader className="shrink-0 gap-0 border-b py-2.5 pl-4 pr-12">
           <DialogTitle className="text-sm">{isEditMode ? "Assessment details" : "New assessment"}</DialogTitle>
           <DialogDescription className="sr-only">
             {isEditMode ? "Edit the subject, date and status for this assessment." : "Create a SAC, test, exam or assignment folder to organise your files."}

@@ -1,7 +1,7 @@
 import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
 import { jsonSchema, Output, streamText } from "ai"
-import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "@/lib/exam-data"
-import { loadAISettings, supportsStreamedAnalysis } from "@/lib/ai-settings"
+import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
+import { loadAISettings, supportsStreamedAnalysis } from "./ai-settings"
 import {
   createMistakeFieldMergePlan,
   getEmptyMistakeFields,
@@ -10,8 +10,8 @@ import {
   type MistakeFieldMergePlan,
   type MistakeFieldValue,
   type MistakeMergeField,
-} from "@/lib/mistake-autofill"
-import { findVcaaExamForAttempt, type VcaaStudyResources } from "@/lib/vcaa-resources"
+} from "./mistake-autofill"
+import { findVcaaExamForAttempt, type VcaaStudyResources } from "./vcaa-resources"
 import {
   createChatGPTProgressHandler,
   validateMistakeBatchImages,
@@ -19,7 +19,7 @@ import {
   type ChatGPTProgress,
   type IndexedMistakeDraft,
   type MistakeDraft,
-} from "@/lib/mistake-ai-core"
+} from "./mistake-ai-core"
 
 export {
   createChatGPTProgressHandler,
@@ -27,8 +27,8 @@ export {
   validateMistakeBatchImages,
   validateMistakeImage,
   validateMistakeImages,
-} from "@/lib/mistake-ai-core"
-export type { ChatGPTProgress, IndexedMistakeDraft, MistakeDraft } from "@/lib/mistake-ai-core"
+} from "./mistake-ai-core"
+export type { ChatGPTProgress, IndexedMistakeDraft, MistakeDraft } from "./mistake-ai-core"
 
 export function selectChatGPTModel(models: string[], preferredModel = "auto"): string | null {
   const supportedModels = models.filter(supportsStreamedAnalysis)

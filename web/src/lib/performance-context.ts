@@ -1,5 +1,5 @@
-import type { ExamAttempt } from "@/lib/exam-data"
-import type { SacRecord } from "@/lib/sac"
+import type { ExamAttempt } from "./exam-data"
+import type { SacRecord } from "./sac"
 
 export type ContextRating = 1 | 2 | 3 | 4 | 5
 

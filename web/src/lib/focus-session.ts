@@ -1,5 +1,5 @@
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
-import type { TimerState } from "@/lib/study-timer"
+import type { FocusTimerSession } from "./ongoing-timers"
+import type { TimerState } from "./study-timer"
 
 export type FocusSessionAction = "start" | "pause" | "resume" | "complete" | "update"
 

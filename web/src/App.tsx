@@ -7,9 +7,9 @@ import {
   Upload,
 } from "lucide-react"
 import { toast } from "sonner"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
+import { Button } from "./components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
 import { PastStudyForm } from "../../src/components/planning/PastStudyForm"
 import { studySubjectOptions } from "../../src/lib/studySubjects"
 import {
@@ -17,15 +17,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "./components/ui/dropdown-menu"
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
-} from "@/components/ui/sidebar"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Toaster } from "@/components/ui/sonner"
-import { ModeToggle } from "@/components/mode-toggle"
+} from "./components/ui/sidebar"
+import { Skeleton } from "./components/ui/skeleton"
+import { Toaster } from "./components/ui/sonner"
+import { ModeToggle } from "./components/mode-toggle"
 import {
   EMPTY_APP_DATA,
   getDueMistakes,
@@ -36,82 +36,82 @@ import {
   type ExamAttempt,
   type Mistake,
   type SavedAtarEstimate,
-} from "@/lib/exam-data"
-import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "@/lib/storage"
-import { useSupabaseSync } from "@/lib/sync"
-import { saveTimerSessionChange, useStudySessionSync } from "@/lib/study-session-sync"
-import { suggestTimetableForAttempt, formatExamLabel } from "@/lib/timetable"
-import { ExamPicker } from "@/components/exam-picker"
-import type { ExamTimerPreset } from "@/components/exam-timer-mode"
-import type { StudyTimerMode } from "@/components/study-timer-page"
-import type { ExamDifficultySettings } from "@/lib/exam-difficulty"
-import type { SacRecord } from "@/lib/sac"
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
-import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "@/lib/app-view"
+} from "./lib/exam-data"
+import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "./lib/storage"
+import { useSupabaseSync } from "./lib/sync"
+import { saveTimerSessionChange, useStudySessionSync } from "./lib/study-session-sync"
+import { suggestTimetableForAttempt, formatExamLabel } from "./lib/timetable"
+import { ExamPicker } from "./components/exam-picker"
+import type { ExamTimerPreset } from "./components/exam-timer-mode"
+import type { StudyTimerMode } from "./components/study-timer-page"
+import type { ExamDifficultySettings } from "./lib/exam-difficulty"
+import type { SacRecord } from "./lib/sac"
+import type { FocusTimerSession } from "./lib/ongoing-timers"
+import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import {
   AppSidebar,
   CommandMenuTrigger,
-} from "@/components/app-navigation"
-import { getViewLabel } from "@/lib/navigation"
-import { useReferenceData } from "@/hooks/use-reference-data"
+} from "./components/app-navigation"
+import { getViewLabel } from "./lib/navigation"
+import { useReferenceData } from "./hooks/use-reference-data"
 
-import { localDate, materialiseTask, type LearningWorkspaceUpdate, type StudyGoal } from "@/lib/learning-workspace"
-import { applyMistakeAutofills, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeFieldMergePlan } from "@/lib/mistake-autofill"
-import type { VcaaExplorerPreset } from "@/components/vcaa-explorer"
+import { localDate, materialiseTask, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
+import { applyMistakeAutofills, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
+import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
 const ExamSheet = lazy(() =>
-  import("@/components/exam-sheet").then((module) => ({ default: module.ExamSheet })),
+  import("./components/exam-sheet").then((module) => ({ default: module.ExamSheet })),
 )
 const MistakeSheet = lazy(() =>
-  import("@/components/mistake-sheet").then((module) => ({ default: module.MistakeSheet })),
+  import("./components/mistake-sheet").then((module) => ({ default: module.MistakeSheet })),
 )
 const ExamsPage = lazy(() =>
-  import("@/components/exams-page").then((module) => ({ default: module.ExamsPage })),
+  import("./components/exams-page").then((module) => ({ default: module.ExamsPage })),
 )
 const VcaaExplorer = lazy(() =>
-  import("@/components/vcaa-explorer").then((module) => ({ default: module.VcaaExplorer })),
+  import("./components/vcaa-explorer").then((module) => ({ default: module.VcaaExplorer })),
 )
 const SettingsPage = lazy(() =>
-  import("@/components/settings-page").then((module) => ({ default: module.SettingsPage })),
+  import("./components/settings-page").then((module) => ({ default: module.SettingsPage })),
 )
 const StudyScorePredictor = lazy(() =>
-  import("@/components/study-score-predictor").then((module) => ({ default: module.StudyScorePredictor })),
+  import("./components/study-score-predictor").then((module) => ({ default: module.StudyScorePredictor })),
 )
 const ExamLibrary = lazy(() =>
-  import("@/components/exam-library").then((module) => ({ default: module.ExamLibrary })),
+  import("./components/exam-library").then((module) => ({ default: module.ExamLibrary })),
 )
 const MistakesPage = lazy(() =>
-  import("@/components/mistakes-page").then((module) => ({ default: module.MistakesPage })),
+  import("./components/mistakes-page").then((module) => ({ default: module.MistakesPage })),
 )
 const SacPage = lazy(() =>
-  import("@/components/sac-page").then((module) => ({ default: module.SacPage })),
+  import("./components/sac-page").then((module) => ({ default: module.SacPage })),
 )
 const AppCommandMenu = lazy(() =>
-  import("@/components/app-command-menu").then((module) => ({ default: module.AppCommandMenu })),
+  import("./components/app-command-menu").then((module) => ({ default: module.AppCommandMenu })),
 )
 const StudyTimerPage = lazy(() =>
-  import("@/components/study-timer-page").then((module) => ({ default: module.StudyTimerPage })),
+  import("./components/study-timer-page").then((module) => ({ default: module.StudyTimerPage })),
 )
 const MasteryPage = lazy(() =>
-  import("@/components/mastery-page").then((module) => ({ default: module.MasteryPage })),
+  import("./components/mastery-page").then((module) => ({ default: module.MasteryPage })),
 )
 const GoalsPage = lazy(() =>
-  import("@/components/goals-page").then((module) => ({ default: module.GoalsPage })),
+  import("./components/goals-page").then((module) => ({ default: module.GoalsPage })),
 )
 const CalendarPage = lazy(() =>
-  import("@/components/calendar-page").then((module) => ({ default: module.CalendarPage })),
+  import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
 
 // Warm the page chunks once the browser is idle so navigating is instant.
 function prefetchPages() {
   const warm = () => {
     for (const load of [
-      () => import("@/components/exams-page"), () => import("@/components/study-timer-page"),
-      () => import("@/components/mistakes-page"), () => import("@/components/calendar-page"),
-      () => import("@/components/goals-page"), () => import("@/components/mastery-page"),
-      () => import("@/components/exam-library"), () => import("@/components/vcaa-explorer"),
-      () => import("@/components/sac-page"), () => import("@/components/study-score-predictor"),
-      () => import("@/components/settings-page"), () => import("@/components/app-command-menu"),
+      () => import("./components/exams-page"), () => import("./components/study-timer-page"),
+      () => import("./components/mistakes-page"), () => import("./components/calendar-page"),
+      () => import("./components/goals-page"), () => import("./components/mastery-page"),
+      () => import("./components/exam-library"), () => import("./components/vcaa-explorer"),
+      () => import("./components/sac-page"), () => import("./components/study-score-predictor"),
+      () => import("./components/settings-page"), () => import("./components/app-command-menu"),
     ]) load().catch(() => {})
   }
   if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 4000 })

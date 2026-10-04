@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { RefreshCw, Sparkles } from "lucide-react"
 import { toast } from "sonner"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card"
-import { MarkdownPreview } from "@/components/markdown-preview"
-import { formatChatGPTProgress, type ChatGPTProgress } from "@/lib/mistake-ai-core"
-import type { AppData, MistakeInsights as MistakeInsightsData } from "@/lib/exam-data"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./ui/accordion"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardTitle } from "./ui/card"
+import { MarkdownPreview } from "./markdown-preview"
+import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
+import type { AppData, MistakeInsights as MistakeInsightsData } from "../lib/exam-data"
 
 const MINIMIZED_KEY = "examtrack:mistake-insights-minimized"
 
@@ -27,7 +27,7 @@ export function MistakeInsights({ data, priorityCategory, onSave }: { data: AppD
   async function runAnalysis() {
     setRunning(true)
     try {
-      const { analyseMistakes } = await import("@/lib/mistake-ai")
+      const { analyseMistakes } = await import("../lib/mistake-ai")
       onSave(await analyseMistakes(data.mistakes, data.attempts, setProgress))
       toast.success("Mistake insights updated")
     } catch (error) {
@@ -41,7 +41,7 @@ export function MistakeInsights({ data, priorityCategory, onSave }: { data: AppD
     if (!insights) return
     setGeneratingQuestions(true)
     try {
-      const { generateMistakePracticeQuestions } = await import("@/lib/mistake-ai")
+      const { generateMistakePracticeQuestions } = await import("../lib/mistake-ai")
       const practiceQuestions = await generateMistakePracticeQuestions(insights, data.mistakes, data.attempts, setProgress)
       onSave({ ...insights, practiceQuestions, questionsGeneratedAt: new Date().toISOString() })
       toast.success("Practice questions generated")

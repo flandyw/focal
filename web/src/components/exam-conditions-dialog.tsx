@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { formatTimer, getExamTimerState } from "@/lib/exam-timer"
-import { updateExamSessionConditions, type ExamTimerSession } from "@/lib/ongoing-timers"
+import { Button } from "./ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
+import { Field, FieldError, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { formatTimer, getExamTimerState } from "../lib/exam-timer"
+import { updateExamSessionConditions, type ExamTimerSession } from "../lib/ongoing-timers"
 
 export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   session: ExamTimerSession

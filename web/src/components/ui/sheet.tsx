@@ -1,10 +1,10 @@
 import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { useIsMobile } from "@/hooks/use-mobile"
+import { cn } from "../../lib/utils"
+import { Button } from "./button"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./resizable"
+import { useIsMobile } from "../../hooks/use-mobile"
 import { XIcon } from "lucide-react"
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {

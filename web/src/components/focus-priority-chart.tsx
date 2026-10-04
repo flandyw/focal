@@ -1,9 +1,9 @@
 import { useMemo } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
-import type { ExamAttempt, Mistake } from "@/lib/exam-data"
-import { buildFocusPriorities, type FocusPriority } from "@/lib/performance-insights"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartTooltip } from "./ui/chart"
+import type { ExamAttempt, Mistake } from "../lib/exam-data"
+import { buildFocusPriorities, type FocusPriority } from "../lib/performance-insights"
 
 const chartConfig = {
   priorityScore: { label: "Priority score", color: "#dc2626" },

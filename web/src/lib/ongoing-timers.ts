@@ -1,4 +1,4 @@
-import { isSacUnit, type SacUnit } from "@/lib/sac"
+import { isSacUnit, type SacUnit } from "./sac"
 
 export type ExamTimerSession = {
   id?: string

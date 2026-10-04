@@ -2,27 +2,27 @@ import { memo, useDeferredValue, useEffect, useMemo, useState, type ReactNode } 
 import { ArrowRight, BookOpenCheck, FileDown, FileJson, Merge, MoreHorizontal, NotebookPen, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
-import { useMinWidth } from "@/hooks/use-mobile"
-import { filterMistakeLibrary, type BrowserFilter } from "@/lib/mistake-library"
-import { MistakePractice } from "@/components/mistake-practice"
-import { MarkdownPreview } from "@/components/markdown-preview"
-import { MistakeAttachments } from "@/components/mistake-attachments"
-import { MistakeAlternativeDeck } from "@/components/mistake-alternative-deck"
-import { MistakeJsonImportDialog } from "@/components/mistake-json-import"
-import { MistakeInsights } from "@/components/mistake-insights"
-import { PageHeader } from "@/components/page-header"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useMinWidth } from "../hooks/use-mobile"
+import { filterMistakeLibrary, type BrowserFilter } from "../lib/mistake-library"
+import { MistakePractice } from "./mistake-practice"
+import { MarkdownPreview } from "./markdown-preview"
+import { MistakeAttachments } from "./mistake-attachments"
+import { MistakeAlternativeDeck } from "./mistake-alternative-deck"
+import { MistakeJsonImportDialog } from "./mistake-json-import"
+import { MistakeInsights } from "./mistake-insights"
+import { PageHeader } from "./page-header"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
+import { Progress } from "./ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Separator } from "./ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import {
   getDueMistakes,
   getMistakeSchedule,
@@ -33,10 +33,10 @@ import {
   type Mistake,
   type MistakeReviewState,
   type ReviewRating,
-} from "@/lib/exam-data"
-import { downloadMistakesPdf } from "@/lib/mistake-pdf"
-import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "@/lib/mistake-filters"
-import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "@/lib/mistake-review"
+} from "../lib/exam-data"
+import { downloadMistakesPdf } from "../lib/mistake-pdf"
+import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
+import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import {
   getMistakeFieldValues,
   hasEmptyMistakeFields,
@@ -45,9 +45,9 @@ import {
   type MistakeAutofill,
   type MistakeFieldMergePlan,
   type MistakeMergeField,
-} from "@/lib/mistake-autofill"
-import { formatChatGPTProgress, type ChatGPTProgress } from "@/lib/mistake-ai-core"
-import { findCachedVcaaExamForAttempt, type VcaaStudyResources } from "@/lib/vcaa-resources"
+} from "../lib/mistake-autofill"
+import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
+import { findCachedVcaaExamForAttempt, type VcaaStudyResources } from "../lib/vcaa-resources"
 
 
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
@@ -432,7 +432,7 @@ function MistakeFieldMergeDialog({
     setPlan(null)
     setProgress(null)
     try {
-      const { generateMistakeFieldMergePlan } = await import("@/lib/mistake-ai")
+      const { generateMistakeFieldMergePlan } = await import("../lib/mistake-ai")
       setPlan(await generateMistakeFieldMergePlan(field, values, setProgress))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not analyse these labels.")
@@ -621,7 +621,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
     setAutofilling(true)
     setAutofillProgress(null)
     try {
-      const { autofillMistakeFields } = await import("@/lib/mistake-ai")
+      const { autofillMistakeFields } = await import("../lib/mistake-ai")
       const autofills = await autofillMistakeFields(autofillCandidates, data.attempts, setAutofillProgress)
       const summary = summarizeMistakeAutofills(data.mistakes, autofills)
       if (!summary.fieldCount) {

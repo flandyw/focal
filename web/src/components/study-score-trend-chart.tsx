@@ -1,8 +1,8 @@
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "@/components/ui/chart"
-import type { StudyScoreTrendPoint } from "@/lib/study-score"
+import { Badge } from "./ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
+import type { StudyScoreTrendPoint } from "../lib/study-score"
 
 const chartConfig = {
   studyScore: { label: "Estimated study score", color: "#2563eb" },

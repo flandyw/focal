@@ -1,7 +1,7 @@
 import ReactMarkdown from "react-markdown"
 import rehypeKatex from "rehype-katex"
 import remarkMath from "remark-math"
-import { cn } from "@/lib/utils"
+import { cn } from "../lib/utils"
 
 // \[...\] is display maths in LaTeX, but only when it owns its lines. Mid-paragraph
 // it has to stay inline, otherwise remark-math opens a block node inside a

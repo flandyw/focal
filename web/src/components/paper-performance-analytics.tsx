@@ -1,21 +1,21 @@
 import { useMemo, useState } from "react"
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Calculator, Minus } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { ExamAttempt, Mistake } from "@/lib/exam-data"
-import { getExamTarget } from "@/lib/exam-target"
-import { isTechSplitMathsSubject } from "@/lib/mistake-filters"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog"
+import { Progress } from "./ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import type { ExamAttempt, Mistake } from "../lib/exam-data"
+import { getExamTarget } from "../lib/exam-target"
+import { isTechSplitMathsSubject } from "../lib/mistake-filters"
 import {
   buildLostMarksAttribution,
   buildPaperWeaknessMatrix,
   type PaperPerformanceCell,
   type PaperWeaknessDiagnosis,
-} from "@/lib/performance-insights"
+} from "../lib/performance-insights"
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)

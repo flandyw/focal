@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
-import type { AppView } from "@/lib/app-view"
+import type { AppView } from "./app-view"
 
 type NavigationItem = { id: AppView; label: string; description: string; icon: LucideIcon }
 

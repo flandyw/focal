@@ -83,8 +83,8 @@ export function AssessmentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]">
-      <div className="grid gap-3 overflow-y-auto p-4">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
         <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
@@ -211,7 +211,7 @@ export function AssessmentForm({
         {children}
       </div>
 
-      <DialogFooter className="m-0 rounded-none px-4 py-2.5 sm:justify-between">
+      <DialogFooter className="m-0 shrink-0 rounded-none px-4 py-2.5 sm:justify-between">
         <p className="hidden text-xs text-muted-foreground sm:block">Due date powers Today, Plan and Review.</p>
         <div className="flex gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancel</Button>

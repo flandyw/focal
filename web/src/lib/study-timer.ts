@@ -1,5 +1,5 @@
-import { formatTimer } from "@/lib/exam-timer"
-import type { FocusTimerSession } from "@/lib/ongoing-timers"
+import { formatTimer } from "./exam-timer"
+import type { FocusTimerSession } from "./ongoing-timers"
 
 export { formatTimer }
 

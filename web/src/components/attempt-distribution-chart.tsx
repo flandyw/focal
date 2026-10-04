@@ -8,8 +8,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { ChartContainer, ChartTooltip } from "./ui/chart"
 import {
   analyseAttempt,
   analyseScore,
@@ -18,7 +18,7 @@ import {
   findAttemptReferenceForYear,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
+} from "../lib/exam-data"
 
 const chartConfig = {
   density: { label: "Cohort density", color: "#2563eb" },

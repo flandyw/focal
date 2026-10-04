@@ -1,4 +1,4 @@
-import type { ExamAttempt } from "@/lib/exam-data"
+import type { ExamAttempt } from "./exam-data"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const DAYS_IN_RANGE = 365

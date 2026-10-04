@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
 import type { User } from "@supabase/supabase-js"
-import { EMPTY_APP_DATA, type AppData } from "@/lib/exam-data"
-import { supabase } from "@/lib/supabase"
-import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, sameValue, syncAppData } from "@/lib/app-sync"
+import { EMPTY_APP_DATA, type AppData } from "./exam-data"
+import { supabase } from "./supabase"
+import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, sameValue, syncAppData } from "./app-sync"
 
 const OWNER_KEY = "examtrack:sync:owner:v1"
 

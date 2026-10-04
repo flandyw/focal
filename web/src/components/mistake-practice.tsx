@@ -1,12 +1,12 @@
 import { useState } from "react"
 import { ArrowLeft, ArrowRight, RotateCcw, Shuffle } from "lucide-react"
-import { MarkdownPreview } from "@/components/markdown-preview"
-import { MistakeAttachments } from "@/components/mistake-attachments"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
-import type { Mistake } from "@/lib/exam-data"
+import { MarkdownPreview } from "./markdown-preview"
+import { MistakeAttachments } from "./mistake-attachments"
+import { Button } from "./ui/button"
+import { Badge } from "./ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog"
+import { Progress } from "./ui/progress"
+import type { Mistake } from "../lib/exam-data"
 
 export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; onClose: () => void }) {
   const [cards, setCards] = useState(mistakes)

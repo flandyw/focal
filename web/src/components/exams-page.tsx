@@ -14,13 +14,13 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Progress } from "@/components/ui/progress"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Progress } from "./ui/progress"
+import { Skeleton } from "./ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import {
   analyseAttempt,
   buildCoverage,
@@ -30,44 +30,44 @@ import {
   type AppData,
   type AssessmentReference,
   type ExamAttempt,
-} from "@/lib/exam-data"
-import { getMistakeProgress } from "@/lib/mistake-review"
-import { buildFocusPriorities, buildSubjectOutlooks } from "@/lib/performance-insights"
-import type { Timetable } from "@/lib/timetable"
-import { PageHeader } from "@/components/page-header"
-import { WorkspacePage } from "@/components/workspace-layout"
-import { UpcomingExamsCard } from "@/components/upcoming-exams-card"
-import { PerformanceContextInsights } from "@/components/performance-context-insights"
-import { ExamTable } from "@/components/exam-table"
-import { ExamActivityChart } from "@/components/exam-activity-chart"
-import { getExamTarget } from "@/lib/exam-target"
-import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultySettings } from "@/lib/exam-difficulty"
-import { openProgressReport } from "@/lib/progress-report"
-import { localDate } from "@/lib/learning-workspace"
+} from "../lib/exam-data"
+import { getMistakeProgress } from "../lib/mistake-review"
+import { buildFocusPriorities, buildSubjectOutlooks } from "../lib/performance-insights"
+import type { Timetable } from "../lib/timetable"
+import { PageHeader } from "./page-header"
+import { WorkspacePage } from "./workspace-layout"
+import { UpcomingExamsCard } from "./upcoming-exams-card"
+import { PerformanceContextInsights } from "./performance-context-insights"
+import { ExamTable } from "./exam-table"
+import { ExamActivityChart } from "./exam-activity-chart"
+import { getExamTarget } from "../lib/exam-target"
+import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultySettings } from "../lib/exam-difficulty"
+import { openProgressReport } from "../lib/progress-report"
+import { localDate } from "../lib/learning-workspace"
 
 const PerformanceTrendChart = lazy(() =>
-  import("@/components/performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
+  import("./performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
 )
 const RevisionPriorityChart = lazy(() =>
-  import("@/components/revision-priority-chart").then((module) => ({ default: module.RevisionPriorityChart })),
+  import("./revision-priority-chart").then((module) => ({ default: module.RevisionPriorityChart })),
 )
 const SubjectBenchmarkChart = lazy(() =>
-  import("@/components/subject-benchmark-chart").then((module) => ({ default: module.SubjectBenchmarkChart })),
+  import("./subject-benchmark-chart").then((module) => ({ default: module.SubjectBenchmarkChart })),
 )
 const VcaaPercentileTrendChart = lazy(() =>
-  import("@/components/vcaa-percentile-trend-chart").then((module) => ({ default: module.VcaaPercentileTrendChart })),
+  import("./vcaa-percentile-trend-chart").then((module) => ({ default: module.VcaaPercentileTrendChart })),
 )
 const ImprovementOutlookChart = lazy(() =>
-  import("@/components/improvement-outlook-chart").then((module) => ({ default: module.ImprovementOutlookChart })),
+  import("./improvement-outlook-chart").then((module) => ({ default: module.ImprovementOutlookChart })),
 )
 const FocusPriorityChart = lazy(() =>
-  import("@/components/focus-priority-chart").then((module) => ({ default: module.FocusPriorityChart })),
+  import("./focus-priority-chart").then((module) => ({ default: module.FocusPriorityChart })),
 )
 const PaperPerformanceAnalytics = lazy(() =>
-  import("@/components/paper-performance-analytics").then((module) => ({ default: module.PaperPerformanceAnalytics })),
+  import("./paper-performance-analytics").then((module) => ({ default: module.PaperPerformanceAnalytics })),
 )
 const ReviewForecastChart = lazy(() =>
-  import("@/components/review-forecast-chart").then((module) => ({ default: module.ReviewForecastChart })),
+  import("./review-forecast-chart").then((module) => ({ default: module.ReviewForecastChart })),
 )
 
 function formatDate(value: string) {

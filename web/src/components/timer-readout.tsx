@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { cn } from "@/lib/utils"
+import { Badge } from "./ui/badge"
+import { Progress } from "./ui/progress"
+import { cn } from "../lib/utils"
 
 /**
  * The one instrument both timer runs are read through. A focus block and a

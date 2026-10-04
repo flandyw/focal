@@ -1,4 +1,4 @@
-import type { ExamAttempt } from "@/lib/exam-data"
+import type { ExamAttempt } from "./exam-data"
 
 export const DEFAULT_PROVIDER_DIFFICULTY = [
   "Kilbaha",

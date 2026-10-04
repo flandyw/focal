@@ -1,4 +1,4 @@
-import type { AssessmentReference, AttemptAnalysis, ExamAttempt } from "@/lib/exam-data"
+import type { AssessmentReference, AttemptAnalysis, ExamAttempt } from "./exam-data"
 
 export type ExamSortKey = "examYear" | "completedAt" | "mark" | "result" | "comparison"
 export type SortDirection = "asc" | "desc"

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { ImageIcon } from "lucide-react"
-import type { MistakeAttachment } from "@/lib/exam-data"
-import { createMistakeAttachmentUrls } from "@/lib/mistake-attachments"
+import type { MistakeAttachment } from "../lib/exam-data"
+import { createMistakeAttachmentUrls } from "../lib/mistake-attachments"
 
 export function MistakeAttachments({ attachments }: { attachments?: MistakeAttachment[] }) {
   const [urls, setUrls] = useState<Record<string, string>>({})

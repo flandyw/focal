@@ -1,4 +1,4 @@
-import { isPerformanceContext, type PerformanceContext } from "@/lib/performance-context"
+import { isPerformanceContext, type PerformanceContext } from "./performance-context"
 
 export const SAC_UNITS = [1, 2, 3, 4] as const
 

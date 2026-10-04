@@ -1,4 +1,4 @@
-import type { MistakeCategory } from "@/lib/exam-data"
+import type { MistakeCategory } from "./exam-data"
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024
 const MAX_BATCH_IMAGE_BYTES = 15 * 1024 * 1024

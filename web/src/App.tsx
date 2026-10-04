@@ -575,13 +575,15 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
           {!embedded && <SidebarTrigger />}
           <span className="text-sm font-medium">{getViewLabel(view)}</span>
           <div className="ml-auto flex items-center gap-1">
-            {embedded ? <Button size="sm" variant="outline" onClick={() => setCommandOpen(true)}>Search exam tools</Button> : <CommandMenuTrigger onClick={() => setCommandOpen(true)} />}
-            <Button size="sm" variant="outline" onClick={() => setPastStudyId(crypto.randomUUID())}>Log past study</Button>
-            <Button size="sm" onClick={openNewExam}>
-              <Plus />
-              <span className="hidden sm:inline">Log exam</span>
-              <span className="sr-only sm:hidden">Log exam</span>
-            </Button>
+            {!embedded && <>
+              <CommandMenuTrigger onClick={() => setCommandOpen(true)} />
+              <Button size="sm" variant="outline" onClick={() => setPastStudyId(crypto.randomUUID())}>Log past study</Button>
+              <Button size="sm" onClick={openNewExam}>
+                <Plus />
+                <span className="hidden sm:inline">Log exam</span>
+                <span className="sr-only sm:hidden">Log exam</span>
+              </Button>
+            </>}
             {!embedded && <ModeToggle />}
             <input ref={importInput} className="sr-only" type="file" accept="application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importData(file); event.currentTarget.value = "" }} />
             <DropdownMenu>
@@ -594,7 +596,7 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
           </div>
         </header>
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
-          {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.label}</Button>)}
+          {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
@@ -648,7 +650,7 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
             </Suspense>
           ) : null}
           {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} sessions={studySessionSync.sessions} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
-          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
+          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage embedded={embedded} subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onPlanGoal={planGoal} /></Suspense> : null}
           {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}

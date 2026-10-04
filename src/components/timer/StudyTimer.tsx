@@ -1114,6 +1114,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
     if (isCollapsed) {
       return (
         <div className="flex flex-col items-center gap-1 py-1">
+          {focusPortal}
           <Button
             variant="ghost"
             size="icon"
@@ -1123,6 +1124,7 @@ const StudyTimerInner = memo(function StudyTimerInner({
           >
             <Timer />
           </Button>
+          <Button variant="ghost" size="icon" onClick={() => setFocusView(true)} aria-label="Open focus view"><Maximize2 /></Button>
           {focalWebSource ? <Button variant="ghost" size="icon" onClick={openTimer} disabled={!externalUrl} aria-label="Open timer in Focal Web"><ExternalLink /></Button> : null}
         </div>
       );
@@ -1130,12 +1132,14 @@ const StudyTimerInner = memo(function StudyTimerInner({
 
     return (
       <section className={cn("min-w-0 border-t border-sidebar-border/70", prominent && "h-full overflow-y-auto")} aria-label="Shared study session">
+        {focusPortal}
         <div className={cn("space-y-3 p-3", prominent && "flex min-h-full flex-col justify-center")}>
           <div className="flex items-center gap-2">
             <Badge variant={sharedRunning ? "success" : "secondary"}>{focalWebSource ? "Focal Web" : folioSource ? "Folio" : "Shared session"}</Badge>
             <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {source?.phase === "reading" ? "Reading time" : source?.phase === "writing" ? "Writing time" : sharedRunning ? "In progress" : "Paused"}
             </span>
+            <Button size="icon-xs" variant="ghost" onClick={() => setFocusView(true)} aria-label="Open focus view"><Maximize2 /></Button>
           </div>
           <div>
             <p className="truncate text-sm font-medium">{sharedSession.title}</p>

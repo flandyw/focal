@@ -532,6 +532,7 @@ export function StudyTimerPage({
   onFocusSessionChange,
   onControlSession,
   exam,
+  embedded = false,
 }: {
   subjects: string[]
   /** The student's own subjects, floated to the top of the picker. */
@@ -545,26 +546,30 @@ export function StudyTimerPage({
   onFocusSessionChange: FocusSessionSink
   onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) => Promise<void>
   exam: ExamTimerModeProps
+  /** The desktop app owns the study timer, so only timed papers are offered. */
+  embedded?: boolean
 }) {
   return (
     <WorkspacePage>
-      <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={mode}>
+      <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
         <div className="mb-4 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance xl:text-3xl">Study timer</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-balance xl:text-3xl">{embedded ? "Timed paper" : "Study timer"}</h1>
             <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">
-              Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record.
+              {embedded
+                ? "Sit a timed paper. Every session feeds your study record."
+                : "Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record."}
             </p>
           </div>
-          <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
+          {!embedded && <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
             <TabsTrigger value="focus">Study</TabsTrigger>
             <TabsTrigger value="exam">Timed paper</TabsTrigger>
-          </TabsList>
+          </TabsList>}
         </div>
 
-        <TabsContent className="mt-0" value="focus">
+        {!embedded && <TabsContent className="mt-0" value="focus">
           <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} />
-        </TabsContent>
+        </TabsContent>}
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>
             <ExamTimerMode {...exam} />

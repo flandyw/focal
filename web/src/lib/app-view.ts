@@ -5,6 +5,7 @@ export const APP_VIEWS = [
   "exams",
   "focus",
   "mistakes",
+  "timetable",
   "sacs",
   "library",
   "mastery",

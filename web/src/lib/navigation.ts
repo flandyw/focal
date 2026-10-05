@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   Calculator,
+  CalendarClock,
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
@@ -22,6 +23,7 @@ const ACTION_NAVIGATION: NavigationItem[] = [
   { id: "exams" as const, label: "Exams", description: "Practice results and analysis", icon: ClipboardList },
   { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers", icon: Timer },
   { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue", icon: NotebookPen },
+  { id: "timetable" as const, label: "Timetable", description: "Your school class cycle", icon: CalendarClock },
 ]
 
 const ASSESSMENT_NAVIGATION: NavigationItem[] = [

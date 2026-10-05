@@ -3,7 +3,8 @@ import { isCompletedSac, type SacRecord } from "./sac"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace"
 import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
-import { VCE_SUBJECTS } from "../../../src/lib/types"
+import { subjectNameFor } from "./class-timetable"
+import { VCE_SUBJECTS, type CalendarEvent } from "../../../src/lib/types"
 
 /** The day plan reads the records the app already keeps. It never stores a
  *  second copy, so a task edited anywhere is edited on the calendar too. */
@@ -15,6 +16,8 @@ export type DayPlanSource = {
   trackedExamIds: string[]
   /** Canonical study sessions: the same shared rows the desktop calendar reads. */
   sessions?: CanonicalStudySession[]
+  /** Calendar events shared with the desktop app. */
+  events?: CalendarEvent[]
 }
 
 /** Everything the web app already knows about a single day, in one list. No
@@ -24,6 +27,7 @@ export type DayItem =
   | { kind: "task"; id: string; title: string; detail: string; subject?: string; minutes: number; status: StudyTaskStatus; covered?: boolean }
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
+  | { kind: "event"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean; multiDay: boolean }
   | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; status: "planned" | "in-progress" | "completed" }
   | { kind: "logged-exam"; id: string; title: string; detail: string; minutes: number; completed: true }
   | { kind: "mistakes"; id: string; title: string; detail: string; minutes: number; count: number }
@@ -99,6 +103,39 @@ function sacItem(record: SacRecord): DayItem {
     minutes: record.durationMinutes,
     startTime: timeOf(record.scheduledAt) ?? "",
     completed: isCompletedSac(record),
+  }
+}
+
+const EVENT_TYPE_LABEL: Record<string, string> = {
+  sac: "SAC", "practice-sac": "Practice SAC", exam: "Exam", assignment: "Assignment", homework: "Homework", event: "Event", other: "Other",
+}
+
+export function eventTypeLabel(type: string) {
+  return EVENT_TYPE_LABEL[type] ?? "Event"
+}
+
+/** Local first and last day an event touches; an end at exactly midnight belongs to the day before. */
+export function eventDays(event: CalendarEvent): { first: string; last: string } {
+  const start = new Date(event.startTime)
+  const end = event.endTime ? new Date(event.endTime) : start
+  const last = end.getTime() > start.getTime() ? new Date(end.getTime() - 60_000) : start
+  return { first: localDate(start), last: localDate(last) }
+}
+
+function eventItem(event: CalendarEvent, date: string, days: { first: string; last: string }): DayItem {
+  const start = new Date(event.startTime)
+  const end = event.endTime ? new Date(event.endTime) : null
+  const minutes = end ? Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000)) : 0
+  const multiDay = days.first !== days.last
+  return {
+    kind: "event",
+    id: event.id,
+    title: event.title,
+    detail: [eventTypeLabel(event.eventType), subjectNameFor(event.subjectId), event.location].filter(Boolean).join(" · "),
+    minutes: multiDay ? 0 : minutes,
+    startTime: multiDay && date !== days.first ? "" : timeOf(event.startTime) ?? "",
+    completed: Boolean(event.isFinished),
+    multiDay,
   }
 }
 
@@ -233,6 +270,11 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     if (localDate(new Date(record.scheduledAt)) !== date) continue
     items.push(sacItem(record))
   }
+  for (const event of data.events ?? []) {
+    const days = eventDays(event)
+    if (date < days.first || date > days.last) continue
+    items.push(eventItem(event, date, days))
+  }
   for (const session of data.sessions ?? []) {
     const projected = sessionItem(session)
     if (projected && projected.date === date) items.push(projected.item)
@@ -288,7 +330,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
   )
 
   // Work first, then anything fixed in time, then what is already on record, then the queue.
-  const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
+  const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, event: 2, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
   items.sort((a, b) => order[a.kind] - order[b.kind] || b.minutes - a.minutes)
   return {
     date,

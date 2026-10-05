@@ -1,3 +1,4 @@
+import type { CalendarEvent, TimetableConfig } from "../../../src/lib/types"
 import { isExamProgression, type ExamProgression } from "./exam-progression"
 import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-difficulty"
 import { isSacRecord, migrateSacRecords, type SacRecord } from "./sac"
@@ -209,6 +210,9 @@ export type AppData = {
   atarEstimates: SavedAtarEstimate[]
   atarEstimatesUpdatedAt: string
   learning: LearningWorkspace
+  /** Calendar events and the class timetable are shared with the desktop app through the sync feed. */
+  events: CalendarEvent[]
+  classTimetable?: TimetableConfig
 }
 
 export const EMPTY_APP_DATA: AppData = {
@@ -226,6 +230,7 @@ export const EMPTY_APP_DATA: AppData = {
   atarEstimates: [],
   atarEstimatesUpdatedAt: "1970-01-01T00:00:00.000Z",
   learning: EMPTY_LEARNING_WORKSPACE,
+  events: [],
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -1035,6 +1040,19 @@ function isMistakeReview(value: unknown): value is MistakeReview {
     (value.easeFactor === undefined || typeof value.easeFactor === "number" && Number.isFinite(value.easeFactor) && value.easeFactor >= MINIMUM_EASE_FACTOR)
 }
 
+export function migrateCalendarEvents(value: unknown): CalendarEvent[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.id !== "string" || typeof item.title !== "string" || typeof item.startTime !== "string") return []
+    if (item.deleted_at) return []
+    return [item as unknown as CalendarEvent]
+  })
+}
+
+export function isTimetableConfig(value: unknown): value is TimetableConfig {
+  return isRecord(value) && Array.isArray(value.entries) && typeof value.day1Starts === "string" && Array.isArray(value.holidays)
+}
+
 export function migrateAppData(value: unknown): AppData | null {
   if (!isRecord(value)) return null
   const data = value as Record<string, unknown>
@@ -1069,6 +1087,8 @@ export function migrateAppData(value: unknown): AppData | null {
     atarEstimates: Array.isArray(data.atarEstimates) ? data.atarEstimates : [],
     atarEstimatesUpdatedAt: typeof data.atarEstimatesUpdatedAt === "string" ? data.atarEstimatesUpdatedAt : "1970-01-01T00:00:00.000Z",
     learning: migrateLearningWorkspace(data.learning),
+    events: migrateCalendarEvents(data.events),
+    classTimetable: isTimetableConfig(data.classTimetable) ? data.classTimetable : undefined,
   }
   return isAppData(migrated) ? migrated : null
 }

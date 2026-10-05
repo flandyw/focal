@@ -9,7 +9,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
-import { CalendarChatbotImportDialog, type ImportedTask } from "./calendar-chatbot-import"
+import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
+import { EventDialog } from "./event-dialog"
 import { PageHeader } from "./page-header"
 import { WorkspacePage } from "./workspace-layout"
 import {
@@ -27,9 +28,12 @@ import {
   type DayPlan,
   type DayPlanSource,
 } from "../lib/day-plan"
+import { classPeriodsOn, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
+import type { CalendarEvent, TimetableConfig } from "../../../src/lib/types"
+import type { TextEventDraft } from "../../../src/lib/calendarImport"
 import type { CanonicalStudySession } from "../../../src/lib/sync/sessionContract"
 
 const today = () => localDate(new Date())
@@ -59,6 +63,7 @@ function formatMinutes(minutes: number) {
 /** One solid mark per kind: at cell size a pale dot is a smudge, not a legend. */
 const KIND_MARK: Record<DayItem["kind"], string> = {
   task: "bg-chart-2",
+  event: "bg-chart-5",
   sac: "bg-chart-4",
   exam: "bg-destructive",
   session: "bg-chart-1",
@@ -68,6 +73,7 @@ const KIND_MARK: Record<DayItem["kind"], string> = {
 
 const KIND_LABEL: Record<DayItem["kind"], string> = {
   task: "Task",
+  event: "Event",
   sac: "SAC",
   exam: "Exam",
   session: "Study session",
@@ -86,6 +92,9 @@ export function CalendarPage({
   onStartFocus,
   timetable,
   subjects,
+  classTimetable,
+  onEventsChange,
+  onOpenTimetable,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -95,6 +104,9 @@ export function CalendarPage({
   onStartFocus: (subject: string | undefined, intent: string) => void
   timetable: Timetable | null
   subjects: string[]
+  classTimetable?: TimetableConfig
+  onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
+  onOpenTimetable: () => void
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -103,6 +115,7 @@ export function CalendarPage({
   const [subject, setSubject] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [eventDialog, setEventDialog] = useState<{ event: CalendarEvent | null; key: number } | null>(null)
 
   const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
   const days = useMemo(() => buildCalendarMonth(month, source, timetable), [month, source, timetable])
@@ -130,11 +143,46 @@ export function CalendarPage({
     setSelected(date)
   }
 
-  function importTasks(tasks: ImportedTask[]) {
-    commit((current) => tasks.reduce((workspace, task) => addTask(workspace, task), current))
-    setSelected(tasks[0]?.date ?? selected)
-    toast(`${tasks.length} item${tasks.length === 1 ? "" : "s"} added to your calendar`)
+  function importDrafts(drafts: TextEventDraft[]) {
+    const now = new Date().toISOString()
+    const events = drafts.filter((draft) => draft.kind === "event").map((draft): CalendarEvent => {
+      const start = new Date(`${draft.date}T${draft.startTime}:00`)
+      const end = draft.endDate ? new Date(`${draft.endDate}T${draft.startTime}:00`) : new Date(start.getTime() + draft.durationMinutes * 60_000)
+      const subject = draft.subjectIds[0]
+      return {
+        id: crypto.randomUUID(), title: draft.title, description: draft.description,
+        startTime: start.toISOString(), endTime: end.toISOString(), eventType: draft.eventType,
+        subjectId: subject ? subjectIdFor(subject) : undefined, location: draft.location,
+        isFinished: false, created_at: now, updated_at: now,
+      }
+    })
+    const sessions = drafts.filter((draft) => draft.kind === "session")
+    if (events.length) onEventsChange((current) => [...current, ...events])
+    if (sessions.length) {
+      commit((current) => sessions.reduce((workspace, draft) => addTask(workspace, {
+        title: draft.title, date: draft.date, minutes: draft.durationMinutes, subject: draft.subjectIds[0],
+        detail: [draft.startTime, draft.location].filter(Boolean).join(" · "),
+      }), current))
+    }
+    setSelected(drafts[0]?.date ?? selected)
+    toast(`${drafts.length} item${drafts.length === 1 ? "" : "s"} added to your calendar`)
   }
+
+  function saveEvents(saved: CalendarEvent[], isNew: boolean) {
+    onEventsChange((current) => isNew ? [...current, ...saved] : current.map((item) => saved.find((event) => event.id === item.id) ?? item))
+    setSelected(localDate(new Date(saved[0].startTime)))
+    setEventDialog(null)
+    toast(isNew ? (saved.length === 1 ? "Event added" : `${saved.length} events added`) : "Event updated")
+  }
+
+  function deleteEvent(id: string) {
+    const removed = data.events?.find((item) => item.id === id)
+    onEventsChange((current) => current.filter((item) => item.id !== id))
+    setEventDialog(null)
+    toast("Event deleted", removed ? { action: { label: "Undo", onClick: () => onEventsChange((current) => [...current, removed]) } } : undefined)
+  }
+
+  const classes = useMemo(() => classPeriodsOn(selected, classTimetable), [selected, classTimetable])
 
   function add() {
     if (!title.trim()) return setError("Enter a task name.")
@@ -151,10 +199,25 @@ export function CalendarPage({
         title="Calendar and day plan"
         description="Everything scheduled for a day, in one place: study tasks, SACs, exams, and what your revision queue owes you."
       >
+        <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
         <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import from chatbot</Button>
         <Button onClick={() => { setMonth(new Date()); setSelected(today()) }} variant="outline"><RotateCcw />Today</Button>
-        <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importTasks} />
+        <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />
       </PageHeader>
+
+      {eventDialog ? (
+        <EventDialog
+          key={eventDialog.key}
+          open
+          event={eventDialog.event}
+          defaultDate={selected}
+          subjects={subjects}
+          classTimetable={classTimetable}
+          onOpenChange={(open) => { if (!open) setEventDialog(null) }}
+          onSave={saveEvents}
+          onDelete={deleteEvent}
+        />
+      ) : null}
 
       <DayStats dueMistakes={plan.dueMistakes} plan={plan} progress={completion} />
 
@@ -252,6 +315,25 @@ export function CalendarPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
+              {classes.length ? (
+                <DaySection title="Classes" count={classes.length}>
+                  <ul className="min-w-0 divide-y rounded-md border">
+                    {classes.map((period, index) => (
+                      <li className="flex items-center gap-2 px-2 py-1.5" key={`${period.period}-${index}`}>
+                        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{period.subject ? periodSubjectName(period) : period.period}</p>
+                          <p className="truncate text-xs text-muted-foreground tabular-nums">{period.period} · {period.startTime}–{period.endTime}{period.location ? ` · ${period.location}` : ""}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </DaySection>
+              ) : classTimetable ? null : (
+                <p className="text-xs text-muted-foreground">
+                  <button className="underline underline-offset-2" onClick={onOpenTimetable} type="button">Set up your class timetable</button> to see classes here and align events to class times.
+                </p>
+              )}
               <DaySection title="Planned" count={open.length}>
                 {open.length ? (
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -260,6 +342,7 @@ export function CalendarPage({
                         item={item}
                         key={`${item.kind}-${item.id}`}
                         onArchive={(id) => commit((current) => archiveTask(current, id))}
+                        onEditEvent={(id) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() })}
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
@@ -285,6 +368,7 @@ export function CalendarPage({
                         item={item}
                         key={`${item.kind}-${item.id}`}
                         onArchive={(id) => commit((current) => archiveTask(current, id))}
+                        onEditEvent={(id) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() })}
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
@@ -449,6 +533,7 @@ function DaySection({ title, count, muted, children }: { title: string; count: n
 function DayItemRow({
   item,
   onArchive,
+  onEditEvent,
   onMove,
   onNavigate,
   onStartFocus,
@@ -456,6 +541,7 @@ function DayItemRow({
 }: {
   item: DayItem
   onArchive: (id: string) => void
+  onEditEvent: (id: string) => void
   onMove: (id: string, date: string) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string) => void
@@ -507,6 +593,8 @@ function DayItemRow({
             <Button onClick={() => onNavigate("mistakes")} size="sm" variant="ghost">Review</Button>
           ) : item.kind === "sac" ? (
             <Button onClick={() => onNavigate("sacs")} size="sm" variant="ghost">Open</Button>
+          ) : item.kind === "event" ? (
+            <Button onClick={() => onEditEvent(item.id)} size="sm" variant="ghost">Edit</Button>
           ) : null}
           {isTask ? (
             <Button

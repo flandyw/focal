@@ -1,5 +1,5 @@
 import type { AppData } from "./exam-data"
-import { EMPTY_APP_DATA, migrateAppData } from "./exam-data"
+import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
 import { isExamDifficultySettings } from "./exam-difficulty"
 import { isExamProgression } from "./exam-progression"
 import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
@@ -11,12 +11,13 @@ const DB_VERSION = 1
 const OUTBOX = "outbox"
 const ROWS = "rows"
 const META = "meta"
-const APP_ENTITIES = new Set(["attempts", "mistakes", "user_state"])
+const APP_ENTITIES = new Set(["attempts", "mistakes", "user_state", "events", "timetable_config"])
+const TIMETABLE_ROW = "timetable_config"
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const OWNER_META_KEY = "owner"
 const TOMBSTONE_KEY = "examtrack:sync:tombstones:v1"
 
-type Entity = "attempts" | "mistakes" | "user_state"
+type Entity = "attempts" | "mistakes" | "user_state" | "events" | "timetable_config"
 type Operation = "put" | "delete"
 type AppRow = { entity: Entity; rowId: string; operation: Operation; payload: unknown }
 type AppliedRow = AppRow & { key: string; accountId: string; seq: number; lamport: number; clientId: string; updatedAt: string }
@@ -29,7 +30,9 @@ type PendingRow = AppRow & {
   attempted: boolean
   queuedAt: number
 }
-type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean }
+type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean; feedVersion?: number }
+// Bump when APP_ENTITIES grows: rows of a newly understood entity were skipped by earlier cursors.
+const FEED_VERSION = 2
 type OwnerMeta = { key: string; accountId: string }
 type VersionedChange = {
   seq: number; change_id: string; client_id: string; entity: string; row_id: string
@@ -100,14 +103,16 @@ const rowKey = (accountId: string, entity: string, rowId: string) => `${accountI
 const logicalKey = (entity: string, rowId: string) => `${entity}:${rowId}`
 
 function defaultMeta(accountId: string): AccountMeta {
-  return { key: accountMetaKey(accountId), accountId, cursor: 0, head: 0, lamport: 0, bootstrapped: false }
+  return { key: accountMetaKey(accountId), accountId, cursor: 0, head: 0, lamport: 0, bootstrapped: false, feedVersion: FEED_VERSION }
 }
 
 export function rowsFromAppData(data: AppData): AppRow[] {
   const rows: AppRow[] = [
     ...data.attempts.map((item) => ({ entity: "attempts" as const, rowId: item.id, operation: "put" as const, payload: item })),
     ...data.mistakes.map((item) => ({ entity: "mistakes" as const, rowId: item.id, operation: "put" as const, payload: item })),
+    ...data.events.map((item) => ({ entity: "events" as const, rowId: item.id, operation: "put" as const, payload: item })),
   ]
+  if (data.classTimetable) rows.push({ entity: "timetable_config", rowId: TIMETABLE_ROW, operation: "put", payload: data.classTimetable })
   const state: Array<[string, unknown, string]> = [
     ["examProgression", data.examProgression, data.examProgression?.updatedAt ?? EPOCH],
     ["trackedExamIds", data.trackedExamIds, data.trackedExamIdsUpdatedAt],
@@ -233,6 +238,11 @@ async function synchronize(data: AppData, userId: string, deviceId: string): Pro
 async function pull(userId: string): Promise<void> {
   if (!supabase) return
   let meta = await readMeta(userId)
+  if (meta.feedVersion !== FEED_VERSION) {
+    // Re-read the feed once so events and timetable rows written before this client knew them arrive.
+    meta = { ...meta, cursor: 0, feedVersion: FEED_VERSION }
+    await writeMeta(meta)
+  }
   let cursor = meta.cursor
   for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
     const { data, error } = await supabase.rpc("sync_read_changes", {
@@ -317,7 +327,7 @@ async function bootstrap(data: AppData, accountId: string): Promise<void> {  con
     if (legacyStamp(row) > remote.updatedAt) toQueue.push(row)
   }
   for (const [kind, tombstones] of Object.entries(readLegacyTombstones())) {
-    if (kind !== "attempts" && kind !== "mistakes") continue
+    if (kind !== "attempts" && kind !== "mistakes" && kind !== "events") continue
     for (const [id, deletedAt] of Object.entries(tombstones)) {
       const remote = canonical.get(logicalKey(kind, id))
       if (!remote || remote.operation !== "delete") {
@@ -401,6 +411,7 @@ function legacyStamp(row: AppRow | AppliedRow): string {
   if (row.entity === "user_state") {
     return isRecord(row.payload) && typeof row.payload.updated_at === "string" ? row.payload.updated_at : ""
   }
+  if (row.entity === "events") return isRecord(row.payload) && typeof row.payload.updated_at === "string" ? row.payload.updated_at : ""
   return isRecord(row.payload) && typeof row.payload.updatedAt === "string" ? row.payload.updatedAt : ""
 }
 
@@ -573,6 +584,12 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
     ...remoteMistakes,
     ...localPending.filter((row) => row.entity === "mistakes" && row.operation === "put").map((row) => row.payload),
   ]
+  const remoteEvents = byEntity("events").filter(live("events")).map((row) => row.payload)
+  const events = [
+    ...remoteEvents,
+    ...localPending.filter((row) => row.entity === "events" && row.operation === "put").map((row) => row.payload),
+  ]
+  const timetableRow = byEntity(TIMETABLE_ROW).find((row) => row.rowId === TIMETABLE_ROW)
   const migrated = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes })
   if (!migrated) throw new Error("Synced attempts or mistakes failed validation")
 
@@ -610,6 +627,10 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
     ...data,
     attempts: mergePendingCollection(migrated.attempts, localPending, "attempts"),
     mistakes: mergePendingCollection(migrated.mistakes, localPending, "mistakes"),
+    events: mergePendingCollection(migrateCalendarEvents(events), localPending, "events"),
+    classTimetable: localPending.some((row) => row.entity === TIMETABLE_ROW)
+      ? data.classTimetable
+      : timetableRow?.operation === "put" && isTimetableConfig(timetableRow.payload) ? timetableRow.payload : undefined,
     examProgression: isExamProgression(remoteProgression) ? remoteProgression : undefined,
     trackedExamIds, trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
     completedExamIds, completedExamIdsUpdatedAt: stamp("completedExamIds"),
@@ -623,7 +644,7 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
   }
 }
 
-function mergePendingCollection<T extends { id: string }>(remote: T[], pending: AppRow[], entity: "attempts" | "mistakes"): T[] {
+function mergePendingCollection<T extends { id: string }>(remote: T[], pending: AppRow[], entity: "attempts" | "mistakes" | "events"): T[] {
   const result = new Map(remote.map((item) => [item.id, item]))
   for (const row of pending) {
     if (row.entity !== entity) continue
@@ -640,8 +661,9 @@ function stringArray(value: unknown): string[] {
 export function recordLocalChanges(previous: AppData, next: AppData, now = new Date().toISOString()): void {
   try {
     const raw = localStorage.getItem(TOMBSTONE_KEY)
-    const tombstones = (raw ? JSON.parse(raw) : { attempts: {}, mistakes: {} }) as Record<string, Record<string, string>>
-    for (const entity of ["attempts", "mistakes"] as const) {
+    const tombstones = (raw ? JSON.parse(raw) : {}) as Record<string, Record<string, string>>
+    for (const entity of ["attempts", "mistakes", "events"] as const) {
+      tombstones[entity] ??= {}
       const previousIds = new Set(previous[entity].map((item) => item.id))
       const nextIds = new Set(next[entity].map((item) => item.id))
       for (const id of previousIds) if (!nextIds.has(id)) tombstones[entity][id] = now

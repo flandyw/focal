@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { Button } from "./components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
 import { PastStudyForm } from "../../src/components/planning/PastStudyForm"
+import type { CalendarEvent, TimetableConfig } from "../../src/lib/types"
 import { studySubjectOptions } from "../../src/lib/studySubjects"
 import {
   DropdownMenu,
@@ -97,6 +98,9 @@ const MasteryPage = lazy(() =>
 )
 const GoalsPage = lazy(() =>
   import("./components/goals-page").then((module) => ({ default: module.GoalsPage })),
+)
+const ClassTimetablePage = lazy(() =>
+  import("./components/class-timetable-page").then((module) => ({ default: module.ClassTimetablePage })),
 )
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
@@ -274,6 +278,14 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
 
   function saveExamDifficulty(examDifficulty: ExamDifficultySettings) {
     setData((current) => ({ ...current, examDifficulty }))
+  }
+
+  function saveEvents(update: (events: CalendarEvent[]) => CalendarEvent[]) {
+    setData((current) => ({ ...current, events: update(current.events) }))
+  }
+
+  function saveClassTimetable(classTimetable: TimetableConfig) {
+    setData((current) => ({ ...current, classTimetable }))
   }
 
   function saveLearning(update: LearningWorkspaceUpdate) {
@@ -649,7 +661,8 @@ export default function App({ embedded = false, onOpenSettings }: { embedded?: b
               />
             </Suspense>
           ) : null}
-          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} subjects={data.subjects} sessions={studySessionSync.sessions} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
+          {view === "timetable" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /></Suspense> : null}
+          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} subjects={data.subjects} classTimetable={data.classTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
           {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage embedded={embedded} subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onPlanGoal={planGoal} /></Suspense> : null}

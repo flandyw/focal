@@ -8,14 +8,12 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./u
 import { Textarea } from "./ui/textarea"
 import { buildChatbotImportPrompt, parseTextEventResponse, type TextEventDraft } from "../../../src/lib/calendarImport"
 
-export type ImportedTask = { title: string; date: string; minutes: number; subject?: string; detail: string }
-
-/** The web calendar holds dated study tasks, so every imported item lands as one. */
+/** Events become calendar events; study sessions become dated study tasks. */
 export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onImport }: {
   open: boolean
   subjects: string[]
   onOpenChange: (open: boolean) => void
-  onImport: (tasks: ImportedTask[]) => void
+  onImport: (drafts: TextEventDraft[]) => void
 }) {
   const [text, setText] = useState("")
   const [drafts, setDrafts] = useState<TextEventDraft[] | null>(null)
@@ -49,13 +47,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   }
 
   function add() {
-    onImport(chosen.map((draft) => ({
-      title: draft.title,
-      date: draft.date,
-      minutes: draft.durationMinutes,
-      subject: draft.subjectIds[0],
-      detail: [draft.startTime, draft.endDate && `until ${draft.endDate}`, draft.location].filter(Boolean).join(" · "),
-    })))
+    onImport(chosen)
     setText("")
     setDrafts(null)
     onOpenChange(false)

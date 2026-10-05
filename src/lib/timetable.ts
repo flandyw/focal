@@ -1,4 +1,4 @@
-import type { SchoolHoliday, Subject, TimetableConfig, TimetableDayLabel, TimetableEntry, TimetablePeriod } from "@/lib/types"
+import type { SchoolHoliday, Subject, TimetableConfig, TimetableDayLabel, TimetableEntry, TimetablePeriod } from "./types"
 
 // --- Types ---
 

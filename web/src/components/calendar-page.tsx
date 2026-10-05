@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { Archive, CalendarDays, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
+import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
@@ -9,6 +9,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
+import { CalendarChatbotImportDialog, type ImportedTask } from "./calendar-chatbot-import"
 import { PageHeader } from "./page-header"
 import { WorkspacePage } from "./workspace-layout"
 import {
@@ -84,6 +85,7 @@ export function CalendarPage({
   onNavigate,
   onStartFocus,
   timetable,
+  subjects,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -92,6 +94,7 @@ export function CalendarPage({
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string) => void
   timetable: Timetable | null
+  subjects: string[]
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -99,6 +102,7 @@ export function CalendarPage({
   const [minutes, setMinutes] = useState(30)
   const [subject, setSubject] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
   const days = useMemo(() => buildCalendarMonth(month, source, timetable), [month, source, timetable])
@@ -126,6 +130,12 @@ export function CalendarPage({
     setSelected(date)
   }
 
+  function importTasks(tasks: ImportedTask[]) {
+    commit((current) => tasks.reduce((workspace, task) => addTask(workspace, task), current))
+    setSelected(tasks[0]?.date ?? selected)
+    toast(`${tasks.length} item${tasks.length === 1 ? "" : "s"} added to your calendar`)
+  }
+
   function add() {
     if (!title.trim()) return setError("Enter a task name.")
     if (!Number.isFinite(minutes) || minutes < 5 || minutes > 360) return setError("Duration must be between 5 and 360 minutes.")
@@ -141,7 +151,9 @@ export function CalendarPage({
         title="Calendar and day plan"
         description="Everything scheduled for a day, in one place: study tasks, SACs, exams, and what your revision queue owes you."
       >
+        <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import from chatbot</Button>
         <Button onClick={() => { setMonth(new Date()); setSelected(today()) }} variant="outline"><RotateCcw />Today</Button>
+        <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importTasks} />
       </PageHeader>
 
       <DayStats dueMistakes={plan.dueMistakes} plan={plan} progress={completion} />

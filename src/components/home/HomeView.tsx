@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Combine,
   Wand2,
+  ClipboardPaste,
   ArrowRight,
   Plus,
   Sparkles,
@@ -167,6 +168,7 @@ export const HomeView = memo(function HomeView({
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [eventBatchSaving, setEventBatchSaving] = useState(false);
   const [textPlannerOpen, setTextPlannerOpen] = useState(false);
+  const [plannerMode, setPlannerMode] = useState<"ai" | "chatbot">("ai");
 
   useEffect(() => {
     const refreshNow = () => setClockNow(new Date());
@@ -466,9 +468,13 @@ export const HomeView = memo(function HomeView({
                       AI Assistant
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onSelect={() => setTextPlannerOpen(true)}>
+                  <DropdownMenuItem onSelect={() => { setPlannerMode("ai"); setTextPlannerOpen(true); }}>
                     <Wand2 />
                     Text to events
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setPlannerMode("chatbot"); setTextPlannerOpen(true); }}>
+                    <ClipboardPaste />
+                    Import from chatbot
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -660,12 +666,13 @@ export const HomeView = memo(function HomeView({
       </ScrollArea>
 
       <TextEventPlanner
-        key={textPlannerOpen ? "planner-open" : "planner-closed"}
+        key={textPlannerOpen ? `planner-open-${plannerMode}` : "planner-closed"}
         open={textPlannerOpen}
         onOpenChange={setTextPlannerOpen}
-        title="Text to Events"
-        description="Paste a notice or plan, then review drafts before adding."
+        title={plannerMode === "chatbot" ? "Import from chatbot" : "Text to Events"}
+        description="Review drafts before anything is added to your calendar."
         initialText=""
+        initialMode={plannerMode}
         projects={projects}
         planningSubjects={planningSubjects}
         onCreateEvents={onCreateEvents}

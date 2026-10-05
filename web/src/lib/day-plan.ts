@@ -360,7 +360,7 @@ export function archiveTask(workspace: LearningWorkspace, id: string, now = new 
   return withTasks(workspace, workspace.tasks.map((task) => task.id === id ? { ...task, archivedAt: timestamp, updatedAt: timestamp } : task), now)
 }
 
-export function addTask(workspace: LearningWorkspace, task: { title: string; date: string; minutes: number; subject?: string }, now = new Date()): LearningWorkspace {
+export function addTask(workspace: LearningWorkspace, task: { title: string; date: string; minutes: number; subject?: string; detail?: string }, now = new Date()): LearningWorkspace {
   const title = task.title.trim().slice(0, 200)
   const minutes = Math.round(task.minutes)
   // A bad title or duration is ignored rather than stored as a broken task.
@@ -370,7 +370,7 @@ export function addTask(workspace: LearningWorkspace, task: { title: string; dat
     id: crypto.randomUUID(),
     kind: "custom",
     title,
-    detail: "Personal study task",
+    detail: task.detail?.trim().slice(0, 200) || "Personal study task",
     subject: task.subject?.trim() || undefined,
     durationMinutes: minutes,
     plannedFor: task.date,

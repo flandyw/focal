@@ -33,7 +33,7 @@ import {
   type MistakeReviewState,
   type ReviewRating,
 } from "../lib/exam-data"
-import { downloadMistakesPdf } from "../lib/mistake-pdf"
+import { MistakeExportDialog } from "./mistake-export-dialog"
 import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import {
@@ -527,7 +527,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [activeId, setActiveId] = useState<string | null>(null)
   const isWorkspace = useMinWidth(WORKSPACE_MIN_WIDTH)
   const [practice, setPractice] = useState<Mistake[] | null>(null)
-  const [exporting, setExporting] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
@@ -608,17 +608,6 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
     return visibleMistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= horizon).length
   }, [visibleMistakes, now])
 
-  async function exportWorksheet() {
-    setExporting(true)
-    try {
-      if (await downloadMistakesPdf(worksheetMistakes, data.attempts, activeSubject === "all" ? "mistakes" : activeSubject)) toast.success("Worksheet downloaded")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not export worksheet.")
-    } finally {
-      setExporting(false)
-    }
-  }
-
   async function autofillEmptyFields() {
     setAutofilling(true)
     setAutofillProgress(null)
@@ -649,7 +638,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => void autofillEmptyFields()} disabled={!autofillCandidates.length || autofilling}><Sparkles />Autofill empty fields{autofillCandidates.length ? ` (${autofillCandidates.length})` : ""}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setMergeOpen(true)} disabled={!hasMergeableFields}><Merge />Merge fields</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void exportWorksheet()} disabled={!worksheetMistakes.length || exporting}><FileDown />{exporting ? "Creating PDF…" : "Export worksheet"}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setExportOpen(true)} disabled={!data.mistakes.length}><FileDown />Export…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
@@ -752,7 +741,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · showing the first ${shownMistakes.length}` : ""}</span>
               <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" disabled={!browsedMistakes.length} checked={browsedMistakes.length > 0 && selectedMistakes.length === browsedMistakes.length} ref={(node) => { if (node) node.indeterminate = selectedMistakes.length > 0 && selectedMistakes.length < browsedMistakes.length }} onChange={(event) => setSelected(event.target.checked ? new Set(browsedMistakes.map((mistake) => mistake.id)) : new Set())} />Select all</label><Button size="sm" variant="outline" disabled={!browsedMistakes.length} onClick={() => setPractice(worksheetMistakes)}><Play />{selectedMistakes.length ? `Practise selected (${selectedMistakes.length})` : "Practise"}</Button></div>
             </div>
-            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" disabled={exporting} onClick={() => void exportWorksheet()}><FileDown />{exporting ? "Exporting…" : "Export selected"}</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
+            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><FileDown />Export selected</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
             <div className="grid items-start gap-4 lg:grid-cols-[21rem_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
               {/* The list scrolls inside its own sticky pane so the reading pane keeps
                   its own vertical rhythm instead of inheriting forty rows of scroll. */}
@@ -783,6 +772,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           onSaveMistakes={onImportMistakes}
         />
       ) : null}
+      {exportOpen ? <MistakeExportDialog mistakes={data.mistakes} current={worksheetMistakes} attempts={data.attempts} onOpenChange={setExportOpen} /> : null}
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>
   )

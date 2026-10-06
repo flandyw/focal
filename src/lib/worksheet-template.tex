@@ -1,0 +1,511 @@
+% =====================================================================
+%  Sample Mathematical Methods Examination 1 — layout replica
+%  Compile with:  xelatex sample.tex   (run twice for page overlays)
+% =====================================================================
+\documentclass[10pt,twoside]{article}
+
+% ---------------------------------------------------------------- page
+\usepackage[a4paper,
+  inner=29.5mm, outer=12.4mm,
+  top=24mm, bottom=16mm,
+  headheight=6mm, headsep=7mm,
+  footskip=0mm]{geometry}
+
+% --------------------------------------------------------------- fonts
+\usepackage{mathptmx}              % Times-style maths, as in the VCAA papers
+\usepackage[no-math]{fontspec}
+\setmainfont{Liberation Sans}      % Arial-metric sans for exam furniture
+\newfontfamily\qfont{TeX Gyre Termes}  % Times-style question text
+
+% ------------------------------------------------------------ packages
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{eso-pic}
+\usepackage{fancyhdr}
+\usepackage{enumitem}
+\usepackage{array,tabularx,colortbl,diagbox}
+
+\definecolor{vcaapink}{HTML}{D88A8C}
+\definecolor{bargrey}{HTML}{404040}
+\definecolor{cellgrey}{HTML}{EDEDED}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\linespread{1.08}
+
+% ---------------------------------------------------- document metadata
+\newcommand{\examtitle}{2026 VCE Mathematical Methods Examination 1}
+\newcommand{\booktotal}{12}          % pages in the Question and Answer Book
+\newcommand{\sheettotal}{4}          % pages in the Formula Sheet
+\newcommand{\ptotal}{\booktotal}
+
+% ------------------------------------------------------ running headers
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.5pt}
+\newcommand{\hdr}{\fontsize{9.5}{11}\selectfont}
+\fancyhead[LE,RO]{\hdr Page \thepage\ of \ptotal}
+\fancyhead[RE,LO]{\hdr\examtitle}
+
+% ---------------------------------------------------- "do not write" bars
+\newif\ifbookbars
+\bookbarsfalse
+\newcommand{\barwidth}{17.2mm}
+\AddToShipoutPictureBG{%
+  \ifbookbars
+    \begin{tikzpicture}[remember picture,overlay]
+      \ifodd\value{page}
+        \fill[bargrey] (current page.south west) rectangle
+             ([xshift=\barwidth]current page.north west);
+        \node[rotate=90,text=white,font=\bfseries\fontsize{11}{13}\selectfont]
+             at ([xshift=0.5*\barwidth]current page.west)
+             {Do not write in this area.};
+      \else
+        \fill[bargrey] ([xshift=-\barwidth]current page.south east)
+             rectangle (current page.north east);
+        \node[rotate=-90,text=white,font=\bfseries\fontsize{11}{13}\selectfont]
+             at ([xshift=-0.5*\barwidth]current page.east)
+             {Do not write in this area.};
+      \fi
+    \end{tikzpicture}%
+  \fi}
+
+% ------------------------------------------------------ question macros
+\newcommand{\question}[2]{%
+  \par\vspace{6mm}%
+  {\fontsize{10.5}{13}\selectfont\textbf{Question #1} (#2 marks)}\par
+  \vspace{1.5mm}}
+
+% marks flush right on the current line
+\newcommand{\qmarks}[1]{%
+  \unskip\nobreak\hfill\mbox{\normalfont\fontsize{10.5}{13}\selectfont #1}}
+\newcommand{\onemark}{\qmarks{1 mark}}
+\newcommand{\nmarks}[1]{\qmarks{#1 marks}}
+
+% ruled answer lines, ending 19 mm short of the text edge
+\newlength{\answerpitch}\setlength{\answerpitch}{9mm}
+\newcount\lnc
+\newcommand{\answerlines}[1]{%
+  \par\vspace{1mm}%
+  {\setlength{\baselineskip}{\answerpitch}%
+   \lnc=0
+   \loop\ifnum\lnc<#1
+     \advance\lnc by 1
+     \noindent\rule{\dimexpr\linewidth-19mm\relax}{0.4pt}\par
+   \repeat}%
+  \vspace{4mm}}
+
+% question body text (Times) and part / sub-part lists
+\newenvironment{qbody}{\par\qfont\fontsize{11.5}{15}\selectfont}{\par}
+\newlist{parts}{enumerate}{1}
+\setlist[parts]{label=\textbf{\sffamily\alph*.}, font=\normalfont,
+  leftmargin=7.7mm, labelwidth=7.7mm, labelsep=0pt, align=left,
+  itemsep=2mm, topsep=1mm}
+\newlist{subparts}{enumerate}{1}
+\setlist[subparts]{label=\textbf{\sffamily\roman*.}, font=\normalfont,
+  leftmargin=4.5mm, labelwidth=4.5mm, labelsep=0pt, align=left,
+  itemsep=2mm, topsep=1mm}
+
+\newcommand{\blankpage}[1][]{%
+  \clearpage
+  \null\vfill
+  \begin{center}\textbf{\fontsize{11}{13}\selectfont This page is blank.}\end{center}
+  \vfill
+  \ifx\relax#1\relax\else
+    \hfill{\fontsize{10.5}{13}\selectfont #1}\par\vspace{2mm}
+  \fi
+  \clearpage}
+
+\newcommand{\examend}{%
+  \par\vfill
+  \hfill\begin{minipage}{62mm}
+    \rule{62mm}{1pt}\par\vspace{2mm}
+    \raggedleft\textbf{\fontsize{10.5}{13}\selectfont End of examination questions}
+  \end{minipage}\par\vspace{6mm}}
+
+% placeholder for logos (official marks are not reproduced)
+\newcommand{\logoplaceholder}[1]{%
+  \tikz\node[draw=black!40,dashed,minimum width=#1,minimum height=9mm,
+    font=\fontsize{6.5}{7}\selectfont\color{black!50}]{LOGO};}
+
+% =====================================================================
+\begin{document}
+
+% ============================== COVER ================================
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+\begin{tikzpicture}[remember picture,overlay,x=1mm,y=-1mm,
+    shift={(current page.north west)}]
+  % pink spine
+  \fill[vcaapink] (0,0) rectangle (9.7,297);
+  % supervisor label box
+  \draw[densely dotted,rounded corners=2mm,line width=0.6pt]
+       (104,13.4) rectangle (197.4,50.8);
+  \node[align=center,font=\fontsize{7}{8.5}\selectfont] at (150.7,32.6)
+       {SUPERVISOR TO ATTACH\\PROCESSING LABEL HERE};
+  % student number boxes: 2 + 3 + 3, then letter
+  \foreach \x in {88.5,98.9} {\draw[line width=0.5pt] (\x,56) rectangle ++(10.4,10.4);}
+  \foreach \x in {114.3,124.7,135.1} {\draw[line width=0.5pt] (\x,56) rectangle ++(10.4,10.4);}
+  \foreach \x in {150.5,160.9,171.3} {\draw[line width=0.5pt] (\x,56) rectangle ++(10.4,10.4);}
+  \draw[line width=0.5pt] (186.9,56) rectangle ++(10.4,10.4);
+  \node[anchor=base west,inner sep=0,font=\fontsize{10.5}{12}\selectfont]
+       at (88.5,71.5) {Write your \textbf{student number} in the boxes above.};
+  \node[anchor=base east,inner sep=0,font=\bfseries\fontsize{10.5}{12}\selectfont]
+       at (197.3,71.5) {Letter};
+  % titles
+  \node[anchor=base west,inner sep=0,font=\fontsize{29}{32}\selectfont]
+       at (20,114) {Mathematical Methods};
+  \node[anchor=base west,inner sep=0,font=\fontsize{29}{32}\selectfont]
+       at (20,125.5) {Examination 1};
+  \node[anchor=base west,inner sep=0,font=\fontsize{18.5}{21}\selectfont]
+       at (20,135.8) {Question and Answer Book};
+  \node[anchor=base west,inner sep=0,font=\fontsize{14.5}{17}\selectfont]
+       at (20,147) {VCE Examination -- Sample Paper};
+  \draw[line width=1.4pt] (20,151) -- (178.3,151);
+  % reading / writing times, materials, instructions
+  \node[anchor=north west,inner sep=0,text width=158mm,
+        font=\fontsize{10.5}{14.2}\selectfont] at (20,153.3) {%
+    \begin{itemize}[leftmargin=3.2mm,labelsep=1.6mm,itemsep=0pt,topsep=0pt,
+                    parsep=0pt,label=\textbullet]
+      \item Reading time is \textbf{15 minutes}: 9.00 am to 9.15 am
+      \item Writing time is \textbf{1 hour}: 9.15 am to 10.15 am
+    \end{itemize}
+    \vspace{1.2mm}
+    {\fontsize{12}{14}\selectfont\textbf{Materials supplied}}\par\vspace{0.5mm}
+    \begin{itemize}[leftmargin=3.2mm,labelsep=1.6mm,itemsep=0pt,topsep=0pt,
+                    parsep=0pt,label=\textbullet]
+      \item Question and Answer Book of \booktotal\ pages
+      \item Formula Sheet
+    \end{itemize}
+    \vspace{1.2mm}
+    {\fontsize{12}{14}\selectfont\textbf{Instructions}}\par\vspace{0.3mm}
+    Students are \textbf{not} permitted to bring any technology (calculators or software), or notes of any kind,
+    into the examination room.\par\vspace{2mm}
+    Students are \textbf{not} permitted to bring mobile phones and/or any unauthorised electronic devices
+    into the examination room.};
+  \draw[line width=1.4pt] (20,216.3) -- (178.3,216.3);
+  % contents
+  \node[anchor=base west,inner sep=0,font=\bfseries\fontsize{12}{14}\selectfont]
+       at (20,224.5) {Contents};
+  \node[anchor=base east,inner sep=0,font=\fontsize{10.5}{12}\selectfont]
+       at (178.3,224.5) {pages};
+  \node[anchor=base west,inner sep=0,font=\fontsize{10.5}{12}\selectfont]
+       at (20,231.3) (cq) {6 questions (22 marks)};
+  \node[anchor=base east,inner sep=0,font=\fontsize{10.5}{12}\selectfont]
+       at (178.3,231.3) (cp) {2--8};
+  \draw[line width=0.5pt] ([xshift=1mm]cq.base east) -- ([xshift=-1mm]cp.base west);
+  % footer
+  \node[anchor=base west,inner sep=0,font=\fontsize{10}{12}\selectfont]
+       at (20,274) {\copyright\ Sample Paper 2026};
+  \node[anchor=east,inner sep=0] at (174,271.5) {\logoplaceholder{48mm}};
+  \node[anchor=east,inner sep=0] at (197.5,271.5) {\logoplaceholder{18mm}};
+\end{tikzpicture}}
+\null
+\clearpage
+
+% ======================= QUESTION PAGES ==============================
+\global\bookbarstrue
+
+% ---------------------------------------------------------- page 2
+{\fontsize{12}{14}\selectfont\textbf{Instructions}}\par\vspace{1mm}
+{\fontsize{10.5}{14}\selectfont
+\begin{itemize}[leftmargin=3.6mm,labelsep=2mm,itemsep=0pt,topsep=0pt,parsep=0pt,label=\textbullet]
+  \item Answer \textbf{all} questions in the spaces provided.
+  \item Write your responses in English.
+  \item In all questions where a numerical answer is required, an \textbf{exact} value must be given unless
+        otherwise specified.
+  \item In questions where more than one mark is available, appropriate working \textbf{must} be shown.
+  \item Unless otherwise indicated, the diagrams in this book are \textbf{not} drawn to scale.
+\end{itemize}}
+\vspace{4mm}
+\noindent\rule{\linewidth}{1pt}
+\vspace{4mm}
+
+\question{1}{3}
+\begin{qbody}
+\begin{parts}
+  \item Let $y = x^{3}e^{2x}$.\par\vspace{1mm}
+        Find $\dfrac{dy}{dx}$.\onemark
+        \answerlines{3}
+  \item Let $f(x) = 4\sqrt{2x+1} - 3$.\par\vspace{1mm}
+        Find the gradient of the tangent to $y = f(x)$ at $x = 4$.\nmarks{2}
+        \answerlines{6}
+\end{parts}
+\end{qbody}
+
+% ---------------------------------------------------------- page 3
+\clearpage
+\question{2}{2}
+\begin{qbody}
+Let $h(x)$ be a function defined for $x > \dfrac{2}{3}$ so that
+$h'(x) = \dfrac{3}{3x-2}$ and $h(1) = 2$.\par\vspace{2mm}
+Find $h(x)$.
+\answerlines{8}
+\end{qbody}
+
+% ---------------------------------------------------------- page 4
+\clearpage
+\question{3}{6}
+\begin{qbody}
+Let $f\colon [0, 2\pi] \to R,\ f(x) = 2\sin(x) - 1$.
+\begin{parts}
+  \item State the range of $f$.\onemark
+        \answerlines{2}
+  \item Solve $f(x) = 0$ for $x$.\nmarks{3}
+        \answerlines{9}
+  \item Sketch the graph of $y = f(x)$ for $x \in \left[\dfrac{\pi}{2}, \dfrac{3\pi}{2}\right]$ on the axes below.\par\vspace{2mm}
+        Label the endpoints with their coordinates.\nmarks{2}\par\vspace{4mm}
+        \hspace*{14mm}%
+        \begin{tikzpicture}[x=17.3mm,y=11.8mm,font=\fontsize{11}{13}\selectfont]
+          % grid
+          \foreach \i in {1,2,3,4} \draw[line width=0.5pt] (\i,-3.45) -- (\i,2.75);
+          \foreach \j in {-3,-2,-1,1,2} \draw[line width=0.5pt] (0,\j) -- (5,\j);
+          % axes
+          \draw[line width=0.6pt,-{latex}] (-0.4,0) -- (5.1,0) node[right] {$x$};
+          \draw[line width=0.6pt,-{latex}] (0,-3.45) -- (0,3.0) node[above] {$y$};
+          \foreach \j in {-3,-2,-1,1,2} {
+            \draw (0,\j) -- (-0.08,\j) node[left] {$\j$};}
+          \foreach \i in {1,2,3,4} \draw (\i,0) -- (\i,-0.08);
+          \node[below left] at (0,0) {$O$};
+          \node[below=1pt,fill=white,inner sep=1pt] at (1,0) {$\dfrac{\pi}{2}$};
+          \node[below=3pt,fill=white,inner sep=1pt] at (2,0) {$\pi$};
+          \node[below=1pt,fill=white,inner sep=1pt] at (3,0) {$\dfrac{3\pi}{2}$};
+          \node[below=3pt,fill=white,inner sep=1pt] at (4,0) {$2\pi$};
+        \end{tikzpicture}
+\end{parts}
+\end{qbody}
+
+% ---------------------------------------------------------- page 5
+\clearpage
+\question{4}{4}
+\begin{qbody}
+The probability distribution for the discrete random variable $X$ is given in the table below,
+where $k$ is a positive real number.\par\vspace{4mm}
+{\renewcommand{\arraystretch}{1.9}%
+\begin{tabular}{|>{\centering\arraybackslash}p{21mm}|*{4}{>{\centering\arraybackslash}p{21mm}|}}
+  \hline
+  $x$ & $0$ & $1$ & $2$ & $3$ \\ \hline
+  $\Pr(X = x)$ & $\dfrac{3}{k}$ & $\dfrac{k}{50}$ & $\dfrac{k}{50}$ & $\dfrac{1}{k}$ \\[2mm] \hline
+\end{tabular}}
+\par\vspace{5mm}
+\begin{parts}
+  \item Show that $k = 5$ or $k = 20$.\nmarks{2}
+        \answerlines{8}
+  \item Let $k = 20$.
+        \begin{subparts}
+          \item Find $\Pr(X \geq 2)$.\onemark
+                \answerlines{3}
+          \item Find $\mathrm{E}(X)$.\onemark
+                \answerlines{4}
+        \end{subparts}
+\end{parts}
+\end{qbody}
+
+% ---------------------------------------------------------- page 6
+\clearpage
+\question{5}{4}
+\begin{qbody}
+Let $f\colon R \to R,\ f(x) = x^{3} + x^{2} - 8x - 12$.
+\begin{parts}
+  \item Verify that $x = 3$ is a solution of $f(x) = 0$.\onemark
+        \answerlines{4}
+  \item Express $f(x)$ in the form $(x + d)^{2}(x - 3)$, where $d \in R$.\nmarks{2}
+        \answerlines{8}
+\end{parts}
+\end{qbody}
+
+% ---------------------------------------------------------- page 7
+\clearpage
+\begin{qbody}
+\begin{parts}[start=3]
+  \item Consider the graph of $y = f(x)$, as shown below.\par\vspace{1mm}
+        Complete the coordinate pairs of all axial intercepts of $y = f(x)$.\onemark
+        \par\vspace{3mm}
+        \hspace*{8mm}%
+        \begin{tikzpicture}[x=13mm,y=2.9mm,font=\fontsize{10}{12}\selectfont]
+          \draw[line width=0.6pt,-{latex}] (-4.6,0) -- (4.6,0) node[right] {$x$};
+          \draw[line width=0.6pt,-{latex}] (0,-23) -- (0,26) node[above] {$y$};
+          \node[below left] at (0,0) {$O$};
+          \begin{scope}
+            \clip (-4.6,-23) rectangle (4.6,24);
+            \draw[line width=1pt,smooth,samples=120,domain=-3.9:3.75]
+                 plot (\x,{(\x)^3 + (\x)^2 - 8*(\x) - 12});
+          \end{scope}
+          \node[above] at (-2,0.3) {$(\quad\ \ ,\, 0)$};
+          \node[above left] at (2.92,0.3) {$(\quad\ \ ,\, 0)$};
+          \node[right] at (0.15,-10.5) {$(0,\quad\ \ )$};
+          \node[left] at (3.55,19) {$y = f(x)$};
+        \end{tikzpicture}
+\end{parts}
+\end{qbody}
+
+% ---------------------------------------------------------- page 8
+\clearpage
+\question{6}{3}
+\begin{qbody}
+Consider the binomial random variable $X \sim \mathrm{Bi}\!\left(5, \dfrac{1}{3}\right)$.
+\begin{parts}
+  \item Find $\mathrm{var}(X)$.\onemark
+        \answerlines{3}
+  \item Determine $\Pr(X \geq 4)$.\par\vspace{1mm}
+        Give your answer in the form $\dfrac{a}{3^{b}}$, where $a, b \in Z$.\nmarks{2}
+        \answerlines{8}
+\end{parts}
+\end{qbody}
+\examend
+
+% ------------------------------------------------------ blank pages
+\blankpage
+\blankpage
+\blankpage
+
+% ======================= BACK COVER (page 12) ========================
+\global\bookbarsfalse
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+\begin{tikzpicture}[remember picture,overlay]
+  \fill[vcaapink] ([xshift=-9.5mm]current page.south east) rectangle (current page.north east);
+  \node[font=\fontsize{10.5}{12}\selectfont] at ([xshift=-4mm]current page.center)
+       {\copyright\ Sample Paper 2026};
+\end{tikzpicture}}
+\null
+\clearpage
+
+% =====================================================================
+%                            FORMULA SHEET
+% =====================================================================
+\newgeometry{left=20mm,right=19mm,top=24mm,bottom=16mm,headheight=6mm,headsep=7mm,footskip=0mm}
+\renewcommand{\ptotal}{\sheettotal}
+\setcounter{page}{1}
+\fancyhf{}
+\fancyhead[LE]{\hdr Page \thepage\ of \ptotal}
+\fancyhead[RE]{\hdr Formula Sheet \quad VCE Mathematical Methods Examination 1}
+\fancyhead[LO]{\hdr VCE Mathematical Methods Examination 1 \ \textbf{Formula Sheet}}
+\fancyhead[RO]{\hdr Page \thepage\ of \ptotal}
+
+% ----------------------------------------------- formula sheet cover
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+\begin{tikzpicture}[remember picture,overlay,x=1mm,y=-1mm,
+    shift={(current page.north west)}]
+  \foreach \k in {0,...,13} \fill[vcaapink] (0,{10.3+20.6*\k}) rectangle ++(10,10.3);
+  \node[anchor=base west,inner sep=0,font=\fontsize{29}{32}\selectfont]
+       at (21,173) {Mathematical Methods};
+  \node[anchor=base west,inner sep=0,font=\fontsize{29}{32}\selectfont]
+       at (21,184.5) {Examination 1};
+  \node[anchor=base west,inner sep=0,font=\fontsize{18.5}{21}\selectfont]
+       at (21,194.5) {Sample Formula Sheet};
+  \draw[line width=1.4pt] (21,198) -- (178.5,198);
+  \node[anchor=base west,inner sep=0,font=\fontsize{10.5}{12}\selectfont]
+       at (21,205) {You may keep this Formula Sheet.};
+  \node[anchor=base west,inner sep=0,font=\fontsize{10}{12}\selectfont]
+       at (21,288.5) {\copyright\ Sample Paper 2026};
+  \node[anchor=east,inner sep=0] at (174.5,286) {\logoplaceholder{48mm}};
+  \node[anchor=east,inner sep=0] at (198,286) {\logoplaceholder{18mm}};
+\end{tikzpicture}}
+\null
+\clearpage
+
+% ----------------------------------------------- formula sheet page 2
+\newcommand{\sect}[1]{{\fontsize{12}{14}\selectfont\textbf{#1}}\par\vspace{2.5mm}}
+\setlength{\arrayrulewidth}{0.5pt}
+\setlength{\extrarowheight}{2pt}
+
+\sect{Mensuration}
+{\qfont\fontsize{11}{13}\selectfont\renewcommand{\arraystretch}{1.9}%
+\begin{tabular}{|>{\raggedright\arraybackslash}p{30mm}|>{\centering\arraybackslash}p{40mm}|>{\raggedright\arraybackslash}p{30mm}|>{\centering\arraybackslash}p{52mm}|}
+  \hline
+  area of a trapezium & $\dfrac{1}{2}(a+b)h$ & volume of a pyramid & $\dfrac{1}{3}Ah$ \\ \hline
+  curved surface area of a cylinder & $2\pi rh$ & volume of a sphere & $\dfrac{4}{3}\pi r^{3}$ \\ \hline
+  volume of a cylinder & $\pi r^{2}h$ & area of a triangle & $\dfrac{1}{2}bc\sin(A)$ \\ \hline
+  volume of a cone & $\dfrac{1}{3}\pi r^{2}h$ &
+    \multicolumn{2}{l|}{\cellcolor{cellgrey}} \\ \hline
+\end{tabular}}
+
+\vspace{8mm}
+\sect{Calculus}
+{\qfont\fontsize{11}{13}\selectfont\renewcommand{\arraystretch}{2.1}%
+\begin{tabular}{|>{\centering\arraybackslash}p{80mm}|>{\centering\arraybackslash}p{80mm}|}
+  \hline
+  $\dfrac{d}{dx}\left(x^{n}\right) = nx^{n-1}$ &
+  $\displaystyle\int x^{n}\,dx = \frac{1}{n+1}x^{n+1} + c,\ n \neq -1$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left((ax+b)^{n}\right) = an(ax+b)^{n-1}$ &
+  $\displaystyle\int (ax+b)^{n}\,dx = \frac{1}{a(n+1)}(ax+b)^{n+1} + c,\ n \neq -1$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left(e^{ax}\right) = ae^{ax}$ &
+  $\displaystyle\int e^{ax}\,dx = \frac{1}{a}e^{ax} + c$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left(\log_{e}(x)\right) = \dfrac{1}{x}$ &
+  $\displaystyle\int \frac{1}{x}\,dx = \log_{e}(x) + c,\ x > 0$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left(\sin(ax)\right) = a\cos(ax)$ &
+  $\displaystyle\int \sin(ax)\,dx = -\frac{1}{a}\cos(ax) + c$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left(\cos(ax)\right) = -a\sin(ax)$ &
+  $\displaystyle\int \cos(ax)\,dx = \frac{1}{a}\sin(ax) + c$ \\[2mm] \hline
+  $\dfrac{d}{dx}\left(\tan(ax)\right) = \dfrac{a}{\cos^{2}(ax)} = a\sec^{2}(ax)$ &
+  \cellcolor{cellgrey} \\[2mm] \hline
+  product rule \quad $\dfrac{d}{dx}(uv) = u\dfrac{dv}{dx} + v\dfrac{du}{dx}$ &
+  quotient rule \quad $\dfrac{d}{dx}\left(\dfrac{u}{v}\right) = \dfrac{v\dfrac{du}{dx} - u\dfrac{dv}{dx}}{v^{2}}$ \\[3mm] \hline
+  chain rule \quad $\dfrac{dy}{dx} = \dfrac{dy}{du}\,\dfrac{du}{dx}$ &
+  Newton's method \quad $x_{n+1} = x_{n} - \dfrac{f(x_{n})}{f'(x_{n})}$ \\[2mm] \hline
+  \multicolumn{2}{|l|}{\parbox[c]{160mm}{\vspace{2mm}trapezium rule approximation\\[1mm]
+     $\text{Area} \approx \dfrac{x_{n} - x_{0}}{2n}\big[f(x_{0}) + 2f(x_{1}) + 2f(x_{2}) + \dots
+       + 2f(x_{n-2}) + 2f(x_{n-1}) + f(x_{n})\big]$\vspace{2mm}}} \\ \hline
+\end{tabular}}
+\clearpage
+
+% ----------------------------------------------- formula sheet page 3
+\sect{Probability}
+{\qfont\fontsize{11}{13}\selectfont\renewcommand{\arraystretch}{2.0}%
+\begin{tabular}{|>{\raggedright\arraybackslash}p{20mm}|p{31mm}|p{26mm}|p{76mm}|}
+  \hline
+  \multicolumn{2}{|l|}{$\Pr(A) = 1 - \Pr(A')$} &
+  \multicolumn{2}{l|}{$\Pr(A \cup B) = \Pr(A) + \Pr(B) - \Pr(A \cap B)$} \\ \hline
+  \multicolumn{2}{|l|}{$\Pr(A|B) = \dfrac{\Pr(A \cap B)}{\Pr(B)}$} &
+  \multicolumn{2}{l|}{\cellcolor{cellgrey}\diagbox[dir=SW,width=110.4mm,height=12mm]{}{}} \\ \hline
+  mean & $\mu = \mathrm{E}(X)$ & variance & $\mathrm{var}(X) = \sigma^{2} = \mathrm{E}((X-\mu)^{2}) = \mathrm{E}(X^{2}) - \mu^{2}$ \\ \hline
+  binomial coefficient & $\dbinom{n}{x} = \dfrac{n!}{x!(n-x)!}$ &
+  \multicolumn{2}{l|}{\cellcolor{cellgrey}\diagbox[dir=SW,width=110.4mm,height=13mm]{}{}} \\ \hline
+\end{tabular}}
+
+\vspace{7mm}
+{\qfont\fontsize{11}{13}\selectfont\renewcommand{\arraystretch}{2.2}%
+\begin{tabular}{|p{20mm}|p{48mm}|p{30mm}|p{55mm}|}
+  \hline
+  \multicolumn{2}{|c|}{\sffamily\bfseries Probability distribution} &
+  \multicolumn{1}{c|}{\sffamily\bfseries Mean} & \multicolumn{1}{c|}{\sffamily\bfseries Variance} \\ \hline
+  discrete & $\Pr(X = x) = p(x)$ & $\mu = \sum x\,p(x)$ & $\sigma^{2} = \sum (x-\mu)^{2}\,p(x)$ \\ \hline
+  binomial & $\Pr(X = x) = \dbinom{n}{x}p^{x}(1-p)^{n-x}$ & $\mu = np$ & $\sigma^{2} = np(1-p)$ \\ \hline
+  continuous & $\Pr(a < X < b) = \displaystyle\int_{a}^{b} f(x)\,dx$ &
+    $\mu = \displaystyle\int_{-\infty}^{\infty} x\,f(x)\,dx$ &
+    $\sigma^{2} = \displaystyle\int_{-\infty}^{\infty} (x-\mu)^{2}f(x)\,dx$ \\[3mm] \hline
+\end{tabular}}
+
+\vspace{9mm}
+\sect{Sample proportions}
+{\qfont\fontsize{11}{13}\selectfont\renewcommand{\arraystretch}{2.2}%
+\begin{tabular}{|>{\raggedright\arraybackslash}p{19mm}|p{36mm}|>{\raggedright\arraybackslash}p{25mm}|p{68mm}|}
+  \hline
+  \multicolumn{2}{|l|}{$\hat{P} = \dfrac{X}{n}$} & mean & $\mathrm{E}(\hat{P}) = p$ \\[2mm] \hline
+  standard deviation & $\mathrm{sd}(\hat{P}) = \sqrt{\dfrac{p(1-p)}{n}}$ &
+  approximate confidence interval &
+  $\left(\hat{p} - z\sqrt{\dfrac{\hat{p}(1-\hat{p})}{n}},\ \hat{p} + z\sqrt{\dfrac{\hat{p}(1-\hat{p})}{n}}\right)$ \\[3mm] \hline
+\end{tabular}}
+
+\vfill
+\hfill\begin{minipage}{62mm}
+  \rule{62mm}{1pt}\par\vspace{2mm}
+  \raggedleft\textbf{\fontsize{10.5}{13}\selectfont End of Formula Sheet}
+\end{minipage}\par\vspace{6mm}
+\clearpage
+
+% ----------------------------------------------- formula sheet back
+\thispagestyle{empty}
+\AddToShipoutPictureBG*{%
+\begin{tikzpicture}[remember picture,overlay,x=1mm,y=-1mm,
+    shift={(current page.north west)}]
+  \foreach \k in {0,...,13} \fill[vcaapink] (200,{10.3+20.6*\k}) rectangle ++(10,10.3);
+  \node[font=\fontsize{10.5}{12}\selectfont] at (100,148.5) {\copyright\ Sample Paper 2026};
+\end{tikzpicture}}
+\null
+
+\end{document}

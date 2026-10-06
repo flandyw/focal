@@ -5,7 +5,9 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { Textarea } from "./ui/textarea"
+import template from "../lib/worksheet-template.tex?raw"
 import type { CurriculumArea, StoplightRating } from "../lib/learning-workspace"
 import { buildRevisionPrompt, groupBy, itemGroup, parseRatingsResponse, type ItemEvidence } from "../lib/stoplight"
 
@@ -21,6 +23,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [worksheet, setWorksheet] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const groups = groupBy(items, itemGroup)
   const selected = items.filter((item) => !skipped.has(itemGroup(item)))
@@ -32,7 +35,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
 
   async function copyPrompt() {
     try {
-      await navigator.clipboard.writeText(buildRevisionPrompt(subject, selected, evidence))
+      await navigator.clipboard.writeText(buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined))
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -54,9 +57,12 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Revise {subject} with a chatbot</DialogTitle>
-          <DialogDescription>The chatbot quizzes you on your checklist, starting with your weakest items, then suggests a red, amber or green rating for each item it tested.</DialogDescription>
+          <DialogDescription>Quiz in chat, or get a printable XeLaTeX worksheet and upload it back to be marked. Either way the chatbot suggests a red, amber or green rating for each item it tested.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
+          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); setCopied(false) }}>
+            <TabsList><TabsTrigger value="chat">Quiz in chat</TabsTrigger><TabsTrigger value="worksheet">Worksheet</TabsTrigger></TabsList>
+          </Tabs>
           <Field>
             <FieldLabel>1. Choose what to revise</FieldLabel>
             <ul className="divide-y rounded-lg border" aria-label="Groups to include">
@@ -73,16 +79,16 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           </Field>
           <Field>
             <div className="flex items-center justify-between gap-3">
-              <FieldLabel>2. Copy the prompt, paste it into any chatbot, and revise</FieldLabel>
+              <FieldLabel>2. Copy the prompt and paste it into a chatbot that can run code</FieldLabel>
               <Button type="button" size="sm" variant="outline" disabled={!selected.length} onClick={() => void copyPrompt()}>
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
-            <FieldDescription>Includes {selected.length} items with your current ratings, open mistakes and marks.</FieldDescription>
+            <FieldDescription>Includes {selected.length} items with your current ratings, open mistakes and marks{worksheet ? ", plus the worksheet template" : ""}.</FieldDescription>
           </Field>
           <Field data-invalid={error ? true : undefined}>
-            <FieldLabel htmlFor="stoplight-revise-json">3. Say "done", then paste the chatbot's reply</FieldLabel>
-            <Textarea id="stoplight-revise-json" rows={4} className="font-mono text-xs" placeholder='{"ratings":[{"n":1,"rating":"amber"}]}'
+            <FieldLabel htmlFor="stoplight-revise-json">{worksheet ? "3. Upload your completed worksheet, then paste the marking reply" : `3. Say "done", then paste the chatbot's reply`}</FieldLabel>
+            <Textarea id="stoplight-revise-json" rows={4} className="font-mono text-xs" placeholder='{"ratings":[{"n":1,"rating":"amber","marks":"2/3"}]}'
               value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} />
             {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only the items it rated change.</FieldDescription>}
           </Field>

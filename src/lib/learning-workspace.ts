@@ -19,11 +19,24 @@ export type StudyTask = {
   archivedAt?: string
 }
 
-type CurriculumArea = {
+export type StoplightRating = "red" | "amber" | "green"
+export type StoplightType = "recall" | "technique" | "apply" | "practical"
+const STOPLIGHT_RATINGS = ["red", "amber", "green"]
+const STOPLIGHT_TYPES = ["recall", "technique", "apply", "practical"]
+
+// ponytail: the persisted key stays `curriculumAreas` (synced + Folio-compatible); a stoplight item is a curriculum area with a `group`.
+export type CurriculumArea = {
   id: string
   subject: string
   name: string
   description?: string
+  /** Unit / Area of Study heading the item sits under. */
+  group?: string
+  rating?: StoplightRating
+  ratedAt?: string
+  /** One-line "prove it" test: green means passing this cold and timed. */
+  check?: string
+  type?: StoplightType
   createdAt: string
   updatedAt: string
   archivedAt?: string
@@ -69,19 +82,6 @@ export const EMPTY_LEARNING_WORKSPACE: LearningWorkspace = {
 
 export type TaskDraft = Omit<StudyTask, "id" | "status" | "createdAt" | "updatedAt">
 
-export type MasteryArea = {
-  key: string
-  subject: string
-  name: string
-  awardedMarks: number
-  availableMarks: number
-  mistakes: number
-  reviews: number
-  mastery: number | null
-  evidenceCount: number
-  lastEvidenceAt?: string
-}
-
 export type GoalProgress = {
   current: number | null
   target: number
@@ -110,7 +110,12 @@ export function isLearningWorkspace(value: unknown): value is LearningWorkspace 
     (task.sourceId === undefined || typeof task.sourceId === "string")) &&
     Array.isArray(value.curriculumAreas) && value.curriculumAreas.every((area) => isTimestamped(area) &&
       typeof area.subject === "string" && area.subject.trim().length > 0 && typeof area.name === "string" && area.name.trim().length > 0 &&
-      (area.description === undefined || typeof area.description === "string")) &&
+      (area.description === undefined || typeof area.description === "string") &&
+      (area.group === undefined || typeof area.group === "string") &&
+      (area.rating === undefined || STOPLIGHT_RATINGS.includes(String(area.rating))) &&
+      (area.ratedAt === undefined || typeof area.ratedAt === "string") &&
+      (area.check === undefined || typeof area.check === "string") &&
+      (area.type === undefined || STOPLIGHT_TYPES.includes(String(area.type)))) &&
     Array.isArray(value.goals) && value.goals.every((goal) => isTimestamped(goal) &&
       ["study-score", "exam-percentage", "atar"].includes(String(goal.kind)) &&
       (goal.subject === undefined || typeof goal.subject === "string") && typeof goal.target === "number" &&
@@ -168,46 +173,6 @@ export function localDate(date: Date) {
 export function materialiseTask(draft: TaskDraft, now = new Date()): StudyTask {
   const timestamp = now.toISOString()
   return { ...draft, id: crypto.randomUUID(), status: "planned", createdAt: timestamp, updatedAt: timestamp }
-}
-
-export function buildMasteryAreas(data: Pick<AppData, "attempts" | "mistakes" | "learning">): MasteryArea[] {
-  const buckets = new Map<string, MasteryArea>()
-  const ensure = (subject: string, name: string) => {
-    const key = `${subject.trim().toLowerCase()}::${name.trim().toLowerCase()}`
-    const current = buckets.get(key) ?? { key, subject, name, awardedMarks: 0, availableMarks: 0, mistakes: 0, reviews: 0, mastery: null, evidenceCount: 0 }
-    buckets.set(key, current)
-    return current
-  }
-  for (const area of data.learning.curriculumAreas.filter((area) => !area.archivedAt)) ensure(area.subject, area.name)
-  for (const attempt of data.attempts) {
-    for (const result of attempt.questionResults ?? []) {
-      const name = result.areaOfStudy?.trim() || result.criterion?.trim()
-      if (!name) continue
-      const bucket = ensure(attempt.subject, name)
-      bucket.awardedMarks += result.marksAwarded
-      bucket.availableMarks += result.maxMarks
-      bucket.evidenceCount += 1
-      bucket.lastEvidenceAt = [bucket.lastEvidenceAt ?? "", attempt.completedAt].toSorted().at(-1)
-    }
-  }
-  const attemptMap = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
-  for (const mistake of data.mistakes) {
-    const attempt = attemptMap.get(mistake.attemptId)
-    const name = mistake.areaOfStudy?.trim() || mistake.criterion?.trim()
-    if (!attempt || !name) continue
-    const bucket = ensure(attempt.subject, name)
-    bucket.mistakes += 1
-    bucket.reviews += mistake.reviewHistory?.length ?? 0
-    bucket.evidenceCount += 1
-    bucket.lastEvidenceAt = [bucket.lastEvidenceAt ?? "", mistake.updatedAt.slice(0, 10)].toSorted().at(-1)
-  }
-  return [...buckets.values()].map((area) => {
-    if (!area.availableMarks && !area.mistakes) return area
-    const score = area.availableMarks ? area.awardedMarks / area.availableMarks * 100 : 60
-    const mistakePenalty = Math.min(25, area.mistakes * 5)
-    const reviewRecovery = Math.min(mistakePenalty, area.reviews * 2)
-    return { ...area, mastery: Math.max(0, Math.min(100, score - mistakePenalty + reviewRecovery)) }
-  }).toSorted((a, b) => (a.mastery ?? -1) - (b.mastery ?? -1) || a.subject.localeCompare(b.subject))
 }
 
 function averagePercent(attempts: ExamAttempt[], subject?: string) {

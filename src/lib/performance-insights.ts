@@ -398,7 +398,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
     const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
     const bucket = paper === 1 ? row.exam1 : row.exam2
     bucket.mistakeCount += 1
-    const signature = (mistake.criterion?.trim() || mistake.category).toLowerCase()
+    const signature = mistake.category.toLowerCase()
     bucket.mistakeSignatures.push(signature)
     const evidence = questionIndex.get(`${attempt.id}\u0000${normaliseQuestionLabel(mistake.question)}`)
     if (evidence && !evidence.mistakeCategories.includes(mistake.category)) evidence.mistakeCategories.push(mistake.category)

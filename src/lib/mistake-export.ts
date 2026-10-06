@@ -13,7 +13,7 @@ function toRows(mistakes: Mistake[], attempts: ExamAttempt[]) {
     return {
       exam: attempt?.title ?? "", subject: attempt?.subject ?? "", paper: attempt?.paper ?? "",
       question: mistake.question, questionText: mistake.questionText ?? "", category: mistake.category,
-      areaOfStudy: mistake.areaOfStudy ?? "", criterion: mistake.criterion ?? "",
+      areaOfStudy: mistake.areaOfStudy ?? "",
       marksLost: mistake.marksLost ?? "", totalMarks: mistake.totalMarks ?? "",
       explanation: mistake.explanation, correction: mistake.correction,
       resolved: getMistakeSchedule(mistake).resolved, suspended: Boolean(mistake.suspended), createdAt: mistake.createdAt,

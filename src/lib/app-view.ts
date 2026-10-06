@@ -9,7 +9,7 @@ const APP_VIEWS = [
   "sacs",
   "library",
   "progress",
-  "mastery",
+  "stoplight",
   "goals",
   "predictor",
   "vcaa",
@@ -37,6 +37,7 @@ export function loadAppView(
     const stored = storage.getItem(APP_VIEW_STORAGE_KEY)
     // The old dashboard view is the exams page now; land people where they were.
     if (stored === "dashboard") return "exams"
+    if (stored === "mastery") return "stoplight"
     return isAppView(stored) ? stored : "calendar"
   } catch {
     return "calendar"

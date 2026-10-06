@@ -56,7 +56,9 @@ import {
 import { ALL_NAVIGATION, getViewLabel } from "./lib/navigation"
 import { useReferenceData } from "./hooks/use-reference-data"
 
-import { localDate, materialiseTask, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
+import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
+import { AI_ENABLED } from "./lib/host"
+import { applyItemLinks, collectLinkRecords, demoteGreens, restoreItems, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
@@ -95,8 +97,8 @@ const AppCommandMenu = lazy(() =>
 const StudyTimerPage = lazy(() =>
   import("./components/study-timer-page").then((module) => ({ default: module.StudyTimerPage })),
 )
-const MasteryPage = lazy(() =>
-  import("./components/mastery-page").then((module) => ({ default: module.MasteryPage })),
+const StoplightPage = lazy(() =>
+  import("./components/stoplight-page").then((module) => ({ default: module.StoplightPage })),
 )
 const GoalsPage = lazy(() =>
   import("./components/goals-page").then((module) => ({ default: module.GoalsPage })),
@@ -114,7 +116,7 @@ function prefetchPages() {
     for (const load of [
       () => import("./components/exams-page"), () => import("./components/study-timer-page"),
       () => import("./components/mistakes-page"), () => import("./components/calendar-page"),
-      () => import("./components/goals-page"), () => import("./components/mastery-page"),
+      () => import("./components/goals-page"), () => import("./components/stoplight-page"),
       () => import("./components/exam-library"), () => import("./components/vcaa-explorer"),
       () => import("./components/sac-page"), () => import("./components/study-score-predictor"),
       () => import("./components/settings-page"), () => import("./components/app-command-menu"),
@@ -214,6 +216,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }, [embedded])
   function saveAttempt(attempt: ExamAttempt, logMistake = false) {
     const isNew = !editingAttempt
+    linkInBackground({ ...data, attempts: [...data.attempts.filter((item) => item.id !== attempt.id), attempt] }, (attempt.questionResults ?? []).map((result) => result.id))
     setData((current) => ({
       ...current,
       attempts: isNew
@@ -288,6 +291,29 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function saveClassTimetable(classTimetable: TimetableConfig) {
     setData((current) => ({ ...current, classTimetable }))
+  }
+
+  function notifyDemoted(previous: CurriculumArea[]) {
+    if (!previous.length) return
+    toast(`${previous.length} green item${previous.length === 1 ? "" : "s"} moved to amber after a new mistake`, { action: { label: "Undo", onClick: () => saveLearning((current) => restoreItems(current, previous)) } })
+  }
+
+  function applyLinks(links: ItemLink[]) {
+    const result = applyItemLinks(data, links)
+    setData((current) => applyItemLinks(current, links).data)
+    toast.success(`Linked ${result.linked} record${result.linked === 1 ? "" : "s"} to stoplight items`)
+    notifyDemoted(result.demoted)
+  }
+
+  // ponytail: fire-and-forget; failures (not connected, offline) stay silent because "Link mistakes" on the Stoplight page retries.
+  function linkInBackground(next: Pick<AppData, "attempts" | "mistakes" | "learning">, ids: string[]) {
+    if (!AI_ENABLED) return
+    const records = collectLinkRecords(next, new Set(ids))
+    if (!records.length) return
+    void import("./lib/mistake-ai")
+      .then(({ classifyToStoplight }) => classifyToStoplight(records, next.learning.curriculumAreas.filter((item) => !item.archivedAt)))
+      .then((links) => { if (links.length) applyLinks(links) })
+      .catch(() => {})
   }
 
   function saveLearning(update: LearningWorkspaceUpdate) {
@@ -394,6 +420,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         : [...current.mistakes, ...mistakes],
     }))
     toast.success(editingMistake ? "Mistake updated" : `${mistakes.length} mistake${mistakes.length === 1 ? "" : "s"} saved`)
+    const relinked = mistakes.filter((mistake) => !editingMistake || mistake.itemIds?.join() !== editingMistake.itemIds?.join())
+    const { previous } = demoteGreens(data.learning, relinked)
+    if (previous.length) {
+      saveLearning((current) => demoteGreens(current, relinked).learning)
+      notifyDemoted(previous)
+    }
+    linkInBackground({ ...data, mistakes: [...data.mistakes, ...mistakes] }, mistakes.filter((mistake) => !mistake.itemIds?.length).map((mistake) => mistake.id))
   }
 
   function saveTimedAttempt(attempt: ExamAttempt) {
@@ -510,6 +543,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   function importMistakes(imported: Mistake[]) {
     setData((current) => ({ ...current, mistakes: [...current.mistakes, ...imported] }))
     toast.success(`${imported.length} mistake${imported.length === 1 ? "" : "s"} imported`)
+    linkInBackground({ ...data, mistakes: [...data.mistakes, ...imported] }, imported.map((mistake) => mistake.id))
   }
 
   function applyAutofills(autofills: MistakeAutofill[]) {
@@ -672,7 +706,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={data} subjects={data.subjects} onPlanSessions={studySessionSync.plan} classTimetable={data.classTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={timetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent) => { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus") }} /></Suspense> : null}
           {view === "progress" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ProgressPage sessions={studySessionSync.sessions} onNewSession={() => setView("focus")} /></Suspense> : null}
           {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage embedded={embedded} subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
-          {view === "mastery" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MasteryPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} /></Suspense> : null}
+          {view === "stoplight" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StoplightPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onApplyLinks={applyLinks} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onPlanGoal={planGoal} /></Suspense> : null}
           {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={data.sacRecords} subjects={references.map((reference) => reference.studyName)} preferredSubjects={data.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
@@ -690,7 +724,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       ) : null}
       {mistakeOpen ? (
         <Suspense fallback={null}>
-          <MistakeSheet open attempts={data.attempts} studies={resourceStudies} initialAttemptId={mistakeAttemptId} initialMistake={editingMistake} storageUserId={sync.user?.id} onOpenChange={setMistakeOpen} onSave={saveMistake} />
+          <MistakeSheet open attempts={data.attempts} studies={resourceStudies} initialAttemptId={mistakeAttemptId} initialMistake={editingMistake} storageUserId={sync.user?.id} items={data.learning.curriculumAreas.filter((item) => item.group && !item.archivedAt)} onOpenChange={setMistakeOpen} onSave={saveMistake} />
         </Suspense>
       ) : null}
       {timetable ? (

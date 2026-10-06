@@ -17,7 +17,6 @@ const FIELD_LABELS: Record<MistakeEditField, string> = {
   explanation: "What went wrong",
   correction: "Improved response",
   areaOfStudy: "Topic",
-  criterion: "Criterion",
 }
 
 const PRESETS = [

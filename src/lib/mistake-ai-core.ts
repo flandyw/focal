@@ -12,7 +12,6 @@ export type MistakeDraft = {
   explanation: string
   correction: string
   areaOfStudy: string
-  criterion: string
   totalMarks: number
   marksLost: number
 }

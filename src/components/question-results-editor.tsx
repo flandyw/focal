@@ -38,10 +38,7 @@ export function QuestionResultsEditor({ value, onChange }: { value: QuestionResu
                 </Select></label>
                 <Button className="self-end" type="button" size="icon" variant="ghost" aria-label={`Remove ${result.label}`} onClick={() => onChange(value.filter((item) => item.id !== result.id))}><Trash2 /></Button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input aria-label={`${result.label} topic or skill`} value={result.areaOfStudy ?? ""} onChange={(event) => update(result.id, { areaOfStudy: event.target.value || undefined })} placeholder="Topic, skill, or Area of Study" />
-                <Input aria-label={`${result.label} assessment criterion`} value={result.criterion ?? ""} onChange={(event) => update(result.id, { criterion: event.target.value || undefined })} placeholder="Criterion, command word, or rubric" />
-              </div>
+              <Input aria-label={`${result.label} topic or skill`} value={result.areaOfStudy ?? ""} onChange={(event) => update(result.id, { areaOfStudy: event.target.value || undefined })} placeholder="Topic, skill, or Area of Study" />
               <Textarea aria-label={`${result.label} marker feedback`} rows={2} value={result.examinerNote ?? ""} onChange={(event) => update(result.id, { examinerNote: event.target.value || undefined })} placeholder="Marker feedback, expected qualities, or examiner advice" />
             </div>
           ))}

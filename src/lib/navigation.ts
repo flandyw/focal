@@ -7,11 +7,11 @@ import {
   ClipboardCheck,
   ClipboardList,
   LibraryBig,
-  Map,
   NotebookPen,
   Target,
   Settings2,
   Timer,
+  TrafficCone,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -34,7 +34,7 @@ const ASSESSMENT_NAVIGATION: NavigationItem[] = [
 
 const ANALYSIS_NAVIGATION: NavigationItem[] = [
   { id: "progress", label: "Progress", description: "Study patterns and progress graphs", icon: BarChart3 },
-  { id: "mastery" as const, label: "Mastery", description: "Map curriculum strengths and gaps", icon: Map },
+  { id: "stoplight" as const, label: "Stoplight", description: "Rate every skill red, amber or green", icon: TrafficCone },
   { id: "goals" as const, label: "Goals", description: "Work backwards from score targets", icon: Target },
   { id: "predictor" as const, label: "Study score", description: "Estimate study scores and ATAR", icon: Calculator },
   { id: "vcaa" as const, label: "VCAA data", description: "Compare grades and open matching papers", icon: LibraryBig },

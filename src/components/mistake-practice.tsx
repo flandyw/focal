@@ -39,7 +39,6 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         {revealed ? <div className="grid gap-5 rounded-xl border bg-muted/30 p-5">
           <section><h4 className="mb-2 font-semibold">What went wrong</h4><MarkdownPreview>{card.explanation}</MarkdownPreview></section>
           <section><h4 className="mb-2 font-semibold">A better approach</h4><MarkdownPreview>{card.correction}</MarkdownPreview></section>
-          {card.criterion ? <section><h4 className="mb-2 font-semibold">Assessment criterion</h4><MarkdownPreview>{card.criterion}</MarkdownPreview></section> : null}
         </div> : null}
         <div className="flex justify-between gap-2"><Button variant="outline" disabled={index === 0} onClick={() => go(index - 1)}><ArrowLeft />Previous</Button><Button onClick={() => index === cards.length - 1 ? setFinished(true) : go(index + 1)}>{index === cards.length - 1 ? "Finish practice" : "Next card"}<ArrowRight /></Button></div>
       </div> : <Button onClick={onClose}>Back to library</Button>}

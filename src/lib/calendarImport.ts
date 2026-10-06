@@ -147,7 +147,7 @@ function coerceItems(parsed: unknown): unknown[] {
   return []
 }
 
-function parseJsonPayload(content: string): unknown {
+export function parseJsonPayload(content: string): unknown {
   const trimmed = content.trim()
   try {
     return JSON.parse(trimmed)

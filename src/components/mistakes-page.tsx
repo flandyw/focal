@@ -206,7 +206,6 @@ function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onToggleSuspend
         <div className="grid gap-4 lg:grid-cols-2">
           <AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" />
           <AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" />
-          {mistake.criterion ? <div className="lg:col-span-2"><AnswerPanel label="Assessment criterion" value={mistake.criterion} tone="neutral" /></div> : null}
         </div>
       ) : null}
       {/* Pinned so the answer controls never scroll away from a long worked solution. */}
@@ -341,7 +340,6 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onToggleSuspend, onD
       <div className="grid gap-6 border-t pt-5 lg:grid-cols-2">
         <ProseField label="What went wrong" value={mistake.explanation} />
         <ProseField label="Improved response or method" value={mistake.correction} />
-        {mistake.criterion ? <div className="lg:col-span-2"><ProseField label="Assessment criterion" value={mistake.criterion} /></div> : null}
       </div>
       {mistake.reviewHistory?.length ? (
         <section className="grid gap-2 border-t pt-5">
@@ -400,7 +398,6 @@ const BrowseRow = memo(BrowseRowInner)
 
 const MERGE_FIELD_LABELS: Record<MistakeMergeField, string> = {
   areaOfStudy: "Topic / Area of Study",
-  criterion: "Assessment criterion",
 }
 
 function MistakeFieldMergeDialog({
@@ -465,7 +462,6 @@ function MistakeFieldMergeDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="areaOfStudy">Topic / Area of Study</SelectItem>
-                <SelectItem value="criterion">Assessment criterion</SelectItem>
               </SelectContent>
             </Select>
             <FieldDescription>{values.length} distinct label{values.length === 1 ? "" : "s"} available for analysis.</FieldDescription>
@@ -550,7 +546,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const topPriority = useMemo(() => buildRevisionPriorities(visibleMistakes).find((item) => item.unresolved > 0), [visibleMistakes])
   const alternativeCount = useMemo(() => data.alternativeMistakeDeck?.cards.filter((card) => visibleMistakes.some((mistake) => mistake.id === card.sourceMistakeId)).length ?? 0, [data.alternativeMistakeDeck, visibleMistakes])
   const autofillCandidates = useMemo(() => data.mistakes.filter(hasEmptyMistakeFields), [data.mistakes])
-  const hasMergeableFields = useMemo(() => data.mistakes.some((mistake) => Boolean(mistake.areaOfStudy?.trim() || mistake.criterion?.trim())), [data.mistakes])
+  const hasMergeableFields = useMemo(() => data.mistakes.some((mistake) => Boolean(mistake.areaOfStudy?.trim())), [data.mistakes])
   const browsedMistakes = useMemo(() => {
     return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution })
   }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution])

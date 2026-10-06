@@ -9,7 +9,7 @@ export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string
   return mistakes.filter((mistake) => {
       const schedule = schedules.get(mistake.id)
       const attempt = attemptMap.get(mistake.attemptId)
-      const matchesSearch = !normalizedSearch || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, mistake.criterion, attempt?.title, attempt?.subject]
+      const matchesSearch = !normalizedSearch || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, attempt?.title, attempt?.subject]
         .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch))
       if (!matchesSearch || !schedule || (category !== "all" && mistake.category !== category) || (topic !== "all" && mistake.areaOfStudy !== topic)) return false
       if (examId !== "all" && (examId === "unlinked" ? Boolean(attempt) : mistake.attemptId !== examId)) return false

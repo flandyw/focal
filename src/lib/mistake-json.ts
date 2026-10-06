@@ -9,7 +9,6 @@ export type ParsedMistakeDraft = {
   totalMarks: number
   marksLost: number
   areaOfStudy: string
-  criterion: string
 }
 
 const PROMPT_EXAMPLE = `[
@@ -21,8 +20,7 @@ const PROMPT_EXAMPLE = `[
     "correction": "Take up as positive so $g$ is $-9.8\\\\ \\\\text{m/s}^2$. At the top $v = 0$, so $h = u^2/(2g) = 6.0^2/19.6 \\\\approx 1.8\\\\ \\\\text{m}$. Always sanity-check that a height is positive.",
     "totalMarks": 3,
     "marksLost": 2,
-    "areaOfStudy": "Motion",
-    "criterion": "Applies formulas correctly"
+    "areaOfStudy": "Motion"
   }
 ]`
 
@@ -45,8 +43,7 @@ Each object must use exactly these keys:
   "correction": "...",
   "totalMarks": 0,
   "marksLost": 0,
-  "areaOfStudy": "",
-  "criterion": ""
+  "areaOfStudy": ""
 }
 
 FIELD DETAILS
@@ -60,7 +57,6 @@ FIELD DETAILS
 - "totalMarks" (required number > 0): total marks available for the whole item; infer from mark schemes, bracketed marks, or question wording.
 - "marksLost" (required number >= 0): marks I lost on the item; never greater than totalMarks; infer from cross marks, annotations, subtotals, or my description. Use 0 if I received full marks but still want the habit logged.
 - "areaOfStudy" (optional string): concise topic, skill, or curriculum area, e.g. "Calculus", "Argument analysis", "Cellular respiration"; "" if unknown.
-- "criterion" (optional string): the assessment criterion being assessed, e.g. "Use of evidence"; "" if unknown.
 
 EXAMPLE OF A COMPLETE RECORD
 
@@ -150,7 +146,6 @@ export function parseMistakeImport(text: string): ParsedMistakeDraft[] {
       explanation: coerceString(item.explanation, "explanation", index),
       correction: coerceString(item.correction, "correction", index),
       areaOfStudy: coerceOptionalString(item.areaOfStudy, "areaOfStudy", index),
-      criterion: coerceOptionalString(item.criterion, "criterion", index),
       totalMarks,
       marksLost,
     }
@@ -176,7 +171,6 @@ export function createMistakesFromImport(
     totalMarks: draft.totalMarks,
     marksLost: draft.marksLost,
     areaOfStudy: draft.areaOfStudy || undefined,
-    criterion: draft.criterion || undefined,
     dueAt: timestamp,
     resolved: false,
     createdAt: timestamp,

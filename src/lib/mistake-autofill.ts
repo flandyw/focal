@@ -6,7 +6,6 @@ const MISTAKE_AUTOFILL_FIELDS = [
   "explanation",
   "correction",
   "areaOfStudy",
-  "criterion",
   "totalMarks",
   "marksLost",
 ] as const
@@ -20,7 +19,6 @@ export type MistakeAutofill = {
   explanation: string | null
   correction: string | null
   areaOfStudy: string | null
-  criterion: string | null
   totalMarks: number | null
   marksLost: number | null
 }
@@ -30,7 +28,7 @@ export type MistakeAutofillSummary = {
   mistakeCount: number
 }
 
-const MISTAKE_MERGE_FIELDS = ["areaOfStudy", "criterion"] as const
+const MISTAKE_MERGE_FIELDS = ["areaOfStudy"] as const
 
 export type MistakeMergeField = (typeof MISTAKE_MERGE_FIELDS)[number]
 
@@ -49,7 +47,7 @@ export type MistakeFieldValue = {
   count: number
 }
 
-const TEXT_FIELDS = ["question", "questionText", "explanation", "correction", "areaOfStudy", "criterion"] as const
+const TEXT_FIELDS = ["question", "questionText", "explanation", "correction", "areaOfStudy"] as const
 
 function isEmptyText(value: string | undefined) {
   return !value?.trim()

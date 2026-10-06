@@ -4,6 +4,8 @@ import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { ArrowLeft, Images, Pencil, Sparkles, X } from "lucide-react"
 import { MistakeAttachments } from "./mistake-attachments"
+import type { CurriculumArea } from "../lib/learning-workspace"
+import { StoplightItemPicker } from "./stoplight-item-picker"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -56,6 +58,7 @@ type MistakeSheetProps = {
   initialAttemptId?: string | null
   initialMistake?: Mistake | null
   storageUserId?: string | null
+  items: CurriculumArea[]
   onOpenChange: (open: boolean) => void
   onSave: (mistake: Mistake | Mistake[]) => void
 }
@@ -89,11 +92,10 @@ function draftFromFields({
   explanation,
   correction,
   areaOfStudy,
-  criterion,
   totalMarks,
   marksLost,
 }: Omit<MistakeDraft, "attemptId"> & { attemptId: string }): MistakeDraft {
-  return { attemptId, question, questionText, category, explanation, correction, areaOfStudy, criterion, totalMarks, marksLost }
+  return { attemptId, question, questionText, category, explanation, correction, areaOfStudy, totalMarks, marksLost }
 }
 
 function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | null {
@@ -103,7 +105,8 @@ function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | nul
   return validateMistakeMarks(draft.totalMarks, draft.marksLost)
 }
 
-function createMistake(draft: MistakeDraft, timestamp: string, initialMistake?: Mistake | null): Mistake {
+function createMistake(draft: MistakeDraft, timestamp: string, initialMistake?: Mistake | null, itemIds: string[] = []): Mistake {
+  const unchanged = itemIds.join() === (initialMistake?.itemIds ?? []).join()
   return {
     id: initialMistake?.id ?? crypto.randomUUID(),
     attemptId: draft.attemptId,
@@ -113,7 +116,8 @@ function createMistake(draft: MistakeDraft, timestamp: string, initialMistake?: 
     explanation: draft.explanation.trim(),
     correction: draft.correction.trim(),
     areaOfStudy: draft.areaOfStudy.trim() || undefined,
-    criterion: draft.criterion.trim() || undefined,
+    itemIds: itemIds.length ? itemIds : undefined,
+    itemsBy: itemIds.length ? unchanged && initialMistake?.itemsBy || "user" : undefined,
     totalMarks: draft.totalMarks,
     marksLost: draft.marksLost,
     dueAt: initialMistake?.dueAt ?? timestamp,
@@ -138,6 +142,7 @@ export function MistakeSheet({
   initialAttemptId,
   initialMistake,
   storageUserId,
+  items,
   onOpenChange,
   onSave,
 }: MistakeSheetProps) {
@@ -149,7 +154,7 @@ export function MistakeSheet({
   const [explanation, setExplanation] = useState(initialMistake?.explanation ?? "")
   const [correction, setCorrection] = useState(initialMistake?.correction ?? "")
   const [areaOfStudy, setAreaOfStudy] = useState(initialMistake?.areaOfStudy ?? "")
-  const [criterion, setCriterion] = useState(initialMistake?.criterion ?? "")
+  const [itemIds, setItemIds] = useState(initialMistake?.itemIds ?? [])
   const [totalMarks, setTotalMarks] = useState(initialMistake?.totalMarks ?? 0)
   const [marksLost, setMarksLost] = useState(initialMistake?.marksLost ?? 0)
   const [questionImages, setQuestionImages] = useState<File[]>([])
@@ -171,11 +176,11 @@ export function MistakeSheet({
   const [error, setError] = useState<string | null>(null)
   const [initialSnapshot] = useState(() => JSON.stringify({
     attemptId, question, questionText, category, explanation, correction,
-    areaOfStudy, criterion, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
+    areaOfStudy, itemIds, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
   }))
   const dirty = JSON.stringify({
     attemptId, question, questionText, category, explanation, correction,
-    areaOfStudy, criterion, totalMarks, marksLost,
+    areaOfStudy, itemIds, totalMarks, marksLost,
     imageCount: images.length, batchCount: batchDrafts.length, questionImageCount: questionImages.length, attachmentIds: savedAttachments.map(({ id }) => id),
   }) !== initialSnapshot
   const [confirmingClose, setConfirmingClose] = useState(false)
@@ -207,7 +212,7 @@ export function MistakeSheet({
     setExplanation("")
     setCorrection("")
     setAreaOfStudy("")
-    setCriterion("")
+    setItemIds([])
     setTotalMarks(0)
     setMarksLost(0)
     setImages([])
@@ -229,7 +234,6 @@ export function MistakeSheet({
     setExplanation(draft.explanation)
     setCorrection(draft.correction)
     setAreaOfStudy(draft.areaOfStudy)
-    setCriterion(draft.criterion)
     setTotalMarks(draft.totalMarks)
     setMarksLost(draft.marksLost)
   }
@@ -243,7 +247,6 @@ export function MistakeSheet({
       explanation,
       correction,
       areaOfStudy,
-      criterion,
       totalMarks,
       marksLost,
     })
@@ -361,7 +364,7 @@ export function MistakeSheet({
 
     setSaving(true)
     setError(null)
-    const mistake = createMistake(draft, new Date().toISOString(), initialMistake)
+    const mistake = createMistake(draft, new Date().toISOString(), initialMistake, itemIds)
     let uploadedAttachments: Mistake["attachments"] = []
     try {
       if (filesToSave.length && storageUserId) uploadedAttachments = await uploadMistakeAttachments(storageUserId, mistake.id, filesToSave)
@@ -591,8 +594,9 @@ export function MistakeSheet({
                   <Input id="mistake-area" value={areaOfStudy} onChange={(event) => setAreaOfStudy(event.target.value)} placeholder="e.g. Cellular respiration, argument analysis, or a key process" />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="mistake-criterion">Assessment criterion <span className="text-muted-foreground">(optional)</span></FieldLabel>
-                  <Input id="mistake-criterion" value={criterion} onChange={(event) => setCriterion(event.target.value)} placeholder="Use evidence precisely" />
+                  <FieldLabel htmlFor="mistake-items">Stoplight items <span className="text-muted-foreground">(optional)</span></FieldLabel>
+                  <StoplightItemPicker id="mistake-items" items={items} subject={attempts.find((attempt) => attempt.id === selectedAttempt)?.subject} value={itemIds} onChange={setItemIds} />
+                  <FieldDescription>Linked automatically with ChatGPT when left empty.</FieldDescription>
                 </Field>
               </div>
 

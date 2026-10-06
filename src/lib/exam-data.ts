@@ -82,7 +82,8 @@ export type QuestionResult = {
   marksAwarded: number
   maxMarks: number
   areaOfStudy?: string
-  criterion?: string
+  itemIds?: string[]
+  itemsBy?: "ai" | "user"
   confidence: QuestionConfidence
   examinerNote?: string
 }
@@ -127,7 +128,9 @@ export type Mistake = {
   totalMarks?: number
   marksLost?: number
   areaOfStudy?: string
-  criterion?: string
+  /** Stoplight items this mistake tests (max 3); `itemsBy` records who linked them. */
+  itemIds?: string[]
+  itemsBy?: "ai" | "user"
   attachments?: MistakeAttachment[]
   dueAt?: string | null
   reviewHistory?: MistakeReview[]
@@ -876,7 +879,7 @@ function isAppData(value: unknown): value is AppData {
         (mistake.marksLost === undefined || typeof mistake.marksLost === "number") &&
         (mistake.totalMarks === undefined && mistake.marksLost === undefined || validateMistakeMarks(mistake.totalMarks!, mistake.marksLost!) === null) &&
         (mistake.areaOfStudy === undefined || typeof mistake.areaOfStudy === "string") &&
-        (mistake.criterion === undefined || typeof mistake.criterion === "string") &&
+        isItemLink(mistake) &&
         (mistake.attachments === undefined || Array.isArray(mistake.attachments) && mistake.attachments.every((attachment) =>
           isRecord(attachment) &&
           typeof attachment.id === "string" &&
@@ -973,13 +976,18 @@ function isSavedAtarEstimate(value: unknown): value is SavedAtarEstimate {
     typeof value.savedAt === "string"
 }
 
+function isItemLink(value: Record<string, unknown>) {
+  return (value.itemIds === undefined || Array.isArray(value.itemIds) && value.itemIds.length <= 3 && value.itemIds.every((id) => typeof id === "string")) &&
+    (value.itemsBy === undefined || value.itemsBy === "ai" || value.itemsBy === "user")
+}
+
 function isQuestionResult(value: unknown): value is QuestionResult {
   if (!isRecord(value)) return false
   return typeof value.id === "string" && typeof value.label === "string" &&
     typeof value.marksAwarded === "number" && typeof value.maxMarks === "number" &&
     ["low", "medium", "high"].includes(String(value.confidence)) &&
     (value.areaOfStudy === undefined || typeof value.areaOfStudy === "string") &&
-    (value.criterion === undefined || typeof value.criterion === "string") &&
+    isItemLink(value) &&
     (value.examinerNote === undefined || typeof value.examinerNote === "string") &&
     validateAttempt({ rawScore: value.marksAwarded, rawMax: value.maxMarks }) === null
 }

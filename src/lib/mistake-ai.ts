@@ -1,6 +1,8 @@
 import { createChatGPTProvider } from "./chatgpt-client"
 import { jsonSchema, Output, streamText } from "ai"
 import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
+import { candidateItems, itemGroup, type ItemLink, type LinkRecord } from "./stoplight"
+import type { CurriculumArea } from "./learning-workspace"
 import { loadAISettings, supportsStreamedAnalysis } from "./ai-settings"
 import {
   createMistakeFieldMergePlan,
@@ -103,13 +105,11 @@ function mistakeContext(mistakes: Mistake[], attempts: ExamAttempt[]) {
       explanation: mistake.explanation,
       correction: mistake.correction,
       areaOfStudy: mistake.areaOfStudy,
-      criterion: mistake.criterion,
       marksLost: mistake.marksLost,
       totalMarks: mistake.totalMarks,
       assessmentResult: assessmentResult ? {
         label: assessmentResult.label,
         areaOfStudy: assessmentResult.areaOfStudy,
-        criterion: assessmentResult.criterion,
         marksLost: assessmentResult.maxMarks - assessmentResult.marksAwarded,
         totalMarks: assessmentResult.maxMarks,
         examinerNote: assessmentResult.examinerNote,
@@ -154,7 +154,7 @@ export async function autofillMistakeFields(
           items: {
             type: "object",
             additionalProperties: false,
-            required: ["id", "question", "questionText", "explanation", "correction", "areaOfStudy", "criterion", "totalMarks", "marksLost"],
+            required: ["id", "question", "questionText", "explanation", "correction", "areaOfStudy", "totalMarks", "marksLost"],
             properties: {
               id: { type: "string", enum: ids },
               question: nullableString,
@@ -162,7 +162,6 @@ export async function autofillMistakeFields(
               explanation: nullableString,
               correction: nullableString,
               areaOfStudy: nullableString,
-              criterion: nullableString,
               totalMarks: nullableNumber,
               marksLost: nullableNumber,
             },
@@ -182,7 +181,7 @@ export async function autofillMistakeFields(
       headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
       onChunk: createChatGPTProgressHandler(onProgress),
       onError: ({ error }) => { streamError = error },
-      prompt: `Fill the listed emptyFields in each student's mistake record using only the supplied record and exam context. Return exactly one object for every id. For fields not listed in emptyFields, return null: existing values must never be rewritten. Treat assessmentResult, when supplied, as the source of truth for its topic, criterion, and marks. Keep question as a short item label, questionText as a self-contained faithful reconstruction, explanation as a concise diagnosis, correction as an actionable improved response or method, areaOfStudy and criterion as concise labels, and marks as realistic non-negative numbers with totalMarks greater than zero and marksLost no greater than totalMarks. Do not pretend to know missing exact wording or marks; return null when the evidence is insufficient. Records: ${JSON.stringify(records)}`,
+      prompt: `Fill the listed emptyFields in each student's mistake record using only the supplied record and exam context. Return exactly one object for every id. For fields not listed in emptyFields, return null: existing values must never be rewritten. Treat assessmentResult, when supplied, as the source of truth for its topic and marks. Keep question as a short item label, questionText as a self-contained faithful reconstruction, explanation as a concise diagnosis, correction as an actionable improved response or method, areaOfStudy as a concise label, and marks as realistic non-negative numbers with totalMarks greater than zero and marksLost no greater than totalMarks. Do not pretend to know missing exact wording or marks; return null when the evidence is insufficient. Records: ${JSON.stringify(records)}`,
     })
     let batchAutofills: MistakeAutofill[]
     try {
@@ -246,7 +245,6 @@ export async function editMistakesWithInstruction(
         explanation: mistake.explanation,
         correction: mistake.correction,
         areaOfStudy: mistake.areaOfStudy,
-        criterion: mistake.criterion,
       }
     })
     let streamError: unknown
@@ -311,7 +309,7 @@ export async function generateMistakeFieldMergePlan(
     headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
     onChunk: createChatGPTProgressHandler(onProgress),
     onError: ({ error }) => { streamError = error },
-    prompt: `Review the student's existing ${field === "criterion" ? "assessment criterion" : "topic / Area of Study"} labels and propose a conservative consolidation plan. Merge only labels that are semantically equivalent, trivial spelling/capitalisation variants, or unnecessarily verbose versions of the same concept. Preserve labels that describe genuinely distinct curriculum topics or assessment criteria, even when they are related. Prefer an existing concise label as the target when suitable, but you may create a clearer concise target. Return only changed source-to-target mappings, use each source at most once, and do not create circular mappings. An empty merges array is correct when no consolidation is clearly useful. Labels and usage counts: ${JSON.stringify(values)}`,
+    prompt: `Review the student's existing topic / Area of Study labels and propose a conservative consolidation plan. Merge only labels that are semantically equivalent, trivial spelling/capitalisation variants, or unnecessarily verbose versions of the same concept. Preserve labels that describe genuinely distinct curriculum topics even when they are related. Prefer an existing concise label as the target when suitable, but you may create a clearer concise target. Return only changed source-to-target mappings, use each source at most once, and do not create circular mappings. An empty merges array is correct when no consolidation is clearly useful. Labels and usage counts: ${JSON.stringify(values)}`,
   })
 
   try {
@@ -470,11 +468,10 @@ export async function analyseMistakeImages(
     explanation: { type: "string", description: "What the student did wrong, in concise Markdown with LaTeX where useful" },
     correction: { type: "string", description: "The improved response, evidence, structure, reasoning, or method, in concise Markdown with LaTeX only where useful" },
     areaOfStudy: { type: "string", description: "A concise topic, skill, or Area of Study, or an empty string if it cannot be determined" },
-    criterion: { type: "string", description: "A concise assessment criterion, or an empty string if it cannot be determined" },
     totalMarks: { type: "number", exclusiveMinimum: 0, description: "Total marks available for the item; infer from the paper or image" },
     marksLost: { type: "number", minimum: 0, description: "Marks the student lost; infer from annotations or the recorded score and never exceed totalMarks" },
   } as const
-  const mistakeRequired = ["attemptId", "question", "questionText", "category", "explanation", "correction", "areaOfStudy", "criterion", "totalMarks", "marksLost"]
+  const mistakeRequired = ["attemptId", "question", "questionText", "category", "explanation", "correction", "areaOfStudy", "totalMarks", "marksLost"]
   const mistakeSchema = jsonSchema<MistakeDraft>({
     type: "object",
     additionalProperties: false,
@@ -529,7 +526,6 @@ export async function analyseMistakeImages(
     explanation: draft.explanation.trim(),
     correction: draft.correction.trim(),
     areaOfStudy: draft.areaOfStudy.trim(),
-    criterion: draft.criterion.trim(),
   }
 }
 
@@ -554,4 +550,75 @@ export async function analyseMistakeImageBatch(
     }
   }
   return drafts
+}
+
+// ponytail: batches run sequentially; items are sent as small integers to keep the prompt short.
+// Ceiling: a subject with many hundreds of items and no matching Area of Study sends them all each batch; add a group-first pass if that gets slow.
+export async function classifyToStoplight(
+  records: LinkRecord[],
+  items: CurriculumArea[],
+  onProgress?: (progress: ChatGPTProgress) => void,
+): Promise<ItemLink[]> {
+  const subjects = [...new Set(records.map((record) => record.subject.toLowerCase()))]
+  if (!subjects.length) return []
+  onProgress?.({ phase: "connecting", tokens: 0, estimated: true, reasoning: false })
+  const { chatgpt, model, settings } = await getChatGPTModel()
+  const links: ItemLink[] = []
+  const size = 8
+
+  for (const subject of subjects) {
+    const subjectItems = items.filter((item) => item.group && item.subject.toLowerCase() === subject)
+    const subjectRecords = records.filter((record) => record.subject.toLowerCase() === subject)
+      .toSorted((a, b) => (a.areaOfStudy ?? "").localeCompare(b.areaOfStudy ?? ""))
+    for (let start = 0; start < subjectRecords.length; start += size) {
+      const batch = subjectRecords.slice(start, start + size)
+      const candidates = candidateItems(subjectItems, batch)
+      const ids = batch.map((record) => record.id)
+      const schema = jsonSchema<{ links: Array<{ id: string; items: number[]; confidence: "high" | "medium" | "low" }> }>({
+        type: "object",
+        additionalProperties: false,
+        required: ["links"],
+        properties: {
+          links: {
+            type: "array",
+            minItems: batch.length,
+            maxItems: batch.length,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "items", "confidence"],
+              properties: {
+                id: { type: "string", enum: ids },
+                items: { type: "array", maxItems: 3, items: { type: "integer", enum: candidates.map((_, index) => index) } },
+                confidence: { type: "string", enum: ["high", "medium", "low"] },
+              },
+            },
+          },
+        },
+      })
+      const checklist = candidates.map((item, index) => ({ n: index, group: itemGroup(item), item: item.name, check: item.check }))
+      let streamError: unknown
+      const result = streamText({
+        model: chatgpt(model),
+        output: Output.object({ schema, name: "stoplight_links" }),
+        maxOutputTokens: Math.max(800, batch.length * 120),
+        headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
+        onChunk: createChatGPTProgressHandler((progress) => onProgress?.({ ...progress, itemIndex: Math.min(start + size, subjectRecords.length), itemCount: subjectRecords.length })),
+        onError: ({ error }) => { streamError = error },
+        prompt: `Link each student record (a mistake or a marked question) to the 1-3 checklist items it tests. Return exactly one object per record id. A record belongs to the item whose knowledge or skill would have prevented the error or earned the marks, not merely the topic heading. Choose only from the numbered checklist. Return an empty items array with low confidence when no item clearly fits; never guess. Subject: ${JSON.stringify(subject)}. Checklist: ${JSON.stringify(checklist)}. Records: ${JSON.stringify(batch.map(({ id, areaOfStudy, text }) => ({ id, areaOfStudy, text })))}`,
+      })
+      let batchLinks
+      try {
+        batchLinks = (await result.output).links
+      } catch (error) {
+        const cause = streamError ?? error
+        throw new Error(formatMistakeAIError(cause), { cause })
+      }
+      for (const link of batchLinks) {
+        const itemIds = link.confidence === "low" ? [] : [...new Set(link.items)].flatMap((index) => candidates[index] ? [candidates[index].id] : [])
+        if (ids.includes(link.id) && itemIds.length) links.push({ id: link.id, itemIds })
+      }
+    }
+  }
+  return links
 }

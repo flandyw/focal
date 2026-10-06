@@ -95,6 +95,7 @@ export function CalendarPage({
   classTimetable,
   onEventsChange,
   onOpenTimetable,
+  onPlanSessions,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -107,6 +108,7 @@ export function CalendarPage({
   classTimetable?: TimetableConfig
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
+  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -143,9 +145,9 @@ export function CalendarPage({
     setSelected(date)
   }
 
-  function importDrafts(drafts: TextEventDraft[]) {
+  async function importDrafts(drafts: TextEventDraft[]) {
     const now = new Date().toISOString()
-    const events = drafts.filter((draft) => draft.kind === "event").map((draft): CalendarEvent => {
+    const toEvent = (draft: TextEventDraft): CalendarEvent => {
       const start = new Date(`${draft.date}T${draft.startTime}:00`)
       const end = draft.endDate ? new Date(`${draft.endDate}T${draft.startTime}:00`) : new Date(start.getTime() + draft.durationMinutes * 60_000)
       const subject = draft.subjectIds[0]
@@ -155,14 +157,27 @@ export function CalendarPage({
         subjectId: subject ? subjectIdFor(subject) : undefined, location: draft.location,
         isFinished: false, created_at: now, updated_at: now,
       }
-    })
+    }
     const sessions = drafts.filter((draft) => draft.kind === "session")
+    const events = drafts.filter((draft) => draft.kind === "event").map(toEvent)
     if (events.length) onEventsChange((current) => [...current, ...events])
     if (sessions.length) {
-      commit((current) => sessions.reduce((workspace, draft) => addTask(workspace, {
-        title: draft.title, date: draft.date, minutes: draft.durationMinutes, subject: draft.subjectIds[0],
-        detail: [draft.startTime, draft.location].filter(Boolean).join(" · "),
-      }), current))
+      const entries = sessions.map((draft) => {
+        const event = toEvent(draft)
+        return { title: draft.title, subjectId: event.subjectId, start: event.startTime, end: event.endTime!, description: draft.description, topics: draft.topics }
+      })
+      try {
+        const saved = await onPlanSessions(entries)
+        // Signed out there is no shared session store, so keep them as local study tasks.
+        if (saved === null) {
+          commit((current) => sessions.reduce((workspace, draft) => addTask(workspace, {
+            title: draft.title, date: draft.date, minutes: draft.durationMinutes, subject: draft.subjectIds[0],
+            detail: [draft.startTime, draft.location].filter(Boolean).join(" · "),
+          }), current))
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Study sessions could not be saved.")
+      }
     }
     setSelected(drafts[0]?.date ?? selected)
     toast(`${drafts.length} item${drafts.length === 1 ? "" : "s"} added to your calendar`)

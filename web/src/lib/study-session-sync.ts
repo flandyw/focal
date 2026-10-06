@@ -436,7 +436,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void> } {
   const dataRef = useRef(data)
   dataRef.current = data
   const initialized = useRef(false)
@@ -589,7 +589,27 @@ export function useStudySessionSync(
     acceptSessions([session])
   }
 
-  return { sessions, control: async (session, action) => {
+  /** Create planned sessions the desktop calendar shows as scheduled study. Null when signed out. */
+  async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) {
+    if (!userId || !supabase) return null
+    const saved: CanonicalStudySession[] = []
+    for (const entry of entries) {
+      const id = crypto.randomUUID()
+      const metadata = {
+        subjectIds: entry.subjectId ? [entry.subjectId] : [], createdVia: "manual",
+        description: entry.description, topics: entry.topics, schedule: { blocks: [{ start: entry.start, end: entry.end }] },
+      }
+      const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
+        action: "create", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
+        title: entry.title, subject_id: entry.subjectId ?? null, metadata })
+      if (!result?.applied || !result.session) throw new Error(`"${entry.title}" was not saved. Check your connection and try again.`)
+      saved.push(result.session)
+      acceptSessions([result.session])
+    }
+    return saved.length
+  }
+
+  return { sessions, plan, control: async (session, action) => {
     const updated = await controlSession(session, action)
     if (updated) acceptSessions([updated])
   }, log }

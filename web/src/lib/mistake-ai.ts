@@ -7,6 +7,8 @@ import {
   createMistakeFieldMergePlan,
   getEmptyMistakeFields,
   type MistakeAutofill,
+  type MistakeEdit,
+  type MistakeEditField,
   type MistakeFieldMerge,
   type MistakeFieldMergePlan,
   type MistakeFieldValue,
@@ -208,6 +210,78 @@ export async function autofillMistakeFields(
   }
 
   return autofills
+}
+
+// ponytail: batches run sequentially; parallelise if very large libraries feel slow.
+export async function editMistakesWithInstruction(
+  mistakes: Mistake[],
+  attempts: ExamAttempt[],
+  fields: MistakeEditField[],
+  instruction: string,
+  onProgress: (progress: ChatGPTProgress) => void,
+  onBatch: (edits: MistakeEdit[]) => void,
+): Promise<void> {
+  onProgress({ phase: "connecting", tokens: 0, estimated: true, reasoning: false })
+  const { chatgpt, model, settings } = await getChatGPTModel()
+  const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
+  const size = 6
+  for (let start = 0; start < mistakes.length; start += size) {
+    const batch = mistakes.slice(start, start + size)
+    const ids = batch.map((mistake) => mistake.id)
+    const schema = jsonSchema<{ edits: MistakeEdit[] }>({
+      type: "object",
+      additionalProperties: false,
+      required: ["edits"],
+      properties: {
+        edits: {
+          type: "array",
+          minItems: batch.length,
+          maxItems: batch.length,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", ...fields],
+            properties: { id: { type: "string", enum: ids }, ...Object.fromEntries(fields.map((field) => [field, { type: "string" }])) },
+          },
+        },
+      },
+    })
+    const records = batch.map((mistake) => {
+      const attempt = attemptMap.get(mistake.attemptId)
+      return {
+        id: mistake.id,
+        subject: attempt?.subject,
+        exam: attempt?.title,
+        question: mistake.question,
+        questionText: mistake.questionText,
+        explanation: mistake.explanation,
+        correction: mistake.correction,
+        areaOfStudy: mistake.areaOfStudy,
+        criterion: mistake.criterion,
+      }
+    })
+    let streamError: unknown
+    const result = streamText({
+      model: chatgpt(model),
+      output: Output.object({ schema, name: "mistake_edits" }),
+      maxOutputTokens: Math.max(1500, batch.length * 1000),
+      headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+      onChunk: createChatGPTProgressHandler((progress) => onProgress({ ...progress, itemIndex: Math.min(start + size, mistakes.length), itemCount: mistakes.length })),
+      onError: ({ error }) => { streamError = error },
+      prompt: `Apply the student's instruction to the ${fields.join(", ")} field${fields.length === 1 ? "" : "s"} of each mistake record. Return exactly one object per id containing only those fields. Rewrite only what the instruction asks for: preserve meaning, facts, numbers, marks and LaTeX correctness, never invent missing content, and return a field unchanged when the instruction does not apply to it. Use the other record fields only as context. Instruction: ${JSON.stringify(instruction)}. Records: ${JSON.stringify(records)}`,
+    })
+    let edits: MistakeEdit[]
+    try {
+      edits = (await result.output).edits
+    } catch (error) {
+      const cause = streamError ?? error
+      throw new Error(formatMistakeAIError(cause), { cause })
+    }
+    if (new Set(edits.map((edit) => edit.id)).size !== ids.length || ids.some((id) => !edits.some((edit) => edit.id === id))) {
+      throw new Error("ChatGPT did not return one result for every mistake. Try again.")
+    }
+    onBatch(edits)
+  }
 }
 
 export async function generateMistakeFieldMergePlan(

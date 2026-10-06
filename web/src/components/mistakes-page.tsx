@@ -33,6 +33,7 @@ import {
   type MistakeReviewState,
   type ReviewRating,
 } from "../lib/exam-data"
+import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
 import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
@@ -42,6 +43,7 @@ import {
   countMistakeFieldMergePlan,
   summarizeMistakeAutofills,
   type MistakeAutofill,
+  type MistakeEdit,
   type MistakeFieldMergePlan,
   type MistakeMergeField,
 } from "../lib/mistake-autofill"
@@ -63,6 +65,7 @@ type MistakesPageProps = {
   onImportMistakes: (mistakes: Mistake[]) => void
   onApplyAutofills: (autofills: MistakeAutofill[]) => void
   onApplyMergePlan: (plan: MistakeFieldMergePlan) => void
+  onApplyEdits: (edits: MistakeEdit[]) => void
   onSaveInsights: (insights: NonNullable<AppData["mistakeInsights"]>) => void
   onSaveAlternativeDeck: (deck: NonNullable<AppData["alternativeMistakeDeck"]>) => void
 }
@@ -507,7 +510,7 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30_000); return () => window.clearInterval(timer) }, [])
   const [subject, setSubject] = useState("all")
@@ -530,6 +533,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [exportOpen, setExportOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
   const [autofillProgress, setAutofillProgress] = useState<ChatGPTProgress | null>(null)
   const attemptMap = useMemo(() => new Map(data.attempts.map((attempt) => [attempt.id, attempt])), [data.attempts])
@@ -637,6 +641,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More mistake tools" />}><MoreHorizontal /></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => void autofillEmptyFields()} disabled={!autofillCandidates.length || autofilling}><Sparkles />Autofill empty fields{autofillCandidates.length ? ` (${autofillCandidates.length})` : ""}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setBulkEditOpen(true)} disabled={!data.mistakes.length}><Sparkles />Bulk edit with ChatGPT…</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setMergeOpen(true)} disabled={!hasMergeableFields}><Merge />Merge fields</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setExportOpen(true)} disabled={!data.mistakes.length}><FileDown />Export…</DropdownMenuItem>
           </DropdownMenuContent>
@@ -741,7 +746,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · showing the first ${shownMistakes.length}` : ""}</span>
               <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" disabled={!browsedMistakes.length} checked={browsedMistakes.length > 0 && selectedMistakes.length === browsedMistakes.length} ref={(node) => { if (node) node.indeterminate = selectedMistakes.length > 0 && selectedMistakes.length < browsedMistakes.length }} onChange={(event) => setSelected(event.target.checked ? new Set(browsedMistakes.map((mistake) => mistake.id)) : new Set())} />Select all</label><Button size="sm" variant="outline" disabled={!browsedMistakes.length} onClick={() => setPractice(worksheetMistakes)}><Play />{selectedMistakes.length ? `Practise selected (${selectedMistakes.length})` : "Practise"}</Button></div>
             </div>
-            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><FileDown />Export selected</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
+            {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button><Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}><Sparkles />Edit with ChatGPT</Button><Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><FileDown />Export selected</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
             <div className="grid items-start gap-4 lg:grid-cols-[21rem_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[24rem_minmax(0,1fr)]">
               {/* The list scrolls inside its own sticky pane so the reading pane keeps
                   its own vertical rhythm instead of inheriting forty rows of scroll. */}
@@ -773,6 +778,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         />
       ) : null}
       {exportOpen ? <MistakeExportDialog mistakes={data.mistakes} current={worksheetMistakes} attempts={data.attempts} onOpenChange={setExportOpen} /> : null}
+      {bulkEditOpen ? <MistakeBulkEditDialog mistakes={data.mistakes} current={browsedMistakes} selected={selectedMistakes} attempts={data.attempts} onOpenChange={setBulkEditOpen} onApply={onApplyEdits} /> : null}
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>
   )

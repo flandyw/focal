@@ -186,3 +186,27 @@ export function applyMistakeFieldMergePlan(mistakes: Mistake[], plan: MistakeFie
     return target ? { ...mistake, [plan.field]: target, updatedAt } : mistake
   })
 }
+
+export type MistakeEditField = (typeof TEXT_FIELDS)[number]
+export type MistakeEdit = { id: string } & Partial<Record<MistakeEditField, string>>
+
+/** Text fields a chatbot bulk edit may rewrite. */
+export const MISTAKE_EDIT_FIELDS = TEXT_FIELDS
+
+/** The fields an edit would actually change, as before/after pairs. Blank replacements never overwrite. */
+export function getMistakeEditChanges(mistake: Mistake, edit: MistakeEdit) {
+  return MISTAKE_EDIT_FIELDS.flatMap((field) => {
+    const next = edit[field]?.trim()
+    const before = mistake[field] ?? ""
+    return next && next !== before.trim() ? [{ field, before, after: next }] : []
+  })
+}
+
+export function applyMistakeEdits(mistakes: Mistake[], edits: MistakeEdit[], updatedAt: string): Mistake[] {
+  const editMap = new Map(edits.map((edit) => [edit.id, edit]))
+  return mistakes.map((mistake) => {
+    const edit = editMap.get(mistake.id)
+    const changes = edit ? getMistakeEditChanges(mistake, edit) : []
+    return changes.length ? { ...mistake, ...Object.fromEntries(changes.map(({ field, after }) => [field, after])), updatedAt } : mistake
+  })
+}

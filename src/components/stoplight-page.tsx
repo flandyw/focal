@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { CalendarPlus, FileJson, Link2, Sparkles, TrafficCone } from "lucide-react"
+import { CalendarPlus, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { MarkdownPreview } from "./markdown-preview"
 import { PageHeader } from "./page-header"
 import { StoplightImportDialog } from "./stoplight-import"
+import { StoplightReviseDialog } from "./stoplight-revise"
 import { MetricCard, MetricGrid, WorkspacePage } from "./workspace-layout"
 import { AI_ENABLED } from "../lib/host"
 import type { AppData } from "../lib/exam-data"
@@ -62,6 +63,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
   const [filter, setFilter] = useState<Filter>("all")
   const [importOpen, setImportOpen] = useState(false)
   const [viewing, setViewing] = useState<CurriculumArea | null>(null)
+  const [revising, setRevising] = useState(false)
   const [linking, setLinking] = useState(false)
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
   const [now] = useState(() => new Date())
@@ -88,6 +90,11 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
     toast.success(`Added ${result.count} revision task${result.count === 1 ? "" : "s"} to your calendar`)
   }
 
+  function applyRatings(ratings: Map<string, StoplightRating>) {
+    onChange((current) => [...ratings].reduce((learning, [id, rating]) => setRating(learning, id, rating), current))
+    toast.success(`Updated ${ratings.size} rating${ratings.size === 1 ? "" : "s"}`)
+  }
+
   async function linkMistakes() {
     setLinking(true)
     setProgress(null)
@@ -110,6 +117,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
       <PageHeader title="Stoplight" description="Rate every key knowledge and skill red, amber or green. Mistakes and marked questions are linked to items, so weak spots surface by themselves.">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />Link mistakes{unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
+        {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
         {subject ? <Button onClick={planWeek}><CalendarPlus />Plan this week</Button> : null}
       </PageHeader>
       {linking && progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
@@ -175,6 +183,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
       )}
 
       <StoplightImportDialog key={String(importOpen)} open={importOpen} subjects={subjects} preferredSubjects={data.subjects} defaultSubject={subject || data.subjects[0] || ""} onOpenChange={setImportOpen} onImport={importItems} />
+      <StoplightReviseDialog key={`${revising}${subject}`} open={revising} subject={subject} items={subjectItems} evidence={evidence} onOpenChange={setRevising} onApply={applyRatings} />
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => { if (!open) setViewing(null) }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
           <DialogHeader><DialogTitle>{viewing?.name}</DialogTitle><DialogDescription>{viewingMistakes.length} linked mistake{viewingMistakes.length === 1 ? "" : "s"}. Review them in Mistakes.</DialogDescription></DialogHeader>

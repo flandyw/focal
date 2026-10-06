@@ -177,6 +177,43 @@ Source:
 `
 }
 
+// --- Chatbot revision session ---
+
+/** Items are numbered by position so the reply can be mapped back without exposing ids. */
+export function buildRevisionPrompt(subject: string, items: CurriculumArea[], evidence: Map<string, ItemEvidence>) {
+  const lines = items.map((item, index) => {
+    const entry = evidence.get(item.id)
+    const notes = [item.rating ?? "unrated", entry?.open ? `${entry.open} open mistakes` : "", entry?.available ? `${entry.awarded}/${entry.available} marks` : ""].filter(Boolean).join(", ")
+    return `${index + 1}. [${itemGroup(item)}] ${item.name}${item.check ? ` — check: ${item.check}` : ""} (${notes})`
+  })
+  return `You are my VCE ${subject} tutor. Help me revise the checklist below and decide a red, amber or green rating for each item.
+
+Ratings: ${RATINGS.map(({ id, meaning }) => `${id} = ${meaning.toLowerCase()}`).join("; ")}.
+
+Method:
+- Start with red, then amber, unrated, and items with open mistakes or low marks. Ask ONE question at a time that tests an item's check, unaided, and wait for my answer.
+- Mark my answer, correct it briefly, and re-teach if I was wrong. Then move on or retry in a different way.
+- Judge ratings from my answers, not my confidence. Only rate items I was actually tested on.
+- When I say "done", reply with ONLY one JSON code block in exactly this shape, using the item numbers below:
+{"ratings":[{"n":1,"rating":"amber"}]}
+
+Checklist:
+${lines.join("\n")}
+`
+}
+
+export function parseRatingsResponse(content: string, items: CurriculumArea[]) {
+  const parsed = parseJsonPayload(content) as { ratings?: unknown } | unknown[]
+  const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed.ratings) ? parsed.ratings : []
+  const ratings = new Map<string, StoplightRating>()
+  for (const entry of list as Array<{ n?: unknown; rating?: unknown }>) {
+    const item = items[Number(entry?.n) - 1]
+    const rating = RATINGS.find(({ id }) => id === String(entry?.rating).toLowerCase())?.id
+    if (item && rating) ratings.set(item.id, rating)
+  }
+  return ratings
+}
+
 const text = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : ""
 
 export function parseStoplightResponse(content: string): ImportedItem[] {

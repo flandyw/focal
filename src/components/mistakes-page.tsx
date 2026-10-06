@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ArrowRight, BookOpenCheck, FileDown, FileJson, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
+import { ArrowRight, BookOpenCheck, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { useMinWidth } from "../hooks/use-mobile"
@@ -36,6 +36,7 @@ import {
 } from "../lib/exam-data"
 import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
+import { MistakeRoundTripDialog } from "./mistake-roundtrip-dialog"
 import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import {
@@ -520,6 +521,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const [practice, setPractice] = useState<Mistake[] | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [roundTripOpen, setRoundTripOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [autofilling, setAutofilling] = useState(false)
@@ -632,6 +634,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
             <DropdownMenuItem onClick={() => setBulkEditOpen(true)} disabled={!data.mistakes.length}><Sparkles />Bulk edit with ChatGPT…</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setMergeOpen(true)} disabled={!hasMergeableFields}><Merge />Merge fields</DropdownMenuItem></> : null}
             <DropdownMenuItem onClick={() => setExportOpen(true)} disabled={!data.mistakes.length}><FileDown />Export…</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setRoundTripOpen(true)} disabled={!data.mistakes.length}><FileUp />Re-import edited JSON…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
@@ -766,6 +769,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         />
       ) : null}
       {exportOpen ? <MistakeExportDialog mistakes={data.mistakes} current={worksheetMistakes} attempts={data.attempts} onOpenChange={setExportOpen} /> : null}
+      {roundTripOpen ? <MistakeRoundTripDialog mistakes={data.mistakes} onOpenChange={setRoundTripOpen} onApply={(edits) => { onApplyEdits(edits); toast.success(`Updated ${edits.length} ${edits.length === 1 ? "mistake" : "mistakes"}`) }} /> : null}
       {bulkEditOpen ? <MistakeBulkEditDialog mistakes={data.mistakes} current={browsedMistakes} selected={selectedMistakes} attempts={data.attempts} onOpenChange={setBulkEditOpen} onApply={onApplyEdits} /> : null}
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>

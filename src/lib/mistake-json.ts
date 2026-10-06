@@ -1,3 +1,4 @@
+import { MISTAKE_EDIT_FIELDS, type MistakeEdit } from "./mistake-autofill"
 import { MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory } from "./exam-data"
 
 export type ParsedMistakeDraft = {
@@ -176,4 +177,37 @@ export function createMistakesFromImport(
     createdAt: timestamp,
     updatedAt: timestamp,
   }))
+}
+
+/** Reads a chatbot-edited JSON export back into edits keyed by mistake id. `unmatched` counts records the app doesn't know. */
+export function parseMistakeRoundTrip(text: string, mistakes: Mistake[]) {
+  const body = extractJsonPayload(text)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    try {
+      // ponytail: repairs only backslashes that are invalid JSON (\[ \( \{ ...); \f \t \b \n \r are valid escapes, so those are caught as corruption below.
+      parsed = JSON.parse(body.replace(/\\(?!["\\/bfnrtu])/g, "\\\\"))
+    } catch {
+      throw new Error("This is not valid JSON. Ask the chatbot to double every backslash in LaTeX and return one fenced JSON code block.")
+    }
+  }
+  const list = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.mistakes) ? parsed.mistakes : null
+  if (!list) throw new Error('Expected the exported object with a "mistakes" array.')
+  const known = new Set(mistakes.map((mistake) => mistake.id))
+  const edits: MistakeEdit[] = []
+  let unmatched = 0
+  for (const item of list) {
+    if (!isRecord(item) || typeof item.id !== "string" || !known.has(item.id)) { unmatched += 1; continue }
+    const edit: MistakeEdit = { id: item.id }
+    for (const field of MISTAKE_EDIT_FIELDS) {
+      const value = item[field]
+      if (typeof value !== "string") continue
+      if (/[\b\f\t]/.test(value)) throw new Error(`"${field}" of ${item.id} contains a control character. An unescaped LaTeX backslash (\\frac, \\theta, \\beta) was read as an escape. Ask the chatbot to double every backslash.`)
+      edit[field] = value
+    }
+    edits.push(edit)
+  }
+  return { edits, unmatched }
 }

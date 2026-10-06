@@ -1,6 +1,9 @@
 import { createOpenAI } from "@ai-sdk/openai"
 import { useCallback, useEffect, useSyncExternalStore } from "react"
 import { AI_ENABLED, CHATGPT_ENDPOINT as CHATGPT_BASE_PATH } from "./host"
+import type { ChatGPTModel } from "../../vendor/siwc/local/src/types"
+
+export type { ChatGPTModel }
 
 // Talks to the local Sign in with ChatGPT service (server/chatgpt.ts, run by the desktop sidecar).
 // Credentials stay in that process; the browser only sees session state and model output.
@@ -38,7 +41,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export function createChatGPTProvider() {
   const openai = createOpenAI({ baseURL: `${CHATGPT_BASE_PATH}/v1`, apiKey: "local" })
   return Object.assign((model: string) => openai.responses(model), {
-    listModels: () => request<string[]>("models"),
+    listModelCatalog: () => request<ChatGPTModel[]>("models"),
+    listModels: async () => (await request<ChatGPTModel[]>("models")).map((model) => model.slug),
   })
 }
 

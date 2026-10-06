@@ -1,5 +1,5 @@
 import "./settings-page.css"
-import { createChatGPTProvider, useChatGPT } from "../lib/chatgpt-client"
+import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useState, type ReactNode } from "react"
@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import {
   loadAISettings,
   saveAISettings,
-  supportsStreamedAnalysis,
   type AISettings,
   type ReasoningEffort,
 } from "../lib/ai-settings"
@@ -51,7 +50,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const [accountLoading, setAccountLoading] = useState(false)
   const [accountMessage, setAccountMessage] = useState<string | null>(null)
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings())
-  const [models, setModels] = useState<string[]>([])
+  const [models, setModels] = useState<ChatGPTModel[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [subjectToAdd, setSubjectToAdd] = useState("")
@@ -73,7 +72,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     setLoadingModels(true)
     setModelError(null)
     try {
-      setModels(await createChatGPTProvider().listModels())
+      setModels(await createChatGPTProvider().listModelCatalog())
     } catch {
       setModels([])
       setModelError("Could not load models for this account.")
@@ -87,8 +86,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     else setModels([])
   }, [auth.isAuthenticated])
 
-  const modelOptions = models.filter(supportsStreamedAnalysis)
-  const selectedModel = modelOptions.includes(settings.model) ? settings.model : modelOptions[0]
+  const selectedModel = models.some((model) => model.slug === settings.model) ? settings.model : models[0]?.slug
   const selectedEffort = settings.reasoningEffort === "none" ? "low" : settings.reasoningEffort
   const fillPercent = ((REASONING_OPTIONS.indexOf(selectedEffort) + 0.5) / REASONING_OPTIONS.length) * 100
 
@@ -304,7 +302,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   ))}
                 </div>
                 <div className="grid py-1">
-                  {modelOptions.map((model) => {
+                  {models.map(({ slug: model, displayName }) => {
                     const selected = model === selectedModel
                     const accent = getModelAccent(model)
                     return (
@@ -312,17 +310,18 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                         key={model}
                         type="button"
                         aria-pressed={selected}
+                        title={`${displayName} (${model})`}
                         className="h-12 truncate rounded-md px-2 text-left text-sm font-medium outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
                         style={{ color: selected ? accent : undefined, fontWeight: selected ? 700 : undefined }}
                         onClick={() => update({ model, reasoningEffort: selectedEffort })}
                       >
-                        {model === "auto" ? "Automatic" : model}
+                        {displayName}
                       </button>
                     )
                   })}
                 </div>
                 <div className="grid rounded-xl bg-muted/80 p-1 ring-1 ring-border/60">
-                {modelOptions.map((model) => {
+                {models.map(({ slug: model, displayName }) => {
                   const selected = model === selectedModel
                   const accent = getModelAccent(model)
                   return (
@@ -342,7 +341,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                           step={1}
                           value={REASONING_OPTIONS.indexOf(selectedEffort)}
                           data-selected={selected}
-                          aria-label={`${model === "auto" ? "Automatic" : model} reasoning level`}
+                          aria-label={`${displayName} reasoning level`}
                           aria-valuetext={REASONING_LABELS[selectedEffort]}
                           className="model-reasoning-slider z-20"
                           style={{ "--slider-accent": accent } as React.CSSProperties}

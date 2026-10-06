@@ -56,7 +56,7 @@ export function createChatGPTService({ storageDir, allowedOrigins = [] }: ChatGP
     const respond = async (): Promise<Response> => {
       try {
         if (route === "session" && request.method === "GET") return json(await chatgpt.getSession())
-        if (route === "models" && request.method === "GET") return json((await chatgpt.listModels({ signal: request.signal })).map((model) => model.slug))
+        if (route === "models" && request.method === "GET") return json(await chatgpt.listModels({ signal: request.signal }))
         if (route === "signin" && request.method === "POST") {
           const body = await request.json().catch(() => ({})) as { reconsent?: unknown }
           return json(await chatgpt.signIn({ reconsent: body.reconsent === true }))

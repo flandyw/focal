@@ -23,8 +23,8 @@ import {
 } from "./mistake-ai-core"
 
 function selectChatGPTModel(models: string[], preferredModel = "auto"): string | null {
+  if (models.includes(preferredModel)) return preferredModel
   const supportedModels = models.filter(supportsStreamedAnalysis)
-  if (preferredModel !== "auto" && supportedModels.includes(preferredModel)) return preferredModel
   return supportedModels[0] ?? null
 }
 

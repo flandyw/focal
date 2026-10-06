@@ -1,8 +1,5 @@
 import { Output, jsonSchema, streamText } from "ai"
-import {
-  ChatGPTProxyError,
-  createChatGPTProxyProvider,
-} from "@opencoredev/loginwithchatgpt-ai"
+import { ChatGPTRequestError, createChatGPTProvider } from "../../../web/src/lib/chatgpt-client"
 import { getChatGPTModel } from "@/lib/settings"
 import { toChatGPTPrompt } from "@/lib/providers/chatgpt-prompt"
 import type {
@@ -15,50 +12,12 @@ import type {
 } from "@/lib/providers/types"
 import { logLlmExchange } from "@/lib/providers/shared"
 
-const configuredBasePath = import.meta.env.VITE_CHATGPT_BASE_PATH
-const CHATGPT_BASE_PATH = configuredBasePath === undefined
-  ? "http://localhost:41731/api/chatgpt"
-  : configuredBasePath.trim().replace(/\/+$/, "")
-
-/** Public endpoint only; the handler keeps ChatGPT tokens behind its session cookie. */
-export function getChatGPTBasePath(): string {
-  return CHATGPT_BASE_PATH
-}
-
-/** The desktop app needs credentialed cookies when the handler is hosted elsewhere. */
-export const chatGPTFetch: typeof fetch = (input, init) => fetch(input, {
-  ...init,
-  credentials: "include",
-})
-
 type ChatGPTReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh"
 
 function normalizeChatGPTReasoningEffort(model?: string, reasoning?: ReasoningConfig): ChatGPTReasoningEffort | undefined {
   if (!reasoning?.effort) return undefined
   if (model === "gpt-6-astra" && reasoning.effort === "none") return "low"
   return reasoning.effort === "minimal" ? "low" : reasoning.effort
-}
-
-function getProxy(model?: string, reasoning?: ReasoningConfig) {
-  if (!CHATGPT_BASE_PATH) {
-    throw new Error("ChatGPT is not configured for this build. Set VITE_CHATGPT_BASE_PATH and rebuild Focal.")
-  }
-  const effort = normalizeChatGPTReasoningEffort(model, reasoning)
-  const fetchWithReasoning: typeof fetch = (input, init) => {
-    const headers = new Headers(input instanceof Request ? input.headers : undefined)
-    new Headers(init?.headers).forEach((value, key) => headers.set(key, value))
-    const url = typeof input === "string" ? input : input instanceof Request ? input.url : input.toString()
-    if (effort && new URL(url, CHATGPT_BASE_PATH).pathname.endsWith("/responses")) {
-      headers.set("x-login-with-chatgpt-reasoning-effort", effort)
-    }
-    return chatGPTFetch(input, { ...init, headers })
-  }
-  return createChatGPTProxyProvider({
-    basePath: CHATGPT_BASE_PATH,
-    credentials: "include",
-    fetch: fetchWithReasoning,
-    ...(model ? { defaultModel: model } : {}),
-  })
 }
 
 function toTools(tools: ChatCompletionRequest["tools"]) {
@@ -109,18 +68,18 @@ function modelInfo(id: string): ModelInfo {
 export const chatgptProvider: Provider = {
   id: "chatgpt",
   displayName: "ChatGPT",
-  summary: "Use your own ChatGPT plan through Focal’s secure proxy (no API key).",
+  summary: "Sign in with ChatGPT to use your own plan (no API key).",
   requiresApiKey: false,
   configFields: [{ key: "model", label: "Model", kind: "text", required: true }],
   supportsReasoning: true,
   supportsToolCalling: true,
 
   isConfigured(): boolean {
-    return Boolean(CHATGPT_BASE_PATH && getChatGPTModel())
+    return Boolean(getChatGPTModel())
   },
 
   async listModels(): Promise<ModelInfo[]> {
-    return (await getProxy().listModels()).map(modelInfo)
+    return (await createChatGPTProvider().listModels()).map(modelInfo)
   },
 
   async healthcheck(): Promise<ProviderHealthcheck> {
@@ -128,7 +87,7 @@ export const chatgptProvider: Provider = {
       const models = await this.listModels()
       return { ok: true, modelCount: models.length }
     } catch (error) {
-      if (error instanceof ChatGPTProxyError && error.status === 401) {
+      if (error instanceof ChatGPTRequestError && error.status === 401) {
         return { ok: false, error: "Connect a ChatGPT account first." }
       }
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -137,8 +96,10 @@ export const chatgptProvider: Provider = {
 
   async chatCompletion(req: ChatCompletionRequest): Promise<ChatCompletionResult> {
     const prompt = toChatGPTPrompt(req.messages)
+    const effort = normalizeChatGPTReasoningEffort(req.model, req.reasoning)
     const result = streamText({
-      model: getProxy(req.model, req.reasoning)(req.model),
+      // ponytail: web/ and the root resolve separate copies of the AI SDK types; the runtime object is the same shape.
+      model: createChatGPTProvider()(req.model) as unknown as Parameters<typeof streamText>[0]["model"],
       messages: prompt.messages,
       ...(prompt.instructions
         ? { providerOptions: { openai: { instructions: prompt.instructions } } }
@@ -152,6 +113,7 @@ export const chatgptProvider: Provider = {
             }),
           }
         : {}),
+      ...(effort ? { headers: { "x-focal-reasoning-effort": effort } } : {}),
       ...(typeof req.maxTokens === "number" ? { maxOutputTokens: req.maxTokens } : {}),
       ...(req.signal ? { abortSignal: req.signal } : {}),
     })

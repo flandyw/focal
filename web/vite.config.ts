@@ -2,14 +2,18 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
-import { createChatGPTAuth } from './server/chatgpt.js'
+import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { createChatGPTService } from './server/chatgpt.js'
 import { handleMistakesPdf } from './server/mistakes-pdf.js'
 
 function chatgptPlugin(): Plugin {
   return {
-    name: 'login-with-chatgpt',
+    name: 'sign-in-with-chatgpt',
     configureServer(server) {
-      const chatgptAuth = createChatGPTAuth()
+      const storageDir = process.env.FOCAL_DATA_DIR ?? path.join(homedir(), '.focal')
+      mkdirSync(storageDir, { recursive: true })
+      const chatgpt = createChatGPTService({ storageDir })
       server.middlewares.use('/api/mistakes-pdf', async (request, response) => {
         const chunks: Buffer[] = []
         for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
@@ -35,7 +39,7 @@ function chatgptPlugin(): Plugin {
             for (const item of Array.isArray(value) ? value : value ? [value] : []) headers.append(name, item)
           }
           const method = request.method ?? 'GET'
-          const result = await chatgptAuth.handler(new Request(
+          const result = await chatgpt(new Request(
             new URL(request.originalUrl ?? request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`).href,
             {
               method,
@@ -45,11 +49,7 @@ function chatgptPlugin(): Plugin {
           ))
 
           response.statusCode = result.status
-          result.headers.forEach((value, name) => {
-            if (name !== 'set-cookie') response.setHeader(name, value)
-          })
-          const cookies = result.headers.getSetCookie()
-          if (cookies.length) response.setHeader('set-cookie', cookies)
+          result.headers.forEach((value, name) => response.setHeader(name, value))
           if (!result.body) return response.end()
 
           const reader = result.body.getReader()

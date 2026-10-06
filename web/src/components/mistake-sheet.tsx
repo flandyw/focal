@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
-import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, Images, LogOut, Pencil, Sparkles, X } from "lucide-react"
+import { useChatGPT } from "../lib/chatgpt-client"
+import { ChatGPTConnection } from "./chatgpt-connection"
+import { ArrowLeft, Images, Pencil, Sparkles, X } from "lucide-react"
 import { MistakeAttachments } from "./mistake-attachments"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -139,7 +140,7 @@ export function MistakeSheet({
   onOpenChange,
   onSave,
 }: MistakeSheetProps) {
-  const auth = useLoginWithChatGPT()
+  const auth = useChatGPT()
   const [attemptId, setAttemptId] = useState(initialMistake?.attemptId ?? initialAttemptId ?? "")
   const [question, setQuestion] = useState(initialMistake?.question ?? "")
   const [questionText, setQuestionText] = useState(initialMistake?.questionText ?? "")
@@ -493,39 +494,7 @@ export function MistakeSheet({
                   ) : null}
                   {progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
                   <div className="rounded-lg border bg-muted/30 p-3">
-                    {auth.status === "loading" ? <p className="text-sm text-muted-foreground">Checking ChatGPT connection…</p> : null}
-
-                    {auth.isAuthenticated ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <CheckCircle2 className="size-4 shrink-0" />
-                          <span className="truncate text-sm font-medium">Connected{auth.user?.email ? ` as ${auth.user.email}` : ""}</span>
-                        </div>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => void auth.logout()}><LogOut />Disconnect</Button>
-                      </div>
-                    ) : null}
-
-                    {auth.status === "pending" ? (
-                      <div className="grid gap-3">
-                        <p className="text-sm">Enter <strong className="font-mono">{auth.userCode}</strong> in the ChatGPT authorization window.</p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => void auth.copyCode()}><Copy />{auth.copied ? "Copied" : "Copy code"}</Button>
-                          <Button size="sm" variant="outline" render={<a href={auth.verificationUrl} target="_blank" rel="noopener noreferrer" />}><ExternalLink />Reopen</Button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {auth.status !== "loading" && !auth.isAuthenticated && auth.status !== "pending" ? (
-                      <div className="grid gap-3">
-                        <p className="text-sm leading-5 text-muted-foreground">AI requests use your ChatGPT plan. The photo passes through this server; Focal never receives your password, and disconnecting deletes the session.</p>
-                        <div>
-                          <Button type="button" size="sm" variant="outline" disabled={auth.isConnecting} onClick={() => void auth.login({ popup: window.open("about:blank", "_blank") })}>
-                            <Sparkles />{auth.isConnecting ? "Connecting…" : "I understand, connect ChatGPT"}
-                          </Button>
-                        </div>
-                        {auth.error ? <p role="alert" className="text-sm text-destructive">{auth.error}</p> : null}
-                      </div>
-                    ) : null}
+                    <ChatGPTConnection />
                   </div>
                     </div>
                   </details>

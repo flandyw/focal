@@ -27,7 +27,7 @@ if (isTauri()) {
   }
 }
 
-export function FocalWebView({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function FocalWebView() {
   useEffect(() => {
     if (!isTauri()) return
     const openExternal = (event: MouseEvent) => {
@@ -44,7 +44,7 @@ export function FocalWebView({ onOpenSettings }: { onOpenSettings: () => void })
   return (
     <div className="h-full overflow-auto">
       <AppErrorBoundary>
-        <ExamsApp embedded onOpenSettings={onOpenSettings} />
+        <ExamsApp embedded />
       </AppErrorBoundary>
     </div>
   )

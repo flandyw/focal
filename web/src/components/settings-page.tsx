@@ -1,9 +1,8 @@
 import "./settings-page.css"
-import { chatGPTOptions } from "../lib/ai-settings"
+import { createChatGPTProvider, useChatGPT } from "../lib/chatgpt-client"
+import { ChatGPTConnection } from "./chatgpt-connection"
 import { useEffect, useState } from "react"
-import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
-import { useLoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
-import { ArrowDown, ArrowUp, CheckCircle2, Cloud, Copy, ExternalLink, LogOut, Plus, RefreshCw, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
+import { ArrowDown, ArrowUp, CheckCircle2, Cloud, LogOut, Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
@@ -12,7 +11,6 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Field, FieldDescription, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { Skeleton } from "./ui/skeleton"
 import {
   loadAISettings,
   saveAISettings,
@@ -38,8 +36,7 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
-  onOpenSettings?: () => void
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
@@ -48,7 +45,7 @@ export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects,
   onSubjectsChange: (subjects: string[]) => void
   onExamDifficultyChange: (settings: ExamDifficultySettings) => void
 }) {
-  const auth = useLoginWithChatGPT(chatGPTOptions)
+  const auth = useChatGPT()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [accountLoading, setAccountLoading] = useState(false)
@@ -75,7 +72,7 @@ export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects,
     setLoadingModels(true)
     setModelError(null)
     try {
-      setModels(await createChatGPTProxyProvider(chatGPTOptions).listModels())
+      setModels(await createChatGPTProvider().listModels())
     } catch {
       setModels([])
       setModelError("Could not load models for this account.")
@@ -89,7 +86,6 @@ export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects,
     else setModels([])
   }, [auth.isAuthenticated])
 
-  const identity = auth.user?.name ?? auth.user?.email ?? "ChatGPT account"
   const modelOptions = models.filter(supportsStreamedAnalysis)
   const selectedModel = modelOptions.includes(settings.model) ? settings.model : modelOptions[0]
   const selectedEffort = settings.reasoningEffort === "none" ? "low" : settings.reasoningEffort
@@ -286,44 +282,7 @@ export function SettingsPage({ onOpenSettings, sync, subjects, selectedSubjects,
           </CardAction>
         </CardHeader>
         <CardContent>
-          {auth.status === "loading" ? <Skeleton className="h-16 w-full" /> : null}
-
-          {auth.isAuthenticated ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="font-medium">{identity}</p>
-                <p className="text-sm text-muted-foreground">
-                  {auth.user?.email && auth.user.email !== identity ? auth.user.email : "Ready for mistake analysis"}
-                  {auth.user?.plan ? ` · ${auth.user.plan} plan` : ""}
-                </p>
-              </div>
-              <Button variant="outline" onClick={() => void auth.logout()}><LogOut />Disconnect</Button>
-            </div>
-          ) : null}
-
-          {auth.status === "pending" ? (
-            <div className="grid gap-3">
-              <p className="text-sm">Enter code <strong className="font-mono">{auth.userCode}</strong> in the ChatGPT authorization window.</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => void auth.copyCode()}><Copy />{auth.copied ? "Copied" : "Copy code"}</Button>
-                <Button variant="outline" render={<a href={auth.verificationUrl} target="_blank" rel="noopener noreferrer" />}><ExternalLink />Reopen authorization</Button>
-              </div>
-            </div>
-          ) : null}
-
-          {auth.status !== "loading" && !auth.isAuthenticated && auth.status !== "pending" ? (
-            <div className="grid gap-4">
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Connecting lets Focal spend from your ChatGPT plan for AI requests. Prompts and mistake photos pass through this server; Focal never receives your password. Disconnecting deletes the server session.
-              </p>
-              <div>
-                <Button disabled={auth.isConnecting} onClick={() => onOpenSettings ? onOpenSettings() : void auth.login({ popup: window.open("about:blank", "_blank") })}>
-                  <Sparkles />{onOpenSettings ? "Connect in account settings" : auth.isConnecting ? "Connecting…" : "I understand, connect ChatGPT"}
-                </Button>
-              </div>
-              {auth.error ? <p role="alert" className="text-sm text-destructive">{auth.error}</p> : null}
-            </div>
-          ) : null}
+          <ChatGPTConnection />
         </CardContent>
       </Card>
 

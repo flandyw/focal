@@ -1,5 +1,4 @@
-import { chatGPTOptions } from "./ai-settings"
-import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
+import { createChatGPTProvider } from "./chatgpt-client"
 import { jsonSchema, Output, streamText } from "ai"
 
 import { pickPlannerModel } from "./ai-settings"
@@ -116,7 +115,7 @@ function errorText(error: unknown): string {
 export function formatPlannerError(error: unknown) {
   const status = errorStatus(error)
   const detail = errorText(error).toLowerCase()
-  if (status === 401 || detail.includes("not_authenticated")) return "Connect ChatGPT in Settings first."
+  if (status === 401 || detail.includes("sign_in_required")) return "Connect ChatGPT in Settings first."
   if (status === 429) return "ChatGPT is receiving too many requests. Wait a minute, then try again."
   if (status === 403 || detail.includes("not allowed") || detail.includes("model_not")) {
     return "That model cannot plan sessions. Pick another in the planner's model list."
@@ -143,7 +142,7 @@ export async function planStudySession(
   context: PlanContext,
   preferredModel: string,
 ): Promise<{ plan: StudyPlan; model: string }> {
-  const chatgpt = createChatGPTProxyProvider(chatGPTOptions)
+  const chatgpt = createChatGPTProvider()
   let models: string[]
   try {
     models = await chatgpt.listModels()
@@ -184,7 +183,7 @@ export async function planStudySession(
         output: Output.object({ schema: SCHEMA, name: "study_plan" }),
         maxOutputTokens: 600,
         // Planning is a cheap job, so it never pays for extended reasoning.
-        headers: { "x-login-with-chatgpt-reasoning-effort": "low" },
+        headers: { "x-focal-reasoning-effort": "low" },
         prompt,
       })
       return { plan: buildStudyPlan(await result.output, fallback, context.subjects), model }

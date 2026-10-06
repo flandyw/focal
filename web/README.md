@@ -19,7 +19,6 @@ A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recha
 
 ```bash
 bun install
-$env:LWC_SECRET = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 bun run dev
 ```
 
@@ -37,11 +36,11 @@ Mistake cards use a due-card study queue with Again, Hard, Good, and Easy rating
 Student data stays in browser storage. Use the app menu to export or import a validated JSON backup.
 Mistake photos sent to ChatGPT pass through the local server and are not saved by Focal.
 
-For a production build, set a stable `LWC_SECRET`, then run `bun run build` followed by `bun run start`. The default in-memory ChatGPT session store logs users out when the server restarts; configure the SDK's shared `sessionStore` for multi-instance or durable deployments.
+Sign in with ChatGPT (the OpenAI DevKit, vendored in `../vendor/siwc`) runs only in a local server on your own computer: `bun run dev`, or `bun run build` then `bun run start`. Credentials are encrypted with a key held in the OS credential store (macOS Keychain, Linux Secret Service via `secret-tool`, Windows DPAPI) under `~/.focal` (override with `FOCAL_DATA_DIR`). The sign-in callback uses `127.0.0.1:8787` (`FOCAL_CHATGPT_REDIRECT_PORT`). Run `bun install` in the repository root too, since the DevKit's dependencies live there.
 
 ## Vercel
 
-Import the Focal repository into Vercel with the root directory set to `web`, add a stable `LWC_SECRET`, and connect an Upstash Redis database from the Vercel Marketplace. Focal accepts either `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` or Vercel's `KV_REST_API_URL` + writable `KV_REST_API_TOKEN`; Vercel deployments fail fast without durable session storage. Redeploy after adding the variables.
+The hosted deployment serves the app without ChatGPT: Sign in with ChatGPT only works when Focal runs on the user's own machine, so the ChatGPT cards explain that instead of connecting.
 
 ## Checks
 

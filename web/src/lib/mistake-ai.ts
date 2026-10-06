@@ -1,5 +1,4 @@
-import { chatGPTOptions } from "./ai-settings"
-import { createChatGPTProxyProvider } from "@opencoredev/loginwithchatgpt-ai"
+import { createChatGPTProvider } from "./chatgpt-client"
 import { jsonSchema, Output, streamText } from "ai"
 import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
 import { loadAISettings, supportsStreamedAnalysis } from "./ai-settings"
@@ -63,7 +62,7 @@ export function formatMistakeAIError(error: unknown) {
   const status = errorStatus(error)
   const detail = errorText(error)
   const normalized = detail.toLowerCase()
-  if (status === 401 || normalized.includes("not_authenticated")) return "Connect ChatGPT in Settings first."
+  if (status === 401 || normalized.includes("sign_in_required")) return "Connect ChatGPT in Settings first."
   if (status === 413 || normalized.includes("responses_request_too_large")) return "This image is too large to send to ChatGPT. Choose a smaller image and try again."
   if (status === 429) return "ChatGPT is receiving too many requests. Wait a minute, then try again."
   if (normalized.includes("stream") && normalized.includes("not support")) return "The selected ChatGPT model does not support streamed analysis. Choose another model in Settings."
@@ -73,7 +72,7 @@ export function formatMistakeAIError(error: unknown) {
 }
 
 async function getChatGPTModel() {
-  const chatgpt = createChatGPTProxyProvider(chatGPTOptions)
+  const chatgpt = createChatGPTProvider()
   let models: string[]
   try {
     models = await chatgpt.listModels()
@@ -190,7 +189,7 @@ export async function autofillMistakeFields(
       model: chatgpt(model),
       output: Output.object({ schema, name: "mistake_autofills" }),
       maxOutputTokens: Math.max(1200, batch.length * 450),
-      headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+      headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
       onChunk: createChatGPTProgressHandler(onProgress),
       onError: ({ error }) => { streamError = error },
       prompt: `Fill the listed emptyFields in each student's mistake record using only the supplied record and exam context. Return exactly one object for every id. For fields not listed in emptyFields, return null: existing values must never be rewritten. Treat assessmentResult, when supplied, as the source of truth for its topic, criterion, and marks. Keep question as a short item label, questionText as a self-contained faithful reconstruction, explanation as a concise diagnosis, correction as an actionable improved response or method, areaOfStudy and criterion as concise labels, and marks as realistic non-negative numbers with totalMarks greater than zero and marksLost no greater than totalMarks. Do not pretend to know missing exact wording or marks; return null when the evidence is insufficient. Records: ${JSON.stringify(records)}`,
@@ -265,7 +264,7 @@ export async function editMistakesWithInstruction(
       model: chatgpt(model),
       output: Output.object({ schema, name: "mistake_edits" }),
       maxOutputTokens: Math.max(1500, batch.length * 1000),
-      headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+      headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
       onChunk: createChatGPTProgressHandler((progress) => onProgress({ ...progress, itemIndex: Math.min(start + size, mistakes.length), itemCount: mistakes.length })),
       onError: ({ error }) => { streamError = error },
       prompt: `Apply the student's instruction to the ${fields.join(", ")} field${fields.length === 1 ? "" : "s"} of each mistake record. Return exactly one object per id containing only those fields. Rewrite only what the instruction asks for: preserve meaning, facts, numbers, marks and LaTeX correctness, never invent missing content, and return a field unchanged when the instruction does not apply to it. Use the other record fields only as context. Instruction: ${JSON.stringify(instruction)}. Records: ${JSON.stringify(records)}`,
@@ -319,7 +318,7 @@ export async function generateMistakeFieldMergePlan(
     model: chatgpt(model),
     output: Output.object({ schema, name: "mistake_field_merge_plan" }),
     maxOutputTokens: Math.max(800, values.length * 80),
-    headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+    headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
     onChunk: createChatGPTProgressHandler(onProgress),
     onError: ({ error }) => { streamError = error },
     prompt: `Review the student's existing ${field === "criterion" ? "assessment criterion" : "topic / Area of Study"} labels and propose a conservative consolidation plan. Merge only labels that are semantically equivalent, trivial spelling/capitalisation variants, or unnecessarily verbose versions of the same concept. Preserve labels that describe genuinely distinct curriculum topics or assessment criteria, even when they are related. Prefer an existing concise label as the target when suitable, but you may create a clearer concise target. Return only changed source-to-target mappings, use each source at most once, and do not create circular mappings. An empty merges array is correct when no consolidation is clearly useful. Labels and usage counts: ${JSON.stringify(values)}`,
@@ -372,7 +371,7 @@ export async function generateAlternativeMistakeQuestions(mistakes: Mistake[], a
       model: chatgpt(model),
       output: Output.object({ schema, name: "alternative_mistake_deck" }),
       maxOutputTokens: Math.max(1400, batch.length * 500),
-      headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+      headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
       onChunk: createChatGPTProgressHandler(onProgress),
       prompt: `Create exactly one original alternative question or task for every mistake record, regardless of subject. It must test the same underlying knowledge, evidence use, communication, reasoning, or process as its source while changing the values, wording, source material, scenario, or required reasoning enough that it cannot be answered by memorising the source. Keep the difficulty and curriculum level comparable. Make every task self-contained, assign a realistic mark value, and provide an appropriate model answer, response plan, or worked solution based on the improved response. Do not copy source wording or reproduce proprietary exam material. Return every source id exactly once. Records: ${JSON.stringify(mistakeContext(batch, attempts))}`,
     })
@@ -424,7 +423,7 @@ export async function analyseMistakes(mistakes: Mistake[], attempts: ExamAttempt
     model: chatgpt(model),
     output: Output.object({ schema, name: "mistake_insights" }),
     maxOutputTokens: 900,
-    headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+    headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
     onChunk: createChatGPTProgressHandler(onProgress),
     prompt: `Analyse this student's logged mistakes. Identify the most important recurring knowledge or process gaps, cite concise evidence from the records, notice useful patterns such as subjects, marks, resolution or review history, and give one practical next step. Do not claim a pattern unless the records support it. Use concise student-friendly plain text. Records: ${JSON.stringify(mistakeContext(mistakes, attempts))}`,
   })
@@ -447,7 +446,7 @@ export async function generateMistakePracticeQuestions(insights: MistakeInsights
     model: chatgpt(model),
     output: Output.object({ schema, name: "practice_questions" }),
     maxOutputTokens: 1400,
-    headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+    headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
     onChunk: createChatGPTProgressHandler(onProgress),
     prompt: `Create 4-6 original, subject-appropriate practice questions or tasks that directly target these diagnosed gaps. Use Markdown and use valid LaTeX only when mathematical or scientific notation needs it. Do not copy the logged material. Order the tasks from easier to harder, include marks, then put model answers, response plans, or worked solutions in a separate section as appropriate to each subject. Insights: ${JSON.stringify(diagnosis)}. Records: ${JSON.stringify(mistakeContext(mistakes, attempts))}`,
   })
@@ -506,7 +505,7 @@ export async function analyseMistakeImages(
     model: chatgpt(model),
     output: Output.object({ schema: mistakeSchema, name: "mistake_log" }),
     maxOutputTokens: 1200,
-    headers: { "x-login-with-chatgpt-reasoning-effort": settings.reasoningEffort },
+    headers: { "x-focal-reasoning-effort": settings.reasoningEffort },
     onChunk: createChatGPTProgressHandler(onProgress),
     onError: ({ error }) => { streamError = error },
     messages: [{

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { motion, useReducedMotion, AnimatePresence } from "framer-motion"
 import { invoke } from "@tauri-apps/api/core"
-import { LoginWithChatGPT } from "@opencoredev/loginwithchatgpt-react"
+import { ChatGPTConnection } from "../../../web/src/components/chatgpt-connection"
+import { useChatGPT } from "../../../web/src/lib/chatgpt-client"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -52,7 +53,6 @@ import {
   type Provider,
   type ModelInfo,
 } from "@/lib/providers"
-import { chatGPTFetch, getChatGPTBasePath } from "@/lib/providers/chatgpt"
 import { chooseOllamaModel, pullOllamaModel } from "@/lib/providers/ollama"
 import { notifyUserSettingsChanged } from "@/lib/sync/engine"
 import type { AssistantPersonality, ReasoningEffort } from "@/lib/settings"
@@ -478,6 +478,11 @@ export function AIModelSection() {
     }
   }, [activeProvider])
 
+  const chatgptConnected = useChatGPT().isAuthenticated
+  useEffect(() => {
+    if (isChatGPT && chatgptConnected) void handleRefreshModels()
+  }, [isChatGPT, chatgptConnected, handleRefreshModels])
+
   const handleHealthcheck = useCallback(async () => {
     setHealthStatus({ status: "pending" })
     const result = await activeProvider.healthcheck()
@@ -599,23 +604,10 @@ export function AIModelSection() {
           <div className="min-w-0">
             <h2 className="text-sm font-medium">ChatGPT account</h2>
             <p className="mt-1 text-xs text-muted-foreground/70 text-wrap-balance">
-              Connect your ChatGPT account to use its plan. Focal never receives your password; requests and files pass through the configured proxy.
+              Sign in with ChatGPT to use your plan. Focal never receives your password; credentials stay encrypted on this device.
             </p>
           </div>
-          {getChatGPTBasePath() ? (
-            <div className="mt-3">
-              <LoginWithChatGPT
-                basePath={getChatGPTBasePath()}
-                fetch={chatGPTFetch}
-                consent={{ appName: "Focal" }}
-                onAuthenticated={() => { void handleRefreshModels() }}
-              />
-            </div>
-          ) : (
-            <p className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5 text-xs text-amber-700 dark:text-amber-300">
-              This build has no ChatGPT proxy configured. Set <code className="font-mono text-[10px]">VITE_CHATGPT_BASE_PATH</code> and rebuild Focal.
-            </p>
-          )}
+          <div className="mt-3"><ChatGPTConnection /></div>
         </section>
       )}
 

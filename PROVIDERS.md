@@ -56,7 +56,7 @@ Providers that don't support reasoning ignore it.
 whatever the host uses:
 - OpenRouter → `response_format: { type: "json_schema", ... }` (server enforces)
 - Ollama → native `/api/chat` `format: <JSON schema>`
-- ChatGPT → Responses API structured output through the Login with ChatGPT proxy
+- ChatGPT → Responses API structured output through the local Sign in with ChatGPT service
 
 `ModelInfo` — what `listModels()` returns. Ollama also supplies local size,
 parameter count, quantization, family, context length, and host-reported
@@ -68,7 +68,7 @@ capabilities from `/api/tags` and `/api/show`.
 |------------|------------------------------------|--------------|--------------------|--------------------|
 | OpenRouter | `https://openrouter.ai/api/v1`     | bearer key   | yes                | yes                |
 | Ollama     | `http://localhost:11434`           | none         | yes via native `format` | no             |
-| ChatGPT    | `VITE_CHATGPT_BASE_PATH`            | HttpOnly session cookie | yes via Responses proxy | yes via Codex effort header |
+| ChatGPT    | `VITE_CHATGPT_BASE_PATH`            | Sign in with ChatGPT (OS-encrypted, local) | yes via Responses | yes via `x-focal-reasoning-effort` |
 
 Default backends and fields rendered in the AI section in Settings come from
 each provider's `configFields` declaration. UI rendering is driven entirely

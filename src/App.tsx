@@ -2146,9 +2146,7 @@ function App() {
                       </Suspense>
                     ) : focalWebView ? (
                       <Suspense fallback={<ViewFallback label="Exams" />}>
-                        <FocalWebView
-                          onOpenSettings={navigation.openSettings}
-                        />
+                        <FocalWebView />
                       </Suspense>
                     ) : plannerView ? (
                       <Suspense fallback={<ViewFallback label="adaptive planner" />}>

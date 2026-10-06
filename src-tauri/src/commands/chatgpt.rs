@@ -38,9 +38,6 @@ impl Default for ChatGptSidecar {
     }
 }
 
-const ALLOWED_ORIGINS: &str =
-    "http://localhost:1420,http://tauri.localhost,https://tauri.localhost,tauri://localhost";
-
 #[cfg(desktop)]
 pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
     let data_directory = app
@@ -67,8 +64,6 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
         .sidecar("focal-chatgpt")
         .map_err(|error| format!("could not configure ChatGPT sidecar: {error}"))?
         .env("FOCAL_CHATGPT_DATA_DIR", data_directory)
-        .env("LWC_ALLOWED_ORIGINS", ALLOWED_ORIGINS)
-        .env("NODE_ENV", "production")
         .spawn()
         .map_err(|error| format!("could not start ChatGPT sidecar: {error}"))?;
 

@@ -1,10 +1,4 @@
-// Desktop uses the same sidecar connection as the main app's AI settings.
-export const chatGPTOptions = {
-  basePath: import.meta.env.VITE_CHATGPT_BASE_PATH?.trim().replace(/\/+$/, "")
-    ?? (import.meta.env.VITE_EMBEDDED_EXAMS ? "http://localhost:41731/api/chatgpt" : "/api/chatgpt"),
-  credentials: "include" as const,
-  fetch: ((input, init) => fetch(input, { ...init, credentials: "include" })) as typeof fetch,
-}
+export { CHATGPT_BASE_PATH } from "./chatgpt-client"
 
 export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const
 

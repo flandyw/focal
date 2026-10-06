@@ -95,7 +95,7 @@ Manage coursework files, plan sessions around a configurable timetable, and trac
 | Frontend | React 19 · TypeScript (strict) · Tailwind v4 · Radix primitives · Recharts · Framer Motion · Sonner · `lucide-react` · `react-day-picker` · `date-fns` |
 | Desktop shell | Tauri v2 (Rust) — SQLite local database · device-only credential storage · filesystem watcher · dialogs · notifications · updater |
 | Type & colour | Sora Variable (display) · Geist (UI) · single-accent palette, dark and light modes equally considered |
-| AI | OpenRouter, local Ollama, or Login with ChatGPT, with structured output (Auto Rename, Text-to-Events) |
+| AI | OpenRouter, local Ollama, or Sign in with ChatGPT, with structured output (Auto Rename, Text-to-Events) |
 | Cloud | Optional Supabase Auth + a compacted Postgres change log + Realtime, backed by a durable SQLite outbox. Notion rows carry stable Focal identity fields. |
 
 ---
@@ -159,9 +159,9 @@ The protocol itself — the rules, the per-entity merge policy, the latency budg
 
 Do not put a Supabase service-role or secret key in `.env` — the desktop client only uses the publishable key. Notion is a separate, optional calendar integration; enable it from Settings → Notion Sync after creating an integration token.
 
-### Login with ChatGPT
+### Sign in with ChatGPT
 
-Focal uses `@opencoredev/loginwithchatgpt-*` through a local Bun sidecar by default. The sidecar is compiled and bundled by `bun run tauri dev` / `bun run tauri build`, listens only on `localhost:41731`, and persists its encrypted session store under Focal's app-data directory. The ChatGPT model picker is populated from the signed-in account and uses a current Codex client version so newer account models can be returned; no OpenAI API key is used. A hosted handler remains supported by setting `VITE_CHATGPT_BASE_PATH` to its `/api/chatgpt` URL before building and configuring its `LWC_SECRET`, `LWC_CLIENT_VERSION`, allowed origins, and shared session store.
+Focal uses the official [Sign in with ChatGPT DevKit](https://github.com/openai/sign-in-with-chatgpt-devkit), vendored under `vendor/siwc` (noncommercial licence; see `vendor/siwc/README.md`). It runs in a local Bun sidecar that is compiled and bundled by `bun run tauri dev` / `bun run tauri build`, listens only on `127.0.0.1:41731`, and keeps ChatGPT tokens encrypted under Focal's app-data directory with a key held in the OS credential store (Keychain, Secret Service, or DPAPI). Sign-in opens the system browser and returns to `127.0.0.1:8787` (`FOCAL_CHATGPT_REDIRECT_PORT`). The model picker is populated from the signed-in account; no OpenAI API key is used. Set `VITE_CHATGPT_BASE_PATH` only to point at a different local service.
 
 ---
 

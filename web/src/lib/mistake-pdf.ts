@@ -1,5 +1,5 @@
 import { downloadExamFile } from "./host"
-import { chatGPTOptions } from "./ai-settings"
+import { CHATGPT_BASE_PATH } from "./chatgpt-client"
 import type { ExamAttempt, Mistake } from "./exam-data"
 
 const TEX_SPECIALS = /[#$%&_{}~^\\]/g
@@ -193,7 +193,7 @@ ${pages.join("\n\\newpage\n")}` : ""}
 }
 
 export async function downloadMistakesPdf(mistakes: Mistake[], attempts: ExamAttempt[], subject = "mistakes") {
-  const response = await fetch(chatGPTOptions.basePath.replace(/\/chatgpt$/, "/mistakes-pdf"), {
+  const response = await fetch(CHATGPT_BASE_PATH.replace(/\/chatgpt$/, "/mistakes-pdf"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ tex: buildMistakesTex(mistakes, attempts) }),

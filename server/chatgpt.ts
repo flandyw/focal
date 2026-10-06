@@ -6,7 +6,7 @@ import { createOsCredentialEncryption } from "./keystore"
 // exposes only a narrow HTTP surface to the app UI. Tokens never leave this process.
 const REDIRECT_PORT = Number(process.env.FOCAL_CHATGPT_REDIRECT_PORT ?? 8787)
 const MAX_REQUEST_BYTES = 4_400_000
-const REASONING_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh"])
+const REASONING_EFFORTS = new Set(["none", "low", "medium", "high", "xhigh", "max"])
 
 export type ChatGPTServiceOptions = {
   storageDir: string

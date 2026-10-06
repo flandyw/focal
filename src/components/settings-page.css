@@ -2,8 +2,8 @@
   --slider-thumb-size: 3.25rem;
   position: absolute;
   inset-block: 0;
-  left: calc(12.5% - var(--slider-thumb-size) / 2);
-  width: calc(75% + var(--slider-thumb-size));
+  left: calc(10% - var(--slider-thumb-size) / 2);
+  width: calc(80% + var(--slider-thumb-size));
   appearance: none;
   cursor: grab;
   background: transparent;
@@ -52,4 +52,3 @@
 .model-reasoning-slider:focus-visible::-moz-range-thumb {
   box-shadow: 0 0 0 0.4rem color-mix(in oklch, var(--slider-accent) 35%, transparent), 0 0.25rem 0.75rem oklch(0 0 0 / 22%);
 }
-

@@ -40,9 +40,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 /** AI SDK provider for the user's ChatGPT plan. `provider(model)` is a language model. */
 export function createChatGPTProvider() {
   const openai = createOpenAI({ baseURL: `${CHATGPT_BASE_PATH}/v1`, apiKey: "local" })
+  async function listModelCatalog() {
+    const models = await request<ChatGPTModel[]>("models")
+    // ponytail: the account catalog can lag working inference IDs. Remove these
+    // two fallbacks when the catalog catches up; inference still enforces access.
+    for (const model of [
+      { slug: "gpt-6.1-sol", displayName: "GPT-6.1 Sol" },
+      { slug: "gpt-6-luna", displayName: "GPT-6 Luna" },
+    ]) {
+      if (!models.some(({ slug }) => slug === model.slug)) models.push(model)
+    }
+    return models
+  }
   return Object.assign((model: string) => openai.responses(model), {
-    listModelCatalog: () => request<ChatGPTModel[]>("models"),
-    listModels: async () => (await request<ChatGPTModel[]>("models")).map((model) => model.slug),
+    listModelCatalog,
+    listModels: async () => (await listModelCatalog()).map((model) => model.slug),
   })
 }
 

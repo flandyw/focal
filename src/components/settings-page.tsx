@@ -28,9 +28,10 @@ const REASONING_LABELS: Record<ReasoningEffort, string> = {
   medium: "Medium",
   high: "High",
   xhigh: "Extra high",
+  max: "Max",
 }
 
-const REASONING_OPTIONS = ["low", "medium", "high", "xhigh"] as const
+const REASONING_OPTIONS = ["low", "medium", "high", "xhigh", "max"] as const
 
 function getModelAccent(model: string) {
   if (model.endsWith("-sol")) return "var(--chart-5)"
@@ -300,7 +301,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <div className="select-none overflow-x-auto pb-1">
               <div className="grid min-w-[38rem] grid-cols-[minmax(10rem,1fr)_minmax(22rem,4fr)] items-center">
                 <span />
-                <div className="grid grid-cols-4 pb-2">
+                <div className="grid grid-cols-5 pb-2">
                   {REASONING_OPTIONS.map((effort) => (
                     <span key={effort} className="px-2 text-center text-sm text-muted-foreground">{REASONING_LABELS[effort]}</span>
                   ))}
@@ -329,7 +330,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   const selected = model === selectedModel
                   const accent = getModelAccent(model)
                   return (
-                    <div key={model} className="relative grid h-12 grid-cols-4 items-center">
+                    <div key={model} className="relative grid h-12 grid-cols-5 items-center">
                         <span
                           aria-hidden="true"
                           className={`absolute inset-y-1 left-0 rounded-full transition-[width,opacity] duration-300 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${selected ? "opacity-100" : "opacity-0"}`}
@@ -360,7 +361,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 </div>
               </div>
             </div>
-            <FieldDescription>Choose a model and reasoning level together. Higher reasoning can take longer. Saved on this device.</FieldDescription>
+            <FieldDescription>Choose a model and reasoning level together. Higher reasoning can take longer. Model access depends on your account. Saved on this device.</FieldDescription>
             {modelError ? <p role="alert" className="text-sm text-destructive">{modelError}</p> : null}
           </Field>
               </div>

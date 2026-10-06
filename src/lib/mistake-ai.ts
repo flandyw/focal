@@ -80,7 +80,7 @@ async function getChatGPTModel() {
   return {
     chatgpt,
     model,
-    settings: model === "gpt-6-astra" && settings.reasoningEffort === "none"
+    settings: ["gpt-6-astra", "gpt-6.1-sol"].includes(model) && settings.reasoningEffort === "none"
       ? { ...settings, reasoningEffort: "low" as const }
       : settings,
   }

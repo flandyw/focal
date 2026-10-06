@@ -2,47 +2,49 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Focal is a VCE study app: practice exams, mistakes, calendar, study timer, progress. It ships as a browser app, a Tauri desktop app, and a separate native Android app. `AGENTS.md` sets the working style (minimal code) and **forbids writing tests**.
+Focal is a VCE study app: practice exams, mistakes, calendar, study timer, progress. It ships as a browser app, a Tauri desktop app, and a separate native Android app. `AGENTS.md` sets the working style (minimal code) and **forbids writing tests**; it also records the web/desktop architecture rules, so read it too.
 
 ## Commands
 
-Bun workspace (`web` is the only workspace member); run `bun install` at the root.
+Single root package and `bun.lock`; run `bun install` at the root.
 
 ```sh
-bun run dev                  # desktop frontend, port 1420 (vite.config.ts at root wraps web/)
+bun run dev                  # browser frontend, port 5173
+bun run dev:desktop          # desktop-mode frontend, port 1420
 bun run tauri dev            # desktop shell + local ChatGPT sidecar + frontend
-bun run --cwd web dev        # browser frontend (no AI)
 bun run check                # typecheck + lint (CI gate); `make check` is the same
-bun run typecheck            # tsc for root, tsconfig.node.json, and web/tsconfig.app.json
-bun run lint[:fix]           # oxlint src web/src scripts
-bun run build                # typecheck + desktop vite build into dist/
-bun run --cwd web build      # tsc -b + browser build (what verify-web CI runs, along with `bun run lint` in web/)
+bun run typecheck            # tsc for tsconfig.json and tsconfig.node.json
+bun run lint[:fix]           # oxlint src scripts
+bun run build                # typecheck + browser build (what verify-web CI runs, after `bun run lint`)
+bun run build:desktop        # typecheck + `vite build --mode desktop` into dist/
+bun run start                # production server.ts (serves build + /api/mistakes-pdf)
 cd android-native && ./gradlew :app:assembleDebug
 ```
 
-There is no test suite. Verify with typecheck, lint, builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually.
+There is no test suite. Verify with `check`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually. Some Makefile `dev` help text still mentions port 1420, but `make dev` runs the browser build (`bun run dev`).
 
 ## Architecture
 
-**One frontend, two hosts.** `web/src` is the only UI. The root `vite.config.ts` merges `web/vite.config.ts` with `root: "web"` and defines `VITE_EMBEDDED_EXAMS=true`, which is what turns the desktop build into the "embedded" variant (`AI_ENABLED` in `web/src/lib/host.ts`). Native behaviour is injected through the mutable `examHost` object in `web/src/lib/host.ts`; `web/src/lib/desktop.ts` fills it in (save dialogs, local SQLite study history, Supabase session storage) only when `isTauri()`. Keep Tauri imports out of the browser path.
+**One frontend, two hosts.** `src/` is the only UI (and the only Vite root). The browser and desktop builds differ only by Vite mode: `--mode desktop` defines `import.meta.env.VITE_EMBEDDED_EXAMS=true` (historical name), which sets `AI_ENABLED` in `src/lib/host.ts` and makes `src/main.tsx` dynamically import `src/lib/desktop.ts`. That module fills the mutable `examHost` object (save dialogs, local SQLite study history, external links) and attaches secure Supabase session storage, only when `isTauri()`. Keep Tauri imports out of the browser path. Don't recreate a `web/` package or a separate desktop UI.
 
-**Root `src/` is shared contracts, not an app.** It holds `types.ts`, `lib/sync/sessionContract.ts` (the study-session DTO/validator imported by both root and `web/`, and mirrored by Android/Folio), `lib/storage/*` (SQLite via `@tauri-apps/plugin-sql`), the Supabase client, and `PastStudyForm`. `web/` imports it via relative paths like `../../../src/...`. The `@` alias maps to each package's own `src`. React is deduped to web's copy.
+**Layout of `src/`.** `App.tsx` owns app state and lazy-loads the page components in `components/`; domain logic lives in `lib/`. Shared contracts that desktop, web, and Android must agree on are `lib/types.ts` and `lib/sync/sessionContract.ts` (study-session DTO/validator). `lib/storage/*` is SQLite via `@tauri-apps/plugin-sql` (desktop only). Several empty leftover directories (e.g. `components/project`, `lib/providers`) are remnants of the removed desktop workspace; ignore them. `lib/class-timetable-core.ts` (school timetable cycles) and `lib/timetable.ts` (exam scheduling) are unrelated.
 
-**Local AI sidecar.** Desktop AI uses Sign in with ChatGPT: `vendor/siwc` (vendored upstream, don't edit casually) + `server/` (`local.ts` is a Bun HTTP server on `127.0.0.1:41731`, `chatgpt.ts`, `keystore.ts`). `scripts/build-chatgpt-sidecar.ts` compiles it with `bun build --compile` into `src-tauri/binaries/focal-chatgpt-<triple>`, and Tauri launches it as an `externalBin` (`src-tauri/src/commands/chatgpt.rs`). `tauri dev/build` hooks run this build automatically. The server also hosts `/api/mistakes-pdf` (shared handler in `web/server/mistakes-pdf.ts`, also exposed via a Vite dev plugin and `web/api/` for Vercel). The browser build has no AI.
+**Local AI sidecar.** Desktop AI uses Sign in with ChatGPT: `vendor/siwc` (vendored upstream, don't edit casually) + `server/` (`local.ts` is a Bun HTTP server on `127.0.0.1:41731`, plus `chatgpt.ts`, `keystore.ts`). `scripts/build-chatgpt-sidecar.ts` compiles it with `bun build --compile` into `src-tauri/binaries/focal-chatgpt-<triple>`, and Tauri launches it as an `externalBin` (`src-tauri/src/commands/chatgpt.rs`). The `tauri dev/build` hooks run that build automatically. `/api/mistakes-pdf` is implemented once in `server/mistakes-pdf.ts` and exposed by the sidecar, a Vite dev plugin, `server.ts`, and `api/` (Vercel). The browser build has no AI.
 
-**Sync.** Desktop, web, Android, and the sibling app Folio share one Supabase project (`supabase/migrations`, apply from repo root with `supabase db push`). Two protocols:
+**Sync.** Desktop, web, Android, and the sibling app Folio share one Supabase project (`supabase/migrations`, apply from the repo root with `supabase db push`). Two protocols:
 - Generic cursor change feed (`sync_read_changes`) for ordinary records (attempts, mistakes, user_state, events…); realtime is only a wakeup.
 - Study sessions are a separate transactional protocol: one `study_sessions` table with intervals in a `segments` JSON array, mutated only via `study_session_mutate` with a `mutation_id`, `device_id`, and `expected_revision`. Never write sessions through `sync_apply_changes`.
 
-Read `docs/sync-protocol.md` before touching either. Historical `examtrack` storage keys and protocol identifiers are intentionally unchanged for saved-data compatibility; don't rename them.
+Read `docs/sync-protocol.md` before touching either. Historical `examtrack` storage keys and protocol identifiers are intentionally unchanged for saved-data and Folio compatibility; don't rename them.
 
-**Desktop local DB.** SQLite migrations in `src-tauri/migrations/` are immutable once released. Add a new numbered file and register it in `database_migrations()` in `src-tauri/src/lib.rs` (migration 1 has a Windows checksum quirk; see the comment there). Old desktop assessment/project data is retained but no longer surfaced; Progress reads local-only history without rewriting it.
+**Desktop local DB.** SQLite migrations in `src-tauri/migrations/` are immutable once released. Add a new numbered file and register it in `database_migrations()` in `src-tauri/src/lib.rs` (migration 1 has a Windows checksum quirk; see the comment there). Old desktop assessment/project data and coursework files are retained but no longer surfaced; don't delete them as cleanup. Desktop Progress reads local-only history without rewriting it.
 
 **Android** (`android-native/`) is an independent Kotlin/Compose app with its own SQLite, outbox, and Notion sync; it reads Supabase config from the root `.env`. It implements the same session protocol (`CanonicalSessionProtocol.kt`).
 
+**Data assets.** Reference datasets live in `public/*.json` and are regenerated by the import scripts in `vcaa/` and `vtac/` (`bun run vcaa:import`, `vcaa:resources`, `vtac:import`; the latter also runs in a GitHub workflow).
+
 ## Conventions and gotchas
 
-- Env: `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` in the root `.env` (desktop) or `web/.env.local` (web). Never a service-role key in the frontend.
-- `web/tsconfig.app.json` is strict about unused locals/params and `erasableSyntaxOnly` (no enums or parameter properties) — stricter than root `tsconfig.json`.
-- Design direction (`PRODUCT.md`, `web/DESIGN.md`): precise, minimal, utilitarian; single blue accent; light and dark equally polished; no gradient text, side-stripes, or glassmorphism. `.impeccable.md` is an older, partly stale design brief (describes a file-management app).
-- Stale docs: `PROVIDERS.md` describes an OpenRouter/Ollama provider layer that no longer exists (`src/lib/providers` is gone), and `docs/architecture-simplification.md` is a plan for the removed desktop calendar/App.tsx. Trust the code over them.
+- Env: `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` in root `.env.local` (either build). Never a service-role key in the frontend.
+- Design direction (`PRODUCT.md`, `docs/web-DESIGN.md`, `docs/TYPOGRAPHY.md`): precise, minimal, utilitarian; single blue accent; light and dark equally polished; no gradient text, side-stripes, or glassmorphism. `.impeccable.md` is an older, partly stale design brief (describes a file-management app).
+- Stale docs: `PROVIDERS.md` describes an OpenRouter/Ollama provider layer that no longer exists, and `docs/architecture-simplification.md` plans work on the removed desktop calendar. `docs/examtrack-merge.md` still refers to `web/`. Trust the code over them.

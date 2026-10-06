@@ -16,7 +16,7 @@ export function ChatGPTConnection() {
   const chatgpt = useChatGPT()
   if (chatgpt.status === "loading") return <p className="text-sm text-muted-foreground">Checking ChatGPT connection…</p>
   if (chatgpt.status === "unavailable") {
-    return <p className="text-sm text-muted-foreground">Sign in with ChatGPT runs on your own computer. Open Focal's desktop app, or run the web app locally with <code className="font-mono text-xs">bun run dev</code>.</p>
+    return <p className="text-sm text-muted-foreground">The local ChatGPT service is not running. Restart Focal to try again.</p>
   }
   return (
     <div className="grid gap-2">

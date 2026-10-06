@@ -6,6 +6,14 @@ export const examHost: {
   report?: (html: string) => Promise<void>
 } = {}
 
+// AI features run only inside the desktop app, which hosts the local Sign in with ChatGPT service.
+export const AI_ENABLED = Boolean(import.meta.env.VITE_EMBEDDED_EXAMS)
+
+const CHATGPT_BASE_PATH = import.meta.env.VITE_CHATGPT_BASE_PATH?.trim().replace(/\/+$/, "")
+  ?? (AI_ENABLED ? "http://localhost:41731/api/chatgpt" : "/api/chatgpt")
+export const CHATGPT_ENDPOINT = CHATGPT_BASE_PATH
+export const MISTAKES_PDF_ENDPOINT = CHATGPT_BASE_PATH.replace(/\/chatgpt$/, "/mistakes-pdf")
+
 export async function downloadExamFile(blob: Blob, name: string) {
   try {
     if (examHost.download) return await examHost.download(blob, name)

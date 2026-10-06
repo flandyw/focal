@@ -36,11 +36,11 @@ Mistake cards use a due-card study queue with Again, Hard, Good, and Easy rating
 Student data stays in browser storage. Use the app menu to export or import a validated JSON backup.
 Mistake photos sent to ChatGPT pass through the local server and are not saved by Focal.
 
-Sign in with ChatGPT (the OpenAI DevKit, vendored in `../vendor/siwc`) runs only in a local server on your own computer: `bun run dev`, or `bun run build` then `bun run start`. Credentials are encrypted with a key held in the OS credential store (macOS Keychain, Linux Secret Service via `secret-tool`, Windows DPAPI) under `~/.focal` (override with `FOCAL_DATA_DIR`). The sign-in callback uses `127.0.0.1:8787` (`FOCAL_CHATGPT_REDIRECT_PORT`). Run `bun install` in the repository root too, since the DevKit's dependencies live there.
+AI features are desktop-only: the desktop app runs the official Sign in with ChatGPT DevKit (vendored in `../vendor/siwc`) in a local sidecar (`../server`). The standalone web app has none.
 
 ## Vercel
 
-The hosted deployment serves the app without ChatGPT: Sign in with ChatGPT only works when Focal runs on the user's own machine, so the ChatGPT cards explain that instead of connecting.
+The hosted web app has no AI features: ChatGPT sign-in, autofill, bulk edit, insights, alternatives, photo import and session planning exist only in the desktop app. Mistakes can still be imported from a chatbot by pasting its JSON.
 
 ## Checks
 

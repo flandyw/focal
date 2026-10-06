@@ -33,6 +33,7 @@ import { studySessionActiveMilliseconds, type StudySessionAction, type Canonical
 import { canonicalNow } from "../lib/study-session-sync"
 import { VCE_SUBJECTS } from "../../../src/lib/types"
 import { StudyPlanCard } from "./study-plan-card"
+import { AI_ENABLED } from "../lib/host"
 import type { StudyPlan } from "../lib/study-plan"
 import {
   DEFAULT_SETTINGS,
@@ -375,7 +376,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         </section>
       <aside className="grid min-w-0 gap-4">
         {renderSettings()}
-        {!isFreeStudy && <details className="rounded-xl border bg-card">
+        {AI_ENABLED && !isFreeStudy && <details className="rounded-xl border bg-card">
           <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Plan a session</summary>
           <StudyPlanCard
             className="rounded-none border-0 shadow-none"

@@ -1,6 +1,7 @@
 import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
+import { AI_ENABLED } from "../lib/host"
 import { useEffect, useState } from "react"
 import { ArrowDown, ArrowUp, CheckCircle2, Cloud, LogOut, Plus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react"
 import { PageHeader } from "./page-header"
@@ -93,7 +94,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Settings" description="Manage sync, the ChatGPT connection, and mistake analysis." />
+      <PageHeader title="Settings" description={AI_ENABLED ? "Manage sync, the ChatGPT connection, and mistake analysis." : "Manage sync and your subjects."} />
 
       <Card>
         <CardHeader>
@@ -273,6 +274,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
         </CardContent>
       </Card>
 
+      {AI_ENABLED ? <>
       <Card>
         <CardHeader>
           <CardTitle>ChatGPT connection</CardTitle>
@@ -362,6 +364,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           </Field>
         </CardContent>
       </Card>
+      </> : null}
     </div>
   )
 }

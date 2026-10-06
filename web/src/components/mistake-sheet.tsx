@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useChatGPT } from "../lib/chatgpt-client"
+import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { ArrowLeft, Images, Pencil, Sparkles, X } from "lucide-react"
 import { MistakeAttachments } from "./mistake-attachments"
@@ -447,7 +448,7 @@ export function MistakeSheet({
                   <Button type="button" size="sm" variant="ghost" onClick={returnToBatchGrid}><ArrowLeft />All questions</Button>
                   <span className="text-sm font-medium tabular-nums">{activeBatchIndex! + 1} of {batchDrafts.length}</span>
                 </div>
-              ) : (
+              ) : AI_ENABLED ? (
                 <Field>
                   <details className="rounded-xl border bg-muted/20 p-4">
                     <summary className="cursor-pointer text-sm font-semibold">Images & AI assistance <span className="font-normal text-muted-foreground">· optional</span></summary>
@@ -499,7 +500,7 @@ export function MistakeSheet({
                     </div>
                   </details>
                 </Field>
-              )}
+              ) : null}
 
               <div className="border-t pt-5"><h3 className="font-semibold">01 · The question</h3><p className="mt-1 text-sm text-muted-foreground">Keep the original task and exam context together.</p></div>
               <div className="grid gap-5 sm:grid-cols-2">

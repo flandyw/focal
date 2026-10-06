@@ -1,6 +1,6 @@
 import { join } from "node:path"
-import { ChatGPTError, createChatGPT } from "../../vendor/siwc/local/src/index.js"
-import { createOsCredentialEncryption } from "./keystore.js"
+import { ChatGPTError, createChatGPT } from "../vendor/siwc/local/src/index"
+import { createOsCredentialEncryption } from "./keystore"
 
 // Sign in with ChatGPT runs on the user's own machine: this service owns the credentials and
 // exposes only a narrow HTTP surface to the app UI. Tokens never leave this process.

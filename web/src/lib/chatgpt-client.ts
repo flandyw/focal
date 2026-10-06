@@ -1,10 +1,9 @@
 import { createOpenAI } from "@ai-sdk/openai"
 import { useCallback, useEffect, useSyncExternalStore } from "react"
+import { AI_ENABLED, CHATGPT_ENDPOINT as CHATGPT_BASE_PATH } from "./host"
 
-// Talks to the local Sign in with ChatGPT service (web/server/chatgpt.ts). Credentials stay in
-// that process; the browser only sees session state and model output.
-export const CHATGPT_BASE_PATH = import.meta.env.VITE_CHATGPT_BASE_PATH?.trim().replace(/\/+$/, "")
-  ?? (import.meta.env.VITE_EMBEDDED_EXAMS ? "http://localhost:41731/api/chatgpt" : "/api/chatgpt")
+// Talks to the local Sign in with ChatGPT service (server/chatgpt.ts, run by the desktop sidecar).
+// Credentials stay in that process; the browser only sees session state and model output.
 
 export type ChatGPTSession = {
   status: "disconnected" | "connecting" | "connected" | "reauth_required"
@@ -76,7 +75,7 @@ async function act(path: string, body?: unknown) {
 
 export function useChatGPT() {
   const state = useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener) } }, () => store)
-  useEffect(() => { if (!store.session && !store.unavailable) void refresh() }, [])
+  useEffect(() => { if (AI_ENABLED && !store.session && !store.unavailable) void refresh() }, [])
   const connect = useCallback((reconsent = false) => act("signin", { reconsent }), [])
   const cancel = useCallback(() => act("cancel"), [])
   const disconnect = useCallback(() => act("disconnect"), [])

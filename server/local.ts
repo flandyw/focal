@@ -2,7 +2,7 @@
 
 import { mkdir } from "node:fs/promises"
 import { join } from "node:path"
-import { createChatGPTService } from "../web/server/chatgpt"
+import { createChatGPTService } from "./chatgpt"
 import { handleMistakesPdf } from "../web/server/mistakes-pdf"
 
 const DEFAULT_PORT = 41_731

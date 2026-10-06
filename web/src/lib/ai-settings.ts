@@ -1,5 +1,3 @@
-export { CHATGPT_BASE_PATH } from "./chatgpt-client"
-
 export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]

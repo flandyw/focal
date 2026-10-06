@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto"
 import { execFile } from "node:child_process"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import type { CredentialEncryption } from "../../vendor/siwc/local/src/index.js"
+import type { CredentialEncryption } from "../vendor/siwc/local/src/index"
 
 const SERVICE = "focal-chatgpt"
 const ACCOUNT = "credential-key"

@@ -36,6 +36,7 @@ import {
 } from "../lib/exam-data"
 import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
+import type { ExportFormat } from "../lib/mistake-export"
 import { MistakeRoundTripDialog } from "./mistake-roundtrip-dialog"
 import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
@@ -520,6 +521,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
   const isWorkspace = useMinWidth(WORKSPACE_MIN_WIDTH)
   const [practice, setPractice] = useState<Mistake[] | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("pdf")
   const [importOpen, setImportOpen] = useState(false)
   const [roundTripOpen, setRoundTripOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
@@ -629,11 +631,11 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
         <Button onClick={onLog}><Plus />Add mistake</Button>
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="More mistake tools" />}><MoreHorizontal /></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-auto min-w-64">
             {AI_ENABLED ? <><DropdownMenuItem onClick={() => void autofillEmptyFields()} disabled={!autofillCandidates.length || autofilling}><Sparkles />Autofill empty fields{autofillCandidates.length ? ` (${autofillCandidates.length})` : ""}</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setBulkEditOpen(true)} disabled={!data.mistakes.length}><Sparkles />Bulk edit with ChatGPT…</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setMergeOpen(true)} disabled={!hasMergeableFields}><Merge />Merge fields</DropdownMenuItem></> : null}
-            <DropdownMenuItem onClick={() => setExportOpen(true)} disabled={!data.mistakes.length}><FileDown />Export…</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { setExportFormat("pdf"); setExportOpen(true) }} disabled={!data.mistakes.length}><FileDown />Export…</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setRoundTripOpen(true)} disabled={!data.mistakes.length}><FileUp />Re-import edited JSON…</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -768,8 +770,8 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           onSaveMistakes={onImportMistakes}
         />
       ) : null}
-      {exportOpen ? <MistakeExportDialog mistakes={data.mistakes} current={worksheetMistakes} attempts={data.attempts} onOpenChange={setExportOpen} /> : null}
-      {roundTripOpen ? <MistakeRoundTripDialog mistakes={data.mistakes} onOpenChange={setRoundTripOpen} onApply={(edits) => { onApplyEdits(edits); toast.success(`Updated ${edits.length} ${edits.length === 1 ? "mistake" : "mistakes"}`) }} /> : null}
+      {exportOpen ? <MistakeExportDialog initialFormat={exportFormat} mistakes={data.mistakes} current={worksheetMistakes} attempts={data.attempts} onOpenChange={setExportOpen} /> : null}
+      {roundTripOpen ? <MistakeRoundTripDialog mistakes={data.mistakes} onExport={() => { setRoundTripOpen(false); setExportFormat("json"); setExportOpen(true) }} onOpenChange={setRoundTripOpen} onApply={(edits) => { onApplyEdits(edits); toast.success(`Updated ${edits.length} ${edits.length === 1 ? "mistake" : "mistakes"}`) }} /> : null}
       {bulkEditOpen ? <MistakeBulkEditDialog mistakes={data.mistakes} current={browsedMistakes} selected={selectedMistakes} attempts={data.attempts} onOpenChange={setBulkEditOpen} onApply={onApplyEdits} /> : null}
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>

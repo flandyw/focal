@@ -1,4 +1,4 @@
-import ReactMarkdown from "react-markdown"
+import ReactMarkdown, { type Components } from "react-markdown"
 import rehypeKatex from "rehype-katex"
 import remarkMath from "remark-math"
 import { cn } from "../lib/utils"
@@ -16,6 +16,17 @@ function normaliseMathDelimiters(source: string, forceInline = false) {
   return forceInline ? markdown.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math: string) => `$${math}$`) : markdown
 }
 
+// A ```svg fence is drawn as an <img>, which the browser sandboxes: no scripts, no external loads.
+const svgBlock: Components = {
+  pre: ({ node, children }) => {
+    const code = node?.children[0]
+    const source = code?.type === "element" && Array.isArray(code.properties.className) && code.properties.className.includes("language-svg")
+      ? code.children.map((child) => child.type === "text" ? child.value : "").join("").trim() : ""
+    if (!/^<svg[\s>]/i.test(source)) return <pre>{children}</pre>
+    return <img alt="Diagram" className="my-2 h-auto max-w-full rounded-md bg-white" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`} />
+  },
+}
+
 export function MarkdownPreview({ children, inline = false, unframed = false, className }: {
   children: string
   inline?: boolean
@@ -27,7 +38,7 @@ export function MarkdownPreview({ children, inline = false, unframed = false, cl
   if (inline) {
     return (
       <span className={cn("typeset", className)}>
-        <ReactMarkdown components={{ p: ({ children }) => <span>{children}</span> }} remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}>
+        <ReactMarkdown components={{ ...svgBlock, p: ({ children }) => <span>{children}</span> }} remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}>
           {markdown}
         </ReactMarkdown>
       </span>
@@ -36,7 +47,7 @@ export function MarkdownPreview({ children, inline = false, unframed = false, cl
 
   return (
     <div className={cn("typeset typeset-mistake", !unframed && "rounded-lg border p-3", className)}>
-      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}>
+      <ReactMarkdown components={svgBlock} remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}>
         {markdown || "Preview appears here."}
       </ReactMarkdown>
     </div>

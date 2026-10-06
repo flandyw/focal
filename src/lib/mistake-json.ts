@@ -25,6 +25,15 @@ const PROMPT_EXAMPLE = `[
   }
 ]`
 
+/** Shared with the JSON export instructions in mistake-export.ts (copied there as plain strings). */
+const SVG_GUIDE = `DIAGRAMS
+- Put a diagram inside "questionText" (or "correction" for a model graph) as a fenced block: three backticks, the word svg, a newline, one <svg> element, a newline, three backticks. The app draws it under the text around it.
+- Inside the JSON string, write the fence with \\n line breaks, use SINGLE quotes for every SVG attribute (so no \\" escaping is needed), and keep the whole SVG on one line.
+- Always include xmlns='http://www.w3.org/2000/svg' and a viewBox (about 0 0 400 300), no width or height. Draw on a white background (<rect width='100%' height='100%' fill='white'/>) with black strokes, so it reads in light and dark mode.
+- Graphs: draw labelled x and y axes with arrowheads, tick marks and numeric labels at the key values, and the curve as a <path> or <polyline> computed from the real function (plot enough points for a smooth curve). Label intercepts, turning points, asymptotes (dashed) and endpoints (open or closed circles) when the question refers to them.
+- Text: <text> with font-family='sans-serif' and font-size 12 to 14. LaTeX does not render inside an SVG, so use plain text and Unicode (x², π, √, θ).
+- No scripts, images, external references or CSS files. Only draw what the question shows; never put the answer on the question's diagram.`
+
 export function buildMistakeImportPrompt(): string {
   return `You are helping me log my exam mistakes into my study tracker. I will give you material such as marked exam papers, photos of questions and responses, transcripts, or my own description of what happened. Turn every distinct mistake in that material into one JSON record so I can paste the result straight into the app.
 
@@ -32,6 +41,7 @@ OUTPUT RULES
 - Return ONLY one fenced \`\`\`json code block containing the JSON array, ending with \`\`\`. Do not include explanations or commentary outside the code block.
 - The response must be a single JSON array of objects, one object per distinct mistake, even when there is only one mistake.
 - Keep mathematical and scientific notation as Markdown with LaTeX ($...$ inline or $$...$$ display) only where needed, and escape backslashes correctly inside JSON strings.
+- Diagrams: where a question needs a graph or figure, draw it as an SVG (see DIAGRAMS below) instead of only describing it.
 - Write concise, student-friendly text. Never invent unreadable or missing content; use context to infer what you can.
 
 Each object must use exactly these keys:
@@ -58,6 +68,8 @@ FIELD DETAILS
 - "totalMarks" (required number > 0): total marks available for the whole item; infer from mark schemes, bracketed marks, or question wording.
 - "marksLost" (required number >= 0): marks I lost on the item; never greater than totalMarks; infer from cross marks, annotations, subtotals, or my description. Use 0 if I received full marks but still want the habit logged.
 - "areaOfStudy" (optional string): concise topic, skill, or curriculum area, e.g. "Calculus", "Argument analysis", "Cellular respiration"; "" if unknown.
+
+${SVG_GUIDE}
 
 EXAMPLE OF A COMPLETE RECORD
 

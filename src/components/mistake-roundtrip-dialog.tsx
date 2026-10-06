@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Check, FileUp } from "lucide-react"
+import { Check, FileDown, FileUp } from "lucide-react"
 
 import type { Mistake } from "../lib/exam-data"
 import { parseMistakeRoundTrip } from "../lib/mistake-json"
@@ -10,8 +10,9 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./u
 import { Textarea } from "./ui/textarea"
 
 /** Second half of Export → JSON: paste (or load) the chatbot's edited file and replace fields by mistake id. */
-export function MistakeRoundTripDialog({ mistakes, onOpenChange, onApply }: {
+export function MistakeRoundTripDialog({ mistakes, onExport, onOpenChange, onApply }: {
   mistakes: Mistake[]
+  onExport: () => void
   onOpenChange: (open: boolean) => void
   onApply: (edits: MistakeEdit[]) => void
 }) {
@@ -92,6 +93,7 @@ export function MistakeRoundTripDialog({ mistakes, onOpenChange, onApply }: {
           ) : null}
         </FieldGroup>
         <DialogFooter>
+          <Button type="button" variant="outline" className="sm:mr-auto" onClick={onExport}><FileDown />Export JSON…</Button>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           {result
             ? <Button type="button" disabled={!accepted.length} onClick={apply}><Check />Apply {accepted.length} {accepted.length === 1 ? "edit" : "edits"}</Button>

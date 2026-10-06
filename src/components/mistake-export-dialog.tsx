@@ -12,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 const FORMATS: Record<ExportFormat, string> = { pdf: "PDF worksheet", markdown: "Markdown", csv: "CSV", json: "JSON" }
 const STATUSES = { all: "All statuses", unresolved: "Unresolved only", resolved: "Resolved only" }
 
-export function MistakeExportDialog({ mistakes, current, attempts, onOpenChange }: { mistakes: Mistake[]; current: Mistake[]; attempts: ExamAttempt[]; onOpenChange: (open: boolean) => void }) {
-  const [format, setFormat] = useState<ExportFormat>("pdf")
+export function MistakeExportDialog({ initialFormat = "pdf", mistakes, current, attempts, onOpenChange }: { initialFormat?: ExportFormat; mistakes: Mistake[]; current: Mistake[]; attempts: ExamAttempt[]; onOpenChange: (open: boolean) => void }) {
+  const [format, setFormat] = useState<ExportFormat>(initialFormat)
   const [scope, setScope] = useState<"current" | "all">(current.length ? "current" : "all")
   const [category, setCategory] = useState("all")
   const [status, setStatus] = useState<keyof typeof STATUSES>("all")

@@ -21,6 +21,7 @@ function escapeTex(value: string) {
 
 function questionToTex(value: string) {
   return value
+    .replace(/```svg[\s\S]*?```/g, "[Diagram: see the app]")
     .split(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[^\n$]+\$|\\\([^\n]*?\\\))/g)
     .map((part) => /^(\$|\\\[|\\\()/.test(part) ? part : escapeTex(part).replace(/\r?\n{2,}/g, "\n\n\\par\n").replace(/\r?\n/g, " "))
     .join("")

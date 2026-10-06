@@ -18,7 +18,8 @@ export function useStudySessions() {
       const repair = repairDuplicateSessions(normalised)
       duplicateIdsRef.current = repair.duplicateIds
       duplicateNotionPageIdsRef.current = repair.duplicateNotionPageIds
-      return repair.sessions
+      // A cancelled server row syncs back as a record with deleted_at set; hide it like events and projects.
+      return repair.sessions.filter((session) => !session.deleted_at)
     },
   })
   const sessionsRef = useLatestRef(sessions)

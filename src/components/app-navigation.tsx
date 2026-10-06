@@ -1,6 +1,5 @@
 import { Fragment } from "react"
 import {
-  GraduationCap,
   LogIn,
   LogOut,
   MonitorPlay,
@@ -163,7 +162,7 @@ export function AppSidebar({
           className="flex h-10 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           onClick={() => navigate("calendar")}
         >
-          <GraduationCap className="size-5 shrink-0" aria-hidden />
+          <img src="/focal-icon.svg" alt="" className="size-6 shrink-0" />
           <span className="flex items-center gap-1.5 font-semibold group-data-[collapsible=icon]:hidden">
             Focal
             <SyncIndicator status={syncStatus} />

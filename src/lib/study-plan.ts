@@ -4,9 +4,9 @@ import { jsonSchema, Output, streamText } from "ai"
 import { pickPlannerModel } from "./ai-settings"
 import { clampLongBreakInterval, clampMinutes, formatFocusTime, type TimerSettings } from "./study-timer"
 
-export const MAX_INTENT_LENGTH = 120
-export const MAX_SUBJECT_LENGTH = 60
-export const MAX_BLOCKS = 12
+const MAX_INTENT_LENGTH = 120
+const MAX_SUBJECT_LENGTH = 60
+const MAX_BLOCKS = 12
 
 export interface StudyPlan {
   subject: string
@@ -51,7 +51,7 @@ function text(value: unknown, max: number) {
 
 /** Every field is coerced and clamped, so a short, malformed or rambling answer
  *  still becomes a runnable session. `fallback` is the timer's current shape. */
-export function buildStudyPlan(raw: unknown, fallback: StudyPlan, knownSubjects: string[] = []): StudyPlan {
+function buildStudyPlan(raw: unknown, fallback: StudyPlan, knownSubjects: string[] = []): StudyPlan {
   const value = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
   const subjects = new Map(knownSubjects.map((subject) => [subject.toLowerCase(), subject]))
   const subject = text(value.subject, MAX_SUBJECT_LENGTH)
@@ -75,14 +75,14 @@ export function buildStudyPlan(raw: unknown, fallback: StudyPlan, knownSubjects:
   return plan
 }
 
-export function planSessionMinutes(plan: StudyPlan) {
+function planSessionMinutes(plan: StudyPlan) {
   const blocks = Math.max(1, plan.blocks)
   const breaks = blocks - 1
   const longBreaks = Math.floor(blocks / plan.longBreakEvery)
   return blocks * plan.workMinutes + breaks * plan.breakMinutes + longBreaks * plan.longBreakMinutes
 }
 
-export function planFocusMinutes(plan: StudyPlan) {
+function planFocusMinutes(plan: StudyPlan) {
   return Math.max(1, plan.blocks) * plan.workMinutes
 }
 

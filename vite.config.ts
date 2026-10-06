@@ -30,7 +30,7 @@ function mistakesPdfPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  define: { "import.meta.env.VITE_EMBEDDED_EXAMS": JSON.stringify(mode === "desktop") },
+  define: { "import.meta.env.VITE_DESKTOP": JSON.stringify(mode === "desktop") },
   clearScreen: false,
   server: { port: mode === "desktop" ? 1420 : 5173, strictPort: true, host: process.env.TAURI_DEV_HOST ?? false },
   plugins: [react(), tailwindcss(), mistakesPdfPlugin()],

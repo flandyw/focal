@@ -8,7 +8,7 @@ export const examHost: {
 } = {}
 
 // AI features run only inside the desktop app, which hosts the local Sign in with ChatGPT service.
-export const AI_ENABLED = Boolean(import.meta.env.VITE_EMBEDDED_EXAMS)
+export const AI_ENABLED = Boolean(import.meta.env.VITE_DESKTOP)
 
 const CHATGPT_BASE_PATH = import.meta.env.VITE_CHATGPT_BASE_PATH?.trim().replace(/\/+$/, "")
   ?? (AI_ENABLED ? "http://localhost:41731/api/chatgpt" : "/api/chatgpt")

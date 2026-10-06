@@ -49,13 +49,6 @@ export const REDUCED_TRANSITION = { duration: 0 } as const
 
 /* ------------------------------ Variants ------------------------------ */
 
-/** Page/view entrance. Fade + tiny rise. */
-export const viewEnter: Variants = {
-  initial: { opacity: 0, y: 6 },
-  animate: { opacity: 1, y: 0, transition: TRANSITION.view },
-  exit: { opacity: 0, y: -4, transition: TRANSITION.exit },
-}
-
 /** Container that staggers child entrance. */
 export const staggerContainer = (stagger = 0.04, delayChildren = 0.05): Variants => ({
   initial: {},
@@ -94,9 +87,3 @@ export const hoverLift = (reduceMotion: boolean | null) =>
   reduceMotion
     ? undefined
     : { y: -2, transition: { duration: MOTION_DURATION.normal, ease: MOTION_EASE } }
-
-/** Slide-right hover for list items (icon/text nudge). */
-export const hoverNudgeRight = (reduceMotion: boolean | null) =>
-  reduceMotion
-    ? undefined
-    : { x: 2, transition: { duration: MOTION_DURATION.fast, ease: MOTION_EASE_SNAPPY } }

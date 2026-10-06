@@ -107,7 +107,7 @@ export async function saveTimerSessionChange(
  * `running`, and the next cursor pull snapped the readout forward by however long the
  * disagreement had lasted.
  */
-export function reconcileSessionResult<T extends TimerSession>(
+function reconcileSessionResult<T extends TimerSession>(
   result: StudySessionMutationResult,
   command: StudySessionCommand,
   current: T,
@@ -180,7 +180,7 @@ export async function controlSession(
   return result?.session ?? undefined
 }
 
-export async function buildCommand(
+async function buildCommand(
   previous: TimerSession | undefined,
   current: TimerSession,
   kind: TimerKind,
@@ -309,7 +309,7 @@ async function commandAccountId(): Promise<string> {
 }
 
 /** Elapsed milliseconds since the last accepted boundary, capped at seven days. */
-export function elapsedSinceBoundary(
+function elapsedSinceBoundary(
   prior: Pick<SessionTiming, "elapsedMs" | "monotonicAt" | "timeOrigin"> | undefined,
   monotonicAt: number,
   timeOrigin: number,
@@ -428,7 +428,7 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
  * ponytail: -1 asks the server for its materialized state instead of a log range. Upgrade
  * path if the server ever needs a cheaper "do you have any?" probe: add it there, not here.
  */
-export function readCursorFor(cursor: number, knownSessions: number, readWholeState: boolean) {
+function readCursorFor(cursor: number, knownSessions: number, readWholeState: boolean) {
   return knownSessions === 0 && !readWholeState ? -1 : cursor
 }
 

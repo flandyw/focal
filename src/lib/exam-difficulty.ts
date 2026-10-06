@@ -21,7 +21,7 @@ export const MATHEMATICS_PROVIDER_DIFFICULTY = [
   "TSSM",
 ] as const
 
-export type DifficultyStrength = "light" | "balanced" | "strong"
+type DifficultyStrength = "light" | "balanced" | "strong"
 
 export type ExamDifficultySettings = {
   enabled: boolean
@@ -30,7 +30,7 @@ export type ExamDifficultySettings = {
   updatedAt: string
 }
 
-export const DEFAULT_EXAM_DIFFICULTY: ExamDifficultySettings = {
+const DEFAULT_EXAM_DIFFICULTY: ExamDifficultySettings = {
   enabled: true,
   providerOrder: [...DEFAULT_PROVIDER_DIFFICULTY],
   strength: "balanced",

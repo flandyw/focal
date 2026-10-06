@@ -1,7 +1,7 @@
 import type { FocusTimerSession } from "./ongoing-timers"
 import type { TimerState } from "./study-timer"
 
-export type FocusSessionAction = "start" | "pause" | "resume" | "complete" | "update"
+type FocusSessionAction = "start" | "pause" | "resume" | "complete" | "update"
 
 export interface FocusSessionDecision {
   action: FocusSessionAction
@@ -23,7 +23,7 @@ export interface FocusSessionIdentity {
  * the page is opened and keeps it "running" through a break, so the block the
  * server bills and the block the user is looking at drift apart.
  */
-export function isFocusCounting(state: TimerState): boolean {
+function isFocusCounting(state: TimerState): boolean {
   return (state.mode === "work" || state.mode === "free") && !state.studyOvertime && state.running
 }
 
@@ -125,7 +125,7 @@ export class SessionRefusedError<T = FocusTimerSession> extends Error {
  * carries its minted session, `update` the corrected identity; the rest are
  * lifecycle moves stamped with the wall time they happened at.
  */
-export type FocusSessionBoundary =
+type FocusSessionBoundary =
   | { action: "start"; at: number; session: FocusTimerSession }
   | { action: "update"; at: number; identity: FocusSessionIdentity }
   | { action: "pause" | "resume" | "complete" | "cancel"; at: number }

@@ -12,9 +12,9 @@ export type PerformanceContext = {
   preparedness?: ContextRating
 }
 
-export type ContextFactorKey = keyof PerformanceContext
+type ContextFactorKey = keyof PerformanceContext
 
-export type ContextFactorInsight = {
+type ContextFactorInsight = {
   key: ContextFactorKey
   label: string
   sampleSize: number

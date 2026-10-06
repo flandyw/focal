@@ -130,11 +130,3 @@ export function buildRevisionPriorities(mistakes: Mistake[]) {
       second.unresolved + second.resolved - (first.unresolved + first.resolved),
   )
 }
-
-export function buildRevisionQueue(mistakes: Mistake[]) {
-  const rank = new Map(buildRevisionPriorities(mistakes).map((item, index) => [item.category, index]))
-  return mistakes.filter((mistake) => !mistake.resolved).toSorted(
-    (first, second) => (rank.get(first.category) ?? 0) - (rank.get(second.category) ?? 0) ||
-      first.updatedAt.localeCompare(second.updatedAt),
-  )
-}

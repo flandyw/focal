@@ -5,7 +5,7 @@ export type ProgressionExam = ExamSuggestion & { phase: string }
 export type ExamProgression = { version: 1; name: string; exams: ProgressionExam[]; updatedAt: string }
 export type ProgressionImportMode = "append" | "replace-subjects"
 const normalise = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ")
-export const progressionExamKey = (exam: Pick<ExamSuggestion, "subject" | "provider" | "examYear" | "paper">) =>
+const progressionExamKey = (exam: Pick<ExamSuggestion, "subject" | "provider" | "examYear" | "paper">) =>
   JSON.stringify([normalise(exam.subject), normalise(exam.provider), exam.examYear, normalise(exam.paper)])
 
 export function parseExamProgression(text: string): Omit<ExamProgression, "updatedAt"> {
@@ -44,10 +44,6 @@ export function isExamProgression(value: unknown): value is ExamProgression {
   const updatedAt = (value as ExamProgression).updatedAt
   if (typeof updatedAt !== "string" || !Number.isFinite(Date.parse(updatedAt))) return false
   try { parseExamProgression(JSON.stringify(value)); return true } catch { return false }
-}
-
-export function mergeExamProgression(local?: ExamProgression, remote?: ExamProgression) {
-  return remote && remote.updatedAt > (local?.updatedAt ?? "") ? remote : local
 }
 
 // Importing is separate from account sync: an import edits only the draft and

@@ -1,7 +1,7 @@
 import type { AppData, AssessmentReference, ExamAttempt } from "./exam-data"
 import { predictStudyScore } from "./study-score"
 
-export type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
+type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
 export type StudyTaskStatus = "planned" | "completed" | "skipped"
 
 export type StudyTask = {
@@ -19,7 +19,7 @@ export type StudyTask = {
   archivedAt?: string
 }
 
-export type CurriculumArea = {
+type CurriculumArea = {
   id: string
   subject: string
   name: string
@@ -42,7 +42,7 @@ export type StudyGoal = {
   archivedAt?: string
 }
 
-export type LearningPreferences = {
+type LearningPreferences = {
   dailyMinutes: number
   studyDays: number[]
 }

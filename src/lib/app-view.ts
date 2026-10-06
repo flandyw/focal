@@ -1,6 +1,6 @@
-export const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
+const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
 
-export const APP_VIEWS = [
+const APP_VIEWS = [
   "calendar",
   "exams",
   "focus",
@@ -18,7 +18,7 @@ export const APP_VIEWS = [
 
 export type AppView = (typeof APP_VIEWS)[number]
 
-export function isAppView(value: unknown): value is AppView {
+function isAppView(value: unknown): value is AppView {
   return typeof value === "string" && APP_VIEWS.includes(value as AppView)
 }
 

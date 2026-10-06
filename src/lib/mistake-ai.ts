@@ -19,20 +19,10 @@ import {
   validateMistakeBatchImages,
   validateMistakeImages,
   type ChatGPTProgress,
-  type IndexedMistakeDraft,
   type MistakeDraft,
 } from "./mistake-ai-core"
 
-export {
-  createChatGPTProgressHandler,
-  formatChatGPTProgress,
-  validateMistakeBatchImages,
-  validateMistakeImage,
-  validateMistakeImages,
-} from "./mistake-ai-core"
-export type { ChatGPTProgress, IndexedMistakeDraft, MistakeDraft } from "./mistake-ai-core"
-
-export function selectChatGPTModel(models: string[], preferredModel = "auto"): string | null {
+function selectChatGPTModel(models: string[], preferredModel = "auto"): string | null {
   const supportedModels = models.filter(supportsStreamedAnalysis)
   if (preferredModel !== "auto" && supportedModels.includes(preferredModel)) return preferredModel
   return supportedModels[0] ?? null
@@ -58,7 +48,7 @@ function errorText(error: unknown): string {
   }).filter(Boolean).join(" ")
 }
 
-export function formatMistakeAIError(error: unknown) {
+function formatMistakeAIError(error: unknown) {
   const status = errorStatus(error)
   const detail = errorText(error)
   const normalized = detail.toLowerCase()
@@ -541,31 +531,6 @@ export async function analyseMistakeImages(
     areaOfStudy: draft.areaOfStudy.trim(),
     criterion: draft.criterion.trim(),
   }
-}
-
-export function orderMistakeBatchDrafts(drafts: IndexedMistakeDraft[], imageCount: number): MistakeDraft[] {
-  const byIndex = new Map(drafts.map((draft) => [draft.imageIndex, draft]))
-  if (drafts.length !== imageCount || byIndex.size !== imageCount || Array.from({ length: imageCount }, (_, index) => index).some((index) => !byIndex.has(index))) {
-    throw new Error("ChatGPT did not create one mistake for every image. Try the batch import again.")
-  }
-  return Array.from({ length: imageCount }, (_, imageIndex) => {
-    const draft = byIndex.get(imageIndex)!
-    if (!draft.question.trim() || !draft.questionText.trim() || !draft.explanation.trim() || !draft.correction.trim()) {
-      throw new Error(`ChatGPT could not read enough of image ${imageIndex + 1} to fill its mistake.`)
-    }
-    if (draft.totalMarks <= 0 || draft.marksLost < 0 || draft.marksLost > draft.totalMarks) {
-      throw new Error(`ChatGPT returned invalid marks for image ${imageIndex + 1}. Try the batch import again.`)
-    }
-    return {
-      ...draft,
-      question: draft.question.trim(),
-      questionText: draft.questionText.trim(),
-      explanation: draft.explanation.trim(),
-      correction: draft.correction.trim(),
-      areaOfStudy: draft.areaOfStudy.trim(),
-      criterion: draft.criterion.trim(),
-    }
-  })
 }
 
 export async function analyseMistakeImageBatch(

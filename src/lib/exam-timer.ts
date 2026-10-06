@@ -1,4 +1,4 @@
-export type ExamTimerPhase = "reading" | "writing" | "overtime"
+type ExamTimerPhase = "reading" | "writing" | "overtime"
 
 export function getExamTimerState(
   now: number,

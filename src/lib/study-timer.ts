@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS = {
   autoStartFocus: false,
   dailyGoal: 4,
 }
-export const MIN_DURATION_MINUTES = 1
+const MIN_DURATION_MINUTES = 1
 export const MAX_DURATION_MINUTES = 180
 export const MAX_DAILY_GOAL = 30
 export const MIN_LONG_BREAK_INTERVAL = 2
@@ -82,7 +82,7 @@ export type TimerAction =
   | { type: "END_FREE_STUDY"; settings: TimerSettings }
   | { type: "SYNC_SETTINGS"; settings: TimerSettings; previousSettings: TimerSettings }
 
-export type FocusBlockSource = "pomodoro" | "free-study"
+type FocusBlockSource = "pomodoro" | "free-study"
 
 export interface FocusBlock {
   id: string
@@ -148,7 +148,7 @@ export function clampMinutes(value: unknown, fallback: number) {
   return Math.min(MAX_DURATION_MINUTES, Math.max(MIN_DURATION_MINUTES, Math.round(value)))
 }
 
-export function clampDailyGoal(value: number | undefined) {
+function clampDailyGoal(value: number | undefined) {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0
   return Math.min(MAX_DAILY_GOAL, Math.max(0, Math.round(value)))
 }
@@ -170,14 +170,14 @@ function booleanOr(value: unknown, fallback: boolean) {
   return typeof value === "boolean" ? value : fallback
 }
 
-export function getDurationSeconds(mode: TimerMode, settings: TimerSettings) {
+function getDurationSeconds(mode: TimerMode, settings: TimerSettings) {
   if (mode === "free") return 0
   if (mode === "work") return settings.workMinutes * 60
   if (mode === "long-break") return settings.longBreakMinutes * 60
   return settings.breakMinutes * 60
 }
 
-export function parseSettings(value: unknown): TimerSettings {
+function parseSettings(value: unknown): TimerSettings {
   const parsed = (typeof value === "string" ? safeParse(value) : value) as Partial<TimerSettings> | null
   if (!parsed || typeof parsed !== "object") return DEFAULT_SETTINGS
   return {
@@ -218,7 +218,7 @@ export function saveSettings(settings: TimerSettings) {
  * boundary it crosses. A single large tick (a throttled tab, a reload after
  * hours away) lands on exactly the state the clock would have reached.
  */
-export function advanceTimer(state: TimerState, settings: TimerSettings, elapsedSeconds: number): TimerState {
+function advanceTimer(state: TimerState, settings: TimerSettings, elapsedSeconds: number): TimerState {
   let next = state
   let remaining = Number.isFinite(elapsedSeconds) ? Math.max(0, Math.floor(elapsedSeconds)) : 0
 

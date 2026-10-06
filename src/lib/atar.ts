@@ -8,7 +8,7 @@ export type AtarStudyResult = {
   scaledScore: number
 }
 
-export type AtarContribution = AtarStudyResult & {
+type AtarContribution = AtarStudyResult & {
   contribution: number
   role: "English" | "Primary" | "Increment"
 }
@@ -57,11 +57,11 @@ function roundTo(value: number, places: number) {
   return Math.round(value * factor) / factor
 }
 
-export function isEnglishStudy(code: string) {
+function isEnglishStudy(code: string) {
   return ENGLISH_CODES.has(code)
 }
 
-export function studyAreaGroup(code: string): string | null {
+function studyAreaGroup(code: string): string | null {
   if (ENGLISH_CODES.has(code)) return "english"
   if (MATHEMATICS_CODES.has(code)) return "mathematics"
   if (HISTORY_CODES.has(code)) return "history"
@@ -77,7 +77,7 @@ function languageEquivalenceKey(studyName: string): string | null {
   return match ? `language:${match[1].toLowerCase()}` : null
 }
 
-export function equivalenceKey(result: Pick<AtarStudyResult, "code" | "studyName">): string {
+function equivalenceKey(result: Pick<AtarStudyResult, "code" | "studyName">): string {
   if (result.code === "EN" || result.code === "EF") return "english-or-eal"
   return languageEquivalenceKey(result.studyName) ?? `study:${result.code}`
 }
@@ -130,7 +130,7 @@ function chooseIncrements(primary: AtarStudyResult[], remaining: AtarStudyResult
   return increments
 }
 
-export function aggregateToAtar(
+function aggregateToAtar(
   aggregate: number,
   reference: AtarAggregateReference,
 ): { atar: number | null; label: string } {

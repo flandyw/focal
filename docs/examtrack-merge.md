@@ -1,6 +1,6 @@
 # Legacy ExamTrack data merge
 
-ExamTrack (now Focal Web) lives in this repository under `web/`, and ExamTrack, Focal desktop/native
+ExamTrack (now Focal Web) lives in this repository at the repository root (`src/`), and ExamTrack, Focal desktop/native
 Android and Folio use the same Supabase project and authenticated account. This document
 records the completed project merge; it is not an instruction to reset or recreate production
 data.

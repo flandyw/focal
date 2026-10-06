@@ -183,13 +183,6 @@ function comparePeriodsByStart(a: TimetablePeriod, b: TimetablePeriod): number {
   return timeStringToMinutes(a.startTime) - timeStringToMinutes(b.startTime)
 }
 
-function copyPeriodIntoSlot(
-  period: TimetablePeriod,
-  slot: Pick<TimetablePeriod, "startTime" | "endTime">,
-): TimetablePeriod {
-  return { ...period, startTime: slot.startTime, endTime: slot.endTime }
-}
-
 function toLocalDateStr(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, "0")
@@ -202,43 +195,13 @@ export function isTimetableBreakLabel(label: string): boolean {
 }
 
 /** Parse a persisted HH:mm value without accepting partial or out-of-range times. */
-export function timetableTimeToMinutes(value: string): number | null {
+function timetableTimeToMinutes(value: string): number | null {
   const match = /^(\d{2}):(\d{2})$/.exec(value)
   if (!match) return null
   const hours = Number(match[1])
   const minutes = Number(match[2])
   if (hours > 23 || minutes > 59) return null
   return hours * 60 + minutes
-}
-
-export type TimetableMeridiem = "AM" | "PM"
-
-export interface TimetableTimeParts {
-  hour: number
-  minute: number
-  meridiem: TimetableMeridiem
-}
-
-export function timetableTimeTo12HourParts(value: string): TimetableTimeParts | null {
-  const total = timetableTimeToMinutes(value)
-  if (total === null) return null
-  const hour24 = Math.floor(total / 60)
-  return {
-    hour: hour24 % 12 || 12,
-    minute: total % 60,
-    meridiem: hour24 < 12 ? "AM" : "PM",
-  }
-}
-
-export function timetableTimeFrom12HourParts(
-  hour: number,
-  minute: number,
-  meridiem: TimetableMeridiem,
-): string | null {
-  if (!Number.isInteger(hour) || hour < 1 || hour > 12) return null
-  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null
-  const hour24 = (hour % 12) + (meridiem === "PM" ? 12 : 0)
-  return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
 }
 
 /** Return a user-facing validation error for a timetable period, or null when valid. */
@@ -252,7 +215,7 @@ export function getTimetablePeriodError(period: TimetablePeriod): string | null 
 }
 
 /** Merge duplicate day entries and return periods in start-time order. */
-export function getTimetablePeriodsForDay(
+function getTimetablePeriodsForDay(
   dayLabel: TimetableDayLabel,
   entries: TimetableEntry[],
 ): TimetablePeriod[] {
@@ -300,51 +263,7 @@ export function getTimetablePeriodsForDate(
   return getTimetablePeriodsForDay(dayLabel, config.entries)
 }
 
-/** Find every period for a subject on a calendar date, respecting the configured cycle. */
-export function getTimetablePeriodsForSubjectOnDate(
-  date: Date,
-  subjectId: string,
-  config: TimetableConfig,
-): TimetablePeriod[] {
-  if (!subjectId) return []
-  return getTimetablePeriodsForDate(date, config)
-    .filter((period) => period.subject === subjectId)
-}
-
-export function reorderPeriodsIntoSlots({
-  periods,
-  periodToMove,
-  insertIndex,
-  showBreaks,
-}: {
-  periods: TimetablePeriod[]
-  periodToMove: TimetablePeriod
-  insertIndex: number
-  showBreaks: boolean
-}): TimetablePeriod[] {
-  const sortedPeriods = [...periods].sort(comparePeriodsByStart)
-  const fixedPeriods = showBreaks
-    ? []
-    : sortedPeriods.filter((period) => isTimetableBreakLabel(period.period))
-  const movablePeriods = showBreaks
-    ? sortedPeriods
-    : sortedPeriods.filter((period) => !isTimetableBreakLabel(period.period))
-  const orderedMovablePeriods = [...movablePeriods]
-  orderedMovablePeriods.splice(
-    Math.min(Math.max(insertIndex, 0), orderedMovablePeriods.length),
-    0,
-    { ...periodToMove },
-  )
-  const movableSlots = [...movablePeriods, periodToMove].sort(
-    comparePeriodsByStart,
-  )
-  const retimedMovablePeriods = orderedMovablePeriods.map((period, i) =>
-    copyPeriodIntoSlot(period, movableSlots[i] ?? period),
-  )
-  return [...fixedPeriods, ...retimedMovablePeriods].sort(comparePeriodsByStart)
-}
-
-export function isDateInHoliday(date: Date, holidays: SchoolHoliday[]): boolean {
+function isDateInHoliday(date: Date, holidays: SchoolHoliday[]): boolean {
   const dateStr = toLocalDateStr(date)
   return holidays.some((h) => dateStr >= h.startDate && dateStr <= h.endDate)
 }
@@ -421,91 +340,4 @@ export function getDayLabelForDate(
   const schoolDayCount = countSchoolDaysBetween(startLocal, dateLocal, holidays, weekendTimetables)
   const length = Number.isInteger(cycleLength) && cycleLength >= 1 ? cycleLength : 10
   return (schoolDayCount % length) + 1
-}
-
-/** Find the next calendar date that has a timetable day. */
-export function getNextTimetableDay(
-  date: Date,
-  day1Starts: string,
-  holidays: SchoolHoliday[],
-  cycleLength = 10,
-  weekendTimetables = false,
-): { date: Date; dayLabel: TimetableDayLabel } | null {
-  const candidate = new Date(date)
-
-  // ponytail: one year covers normal school breaks; lift the cap if multi-year
-  // timetable pauses ever become a supported use case.
-  for (let offset = 1; offset <= 366; offset++) {
-    candidate.setDate(candidate.getDate() + 1)
-    const dayLabel = getDayLabelForDate(
-      candidate,
-      day1Starts,
-      holidays,
-      cycleLength,
-      weekendTimetables,
-    )
-    if (dayLabel !== null) return { date: candidate, dayLabel }
-  }
-
-  return null
-}
-
-/**
- * Find the timetable entries for a given day label.
- */
-export function getTimetableEntriesForDay(
-  dayLabel: TimetableDayLabel,
-  entries: TimetableEntry[],
-): TimetableEntry[] {
-  return entries.filter((e) => e.dayLabel === dayLabel)
-}
-
-export interface CurrentPeriodInfo {
-  current: TimetablePeriod | null
-  next: TimetablePeriod | null
-  remainingMinutes: number
-}
-
-/**
- * Find the current (in-progress) and next upcoming period from a list of periods,
- * based on the current wall-clock time.
- *
- * Sorts periods by start time internally so the result is correct regardless of input order.
- * Periods with invalid (NaN) times are skipped. If the current time is before all periods,
- * the first period is reported as `next`. If after all periods, `next` is null.
- */
-export function getCurrentPeriodInfo(periods: TimetablePeriod[], now?: Date): CurrentPeriodInfo {
-  const date = now ?? new Date()
-  const currentMinutes = date.getHours() * 60 + date.getMinutes()
-
-  const parsed = periods
-    .map((p) => {
-      const start = timetableTimeToMinutes(p.startTime)
-      const end = timetableTimeToMinutes(p.endTime)
-      if (start === null || end === null) return null
-      if (end <= start) return null
-      return { period: p, start, end }
-    })
-    .filter((p): p is { period: TimetablePeriod; start: number; end: number } => p !== null)
-    .sort((a, b) => a.start - b.start)
-
-  let current: TimetablePeriod | null = null
-  let next: TimetablePeriod | null = null
-  let remainingMinutes = 0
-
-  for (const p of parsed) {
-    if (currentMinutes >= p.start && currentMinutes < p.end) {
-      current = p.period
-      remainingMinutes = p.end - currentMinutes
-      // A current period is in progress; `next` is the period after it.
-      continue
-    }
-    if (current === null && currentMinutes < p.start && next === null) {
-      next = p.period
-    } else if (current !== null && next === null && p.start > currentMinutes) {
-      next = p.period
-    }
-  }
-
-  return { current, next, remainingMinutes }
 }

@@ -13,12 +13,12 @@ function ownerBackupKey(owner: string) {
 export type SyncStatus = "unconfigured" | "signed-out" | "syncing" | "synced" | "pending" | "error"
 
 /** Folio reviews change scheduling payloads without changing collection IDs or counts. */
-export function equalAppData(first: AppData, second: AppData) {
+function equalAppData(first: AppData, second: AppData) {
   return sameValue(first, second)
 }
 
 /** A projection started from an older snapshot must not overwrite a local edit queued while it ran. */
-export function isSupersededSync(startedFrom: AppData, queuedLatest: AppData): boolean {
+function isSupersededSync(startedFrom: AppData, queuedLatest: AppData): boolean {
   return queuedLatest !== startedFrom
 }
 

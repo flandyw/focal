@@ -1,7 +1,7 @@
 import { VCE_SUBJECTS, type Subject } from "./types"
 
 /** Match exact identities only: e.g. English Language must never become English. */
-export function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJECTS): string {
+function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJECTS): string {
   const key = value.trim().toLowerCase()
   const name = key === "mathematical methods cas" ? "mathematical methods" : key
   return subjects.find((subject) => [subject.id, subject.name, subject.shortCode]

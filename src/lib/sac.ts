@@ -8,7 +8,7 @@ export function isSacUnit(value: unknown): value is SacUnit {
   return typeof value === "number" && SAC_UNITS.includes(value as SacUnit)
 }
 
-export type SacTiming = {
+type SacTiming = {
   plannedSeconds: number
   actualSeconds: number
   overtimeSeconds: number

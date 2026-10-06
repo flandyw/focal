@@ -44,7 +44,7 @@ function worksheetDetails(mistakes: Mistake[], attemptMap: Map<string, ExamAttem
   }
 }
 
-export function buildMistakesTex(mistakes: Mistake[], attempts: ExamAttempt[]) {
+function buildMistakesTex(mistakes: Mistake[], attempts: ExamAttempt[]) {
   const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
   const details = worksheetDetails(mistakes, attemptMap)
   const generatedDate = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })

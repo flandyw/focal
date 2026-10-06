@@ -11,7 +11,7 @@ export function formatReferenceFreshness(generatedAt?: string | null) {
   return `Official resources updated ${new Date(generatedAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}`
 }
 
-export type VcaaResourceKind = "specification" | "exam" | "report" | "sample" | "other"
+type VcaaResourceKind = "specification" | "exam" | "report" | "sample" | "other"
 
 export type VcaaResource = {
   label: string
@@ -51,7 +51,7 @@ function getResourceStudyName(resource: VcaaResource, study: VcaaStudyResources)
   return resource.label.match(/^\d{4}\s+(?:VCE\s+)?(.+?)\s+(?:written\s+)?exam(?:ination)?(?:\s+[1-9])?$/i)?.[1]?.trim() ?? study.studyName
 }
 
-export function getVcaaExams(studies: VcaaStudyResources[]): VcaaExamResource[] {
+function getVcaaExams(studies: VcaaStudyResources[]): VcaaExamResource[] {
   const seen = new Set<string>()
   const exams: VcaaExamResource[] = []
   for (const study of studies) {

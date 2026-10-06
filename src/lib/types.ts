@@ -29,25 +29,6 @@ export type StudySessionExecution =
 
 export type NotionSyncSnapshot = Record<string, string | boolean | null>;
 
-export interface StudySessionDraft {
-  id?: string;
-  projectId?: string;
-  subjectIds: string[];
-  title: string;
-  description?: string;
-  startTime: string;
-  endTime: string;
-  status?: StudySessionStatus;
-  topics?: string[];
-  notes?: string;
-  confidence?: ConfidenceScore;
-  blockers?: string;
-  nextAction?: string;
-  activeDurations?: StudyTimeRange[];
-  completedAt?: string;
-  source?: NotionSource;
-}
-
 export interface NotionSource {
   type: "notion";
   id: string;
@@ -158,8 +139,6 @@ export const VCE_SUBJECTS: Subject[] = [
 
 ];
 
-export const DEFAULT_SUBFOLDERS = ["SACs", "Notes", "Past-Papers", "Exam-Revision", "Resources"];
-
 export interface ProjectChecklistItem {
   id: string
   text: string
@@ -196,19 +175,6 @@ export interface StudyCard {
   intervalDays: number
   dueAt: string
   lastReviewedAt?: string
-}
-
-export interface ProjectTemplate {
-  id: string
-  name: string
-  description?: string
-  icon?: string
-  subjectId?: string
-  unit?: Unit
-  deadlineType?: DeadlineType
-  customSubfolders?: string[]
-  checklist?: { text: string }[]
-  created_at: string
 }
 
 export interface Project {
@@ -252,11 +218,6 @@ export interface FileInfo {
   isFavorite?: boolean;
 }
 
-export interface SearchResult {
-  file: FileInfo;
-  projectFolder: string;
-}
-
 // --- Timetable ---
 
 /**
@@ -298,7 +259,6 @@ export interface UserSettings {
   notion_type_property: string
   notion_completed_property: string
   notion_subject_property: string
-  // ponytail: AI provider plumbing — see src/lib/providers/* + PROVIDERS.md.
   provider?: string
   ollama_base_url?: string
   ollama_model?: string
@@ -366,16 +326,3 @@ export type PriorityItemKind =
   | "weak-topic";
 
 export type PriorityUrgency = "critical" | "high" | "medium" | "low";
-
-export interface PriorityItem {
-  id: string;
-  kind: PriorityItemKind;
-  title: string;
-  reason: string;
-  urgency: PriorityUrgency;
-  subjectIds: string[];
-  projectId?: string;
-  eventId?: string;
-  sessionId?: string;
-  action: string;
-}

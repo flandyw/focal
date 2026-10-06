@@ -4,13 +4,11 @@ import { exists, readTextFile } from "@tauri-apps/plugin-fs"
 import {
   coreRecordKind,
   coreDataFile,
-  isCoreDataFile,
   type CoreRecordKind,
   type StoredRecordInput,
   parseStoredPayloads,
   prepareStoredRecords,
   type CoreDataFile,
-  type StoredPayloadRow,
 } from "./records"
 
 const DATABASE_URL = "sqlite:focal.db"
@@ -19,8 +17,6 @@ const DELETE_BATCH_SIZE = 250
 
 let databasePromise: Promise<Database> | null = null
 const importPromises = new Map<CoreDataFile, Promise<void>>()
-const writeLocks = new Map<CoreRecordKind, Promise<unknown>>()
-
 interface CountRow {
   count: number
 }
@@ -32,14 +28,6 @@ interface IdRow {
 export function openFocalDatabase(): Promise<Database> {
   databasePromise ??= Database.load(DATABASE_URL)
   return databasePromise
-}
-
-export async function withWriteLock<T>(address: CoreDataFile | CoreRecordKind, operation: () => Promise<T>): Promise<T> {
-  const kind = isCoreDataFile(address) ? coreRecordKind(address) : address
-  const previous = writeLocks.get(kind) ?? Promise.resolve()
-  const result = previous.then(operation, operation)
-  writeLocks.set(kind, result.catch(() => undefined))
-  return result
 }
 
 async function readLegacyArray(fileName: CoreDataFile): Promise<unknown[]> {
@@ -152,11 +140,11 @@ async function ensureLegacyImport(fileName: CoreDataFile): Promise<void> {
   }
 }
 
-export async function ensureRecordImport(kind: CoreRecordKind): Promise<void> {
+async function ensureRecordImport(kind: CoreRecordKind): Promise<void> {
   await ensureLegacyImport(coreDataFile(kind))
 }
 
-export async function readRecordRows(kind: CoreRecordKind, ids?: readonly string[]): Promise<StoredRecordInput[]> {
+async function readRecordRows(kind: CoreRecordKind, ids?: readonly string[]): Promise<StoredRecordInput[]> {
   await ensureRecordImport(kind)
   if (ids && !ids.length) return []
   return (await openFocalDatabase()).select<StoredRecordInput[]>(
@@ -169,28 +157,4 @@ export async function readRecordRows(kind: CoreRecordKind, ids?: readonly string
 
 export async function readRecords(kind: CoreRecordKind): Promise<unknown[]> {
   return parseStoredPayloads(await readRecordRows(kind))
-}
-
-export async function writePersistedArray(fileName: CoreDataFile, items: unknown[]): Promise<void> {
-  await ensureLegacyImport(fileName)
-  await withWriteLock(fileName, async () => {
-    await replaceRecords(await openFocalDatabase(), fileName, items)
-  })
-}
-
-export async function mutatePersistedArray<T>(
-  fileName: CoreDataFile,
-  mutate: (current: unknown[]) => T[] | Promise<T[]>,
-): Promise<T[]> {
-  await ensureLegacyImport(fileName)
-  return withWriteLock(fileName, async () => {
-    const database = await openFocalDatabase()
-    const rows = await database.select<StoredPayloadRow[]>(
-      "select payload from records where kind = $1 order by position asc",
-      [coreRecordKind(fileName)],
-    )
-    const updated = await mutate(parseStoredPayloads(rows))
-    await replaceRecords(database, fileName, updated)
-    return updated
-  })
 }

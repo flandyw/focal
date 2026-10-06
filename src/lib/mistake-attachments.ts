@@ -1,10 +1,10 @@
 import type { MistakeAttachment } from "./exam-data"
 import { supabase } from "./supabase"
 
-export const MISTAKE_ATTACHMENTS_BUCKET = "mistake-attachments"
-export const MAX_MISTAKE_ATTACHMENTS = 5
-export const MAX_MISTAKE_ATTACHMENT_BYTES = 5 * 1024 * 1024
-export const MAX_MISTAKE_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024
+const MISTAKE_ATTACHMENTS_BUCKET = "mistake-attachments"
+const MAX_MISTAKE_ATTACHMENTS = 5
+const MAX_MISTAKE_ATTACHMENT_BYTES = 5 * 1024 * 1024
+const MAX_MISTAKE_ATTACHMENTS_TOTAL_BYTES = 20 * 1024 * 1024
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"])
 const EXTENSIONS: Record<string, string> = {
@@ -24,7 +24,7 @@ export function validateSavedMistakeImages(files: Pick<File, "size" | "type">[],
   return null
 }
 
-export function buildMistakeAttachmentPath(userId: string, mistakeId: string, attachmentId: string, type: string) {
+function buildMistakeAttachmentPath(userId: string, mistakeId: string, attachmentId: string, type: string) {
   return `${userId}/${mistakeId}/${attachmentId}.${EXTENSIONS[type] ?? "img"}`
 }
 

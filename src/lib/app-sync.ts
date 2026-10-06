@@ -45,7 +45,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-export function appSyncDeviceId(): string {
+function appSyncDeviceId(): string {
   const key = "examtrack:study-session-device:v1"
   let value = localStorage.getItem(key)
   if (!value) {
@@ -106,7 +106,7 @@ function defaultMeta(accountId: string): AccountMeta {
   return { key: accountMetaKey(accountId), accountId, cursor: 0, head: 0, lamport: 0, bootstrapped: false, feedVersion: FEED_VERSION }
 }
 
-export function rowsFromAppData(data: AppData): AppRow[] {
+function rowsFromAppData(data: AppData): AppRow[] {
   const rows: AppRow[] = [
     ...data.attempts.map((item) => ({ entity: "attempts" as const, rowId: item.id, operation: "put" as const, payload: item })),
     ...data.mistakes.map((item) => ({ entity: "mistakes" as const, rowId: item.id, operation: "put" as const, payload: item })),
@@ -161,7 +161,7 @@ export function diffAppData(previous: AppData, next: AppData): AppRow[] {
   return changes
 }
 
-export async function queueAppChanges(accountId: string, changes: readonly AppRow[]): Promise<void> {
+async function queueAppChanges(accountId: string, changes: readonly AppRow[]): Promise<void> {
   if (!changes.length) return
   const db = await openDatabase()
   const transaction = db.transaction([OUTBOX, ROWS, META], "readwrite")
@@ -260,7 +260,7 @@ async function pull(userId: string): Promise<void> {
   }
 }
 
-export function parseChange(raw: unknown): VersionedChange[] {
+function parseChange(raw: unknown): VersionedChange[] {
   // The cursor tails the shared feed, including Folio notebooks. Filter entities only when storing rows.
   if (!isRecord(raw) || typeof raw.entity !== "string" ||
     (raw.operation !== "put" && raw.operation !== "delete") ||
@@ -353,7 +353,7 @@ function readLegacyTombstones(): Record<string, Record<string, string>> {
  * user deleted on this device, so no stale server copy or late sync page can bring it back;
  * an undo elsewhere (a remote write stamped after the delete) still wins.
  */
-export function isTombstoned(entity: Entity, rowId: string, rowUpdatedAt: string, tombstones: Record<string, Record<string, string>>): boolean {
+function isTombstoned(entity: Entity, rowId: string, rowUpdatedAt: string, tombstones: Record<string, Record<string, string>>): boolean {
   const deletedAt = tombstones[entity]?.[rowId]
   return typeof deletedAt === "string" && deletedAt > rowUpdatedAt
 }
@@ -673,8 +673,4 @@ export function recordLocalChanges(previous: AppData, next: AppData, now = new D
   } catch {
     // ponytail: localStorage tombstones are only a bootstrap bridge; IndexedDB is authoritative after sign-in.
   }
-}
-
-export function mergeMistakeConflict(base: unknown, local: unknown, remote: unknown): unknown {
-  return mergeConcurrentValue("mistakes", "", base, local, remote)
 }

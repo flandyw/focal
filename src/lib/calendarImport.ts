@@ -1,5 +1,5 @@
 // Pure (no React/Tauri) so desktop and web share one chatbot-import contract.
-export type ImportEventType = "sac" | "exam" | "assignment" | "event" | "homework" | "other" | "practice-sac"
+type ImportEventType = "sac" | "exam" | "assignment" | "event" | "homework" | "other" | "practice-sac"
 export interface ImportSubject { id: string; name: string; shortCode: string }
 export interface ImportProject { id: string; name: string }
 
@@ -25,8 +25,6 @@ export interface TextEventDraft {
 // --- Constants ---
 
 const VALID_EVENT_TYPES = new Set<ImportEventType>(["sac", "exam", "assignment", "event", "homework", "other", "practice-sac"])
-export const MAX_SOURCE_LENGTH = 20_000
-
 // --- API / Parsing ---
 
 function readString(record: Record<string, unknown>, ...keys: string[]): string {
@@ -167,7 +165,7 @@ function parseJsonPayload(content: string): unknown {
   }
 }
 
-export function isValidDateTime(dateValue: string, timeValue: string): boolean {
+function isValidDateTime(dateValue: string, timeValue: string): boolean {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue)
   const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeValue)
   if (!dateMatch || !timeMatch) return false
@@ -175,18 +173,6 @@ export function isValidDateTime(dateValue: string, timeValue: string): boolean {
   const [, h, mi] = timeMatch.map(Number)
   const date = new Date(y, mo - 1, d, h, mi)
   return date.getFullYear() === y && date.getMonth() + 1 === mo && date.getDate() === d && date.getHours() === h && date.getMinutes() === mi
-}
-
-export function getDraftIssue(draft: TextEventDraft): string | null {
-  if (!draft.title.trim()) return "Add a title."
-  if (!isValidDateTime(draft.date, draft.startTime)) return "Choose a valid date and time."
-  if (draft.endDate && (!isValidDateTime(draft.endDate, draft.startTime) || draft.endDate < draft.date)) {
-    return "End date must be on or after the start date."
-  }
-  if (!Number.isFinite(draft.durationMinutes) || draft.durationMinutes < 15 || draft.durationMinutes > 180) {
-    return "Duration must be between 15 and 180 minutes."
-  }
-  return null
 }
 
 export function parseTextEventResponse(content: string, subjects: ImportSubject[], projects: ImportProject[]): TextEventDraft[] {
@@ -260,7 +246,7 @@ export function parseTextEventResponse(content: string, subjects: ImportSubject[
 }
 
 /** Local YYYY-MM-DD for a Date. */
-export function localDateValue(date: Date): string {
+function localDateValue(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 

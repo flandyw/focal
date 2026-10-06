@@ -32,6 +32,6 @@ Not lazy about: input validation at trust boundaries, error handling that preven
 - Progress graphs now live in `src/components/analytics/` and are available in both builds. Desktop Progress also reads local-only historical sessions without rewriting the old database.
 - `src/lib/class-timetable-core.ts` implements school timetable cycles; `src/lib/timetable.ts` handles exam scheduling. They are distinct modules.
 - Browser assets and reference datasets are in root `public/`; the PDF endpoint is in `api/` and `server/mistakes-pdf.ts`. Reference import tools are in `vcaa/` and `vtac/`. Web deployment configuration is root `vercel.json`; configure the hosting project to use the repository root.
-- Run `bun run dev` / `bun run build` for web. Run `bun run dev:desktop` / `bun run build:desktop` for the desktop frontend, or `bun run tauri dev` for the native app. Vite's `desktop` mode enables native integration and AI; the browser build disables them. `VITE_EMBEDDED_EXAMS` is the historical internal flag for this distinction.
+- Run `bun run dev` / `bun run build` for web. Run `bun run dev:desktop` / `bun run build:desktop` for the desktop frontend, or `bun run tauri dev` for the native app. Vite's `desktop` mode enables native integration and AI; the browser build disables them. `VITE_DESKTOP` is the internal flag for this distinction.
 - Validate with `bun run check`, `bun run build`, and `bun run build:desktop`. Do not add tests.
 - Preserve historical `examtrack` storage keys and sync identifiers: existing saved data and Folio depend on them.

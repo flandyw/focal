@@ -2,13 +2,12 @@ import { VCE_SUBJECTS, type TimetableConfig, type TimetablePeriod } from "./type
 import { getDayLabelForDate, getTimetablePeriodsForDate, resolveTimetableSubject } from "./class-timetable-core"
 import { normaliseComparisonName } from "./exam-data"
 
-export { getDayLabelForDate, getTimetablePeriodsForDate }
+export { getDayLabelForDate }
 export {
   TIMETABLE_SCREENSHOT_PROMPT,
   getTimetablePeriodError,
   isTimetableBreakLabel,
   parseTimetableImport,
-  timetableTimeToMinutes,
 } from "./class-timetable-core"
 
 /** The class timetable shares its shape (and sync row) with the desktop app. */

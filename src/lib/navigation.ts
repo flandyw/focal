@@ -46,7 +46,7 @@ export const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }
   { label: "Analysis", items: ANALYSIS_NAVIGATION },
 ]
 
-export const APP_NAVIGATION: NavigationItem[] = [...ACTION_NAVIGATION, ...ASSESSMENT_NAVIGATION, ...ANALYSIS_NAVIGATION]
+const APP_NAVIGATION: NavigationItem[] = [...ACTION_NAVIGATION, ...ASSESSMENT_NAVIGATION, ...ANALYSIS_NAVIGATION]
 
 export const SETTINGS_ITEM = {
   id: "settings" as const,

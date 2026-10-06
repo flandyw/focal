@@ -1,4 +1,4 @@
-export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const
+const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
 
@@ -7,7 +7,7 @@ export type AISettings = {
   reasoningEffort: ReasoningEffort
 }
 
-export const DEFAULT_AI_SETTINGS: AISettings = {
+const DEFAULT_AI_SETTINGS: AISettings = {
   model: "auto",
   reasoningEffort: "medium",
 }
@@ -19,7 +19,7 @@ export function supportsStreamedAnalysis(model: string) {
 }
 
 /** Planning is a cheap, high-volume job, so it gets its own model choice. */
-export const CHEAPEST_MODEL = "gpt-6-luna"
+const CHEAPEST_MODEL = "gpt-6-luna"
 
 export function isCheapestModel(model: string) {
   return model === CHEAPEST_MODEL || model.endsWith("-luna")
@@ -51,7 +51,7 @@ export function savePlannerModel(model: string) {
 
 const STORAGE_KEY = "examtrack:ai-settings:v1"
 
-export function parseAISettings(value: string | null): AISettings {
+function parseAISettings(value: string | null): AISettings {
   if (!value) return DEFAULT_AI_SETTINGS
   try {
     const parsed: unknown = JSON.parse(value)

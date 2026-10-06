@@ -1,5 +1,4 @@
 import { openFocalDatabase } from "./database"
-import { isTauri } from "@tauri-apps/api/core"
 
 export interface PreferenceDefinition {
   key: string
@@ -80,18 +79,8 @@ export function persistPreference(key: string, value: string, syncable: boolean)
   })
 }
 
-export function setCachedPreference(key: string, value: string, syncable: boolean): void {
-  localStorage.setItem(key, value)
-  if (!isTauri()) return
-  void persistPreference(key, value, syncable)
-}
-
 export function removePreference(key: string): Promise<void> {
   return withWriteLock(async () => {
     await (await openFocalDatabase()).execute("delete from preferences where key = $1", [key])
   })
-}
-
-export async function flushPreferenceWrites(): Promise<void> {
-  await writeLock
 }

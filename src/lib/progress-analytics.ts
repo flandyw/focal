@@ -34,7 +34,7 @@ export interface TimeOfDayBucket {
   minutes: number
 }
 
-export interface SubjectTimeOfDayBucket extends TimeOfDayBucket {
+interface SubjectTimeOfDayBucket extends TimeOfDayBucket {
   subjectId: string
 }
 
@@ -166,7 +166,7 @@ export function getStudyPeriodComparison(
   }
 }
 
-export function getTimeTrends(
+function getTimeTrends(
   sessions: StudySession[],
   projects: Project[],
   range: AnalyticsRange,
@@ -210,7 +210,7 @@ export function getTimeTrends(
   return points
 }
 
-export function getSubjectBreakdown(
+function getSubjectBreakdown(
   sessions: StudySession[],
   projects: Project[],
   range: AnalyticsRange,
@@ -245,7 +245,7 @@ export function getSubjectBreakdown(
     .sort((a, b) => b.minutes - a.minutes)
 }
 
-export function getConsistencyData(
+function getConsistencyData(
   sessions: StudySession[],
   range: AnalyticsRange,
   periodEnd = Date.now(),
@@ -347,7 +347,7 @@ function aggregateTimeOfDay(subjectBuckets: SubjectTimeOfDayBucket[]): TimeOfDay
   return buckets
 }
 
-export function getTimeOfDayBySubject(
+function getTimeOfDayBySubject(
   sessions: StudySession[],
   projects: Project[],
   range: AnalyticsRange,
@@ -383,7 +383,7 @@ export function getTimeOfDayBySubject(
   )
 }
 
-export function getSubjectCompletion(
+function getSubjectCompletion(
   sessions: StudySession[],
   projects: Project[],
   range: AnalyticsRange,
@@ -421,7 +421,7 @@ export function getSubjectCompletion(
     .sort((a, b) => b.rate - a.rate)
 }
 
-export function getStudyEfficiency(
+function getStudyEfficiency(
   sessions: StudySession[],
   projects: Project[],
   range: AnalyticsRange,

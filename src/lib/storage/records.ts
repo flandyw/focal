@@ -18,10 +18,6 @@ const KIND_BY_FILE: Record<CoreDataFile, CoreRecordKind> = {
   "sessions.json": "study_sessions",
 }
 
-export function isCoreDataFile(fileName: string): fileName is CoreDataFile {
-  return fileName === "projects.json" || fileName === "events.json" || fileName === "sessions.json"
-}
-
 export function coreRecordKind(fileName: CoreDataFile): CoreRecordKind {
   return KIND_BY_FILE[fileName]
 }

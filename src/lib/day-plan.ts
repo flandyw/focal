@@ -110,12 +110,12 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   sac: "SAC", "practice-sac": "Practice SAC", exam: "Exam", assignment: "Assignment", homework: "Homework", event: "Event", other: "Other",
 }
 
-export function eventTypeLabel(type: string) {
+function eventTypeLabel(type: string) {
   return EVENT_TYPE_LABEL[type] ?? "Event"
 }
 
 /** Local first and last day an event touches; an end at exactly midnight belongs to the day before. */
-export function eventDays(event: CalendarEvent): { first: string; last: string } {
+function eventDays(event: CalendarEvent): { first: string; last: string } {
   const start = new Date(event.startTime)
   const end = event.endTime ? new Date(event.endTime) : start
   const last = end.getTime() > start.getTime() ? new Date(end.getTime() - 60_000) : start

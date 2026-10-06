@@ -1,4 +1,4 @@
-export type AtarAggregatePoint = {
+type AtarAggregatePoint = {
   atar: number
   aggregate: number
 }

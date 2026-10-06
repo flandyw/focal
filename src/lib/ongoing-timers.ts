@@ -142,13 +142,6 @@ export type FocusTimerSession = {
   pausedSeconds: number
 }
 
-export function isFocusTimerSession(value: unknown): value is FocusTimerSession {
-  if (!isRecord(value) || !hasValidSharedTimerState(value)) return false
-  return typeof value.workMinutes === "number" && Number.isFinite(value.workMinutes) && value.workMinutes > 0 &&
-    (value.cycleNumber === undefined || typeof value.cycleNumber === "number" && Number.isFinite(value.cycleNumber)) &&
-    isOptionalString(value.intent)
-}
-
 export function isSacTimerSession(value: unknown): value is SacTimerSession {
   if (!isRecord(value) || !hasValidSharedTimerState(value)) return false
   return isOptionalString(value.recordId) &&

@@ -13,7 +13,7 @@ export type ExamActivityDay = {
   inRange: boolean
 }
 
-export type ExamActivityMonth = {
+type ExamActivityMonth = {
   label: string
   weekIndex: number
 }

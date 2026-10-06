@@ -71,7 +71,7 @@ export function formatChatGPTProgress({ phase, tokens, estimated, reasoning, ite
   return `${item}${status} · ${estimated && tokens ? "~" : ""}${tokens} streamed tokens${reasoning ? " · reasoning detected" : ""}`
 }
 
-export function validateMistakeImage(file: Pick<File, "size" | "type">): string | null {
+function validateMistakeImage(file: Pick<File, "size" | "type">): string | null {
   if (!file.type.startsWith("image/")) return "Choose an image file."
   if (file.size > MAX_IMAGE_BYTES) return "Choose an image smaller than 3 MB."
   return null

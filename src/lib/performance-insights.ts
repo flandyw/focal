@@ -210,10 +210,10 @@ export function buildFocusPriorities(
     .toSorted((first, second) => second.priorityScore - first.priorityScore || second.missedMarks - first.missedMarks)
 }
 
-export type PaperEvidenceConfidence = "low" | "medium" | "high"
-export type PaperTrend = "improving" | "flat" | "deteriorating" | "insufficient"
+type PaperEvidenceConfidence = "low" | "medium" | "high"
+type PaperTrend = "improving" | "flat" | "deteriorating" | "insufficient"
 
-export type PaperQuestionEvidence = {
+type PaperQuestionEvidence = {
   attemptId: string
   attemptTitle: string
   provider: string
@@ -422,7 +422,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   })
 }
 
-export type LostMarksCategory = {
+type LostMarksCategory = {
   category: string
   marks: number
   exam1: number

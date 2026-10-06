@@ -1,6 +1,6 @@
 import { normaliseComparisonName } from "./exam-data"
 
-export type TimetableComponent =
+type TimetableComponent =
   | "written"
   | "oral"
   | "performance"
@@ -27,7 +27,7 @@ export type Timetable = {
   exams: TimetableEntry[]
 }
 
-export function isTimetableEntry(value: unknown): value is TimetableEntry {
+function isTimetableEntry(value: unknown): value is TimetableEntry {
   if (!value || typeof value !== "object") return false
   const entry = value as Record<string, unknown>
   return (
@@ -79,12 +79,6 @@ export function getExamEnd(entry: TimetableEntry): Date {
 
 export function isUpcoming(entry: TimetableEntry, now: Date = new Date()): boolean {
   return getExamStart(entry).getTime() > now.getTime()
-}
-
-export function isInProgress(entry: TimetableEntry, now: Date = new Date()): boolean {
-  const start = getExamStart(entry).getTime()
-  const end = getExamEnd(entry).getTime()
-  return start <= now.getTime() && now.getTime() <= end
 }
 
 export function isPast(entry: TimetableEntry, now: Date = new Date()): boolean {

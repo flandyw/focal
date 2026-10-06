@@ -7,7 +7,7 @@ import {
 } from "./exam-data"
 import { normaliseScalingStudyName } from "./scaling"
 
-export type StudyScoreEvidence = {
+type StudyScoreEvidence = {
   attempt: ExamAttempt
   percentile: number
   weight: number
@@ -15,7 +15,7 @@ export type StudyScoreEvidence = {
   exactReferenceYear: boolean
 }
 
-export type StudyScoreComponent = {
+type StudyScoreComponent = {
   label: string
   percentile: number
   weightPercent: number
@@ -59,7 +59,7 @@ function clamp(value: number, minimum: number, maximum: number) {
 
 // Peter J. Acklam's inverse-normal approximation. It is accurate well beyond
 // the precision justified by a VCE study-score estimate.
-export function inverseNormalCdf(probability: number): number {
+function inverseNormalCdf(probability: number): number {
   const p = clamp(probability, 0.0001, 0.9999)
   const a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924]
   const b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857]
@@ -85,7 +85,7 @@ export function inverseNormalCdf(probability: number): number {
     (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
 }
 
-export function percentileToRawStudyScore(percentile: number): number {
+function percentileToRawStudyScore(percentile: number): number {
   return clamp(30 + 7 * inverseNormalCdf(clamp(percentile, 0.1, 99.9) / 100), 0, 50)
 }
 

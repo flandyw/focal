@@ -33,7 +33,7 @@ export const MISTAKE_CATEGORIES = [
 
 export type MistakeCategory = (typeof MISTAKE_CATEGORIES)[number]
 
-export type GradeBand = {
+type GradeBand = {
   grade: string
   minScore: number | null
   maxScore: number | null
@@ -87,7 +87,7 @@ export type QuestionResult = {
   examinerNote?: string
 }
 
-export type ExamTiming = {
+type ExamTiming = {
   plannedReadingMinutes: number
   plannedWritingMinutes: number
   actualWritingSeconds: number
@@ -96,11 +96,11 @@ export type ExamTiming = {
 }
 
 export type ReviewRating = "again" | "hard" | "good" | "easy"
-export type LegacyReviewResult = "incorrect" | "assisted" | "correct"
+type LegacyReviewResult = "incorrect" | "assisted" | "correct"
 export type ReviewResult = ReviewRating | LegacyReviewResult
 export type MistakeReviewState = "new" | "learning" | "review" | "relearning"
 
-export type MistakeReview = {
+type MistakeReview = {
   id: string
   completedAt: string
   result: ReviewResult
@@ -143,7 +143,7 @@ export type Mistake = {
   updatedAt: string
 }
 
-export type MistakeInsight = {
+type MistakeInsight = {
   title: string
   evidence: string
   action: string
@@ -419,19 +419,6 @@ export function localDayDifference(date: Date, from: Date): number {
   return Math.round((day.getTime() - start.getTime()) / DAY_MS)
 }
 
-/**
- * Cards scheduled before today in the local calendar — not a rolling 24 hours. Suspended
- * cards are excluded; mastered cards are not, matching the schedule grouping and the folio app.
- */
-export function getOverdueMistakes(mistakes: Mistake[], now = new Date()): Mistake[] {
-  return mistakes
-    .filter((mistake) => !mistake.suspended)
-    .map((mistake) => ({ mistake, dueAt: getMistakeSchedule(mistake).dueAt }))
-    .filter(({ dueAt }) => localDayDifference(new Date(dueAt), now) < 0)
-    .toSorted((first, second) => first.dueAt.localeCompare(second.dueAt))
-    .map(({ mistake }) => mistake)
-}
-
 export type CoverageArea = {
   subject: string
   areaOfStudy: string
@@ -470,13 +457,6 @@ export type AttemptAnalysis = {
   percentage: number
   grade: string | null
   percentile: number | null
-}
-
-export type AttemptPoint = {
-  grade: string
-  percentile: number
-  scaledScore: number
-  attempt: ExamAttempt
 }
 
 export function analyseScore(
@@ -579,22 +559,9 @@ export function formatOrdinal(value: number) {
   return `${rounded}${suffix}`
 }
 
-export function matchesAttemptReference(attempt: Pick<ExamAttempt, "subject" | "paper">, reference: AssessmentReference) {
+function matchesAttemptReference(attempt: Pick<ExamAttempt, "subject" | "paper">, reference: AssessmentReference) {
   return normaliseComparisonName(attempt.subject) === normaliseComparisonName(reference.studyName) &&
     normaliseComparisonName(attempt.paper) === normaliseComparisonName(reference.name)
-}
-
-export function getAttemptPoints(
-  attempts: ExamAttempt[],
-  reference: AssessmentReference,
-): AttemptPoint[] {
-  return attempts.flatMap((attempt) => {
-    if (!matchesAttemptReference(attempt, reference)) return []
-    const analysis = analyseAttempt(attempt, reference)
-    return analysis.grade && analysis.percentile !== null
-      ? [{ grade: analysis.grade, percentile: analysis.percentile, scaledScore: analysis.scaledScore, attempt }]
-      : []
-  })
 }
 
 export type DistributionStats = {
@@ -690,15 +657,6 @@ export function buildVcaaYearInsights(
       sourceUrl: reference.sourceUrl,
     }
   }).toSorted((first, second) => first.year - second.year)
-}
-
-export function getReferencesForAttempt(
-  attempt: ExamAttempt,
-  references: AssessmentReference[],
-): AssessmentReference[] {
-  return [...new Set(references.map((reference) => reference.year))]
-    .flatMap((year) => findAttemptReferenceForYear(attempt, references, year) ?? [])
-    .toSorted((a, b) => b.year - a.year)
 }
 
 type ReferenceIndex = {
@@ -869,7 +827,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
 }
 
-export function isAppData(value: unknown): value is AppData {
+function isAppData(value: unknown): value is AppData {
   if (!isRecord(value)) return false
   const data = value as Partial<AppData>
   const attemptsValid =

@@ -1,14 +1,14 @@
-export type StudySessionKind = "focus" | "exam" | "sac"
-export type StudySessionState = "planned" | "running" | "paused" | "completed" | "cancelled"
-export type StudySessionPhase = "focus" | "reading" | "writing"
+type StudySessionKind = "focus" | "exam" | "sac"
+type StudySessionState = "planned" | "running" | "paused" | "completed" | "cancelled"
+type StudySessionPhase = "focus" | "reading" | "writing"
 // ponytail: "examtrack" is the historical app id for Focal Web. It is frozen: Folio and the
 // web build send it, and Postgres rows already store it.
-export type StudySessionApp = "focal" | "examtrack" | "folio"
+type StudySessionApp = "focal" | "examtrack" | "folio"
 export type StudySessionAction =
   | "log" | "create" | "start" | "pause" | "resume" | "phase_change"
   | "save_progress" | "complete" | "cancel"
 
-export interface StudySessionSegment {
+interface StudySessionSegment {
   id: string
   session_id: string
   started_at: string
@@ -59,7 +59,7 @@ export interface StudySessionCommand {
   elapsed_since_previous_ms?: number
 }
 
-export type StudySessionMutationReason =
+type StudySessionMutationReason =
   | "stale_revision" | "session_terminal" | "invalid_transition" | "not_found"
   | "active_session_exists" | "already_exists" | "already_running" | "already_paused"
   | "already_completed" | "already_cancelled" | null
@@ -168,7 +168,7 @@ export function studySessionActiveMilliseconds(session: CanonicalStudySession, e
   return session.accumulated_active_ms + (Number.isFinite(currentSegmentMs) ? currentSegmentMs : 0)
 }
 
-export function isStudySessionCommand(value: unknown): value is StudySessionCommand {
+function isStudySessionCommand(value: unknown): value is StudySessionCommand {
   if (!isRecord(value)) return false
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   return typeof value.mutation_id === "string" && uuid.test(value.mutation_id) &&

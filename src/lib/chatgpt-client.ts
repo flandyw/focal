@@ -5,14 +5,14 @@ import { AI_ENABLED, CHATGPT_ENDPOINT as CHATGPT_BASE_PATH } from "./host"
 // Talks to the local Sign in with ChatGPT service (server/chatgpt.ts, run by the desktop sidecar).
 // Credentials stay in that process; the browser only sees session state and model output.
 
-export type ChatGPTSession = {
+type ChatGPTSession = {
   status: "disconnected" | "connecting" | "connected" | "reauth_required"
   sharing: boolean
   identity?: { name?: string; email?: string }
   error?: { code: string; message: string }
 }
 
-export class ChatGPTRequestError extends Error {
+class ChatGPTRequestError extends Error {
   readonly status: number
   readonly code?: string
   constructor(message: string, status: number, code?: string) {

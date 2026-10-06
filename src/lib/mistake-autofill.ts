@@ -1,6 +1,6 @@
 import { validateMistakeMarks, type Mistake } from "./exam-data"
 
-export const MISTAKE_AUTOFILL_FIELDS = [
+const MISTAKE_AUTOFILL_FIELDS = [
   "question",
   "questionText",
   "explanation",
@@ -30,7 +30,7 @@ export type MistakeAutofillSummary = {
   mistakeCount: number
 }
 
-export const MISTAKE_MERGE_FIELDS = ["areaOfStudy", "criterion"] as const
+const MISTAKE_MERGE_FIELDS = ["areaOfStudy", "criterion"] as const
 
 export type MistakeMergeField = (typeof MISTAKE_MERGE_FIELDS)[number]
 

@@ -73,11 +73,6 @@ export function useReferenceData() {
     const controller = new AbortController()
     let active = true
 
-    setReferencesStatus("loading")
-    setStudiesStatus("loading")
-    setScalingStatus("loading")
-    setTimetableStatus("loading")
-
     // Exams-critical data first: grade distributions unblock the
     // exams/library/VCAA views. Everything else is fetched after idle so
     // first paint + interaction are not blocked parsing ~3MB of JSON.
@@ -148,7 +143,13 @@ export function useReferenceData() {
     }
   }, [reloadToken])
 
-  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+  const reload = useCallback(() => {
+    setReferencesStatus("loading")
+    setStudiesStatus("loading")
+    setScalingStatus("loading")
+    setTimetableStatus("loading")
+    setReloadToken((token) => token + 1)
+  }, [])
 
   return {
     references,

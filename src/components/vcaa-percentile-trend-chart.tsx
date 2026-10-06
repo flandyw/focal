@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -30,16 +30,15 @@ export function VcaaPercentileTrendChart({
     [attempts, preferredSubjects],
   )
   const [subjectFilter, setSubjectFilter] = useState(() => firstPreferredSubject(subjects, preferredSubjects) || "all")
-  useEffect(() => {
-    if (subjectFilter !== "all" && !subjects.includes(subjectFilter)) setSubjectFilter("all")
-  }, [subjectFilter, subjects])
+  if (subjectFilter !== "all" && !subjects.includes(subjectFilter)) setSubjectFilter("all")
+  const activeSubjectFilter = subjectFilter === "all" || subjects.includes(subjectFilter) ? subjectFilter : "all"
   const points = useMemo(() => buildAttemptBenchmarks(attempts, references)
-    .filter((item) => item.percentile !== null && (subjectFilter === "all" || item.attempt.subject === subjectFilter))
+    .filter((item) => item.percentile !== null && (activeSubjectFilter === "all" || item.attempt.subject === activeSubjectFilter))
     .map((item) => ({
       ...item,
       timestamp: new Date(`${item.attempt.completedAt}T00:00:00`).getTime(),
       dateLabel: new Date(`${item.attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
-    })), [attempts, references, subjectFilter])
+    })), [attempts, references, activeSubjectFilter])
   const first = points[0]
   const latest = points.at(-1)
   const change = first?.percentile != null && latest?.percentile != null
@@ -60,7 +59,7 @@ export function VcaaPercentileTrendChart({
           {subjects.length > 1 ? (
             <div className="flex items-center gap-2">
               <label htmlFor={`percentile-subject-${filterId}`} className="text-sm text-muted-foreground">Subject</label>
-              <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subjectFilter} onValueChange={setSubjectFilter} includeAll id={`percentile-subject-${filterId}`} className="h-8 w-44" />
+              <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={activeSubjectFilter} onValueChange={setSubjectFilter} includeAll id={`percentile-subject-${filterId}`} className="h-8 w-44" />
             </div>
           ) : null}
         </div>

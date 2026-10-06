@@ -50,12 +50,11 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
     let state = app
         .try_state::<ChatGptSidecar>()
         .ok_or_else(|| "ChatGPT sidecar state is unavailable".to_owned())?;
-    if state
+    let mut process = state
         .process
         .lock()
-        .map_err(|_| "ChatGPT sidecar state is unavailable")?
-        .running
-    {
+        .map_err(|_| "ChatGPT sidecar state is unavailable")?;
+    if process.running {
         return Ok(());
     }
 
@@ -64,14 +63,11 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
         .sidecar("focal-chatgpt")
         .map_err(|error| format!("could not configure ChatGPT sidecar: {error}"))?
         .env("FOCAL_CHATGPT_DATA_DIR", data_directory)
+        .env("FOCAL_CHATGPT_MANAGED", "1")
         .spawn()
         .map_err(|error| format!("could not start ChatGPT sidecar: {error}"))?;
 
     let pid = child.pid();
-    let mut process = state
-        .process
-        .lock()
-        .map_err(|_| "ChatGPT sidecar state is unavailable")?;
     process.child = Some(child);
     process.pid = Some(pid);
     process.running = true;
@@ -146,4 +142,9 @@ pub fn stop(_app: &tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn stop_chatgpt_sidecar(app: tauri::AppHandle) -> Result<(), String> {
     stop(&app)
+}
+
+#[tauri::command]
+pub fn start_chatgpt_sidecar(app: tauri::AppHandle) -> Result<(), String> {
+    start(&app)
 }

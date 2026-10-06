@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Calculator, Info, Link2, TrendingUp } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
@@ -37,22 +37,25 @@ export function StudyScorePredictor({
     () => prioritiseSubjects(data.attempts.map((attempt) => attempt.subject), data.subjects),
     [data.attempts, data.subjects],
   )
-  const [subject, setSubject] = useState(subjects[0] ?? "")
-  const [sacPercentile, setSacPercentile] = useState("")
-  const [examWeight, setExamWeight] = useState(() => defaultExamWeight(subjects[0] ?? ""))
-  const [distributionYear, setDistributionYear] = useState("automatic")
-  const [scalingYear, setScalingYear] = useState("combined")
-
-  useEffect(() => {
-    if (!subjects.includes(subject)) setSubject(subjects[0] ?? "")
-  }, [subject, subjects])
-
-  useEffect(() => {
-    setExamWeight(defaultExamWeight(subject))
-    setSacPercentile("")
-    setDistributionYear("automatic")
-    setScalingYear("combined")
-  }, [subject])
+  const [selectedSubject, setSubject] = useState(subjects[0] ?? "")
+  const subject = subjects.includes(selectedSubject) ? selectedSubject : subjects[0] ?? ""
+  const [savedInputs, setSavedInputs] = useState(() => ({
+    subject,
+    sacPercentile: "",
+    examWeight: defaultExamWeight(subject),
+    distributionYear: "automatic",
+    scalingYear: "combined",
+  }))
+  const inputs = savedInputs.subject === subject ? savedInputs : {
+    subject,
+    sacPercentile: "",
+    examWeight: defaultExamWeight(subject),
+    distributionYear: "automatic",
+    scalingYear: "combined",
+  }
+  if (selectedSubject !== subject) setSubject(subject)
+  if (savedInputs.subject !== subject) setSavedInputs(inputs)
+  const { sacPercentile, examWeight, distributionYear, scalingYear } = inputs
 
   const distributionYears = useMemo(
     () => [...new Set(references
@@ -144,7 +147,7 @@ export function StudyScorePredictor({
                     inputMode="decimal"
                     placeholder="Optional"
                     value={sacPercentile}
-                    onChange={(event) => setSacPercentile(event.target.value)}
+                    onChange={(event) => setSavedInputs({ ...inputs, sacPercentile: event.target.value })}
                   />
                   <FieldDescription>
                     Enter your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile.
@@ -153,7 +156,7 @@ export function StudyScorePredictor({
 
                 <Field>
                   <FieldLabel htmlFor="distribution-year">Grade distribution</FieldLabel>
-                  <Select value={distributionYear} onValueChange={(value) => setDistributionYear(value ?? "automatic")}>
+                  <Select value={distributionYear} onValueChange={(value) => setSavedInputs({ ...inputs, distributionYear: value ?? "automatic" })}>
                     <SelectTrigger id="distribution-year" className="w-full">
                       <SelectValue>{distributionYear === "automatic" ? "Automatic (match exam year)" : distributionYear}</SelectValue>
                     </SelectTrigger>
@@ -183,7 +186,7 @@ export function StudyScorePredictor({
                         max="100"
                         step="1"
                         value={examWeight}
-                        onChange={(event) => setExamWeight(Number(event.target.value))}
+                        onChange={(event) => setSavedInputs({ ...inputs, examWeight: Number(event.target.value) })}
                       />
                       <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                     </div>
@@ -220,7 +223,7 @@ export function StudyScorePredictor({
                         <div className="border-t pt-4 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scaled estimate</p>
-                            <Select value={scalingYear} onValueChange={(value) => setScalingYear(value ?? "combined")}>
+                            <Select value={scalingYear} onValueChange={(value) => setSavedInputs({ ...inputs, scalingYear: value ?? "combined" })}>
                               <SelectTrigger aria-label="Scaling report year" size="sm" className="w-auto min-w-32">
                                 <SelectValue>{scalingYear === "combined" ? `Combined (${Math.min(...scalingYears)}–${Math.max(...scalingYears)})` : scalingYear}</SelectValue>
                               </SelectTrigger>

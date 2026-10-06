@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Shuffle, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -23,23 +23,20 @@ type MistakeAlternativeDeckProps = {
 export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, onSave }: MistakeAlternativeDeckProps) {
   const [generating, setGenerating] = useState(false)
   const [generationProgress, setGenerationProgress] = useState<ChatGPTProgress | null>(null)
-  const [revealed, setRevealed] = useState(false)
   const sourceMistakeMap = useMemo(() => new Map(mistakes.map((mistake) => [mistake.id, mistake])), [mistakes])
   const cards = useMemo(() => deck?.cards.filter((card) => sourceMistakeMap.has(card.sourceMistakeId)) ?? [], [deck, sourceMistakeMap])
   const cardMap = useMemo(() => new Map(cards.map((card) => [card.sourceMistakeId, card])), [cards])
   const cardIds = cards.map((card) => card.sourceMistakeId).join("\u0000")
-  const [order, setOrder] = useState(() => cards.map((card) => card.sourceMistakeId))
-  const [position, setPosition] = useState(0)
+  const [view, setView] = useState(() => ({ cardIds, order: cards.map((card) => card.sourceMistakeId), position: 0, revealed: false }))
+  const currentView = view.cardIds === cardIds
+  const order = currentView ? view.order : cards.map((card) => card.sourceMistakeId)
+  const position = currentView ? view.position : 0
+  const revealed = currentView && view.revealed
+  if (!currentView) setView({ cardIds, order, position, revealed })
   const current = cardMap.get(order[position])
   const source = current ? sourceMistakeMap.get(current.sourceMistakeId) : undefined
   const staleCount = cards.filter((card) => (sourceMistakeMap.get(card.sourceMistakeId)?.updatedAt ?? "") > card.generatedAt).length
   const missingCount = Math.max(0, mistakes.length - cards.length)
-
-  useEffect(() => {
-    setOrder(cardIds ? cardIds.split("\u0000") : [])
-    setPosition(0)
-    setRevealed(false)
-  }, [cardIds])
 
   async function generateDeck() {
     setGenerating(true)
@@ -66,21 +63,16 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
   }
 
   function move(offset: number) {
-    setPosition((value) => (value + offset + order.length) % order.length)
-    setRevealed(false)
+    setView({ cardIds, order, position: (position + offset + order.length) % order.length, revealed: false })
   }
 
   function shuffle() {
-    setOrder((ids) => {
-      const shuffled = [...ids]
-      for (let index = shuffled.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(Math.random() * (index + 1))
-        ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
-      }
-      return shuffled
-    })
-    setPosition(0)
-    setRevealed(false)
+    const shuffled = [...order]
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1))
+      ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+    }
+    setView({ cardIds, order: shuffled, position: 0, revealed: false })
   }
 
   if (!current || !source) {
@@ -151,7 +143,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-2">
           <Button variant="outline" onClick={() => move(-1)} disabled={order.length < 2}><ChevronLeft />Previous</Button>
-          {!revealed ? <Button onClick={() => setRevealed(true)}>Show answer</Button> : <span className="text-sm text-muted-foreground">Answer revealed</span>}
+          {!revealed ? <Button onClick={() => setView({ cardIds, order, position, revealed: true })}>Show answer</Button> : <span className="text-sm text-muted-foreground">Answer revealed</span>}
           <Button variant="outline" onClick={() => move(1)} disabled={order.length < 2}>Next<ChevronRight /></Button>
         </CardFooter>
       </Card>

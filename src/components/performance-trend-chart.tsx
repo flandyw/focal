@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -122,15 +122,12 @@ export function PerformanceTrendChart({
     [attempts, preferredSubjects],
   )
   const [subjectFilter, setSubjectFilter] = useState<string>(() => firstPreferredSubject(subjects, preferredSubjects) || "all")
-  useEffect(() => {
-    if (subjectFilter !== "all" && !subjects.includes(subjectFilter)) {
-      setSubjectFilter("all")
-    }
-  }, [subjects, subjectFilter])
+  if (subjectFilter !== "all" && !subjects.includes(subjectFilter)) setSubjectFilter("all")
+  const activeSubjectFilter = subjectFilter === "all" || subjects.includes(subjectFilter) ? subjectFilter : "all"
 
   const trend = useMemo(
-    () => buildTrend(attempts, references, subjectFilter, difficultySettings),
-    [attempts, references, subjectFilter, difficultySettings],
+    () => buildTrend(attempts, references, activeSubjectFilter, difficultySettings),
+    [attempts, references, activeSubjectFilter, difficultySettings],
   )
   const summary = useMemo(() => buildSummary(trend), [trend])
   const overallAverage = useMemo(() => {
@@ -170,7 +167,7 @@ export function PerformanceTrendChart({
               <label htmlFor={`trend-subject-${filterId}`} className="whitespace-nowrap text-sm text-muted-foreground">
                 Subject
               </label>
-              <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subjectFilter} onValueChange={setSubjectFilter} includeAll id={`trend-subject-${filterId}`} className="h-8 w-44" />
+              <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={activeSubjectFilter} onValueChange={setSubjectFilter} includeAll id={`trend-subject-${filterId}`} className="h-8 w-44" />
             </div>
           ) : null}
         </div>

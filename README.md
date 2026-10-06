@@ -13,7 +13,6 @@ Progress is available in both apps under Analysis. It includes the transferred s
 | `src/` | Shared frontend, study/timetable contracts, progress graphs, and desktop integration |
 | `src-tauri/` | Native desktop shell and ChatGPT sidecar lifecycle |
 | `server/`, `vendor/siwc/` | Local Sign in with ChatGPT service |
-| `android-native/` | Separate native Android app |
 | `supabase/migrations/` | Shared account and data schema |
 
 ## Development

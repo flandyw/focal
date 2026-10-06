@@ -12,6 +12,8 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { WorkspacePage } from "./workspace-layout"
+import { useTickingNow } from "../hooks/use-ticking-now"
+import { canonicalNow } from "../lib/study-session-sync"
 import type { AppData, AssessmentReference } from "../lib/exam-data"
 import { getGoalProgress, localDate, type LearningWorkspace, type LearningWorkspaceUpdate, type StudyGoal, type StudyGoalKind } from "../lib/learning-workspace"
 
@@ -99,6 +101,7 @@ export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: 
   const [deadline, setDeadline] = useState(defaultDeadline)
   const [editingGoal, setEditingGoal] = useState<StudyGoal | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const now = useTickingNow()
   const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => ({ goal, progress: getGoalProgress(goal, data, references) })), [data, references])
   const archivedGoals = data.learning.goals.filter((goal) => goal.archivedAt)
 
@@ -128,7 +131,7 @@ export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: 
   }
 
   function restoreGoal(id: string) {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = canonicalNow().toISOString()
     commit((current) => ({ ...current, goals: current.goals.map((goal) => goal.id === id ? { ...goal, archivedAt: undefined, updatedAt } : goal) }))
   }
 
@@ -149,7 +152,7 @@ export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: 
 
       {progress.length ? <div className="grid gap-4 lg:grid-cols-2">{progress.map(({ goal, progress: item }) => {
         const achieved = item.current !== null && item.current >= goal.target
-        const expired = !achieved && goal.deadline < localDate(new Date())
+        const expired = !achieved && goal.deadline < localDate(now)
         return <Card key={goal.id}>
           <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</CardTitle><CardDescription>Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</CardDescription></div><Badge variant={expired ? "destructive" : achieved ? "secondary" : "outline"}>{expired ? "Expired" : achieved ? "Reached" : item.gap === null ? "Needs baseline" : `${item.gap.toFixed(goal.kind === "atar" ? 2 : 1)} to go`}</Badge></div></CardHeader>
           <CardContent className="grid gap-4"><div><div className="mb-2 flex justify-between text-sm"><span>{item.label}</span><strong className="tabular-nums">{item.current === null ? "—" : item.current.toFixed(goal.kind === "atar" ? 2 : 1)} / {goal.target}</strong></div><Progress value={item.progress} /></div><p className="text-sm text-muted-foreground">{item.evidence}</p><p className="text-sm">{item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button><Button size="sm" variant="ghost" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button><Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button></div></CardContent>

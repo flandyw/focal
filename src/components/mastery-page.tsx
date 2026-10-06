@@ -13,6 +13,7 @@ import { SubjectCombobox } from "./subject-combobox"
 import { MetricCard, MetricGrid, SectionHeading, WorkspacePage } from "./workspace-layout"
 import type { AppData } from "../lib/exam-data"
 import { buildMasteryAreas, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
+import { canonicalNow } from "../lib/study-session-sync"
 
 function masteryLabel(value: number | null) {
   if (value === null) return "Untested"
@@ -62,12 +63,12 @@ export function MasteryPage({ data, subjects, onChange }: {
   }
 
   function removeArea(subjectName: string, areaName: string) {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = canonicalNow().toISOString()
     commit((current) => ({ ...current, curriculumAreas: current.curriculumAreas.map((area) => area.subject === subjectName && area.name === areaName ? { ...area, archivedAt: updatedAt, updatedAt } : area) }))
   }
 
   function restoreArea(id: string) {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = canonicalNow().toISOString()
     commit((current) => ({ ...current, curriculumAreas: current.curriculumAreas.map((area) => area.id === id ? { ...area, archivedAt: undefined, updatedAt } : area) }))
   }
 

@@ -20,7 +20,7 @@
 // overwrites with the same values) and it never deletes. The upgrade path, if the data
 // ever needs to move again, is the same script with a different --to-user.
 
-import { copyFileSync, rmSync } from "node:fs"
+import { rmSync } from "node:fs"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, extname } from "node:path"

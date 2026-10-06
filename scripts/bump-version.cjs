@@ -25,7 +25,7 @@ fs.writeFileSync(
 )
 fs.writeFileSync(
   cargoTomlPath,
-  cargoToml.replace(/^(version\s*=\s*")[^\"]+("\s*)$/m, `$1${newVersion}$2`),
+  cargoToml.replace(/^(version\s*=\s*")[^"]+("\s*)$/m, `$1${newVersion}$2`),
 )
 
 console.log(newVersion)

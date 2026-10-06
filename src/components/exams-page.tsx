@@ -44,6 +44,7 @@ import { getExamTarget } from "../lib/exam-target"
 import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultySettings } from "../lib/exam-difficulty"
 import { openProgressReport } from "../lib/progress-report"
 import { localDate } from "../lib/learning-workspace"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 const PerformanceTrendChart = lazy(() =>
   import("./performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
@@ -269,9 +270,10 @@ function readDismissal(title: string): Dismissal {
 
 function NextActionNotice({ action }: { action: NextAction | null }) {
   const [dismissed, setDismissed] = useState<Dismissal>(() => (action ? readDismissal(action.title) : { title: "", until: 0 }))
+  const now = useTickingNow()
   if (!action) return null
   const Icon = action.icon
-  if (dismissed.title === action.title && dismissed.until > Date.now()) return null
+  if (dismissed.title === action.title && dismissed.until > now.getTime()) return null
   return (
     // ponytail: one-liner by design — the description is decorative context, so it truncates
     // instead of wrapping. Upgrade path: a "details" popover if the text ever matters more than the CTA.

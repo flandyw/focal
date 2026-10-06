@@ -76,11 +76,9 @@ safety poll.
 
 ## Local durability
 
-Focal desktop stores local records and ordered session commands in SQLite. Native Android
-uses the same mutation/cursor APIs and a durable non-coalescing session-command queue. The
-server does not impose a single-active-session constraint; clients may have concurrent
-canonical sessions. Android timers persist elapsed-realtime deadlines and boot counts; a
-reboot cuts continuity instead of inventing study time. Focal Web stores session commands and ordinary app changes in
+Focal desktop stores local records and ordered session commands in SQLite. The server
+does not impose a single-active-session constraint; clients may have concurrent canonical
+sessions. Focal Web stores session commands and ordinary app changes in
 account-scoped IndexedDB before publishing. Lifecycle commands stay ordered; unsent
 `save_progress` commands may coalesce by session. Ordinary writes coalesce only within the
 same stable entity and row. Replayed RPC requests keep the same UUID until a receipt arrives;

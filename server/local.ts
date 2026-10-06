@@ -49,9 +49,16 @@ const server = Bun.serve({
 
 console.warn(`[focal-chatgpt] listening on http://localhost:${server.port}`)
 
-function shutdown() {
-  void server.stop()
+async function shutdown() {
+  await server.stop(true)
+  process.exit(0)
 }
 
 process.on("SIGINT", shutdown)
 process.on("SIGTERM", shutdown)
+
+if (process.env.FOCAL_CHATGPT_MANAGED === "1") {
+  // Tauri owns stdin's write end; EOF means the desktop process is gone.
+  process.stdin.on("end", shutdown)
+  process.stdin.resume()
+}

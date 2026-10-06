@@ -131,6 +131,7 @@ type FocusSessionBoundary =
   | { action: "pause" | "resume" | "complete" | "cancel"; at: number }
 
 export interface FocusSessionMirror {
+  setSink(sink: FocusSessionSink | undefined): void
   /** The last state the server acknowledged. Never the optimistic desired state. */
   acknowledged(): FocusTimerSession | undefined
   /** What the session becomes once every recorded boundary has landed: the basis
@@ -168,7 +169,7 @@ export function createFocusSessionMirror({
   onBusy,
   retryDelayMs = 2_000,
 }: {
-  sink: FocusSessionSink
+  sink?: FocusSessionSink
   /** The persisted acknowledged session, so a reload mid-block keeps the same
    *  server session instead of minting a second one behind a zombie. */
   initial?: FocusTimerSession | undefined
@@ -238,7 +239,7 @@ export function createFocusSessionMirror({
         const next = derive(previous, head)
         setBusy(true)
         try {
-          const saved = await sink(previous, next, head.action === "complete" || head.action === "cancel" ? head.action : undefined)
+          const saved = await sink?.(previous, next, head.action === "complete" || head.action === "cancel" ? head.action : undefined)
           commit(saved)
           boundaries.shift()
           attempts = 0
@@ -261,6 +262,7 @@ export function createFocusSessionMirror({
   }
 
   return {
+    setSink: (next) => { sink = next },
     acknowledged: () => acknowledged,
     projected: () => boundaries.reduce<FocusTimerSession | undefined>((session, boundary) => derive(session, boundary), acknowledged),
     push: (boundary) => {

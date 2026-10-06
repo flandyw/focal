@@ -36,8 +36,9 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
   onChange: (config: TimetableConfig) => void
 }) {
   const [importOpen, setImportOpen] = useState(false)
+  const [date] = useState(() => new Date())
   const cycleLength = config?.cycleLength ?? 10
-  const today = config ? getDayLabelForDate(new Date(),  config.day1Starts, config.holidays, cycleLength, config.weekendTimetables) : null
+  const today = config ? getDayLabelForDate(date, config.day1Starts, config.holidays, cycleLength, config.weekendTimetables) : null
 
   return (
     <WorkspacePage>

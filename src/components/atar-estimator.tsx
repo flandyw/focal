@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Plus, RotateCcw, Save, Trash2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
@@ -51,9 +51,9 @@ export function AtarEstimator({
   const firstStudyName = firstPreferredSubject(studies.map((study) => study.studyName), data.subjects)
   const firstStudyCode = studies.find((study) => study.studyName === firstStudyName)?.code ?? ""
 
-  useEffect(() => {
-    if (firstStudyCode) setRows((current) => current.map((row) => row.code ? row : { ...row, code: firstStudyCode }))
-  }, [firstStudyCode])
+  if (firstStudyCode && rows.some((row) => !row.code)) {
+    setRows(rows.map((row) => row.code ? row : { ...row, code: firstStudyCode }))
+  }
 
   const predictions = useMemo(() => {
     const map = new Map<string, number>()

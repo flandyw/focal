@@ -438,7 +438,7 @@ export function useStudySessionSync(
   setData: Dispatch<SetStateAction<AppData>>,
 ): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void> } {
   const dataRef = useRef(data)
-  dataRef.current = data
+  useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
   const readWholeState = useRef(false)
   const canonicalSessions = useRef(new Map<string, CanonicalStudySession>())

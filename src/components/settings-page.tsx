@@ -85,10 +85,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
   useEffect(() => {
     if (auth.isAuthenticated) void refreshModels()
-    else setModels([])
   }, [auth.isAuthenticated])
 
-  const selectedModel = models.some((model) => model.slug === settings.model) ? settings.model : models[0]?.slug
+  const availableModels = auth.isAuthenticated ? models : []
+  const selectedModel = availableModels.some((model) => model.slug === settings.model) ? settings.model : availableModels[0]?.slug
   const selectedEffort = settings.reasoningEffort === "none" ? "low" : settings.reasoningEffort
   const fillPercent = ((REASONING_OPTIONS.indexOf(selectedEffort) + 0.5) / REASONING_OPTIONS.length) * 100
 
@@ -306,7 +306,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   ))}
                 </div>
                 <div className="grid py-1">
-                  {models.map(({ slug: model, displayName }) => {
+                  {availableModels.map(({ slug: model, displayName }) => {
                     const selected = model === selectedModel
                     const accent = getModelAccent(model)
                     return (
@@ -325,7 +325,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   })}
                 </div>
                 <div className="grid rounded-xl bg-muted/80 p-1 ring-1 ring-border/60">
-                {models.map(({ slug: model, displayName }) => {
+                {availableModels.map(({ slug: model, displayName }) => {
                   const selected = model === selectedModel
                   const accent = getModelAccent(model)
                   return (

@@ -45,13 +45,10 @@ export function StudyPlanCard({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const options = models.filter(supportsStreamedAnalysis)
+  const options = auth.isAuthenticated ? models.filter(supportsStreamedAnalysis) : []
 
   useEffect(() => {
-    if (!auth.isAuthenticated) {
-      setModels([])
-      return
-    }
+    if (!auth.isAuthenticated) return
     let cancelled = false
     createChatGPTProvider().listModels()
       .then((available) => { if (!cancelled) setModels(available.filter(supportsStreamedAnalysis)) })

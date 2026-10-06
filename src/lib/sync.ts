@@ -85,11 +85,11 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   useEffect(() => {
     if (!supabase || !user) return
     let cancelled = false
-    setStatus("syncing")
     const task = syncTask.current.catch(() => {}).then(async () => {
       await queueTask.current
       if (queueFailed.current) throw new Error("Local sync changes could not be saved")
       if (cancelled) return null
+      setStatus("syncing")
       const merged = await syncAppData(data, user.id)
       const health = await appSyncHealth(user.id)
       if (cancelled) return null

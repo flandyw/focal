@@ -59,11 +59,6 @@ export interface StudySessionCommand {
   elapsed_since_previous_ms?: number
 }
 
-type StudySessionMutationReason =
-  | "stale_revision" | "session_terminal" | "invalid_transition" | "not_found"
-  | "active_session_exists" | "already_exists" | "already_running" | "already_paused"
-  | "already_completed" | "already_cancelled" | null
-
 export interface StudySessionMutationResult {
   ok: boolean
   applied: boolean
@@ -166,26 +161,6 @@ export function studySessionActiveMilliseconds(session: CanonicalStudySession, e
     ? Math.max(0, estimatedServerNowMs - Date.parse(session.segment_started_at))
     : 0
   return session.accumulated_active_ms + (Number.isFinite(currentSegmentMs) ? currentSegmentMs : 0)
-}
-
-function isStudySessionCommand(value: unknown): value is StudySessionCommand {
-  if (!isRecord(value)) return false
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-  return typeof value.mutation_id === "string" && uuid.test(value.mutation_id) &&
-    typeof value.session_id === "string" && value.session_id.length > 0 && value.session_id.length <= 160 &&
-    Number.isSafeInteger(value.expected_revision) && (value.expected_revision as number) >= 0 &&
-    typeof value.device_id === "string" && uuid.test(value.device_id) && SESSION_APPS.has(value.app) &&
-    ["log", "create", "start", "pause", "resume", "phase_change", "save_progress", "complete", "cancel"].includes(String(value.action)) &&
-    (value.kind === undefined || SESSION_KINDS.has(value.kind)) &&
-    (value.phase === undefined || SESSION_PHASES.has(value.phase)) &&
-    (value.title === undefined || typeof value.title === "string" && value.title.length <= 512) &&
-    (value.subject_id === undefined || value.subject_id === null || typeof value.subject_id === "string") &&
-    (value.metadata === undefined || isRecord(value.metadata)) &&
-    (value.action !== "log" || Array.isArray(value.blocks) && value.blocks.length > 0 && value.blocks.length <= 100 &&
-      value.blocks.every((block) => isRecord(block) && typeof block.start === "string" && typeof block.end === "string" &&
-        Number.isFinite(Date.parse(block.start)) && Number.isFinite(Date.parse(block.end)) && Date.parse(block.end) > Date.parse(block.start))) &&
-    (value.occurred_at === undefined || value.occurred_at === null || typeof value.occurred_at === "string" && Number.isFinite(Date.parse(value.occurred_at))) &&
-    (value.elapsed_since_previous_ms === undefined || Number.isSafeInteger(value.elapsed_since_previous_ms) && (value.elapsed_since_previous_ms as number) >= 0 && (value.elapsed_since_previous_ms as number) <= 604_800_000)
 }
 
 export function parseStudySessionMutationResult(value: unknown): StudySessionMutationResult | null {

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react"
+import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "./ui/button"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
@@ -39,14 +39,14 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
   const [notes, setNotes] = useState(initialRecord?.notes ?? "")
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialRecord?.performanceContext ?? {})
   const [error, setError] = useState<string | null>(null)
-  const initialSnapshot = useRef(JSON.stringify({
+  const [initialSnapshot] = useState(() => JSON.stringify({
     subject, provider, title, sacNumber, unit, areaOfStudy, scheduledAt, durationMinutes,
     score, maxScore, weighting, notes, performanceContext,
   }))
   const dirty = JSON.stringify({
     subject, provider, title, sacNumber, unit, areaOfStudy, scheduledAt, durationMinutes,
     score, maxScore, weighting, notes, performanceContext,
-  }) !== initialSnapshot.current
+  }) !== initialSnapshot
   const [confirmingClose, setConfirmingClose] = useState(false)
 
   function handleOpenChange(next: boolean) {

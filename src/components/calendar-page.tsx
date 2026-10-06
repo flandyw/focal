@@ -267,9 +267,7 @@ export function CalendarPage({
                     aria-label={`${day.date}, ${day.load} item${day.load === 1 ? "" : "s"}, ${formatMinutes(day.minutes)} of study`}
                     aria-pressed={active}
                     className={cn(
-                      // Cells size to their content and floor at three lines: a month is mostly
-                      // light days, and a fixed tall cell spent 300px of the page on nothing.
-                      "flex min-w-0 flex-col gap-1 rounded-md border p-1 text-left transition-colors hover:bg-accent/60",
+                      "flex aspect-square min-h-0 min-w-0 flex-col gap-1 overflow-hidden rounded-md border p-1 text-left transition-colors hover:bg-accent/60",
                       !day.inMonth && "opacity-40",
                       active && "border-primary bg-accent",
                       day.isToday && !active && "border-primary/40",
@@ -278,7 +276,7 @@ export function CalendarPage({
                     onClick={() => setSelected(day.date)}
                     type="button"
                   >
-                    <span className="flex items-baseline justify-between gap-1">
+                    <span className="flex shrink-0 items-baseline justify-between gap-1">
                       <span className={cn("text-xs leading-none font-medium tabular-nums", day.isToday && "text-primary")}>{day.day}</span>
                       {day.minutes > 0 ? <span className="truncate text-[0.625rem] leading-none text-muted-foreground tabular-nums">{formatMinutes(day.minutes)}</span> : null}
                     </span>
@@ -286,7 +284,7 @@ export function CalendarPage({
                         A phone gets the date, the minutes and the load bar; the detail is one
                         tap away in the day panel. */}
                     {visible.length ? (
-                      <span className="hidden min-w-0 gap-px sm:grid">
+                      <span className="hidden min-h-0 min-w-0 gap-px overflow-hidden sm:grid">
                         {visible.map((item) => (
                           <span className="flex min-w-0 items-center gap-1 text-[0.625rem] leading-[0.875rem]" key={`${item.kind}-${item.id}`}>
                             <span aria-hidden className={cn("size-1 shrink-0 rounded-full", KIND_MARK[item.kind])} />
@@ -300,7 +298,7 @@ export function CalendarPage({
                         month. No track at all on a day with no study -- a grey rule on 35
                         blank cells reads as 35 pieces of content, not as 35 empty days. */}
                     {day.minutes > 0 ? (
-                      <span aria-hidden className="mt-auto h-0.5 overflow-hidden rounded-full bg-muted">
+                      <span aria-hidden className="mt-auto h-0.5 shrink-0 overflow-hidden rounded-full bg-muted">
                         <span className={cn("block h-full rounded-full", active ? "bg-primary" : "bg-chart-2/70")} style={{ width: `${day.loadBar}%` }} />
                       </span>
                     ) : null}

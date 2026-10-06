@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Check, ListFilter, Search } from "lucide-react"
 import { Button } from "./ui/button"
 import {
@@ -124,9 +124,10 @@ export function ExamPicker({
   const [query, setQuery] = useState("")
   const now = useTickingNow()
 
-  useEffect(() => {
-    if (!open) setQuery("")
-  }, [open])
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setQuery("")
+    onOpenChange(next)
+  }
 
   const sections = useMemo(() => buildSections(entries, now, query), [entries, now, query])
   const trackedSet = useMemo(() => new Set(trackedIds), [trackedIds])
@@ -134,7 +135,7 @@ export function ExamPicker({
   const groupedPast = useMemo(() => groupByDate(sections.past.entries), [sections.past.entries])
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b px-6 py-5">
           <DialogTitle>Track VCE exams I'm doing</DialogTitle>
@@ -196,7 +197,7 @@ export function ExamPicker({
               Clear all
             </Button>
           </div>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
+          <Button onClick={() => handleOpenChange(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

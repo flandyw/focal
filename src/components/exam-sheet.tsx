@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from "react"
+import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "./ui/button"
 import { SubjectCombobox } from "./subject-combobox"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
@@ -32,7 +32,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   const defaultSubject = firstPreferredSubject(subjects, preferredSubjects)
   const [subject, setSubject] = useState(initialAttempt?.subject ?? defaultSubject)
   const [provider, setProvider] = useState(initialAttempt?.provider ?? "VCAA")
-  const [examYear, setExamYear] = useState(initialAttempt?.examYear ?? new Date().getFullYear())
+  const [examYear, setExamYear] = useState(() => initialAttempt?.examYear ?? new Date().getFullYear())
   const [paper, setPaper] = useState(initialAttempt?.paper ?? "")
   const [completedAt, setCompletedAt] = useState(initialAttempt?.completedAt ?? today)
   const [rawScore, setRawScore] = useState(initialAttempt?.rawScore ?? 0)
@@ -41,14 +41,14 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialAttempt?.performanceContext ?? {})
   const [questionResults, setQuestionResults] = useState<QuestionResult[]>(initialAttempt?.questionResults ?? [])
   const [error, setError] = useState<string | null>(null)
-  const initialSnapshot = useRef(JSON.stringify({
+  const [initialSnapshot] = useState(() => JSON.stringify({
     subject, provider, examYear, paper, completedAt, rawScore, rawMax,
     comment, performanceContext, questionResults,
   }))
   const dirty = JSON.stringify({
     subject, provider, examYear, paper, completedAt, rawScore, rawMax,
     comment, performanceContext, questionResults,
-  }) !== initialSnapshot.current
+  }) !== initialSnapshot
   const [confirmingClose, setConfirmingClose] = useState(false)
 
   function handleOpenChange(next: boolean) {

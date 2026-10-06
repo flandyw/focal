@@ -128,7 +128,6 @@ fn database_migrations() -> Vec<Migration> {
     ]
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -154,7 +153,17 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .manage(commands::chatgpt::ChatGptSidecar::default())
-        .invoke_handler(tauri::generate_handler![commands::chatgpt::stop_chatgpt_sidecar])
+        .invoke_handler(tauri::generate_handler![
+            commands::chatgpt::stop_chatgpt_sidecar,
+            commands::chatgpt::start_chatgpt_sidecar,
+        ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                if let Err(error) = commands::chatgpt::stop(window.app_handle()) {
+                    eprintln!("could not stop ChatGPT sidecar on window close: {error}");
+                }
+            }
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

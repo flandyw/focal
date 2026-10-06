@@ -50,6 +50,7 @@ import {
 } from "../lib/mistake-autofill"
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import { findCachedVcaaExamForAttempt, type VcaaStudyResources } from "../lib/vcaa-resources"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
@@ -230,13 +231,19 @@ function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onToggleSuspend
 function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, onToggleSuspend }: { onEdit: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating) => void; onBrowse: () => void }) {
   const [ratings, setRatings] = useState<Record<ReviewRating, number>>({ again: 0, hard: 0, good: 0, easy: 0 })
   const reviewed = ratings.again + ratings.hard + ratings.good + ratings.easy
-  const [now, setNow] = useState(() => new Date())
+  const now = useTickingNow(30_000)
   const attemptMap = useMemo(() => new Map(attempts.map((attempt) => [attempt.id, attempt])), [attempts])
   const due = getDueMistakes(mistakes, now)
-  const dueIdKey = due.map((mistake) => mistake.id).join("\u0000")
   const [queueIds, setQueueIds] = useState(() => due.map((mistake) => mistake.id))
+  const dueIds = due.map((mistake) => mistake.id)
+  const dueIdSet = new Set(dueIds)
+  const activeQueueIds = [
+    ...queueIds.filter((id) => dueIdSet.has(id)),
+    ...dueIds.filter((id) => !queueIds.includes(id)),
+  ]
+  if (queueIds.join("\u0000") !== activeQueueIds.join("\u0000")) setQueueIds(activeQueueIds)
   const dueMap = new Map(due.map((mistake) => [mistake.id, mistake]))
-  const current = queueIds.map((id) => dueMap.get(id)).find((mistake) => mistake !== undefined)
+  const current = activeQueueIds.map((id) => dueMap.get(id)).find((mistake) => mistake !== undefined)
   const counts = getMistakeQueueCounts(mistakes, now)
   const nextScheduled = mistakes
     .filter((mistake) => !mistake.suspended && !due.some((dueMistake) => dueMistake.id === mistake.id))
@@ -244,40 +251,24 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
     .toSorted()[0]
   const sessionTotal = reviewed + due.length
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30_000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    const nextDueIds = dueIdKey ? dueIdKey.split("\u0000") : []
-    const nextDueIdSet = new Set(nextDueIds)
-    setQueueIds((currentIds) => [
-      ...currentIds.filter((id) => nextDueIdSet.has(id)),
-      ...nextDueIds.filter((id) => !currentIds.includes(id)),
-    ])
-  }, [dueIdKey])
-
   function rate(rating: ReviewRating) {
     if (!current) return
     onReview(current, rating)
-    setQueueIds((ids) => ids.filter((id) => id !== current.id))
+    setQueueIds(activeQueueIds.filter((id) => id !== current.id))
     setRatings((value) => ({ ...value, [rating]: value[rating] + 1 }))
   }
 
   function shuffleQueue() {
-    setQueueIds((ids) => {
-      const shuffled = [...ids]
-      for (let index = shuffled.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(Math.random() * (index + 1))
-        ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
-      }
-      return shuffled
-    })
+    const shuffled = [...activeQueueIds]
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1))
+      ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+    }
+    setQueueIds(shuffled)
   }
 
   function skipCard() {
-    setQueueIds((ids) => ids.length > 1 ? [...ids.slice(1), ids[0]] : ids)
+    setQueueIds(activeQueueIds.length > 1 ? [...activeQueueIds.slice(1), activeQueueIds[0]] : activeQueueIds)
   }
 
   if (!current) {
@@ -374,15 +365,16 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onToggleSuspend, onD
 }
 
 // A row, not a card. Scanning forty mistakes beats scrolling past four.
-function BrowseRowInner({ mistake, active, selected, onOpen, onSelect }: {
+function BrowseRowInner({ mistake, active, selected, now, onOpen, onSelect }: {
   mistake: Mistake
   active: boolean
   selected: boolean
+  now: Date
   onOpen: () => void
   onSelect: () => void
 }) {
   const schedule = getMistakeSchedule(mistake)
-  const isDue = !mistake.suspended && new Date(schedule.dueAt).getTime() <= Date.now()
+  const isDue = !mistake.suspended && new Date(schedule.dueAt).getTime() <= now.getTime()
   return (
     <li className={"rounded-lg transition-colors motion-reduce:transition-none " + (active ? "bg-accent" : "hover:bg-accent/60")}>
       <div className="flex items-start gap-3 px-2 py-1.5">
@@ -512,8 +504,7 @@ function MistakeFieldMergeDialog({
 }
 
 export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 30_000); return () => window.clearInterval(timer) }, [])
+  const now = useTickingNow(30_000)
   const [subject, setSubject] = useState("all")
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>("browse")
@@ -752,7 +743,7 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
               {/* The list scrolls inside its own sticky pane so the reading pane keeps
                   its own vertical rhythm instead of inheriting forty rows of scroll. */}
               <ol className="grid min-w-0 content-start gap-0.5 lg:sticky lg:top-6 lg:max-h-[calc(100svh-3rem)] lg:overflow-y-auto lg:pr-1">
-                {shownMistakes.map((mistake) => <BrowseRow key={mistake.id} mistake={mistake} active={mistake.id === activeId} selected={selected.has(mistake.id)} onOpen={() => setActiveId(mistake.id === activeId ? null : mistake.id)} onSelect={() => toggleSelected(mistake.id)} />)}
+                {shownMistakes.map((mistake) => <BrowseRow key={mistake.id} mistake={mistake} now={now} active={mistake.id === activeId} selected={selected.has(mistake.id)} onOpen={() => setActiveId(mistake.id === activeId ? null : mistake.id)} onSelect={() => toggleSelected(mistake.id)} />)}
                 {!isWorkspace && activeMistake ? <li className="mt-2"><MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} /></li> : null}
               </ol>
               {isWorkspace ? (activeMistake

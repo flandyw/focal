@@ -1,6 +1,6 @@
 import { readRecords } from "./storage/database"
 import type { StudySession } from "./types"
-import { isTauri } from "@tauri-apps/api/core"
+import { invoke, isTauri } from "@tauri-apps/api/core"
 import { save } from "@tauri-apps/plugin-dialog"
 import { writeFile } from "@tauri-apps/plugin-fs"
 import { openPath, openUrl } from "@tauri-apps/plugin-opener"
@@ -95,10 +95,17 @@ updateActions.install = async () => {
   if (!pending) return
   setUpdateState({ status: "installing" })
   try {
+    await invoke("stop_chatgpt_sidecar")
     await pending.install()
     await relaunch()
   } catch (error) {
-    setUpdateState({ status: "error", error: String(error) })
+    let message = String(error)
+    try {
+      await invoke("start_chatgpt_sidecar")
+    } catch (restartError) {
+      message += `; could not restart the ChatGPT service: ${String(restartError)}`
+    }
+    setUpdateState({ status: "error", error: message })
   }
 }
 

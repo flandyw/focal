@@ -17,7 +17,6 @@ on:
       - ".oxlintrc.json"
       - "package.json"
       - "bun.lock"
-      - "android-native/**"
       - ".github/workflows/release.yml"
 
 concurrency:
@@ -52,6 +51,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - name: Import VTAC scaling reports
         run: bun run vtac:import
@@ -72,22 +76,22 @@ jobs:
   verify:
     needs: version
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      - uses: dtolnay/rust-toolchain@stable
-      - name: install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun run build:chatgpt-sidecar
 
   create-release:
-    needs: [version, verify]
+    needs: version
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -107,7 +111,7 @@ jobs:
           done
 
   publish-tauri:
-    needs: [version, create-release, vtac]
+    needs: [version, verify, create-release, vtac]
     permissions:
       contents: write
     env:
@@ -152,6 +156,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.args }}
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
       - name: install frontend dependencies
         run: bun install --frozen-lockfile
 
@@ -166,58 +179,3 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
           uploadUpdaterJson: true
-
-  publish-android:
-    needs: [version, create-release]
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    env:
-      FOCAL_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-      FOCAL_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Stamp version
-        run: node scripts/bump-version.cjs ${{ needs.version.outputs.count }}
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: android-actions/setup-android@v4
-      - uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: basic
-      - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Configure signing
-        run: |
-          test -n "$FOCAL_SUPABASE_URL" && test -n "$FOCAL_SUPABASE_PUBLISHABLE_KEY"
-          test -n "$ANDROID_KEYSTORE_BASE64" && test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS" && test -n "$ANDROID_KEY_PASSWORD"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/focal-release.jks"
-          chmod 600 "$RUNNER_TEMP/focal-release.jks"
-          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/focal-release.jks" >> "$GITHUB_ENV"
-      - name: Build signed APK
-        working-directory: android-native
-        run: bash ./gradlew :app:assembleRelease --no-daemon
-      - name: Verify and prepare release assets
-        run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android-native/app/build/outputs/apk/release/app-release.apk
-          node android-native/scripts/release-manifest.mjs --self-check
-          mkdir -p "$RUNNER_TEMP/android-release"
-          node android-native/scripts/release-manifest.mjs \
-            android-native/app/build/outputs/apk/release/app-release.apk \
-            android-native/app/build/outputs/apk/release/output-metadata.json \
-            package.json "$RUNNER_TEMP/android-release" "app-v${{ needs.version.outputs.version }}"
-      - name: Upload Android assets
-        run: |
-          for attempt in 1 2 3 4; do
-            if gh release upload "app-v${{ needs.version.outputs.version }}" "$RUNNER_TEMP/android-release/Focal-Android.apk" "$RUNNER_TEMP/android-release/android-update.json" --clobber; then exit 0; fi
-            if [ "$attempt" = 4 ]; then exit 1; fi
-            sleep $((60 * 2 ** (attempt - 1)))
-          done

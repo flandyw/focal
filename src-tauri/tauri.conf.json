@@ -4,9 +4,9 @@
   "version": "1.7.3",
   "identifier": "com.andy.focal",
   "build": {
-    "beforeDevCommand": "bun tauri icon branding/focal-icon.svg && bun run build:chatgpt-sidecar && bun run dev:desktop",
+    "beforeDevCommand": "bun run build:chatgpt-sidecar && bun run dev:desktop",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun tauri icon branding/focal-icon.svg && bun run build:chatgpt-sidecar && bun run build:desktop",
+    "beforeBuildCommand": "bun run build:chatgpt-sidecar && bun run vite build --mode desktop",
     "frontendDist": "../dist"
   },
   "app": {

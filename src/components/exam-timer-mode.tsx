@@ -77,9 +77,10 @@ function SuggestionButton({ suggestion, onClick, showProvider = false }: {
 
 export function ExamTimerMode({ progression, onProgressionChange, attempts, references, studies, preferredSubjects, initialExam, activeSession, saveStatus, syncAction, onLeave, onSessionChange, onSave }: ExamTimerModeProps) {
   const session = activeSession ?? null
+  const now = useTickingNow(session ? 1000 : 60_000)
   const [subject, setSubject] = useState(initialExam?.subject ?? firstPreferredSubject(references.map((item) => item.studyName), preferredSubjects))
   const [provider, setProvider] = useState(initialExam?.provider ?? "VCAA")
-  const [examYear, setExamYear] = useState(initialExam?.examYear ?? new Date().getFullYear())
+  const [examYear, setExamYear] = useState(initialExam?.examYear ?? now.getFullYear())
   const [paper, setPaper] = useState(initialExam?.paper ?? "")
   const initialConditions = getKnownExamConditions(initialExam?.subject ?? "", initialExam?.paper ?? "")
   const [readingMinutes, setReadingMinutes] = useState(initialExam?.readingMinutes ?? initialConditions?.readingMinutes ?? 15)
@@ -96,7 +97,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
   const [markingError, setMarkingError] = useState<string | null>(null)
   const [questionResults, setQuestionResults] = useState<QuestionResult[]>([])
   const lastAutofilledKey = useRef<string | null>(null)
-  const history = useMemo(loadAppData, [])
+  const history = useMemo(() => loadAppData(), [])
   const suggestions = useMemo(
     () => buildExamSuggestions(attempts, references, preferredSubjects, 4, studies),
     [attempts, preferredSubjects, references, studies],
@@ -106,9 +107,8 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
     [attempts, history.examDifficulty, preferredSubjects, references],
   )
   const latestAttempt = useMemo(() => findLatestAttempt(attempts), [attempts])
-  const now = useTickingNow(session ? 1000 : 60_000)
   const reportUrl = useMemo(() => studies.find((study) => study.studyName.toLowerCase() === (session?.subject ?? subject).toLowerCase())?.resources.find((resource) => resource.kind === "report" && resource.year === (session?.examYear ?? examYear))?.url, [examYear, session?.examYear, session?.subject, studies, subject])
-  const paperUrl = useMemo(() => studies.find((study) => study.studyName.toLowerCase() === (session?.subject ?? subject).toLowerCase())?.resources.find((resource) => resource.kind === "exam" && resource.year === (session?.examYear ?? examYear) && (!session?.paper || resource.label.toLowerCase().includes(session.paper.toLowerCase()) || session.paper.toLowerCase().includes(resource.label.toLowerCase())))?.url, [examYear, session?.examYear, session?.paper, session?.subject, studies, subject])
+  const paperUrl = studies.find((study) => study.studyName.toLowerCase() === (session?.subject ?? subject).toLowerCase())?.resources.find((resource) => resource.kind === "exam" && resource.year === (session?.examYear ?? examYear) && (!session?.paper || resource.label.toLowerCase().includes(session.paper.toLowerCase()) || session.paper.toLowerCase().includes(resource.label.toLowerCase())))?.url
 
   useEffect(() => {
     if (session || !paper.trim()) return

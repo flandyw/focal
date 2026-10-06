@@ -31,21 +31,19 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   }
   const timer = preview ? getExamTimerState(preview.pausedAt ?? now, preview.startedAt, preview.readingMinutes, preview.writingMinutes, preview.marks) : undefined
 
-  function save(event: FormEvent) {
-    event.preventDefault()
-    setSubmitted(true)
-    if (!preview) return
-    onSave(updateExamSessionConditions(session, preview, Date.now()))
-    onClose()
-  }
-
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Edit exam conditions</DialogTitle>
         <DialogDescription>{session.pausedAt !== undefined ? "Your exam stays paused while you edit." : "Your timer keeps running while you edit."} Writing time already used and question progress are preserved.</DialogDescription>
       </DialogHeader>
-      <form id="exam-conditions-form" onSubmit={save} noValidate className="grid gap-5">
+      <form id="exam-conditions-form" onSubmit={(event: FormEvent) => {
+        event.preventDefault()
+        setSubmitted(true)
+        if (!preview) return
+        onSave(updateExamSessionConditions(session, preview, Math.round(performance.timeOrigin + event.timeStamp)))
+        onClose()
+      }} noValidate className="grid gap-5">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field><FieldLabel htmlFor="edit-reading">Reading (min)</FieldLabel><Input id="edit-reading" type="number" min="0" max="180" step="0.5" value={reading} onChange={(event) => setReading(event.target.value)} autoFocus required /></Field>
           <Field><FieldLabel htmlFor="edit-writing">Writing (min)</FieldLabel><Input id="edit-writing" type="number" min="1" max="360" step="0.5" value={writing} onChange={(event) => setWriting(event.target.value)} required /></Field>

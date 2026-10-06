@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, lazy, useMemo, useRef, useState } from "react"
 import {
   Bell,
   BellOff,
@@ -30,7 +30,7 @@ import type { FocusSessionSink } from "../lib/focus-session"
 import { sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
 import { studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
-import { canonicalNow } from "../lib/study-session-sync"
+import { useTickingNow } from "../hooks/use-ticking-now"
 import { VCE_SUBJECTS } from "../lib/types"
 import { StudyPlanCard } from "./study-plan-card"
 import { AI_ENABLED } from "../lib/host"
@@ -124,7 +124,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 }) {
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
-  const [announcement, setAnnouncement] = useState("")
 
   const localSessionId = loadFocusSession()?.id
   const activeSession = (sessions ?? [])
@@ -133,28 +132,22 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const sharedSession = activeSession?.id === localSessionId ? undefined : activeSession
   const local = useStudyTimer({ subject, intent, onSessionChange, enabled: !sharedSession })
   const { settings, blocks, blocksToday, focusSecondsToday, updateSettings } = local
-  const [sharedNow, setSharedNow] = useState(() => canonicalNow().getTime())
   const [sharedBusy, setSharedBusy] = useState(false)
   const sharedBusyRef = useRef(false)
-  const [sharedError, setSharedError] = useState("")
-
-  useEffect(() => {
-    setSharedError("")
-    setSharedNow(canonicalNow().getTime())
-    if (sharedSession?.state !== "running") return
-    const interval = window.setInterval(() => setSharedNow(canonicalNow().getTime()), 1000)
-    return () => window.clearInterval(interval)
-  }, [sharedSession?.id, sharedSession?.revision, sharedSession?.state])
+  const [sharedFailure, setSharedFailure] = useState<{ key: string; message: string } | null>(null)
+  const now = useTickingNow(sharedSession?.state === "running" ? 1000 : 60_000)
+  const sharedSessionKey = sharedSession ? `${sharedSession.id}:${sharedSession.revision}:${sharedSession.state}` : ""
+  const sharedError = sharedFailure?.key === sharedSessionKey ? sharedFailure.message : ""
 
   async function controlShared(action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) {
     if (!sharedSession || !onControlSession || sharedBusyRef.current) return
     sharedBusyRef.current = true
     setSharedBusy(true)
-    setSharedError("")
+    setSharedFailure(null)
     try {
       await onControlSession(sharedSession, action)
     } catch (error) {
-      setSharedError(error instanceof Error ? error.message : "Could not update the study session.")
+      setSharedFailure({ key: sharedSessionKey, message: error instanceof Error ? error.message : "Could not update the study session." })
     } finally {
       sharedBusyRef.current = false
       setSharedBusy(false)
@@ -165,7 +158,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const state = sharedSession ? {
     ...local.state, mode: "free" as const, freeStudy: true, studyOvertime: false,
     running: sharedSession.state === "running", secondsLeft: 0, totalSeconds: 0, cycles: 0,
-    overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, sharedNow) / 1000),
+    overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 1000),
   } : local.state
   const progress = sharedSession ? 0 : local.progress
   const sessionBusy = sharedBusy || local.sessionBusy || (!!sharedSession && !onControlSession)
@@ -179,6 +172,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   const isFreeStudy = state.mode === "free"
   const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
+  const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
+  if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
+  const announcement = notificationBlockedMode === displayMode ? "Notifications are blocked for this site." : `${displayMode} started.`
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
@@ -187,10 +183,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {
-    const dayStart = new Date()
+    const dayStart = new Date(now.getTime())
     dayStart.setHours(0, 0, 0, 0)
     return blocks.filter((block) => block.endedAt >= dayStart.getTime()).reverse()
-  }, [blocks])
+  }, [blocks, now])
 
   // The timer mirrors each of its own work blocks into a shared sitting, so the sittings are
   // a superset of these blocks and the local list would double every minute. Signed in, the
@@ -201,13 +197,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // so it drops off this list once the account signs in. Upgrade path: replay local blocks to
   // the server on sign-in rather than letting the two records overlap.
   const todaysSittings = useMemo(() => {
-    const today = localDate(new Date())
+    const today = localDate(now)
     return (sessions ?? []).flatMap((session) => {
       const projected = sessionItem(session)
       if (!projected || projected.date !== today || projected.item.kind !== "session" || projected.item.status === "planned") return []
       return [projected.item]
     })
-  }, [sessions])
+  }, [now, sessions])
   const todaysRecord = todaysSittings.length > 0 ? todaysSittings : null
   const recordCount = todaysRecord?.length ?? blocksToday
   const recordSeconds = todaysRecord
@@ -216,10 +212,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   // One authored moment: the readout re-enters when the phase changes, and a
   // single status line carries it for anyone not watching the animation.
-  useEffect(() => {
-    setAnnouncement(`${displayMode} started.`)
-  }, [displayMode])
-
   /** One atomic apply: a plan never lands half-configured, and the block in
    *  progress keeps its place (settings sync) rather than restarting. */
   function applyPlan(plan: StudyPlan) {
@@ -246,7 +238,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     if (settings.notificationsEnabled) return updateSettings({ notificationsEnabled: false })
     const granted = await requestTimerNotifications()
     updateSettings({ notificationsEnabled: granted })
-    if (!granted) setAnnouncement("Notifications are blocked for this site.")
+    if (!granted) setNotificationBlockedMode(displayMode)
   }
 
   const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime

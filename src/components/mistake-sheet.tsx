@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useChatGPT } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
@@ -169,7 +169,7 @@ export function MistakeSheet({
   const [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const initialSnapshot = useRef(JSON.stringify({
+  const [initialSnapshot] = useState(() => JSON.stringify({
     attemptId, question, questionText, category, explanation, correction,
     areaOfStudy, criterion, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
   }))
@@ -177,7 +177,7 @@ export function MistakeSheet({
     attemptId, question, questionText, category, explanation, correction,
     areaOfStudy, criterion, totalMarks, marksLost,
     imageCount: images.length, batchCount: batchDrafts.length, questionImageCount: questionImages.length, attachmentIds: savedAttachments.map(({ id }) => id),
-  }) !== initialSnapshot.current
+  }) !== initialSnapshot
   const [confirmingClose, setConfirmingClose] = useState(false)
 
   function handleOpenChange(next: boolean) {

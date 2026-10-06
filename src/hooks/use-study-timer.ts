@@ -116,11 +116,11 @@ export function useStudyTimer({
   const [now, setNow] = useState(() => Date.now())
 
   const settingsRef = useRef(settings)
-  settingsRef.current = settings
   // `useState` gives the one stable ref object a lazy `useRef` initializer cannot.
   const [openBlockRef] = useState(() => ({ current: loadOpenBlock() as OpenBlock | null }))
-  const sinkRef = useRef(onSessionChange)
-  sinkRef.current = onSessionChange
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
 
   // The synced lifecycle of the focus session. Its acknowledged state only moves on a
   // server answer, every boundary is sent in the order it was crossed and retried until
@@ -128,11 +128,12 @@ export function useStudyTimer({
   // moved past and no failed Complete can strand a running timer on the server.
   const [sessionBusy, setSessionBusy] = useState(false)
   const [sessionMirror] = useState<FocusSessionMirror>(() => createFocusSessionMirror({
-    sink: (previous, next, terminal) => sinkRef.current?.(previous, next, terminal),
+    sink: onSessionChange,
     initial: loadFocusSession(),
     onAcknowledged: saveFocusSession,
     onBusy: setSessionBusy,
   }))
+  useEffect(() => sessionMirror.setSink(onSessionChange), [sessionMirror, onSessionChange])
 
   const previousState = useRef(state)
 

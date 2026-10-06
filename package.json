@@ -10,10 +10,16 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "build:chatgpt-sidecar": "bun scripts/build-chatgpt-sidecar.ts",
-    "lint": "oxlint src web/src scripts",
-    "lint:fix": "oxlint src web/src scripts --fix",
+    "lint": "oxlint src scripts",
+    "lint:fix": "oxlint src scripts --fix",
     "check": "bun run typecheck && bun run lint",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p web/tsconfig.app.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "dev:desktop": "vite --mode desktop",
+    "build:desktop": "bun run typecheck && vite build --mode desktop",
+    "start": "NODE_ENV=production bun server.ts",
+    "vcaa:import": "bun vcaa/import-all-grade-distributions.mjs",
+    "vcaa:resources": "bun vcaa/import-exam-resources.mjs",
+    "vtac:import": "bun vtac/import-scaling-reports.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.78",
@@ -63,9 +69,7 @@
     "supabase": "^2.118.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.1",
-    "@types/katex": "^0.16.8"
-  },
-  "workspaces": [
-    "web"
-  ]
+    "@types/katex": "^0.16.8",
+    "pdfjs-dist": "^6.3.289"
+  }
 }

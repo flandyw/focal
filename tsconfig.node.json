@@ -13,7 +13,7 @@
   },
   "include": [
     "vite.config.ts",
-    "web/vite.config.ts",
-    "web/server/mistakes-pdf.ts"
+    "server/mistakes-pdf.ts",
+    "api"
   ]
 }

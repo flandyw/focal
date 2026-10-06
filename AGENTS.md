@@ -23,3 +23,15 @@ Rules:
 - Mark intentional simplifications with a `ponytail:` comment. If the shortcut has a known ceiling (global lock, O(n²) scan, naive heuristic), the comment names the ceiling and the upgrade path.
 
 Not lazy about: input validation at trust boundaries, error handling that prevents data loss, security, accessibility, anything explicitly requested.
+
+## Shared web and desktop architecture
+
+- The former `web/` frontend has moved into root `src/`. There is one React UI, one root `package.json`, one `bun.lock`, and one Vite configuration. Do not recreate a separate desktop UI or `web/` package.
+- Desktop packages this same frontend with Tauri. `src/lib/desktop.ts` adds native file dialogs, external links, secure Supabase session storage, and read-only access to historical desktop study sessions. The ChatGPT sidecar remains in `server/` and `vendor/siwc/`, with its lifecycle owned by `src-tauri/`.
+- The old desktop assessment/project UI, inbox, planning UI, tray controls, and their unused native commands have been removed. Existing SQLite data and coursework files are preserved; do not delete them as cleanup.
+- Progress graphs now live in `src/components/analytics/` and are available in both builds. Desktop Progress also reads local-only historical sessions without rewriting the old database.
+- `src/lib/class-timetable-core.ts` implements school timetable cycles; `src/lib/timetable.ts` handles exam scheduling. They are distinct modules.
+- Browser assets and reference datasets are in root `public/`; the PDF endpoint is in `api/` and `server/mistakes-pdf.ts`. Reference import tools are in `vcaa/` and `vtac/`. Web deployment configuration is root `vercel.json`; configure the hosting project to use the repository root.
+- Run `bun run dev` / `bun run build` for web. Run `bun run dev:desktop` / `bun run build:desktop` for the desktop frontend, or `bun run tauri dev` for the native app. Vite's `desktop` mode enables native integration and AI; the browser build disables them. `VITE_EMBEDDED_EXAMS` is the historical internal flag for this distinction.
+- Validate with `bun run check`, `bun run build`, and `bun run build:desktop`. Do not add tests.
+- Preserve historical `examtrack` storage keys and sync identifiers: existing saved data and Folio depend on them.

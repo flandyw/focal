@@ -1,8 +1,6 @@
 name: verify desktop
 
-# One workflow per app so a web-only change never installs Rust and Tauri system
-# libraries. If a branch protection rule requires the old "check" job, name these
-# "check (desktop)" / "check (web)" / "check (android)" or update the required list.
+# Shared frontend changes are checked in both browser and desktop modes.
 on:
   pull_request:
     paths:
@@ -19,7 +17,6 @@ on:
       - "bun.lock"
       - "Makefile"
       - ".github/workflows/verify-desktop.yml"
-      - "web/**"
       - "!android-native/**"
   push:
     branches: [main]
@@ -37,7 +34,6 @@ on:
       - "bun.lock"
       - "Makefile"
       - ".github/workflows/verify-desktop.yml"
-      - "web/**"
       - "!android-native/**"
 
 concurrency:
@@ -68,4 +64,4 @@ jobs:
       - run: bun run check
       - run: bun run build:chatgpt-sidecar
       # ponytail: `check` already typechecked this checkout; build only the bundle.
-      - run: bunx --no-install vite build
+      - run: bunx --no-install vite build --mode desktop

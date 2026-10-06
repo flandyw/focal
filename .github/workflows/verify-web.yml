@@ -3,16 +3,28 @@ name: verify web
 on:
   pull_request:
     paths:
-      - "web/**"
       - "src/**"
+      - "public/**"
+      - "vite.config.ts"
+      - "server/**"
+      - "api/**"
+      - "tsconfig*.json"
+      - "index.html"
+      - "vercel.json"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/verify-web.yml"
   push:
     branches: [main]
     paths:
-      - "web/**"
       - "src/**"
+      - "public/**"
+      - "vite.config.ts"
+      - "server/**"
+      - "api/**"
+      - "tsconfig*.json"
+      - "index.html"
+      - "vercel.json"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/verify-web.yml"
@@ -30,7 +42,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: web
+        working-directory: .
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2

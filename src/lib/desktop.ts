@@ -4,10 +4,13 @@ import { isTauri } from "@tauri-apps/api/core"
 import { save } from "@tauri-apps/plugin-dialog"
 import { writeFile } from "@tauri-apps/plugin-fs"
 import { openPath, openUrl } from "@tauri-apps/plugin-opener"
+import { relaunch } from "@tauri-apps/plugin-process"
+import { check, type Update } from "@tauri-apps/plugin-updater"
 import { toast } from "sonner"
 import { examHost } from "./host"
 import { setSupabaseClient } from "./supabase"
 import { supabase } from "./supabase/client"
+import { setUpdateState, updateActions } from "./update-store"
 
 setSupabaseClient(supabase)
 
@@ -53,4 +56,54 @@ if (isTauri()) {
     event.preventDefault()
     void openUrl(url.href).catch((error) => toast.error(`Could not open link: ${String(error)}`))
   }, true)
+}
+
+let pending: Update | undefined
+
+updateActions.check = async () => {
+  setUpdateState({ status: "checking", error: undefined })
+  try {
+    pending = (await check()) ?? undefined
+    setUpdateState(pending ? { status: "available", version: pending.version, downloaded: 0, total: undefined, speed: 0 } : { status: "uptodate" })
+  } catch (error) {
+    setUpdateState({ status: "error", error: String(error) })
+  }
+}
+
+updateActions.download = async () => {
+  if (!pending) return
+  setUpdateState({ status: "downloading", downloaded: 0, total: undefined, speed: 0 })
+  let downloaded = 0
+  let last = { time: performance.now(), bytes: 0 }
+  try {
+    await pending.download((event) => {
+      if (event.event === "Started") setUpdateState({ total: event.data.contentLength })
+      if (event.event !== "Progress") return
+      downloaded += event.data.chunkLength
+      const now = performance.now()
+      if (now - last.time < 500) return setUpdateState({ downloaded })
+      setUpdateState({ downloaded, speed: ((downloaded - last.bytes) * 1000) / (now - last.time) })
+      last = { time: now, bytes: downloaded }
+    })
+    setUpdateState({ status: "ready", speed: 0 })
+  } catch (error) {
+    setUpdateState({ status: "error", error: String(error) })
+  }
+}
+
+updateActions.install = async () => {
+  if (!pending) return
+  setUpdateState({ status: "installing" })
+  try {
+    await pending.install()
+    await relaunch()
+  } catch (error) {
+    setUpdateState({ status: "error", error: String(error) })
+  }
+}
+
+if (isTauri() && !import.meta.env.DEV) {
+  void updateActions.check().then(() => {
+    if (pending) toast(`Focal ${pending.version} is available`, { description: "Download it from Settings → Updates." })
+  })
 }

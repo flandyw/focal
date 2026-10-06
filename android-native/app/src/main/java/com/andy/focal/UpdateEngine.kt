@@ -37,8 +37,8 @@ internal object UpdateSchedule {
 
 internal class UpdateEngine(private val context: Context) {
     private val prefs = context.getSharedPreferences("github_updates", Context.MODE_PRIVATE)
-    private val manifestUrl = "https://github.com/flandolf/focal/releases/latest/download/android-update.json"
-    private val apkPrefix = "https://github.com/flandolf/focal/releases/download/"
+    private val manifestUrl = "https://github.com/flandyw/focal/releases/latest/download/android-update.json"
+    private val apkPrefix = "https://github.com/flandyw/focal/releases/download/"
 
     suspend fun check(manual: Boolean): Pair<AppUpdate?, String> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()

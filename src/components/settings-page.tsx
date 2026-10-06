@@ -3,13 +3,15 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useState, type ReactNode } from "react"
-import { ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Trash2, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Trash2, UserRound, X } from "lucide-react"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Field, FieldDescription, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
+import { Progress } from "./ui/progress"
+import { updateActions, useUpdateState } from "../lib/update-store"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import {
   loadAISettings,
@@ -94,7 +96,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "subjects", label: "Subjects", icon: BookOpen },
     { id: "difficulty", label: "Difficulty", icon: SlidersHorizontal },
     { id: "account", label: "Account", icon: UserRound },
-    ...(AI_ENABLED ? [{ id: "ai", label: "AI", icon: Sparkles }] : []),
+    ...(AI_ENABLED ? [{ id: "ai", label: "AI", icon: Sparkles }, { id: "updates", label: "Updates", icon: Download }] : []),
   ] as const
   const active = sections.some((item) => item.id === section) ? section : "subjects"
 
@@ -280,6 +282,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             </Section>
           ) : null}
 
+          {active === "updates" && AI_ENABLED ? <UpdatesSection /> : null}
+
           {active === "ai" && AI_ENABLED ? (
             <Section title="AI" description="AI requests use the connected account's ChatGPT plan." action={auth.isAuthenticated ? <Badge variant="secondary"><CheckCircle2 />Connected</Badge> : null}>
               <div className="py-4"><ChatGPTConnection /></div>
@@ -392,5 +396,42 @@ function Row({ title, description, children }: { title: string; description: str
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
     </div>
+  )
+}
+
+const formatBytes = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`
+
+function UpdatesSection() {
+  const update = useUpdateState()
+  const busy = update.status === "checking" || update.status === "downloading" || update.status === "installing"
+  const percent = update.total ? Math.min(100, (update.downloaded / update.total) * 100) : null
+  const description = {
+    idle: "Check GitHub for a newer version of Focal.",
+    checking: "Checking for updates…",
+    uptodate: "Focal is up to date.",
+    available: `Version ${update.version} is available.`,
+    downloading: `Downloading version ${update.version}…`,
+    ready: `Version ${update.version} is downloaded and ready to install.`,
+    installing: "Installing and restarting…",
+    error: update.error ?? "Update failed.",
+  }[update.status]
+  return (
+    <Section title="Updates" description="Updates are downloaded in the background; you choose when to restart.">
+      <Row title="Focal" description={description}>
+        {update.status === "available" ? <Button size="sm" onClick={() => void updateActions.download?.()}><Download />Download</Button> : null}
+        {update.status === "ready" ? <Button size="sm" onClick={() => void updateActions.install?.()}>Install and restart</Button> : null}
+        <Button size="sm" variant="ghost" disabled={busy || update.status === "ready"} onClick={() => void updateActions.check?.()}>
+          <RefreshCw className={update.status === "checking" ? "animate-spin" : ""} />Check for updates
+        </Button>
+      </Row>
+      {update.status === "downloading" ? (
+        <div className="grid gap-2 py-4">
+          <Progress value={percent} />
+          <p className="text-sm tabular-nums text-muted-foreground">
+            {formatBytes(update.downloaded)}{update.total ? ` of ${formatBytes(update.total)}` : ""}{percent === null ? "" : ` · ${Math.round(percent)}%`}{update.speed ? ` · ${formatBytes(update.speed)}/s` : ""}
+          </p>
+        </div>
+      ) : null}
+    </Section>
   )
 }

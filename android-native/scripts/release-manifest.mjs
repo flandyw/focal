@@ -16,7 +16,7 @@ function manifest(apk, metadata, version) {
   return {
     version,
     versionCode: code,
-    apkUrl: `https://github.com/flandolf/focal/releases/download/app-v${version}/Focal-Android.apk`,
+    apkUrl: `https://github.com/flandyw/focal/releases/download/app-v${version}/Focal-Android.apk`,
     sha256: createHash('sha256').update(readFileSync(apk)).digest('hex'),
     size,
   };

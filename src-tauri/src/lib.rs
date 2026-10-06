@@ -152,6 +152,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
         .manage(commands::chatgpt::ChatGptSidecar::default())
         .invoke_handler(tauri::generate_handler![commands::chatgpt::stop_chatgpt_sidecar])
         .build(tauri::generate_context!())

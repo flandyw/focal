@@ -42,6 +42,33 @@ jobs:
           echo "count=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
           echo "version=$(node scripts/bump-version.cjs)" >> "$GITHUB_OUTPUT"
 
+  vtac:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Import VTAC scaling reports
+        run: bun run vtac:import
+      - name: Commit generated data
+        run: |
+          if ! git diff --quiet -- public/vtac-scaling-reports.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add public/vtac-scaling-reports.json
+            git commit -m "Update VTAC scaling data"
+            git push origin HEAD:${{ github.ref_name }} || echo "Could not push; the release still ships the fresh data."
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vtac-scaling-reports
+          path: public/vtac-scaling-reports.json
+
   verify:
     needs: version
     runs-on: ubuntu-22.04
@@ -80,7 +107,7 @@ jobs:
           done
 
   publish-tauri:
-    needs: [version, create-release]
+    needs: [version, create-release, vtac]
     permissions:
       contents: write
     env:
@@ -104,6 +131,10 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: vtac-scaling-reports
+          path: public
       - name: Stamp version
         run: node scripts/bump-version.cjs ${{ needs.version.outputs.count }}
       - uses: oven-sh/setup-bun@v2

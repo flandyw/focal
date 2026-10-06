@@ -11,7 +11,7 @@ import {
   prepareStoredRecords,
   type CoreDataFile,
   type StoredPayloadRow,
-} from "@/lib/storage/records"
+} from "./records"
 
 const DATABASE_URL = "sqlite:focal.db"
 const UPSERT_BATCH_SIZE = 75

@@ -2,14 +2,14 @@
 
 ## One Supabase project
 
-This web app and the Focal desktop app share Focal's Supabase project. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLABLE_KEY` point at it, and `attempts`, `mistakes` and `user_state` are three of its tables, created by `focal/supabase/migrations/0010_examtrack_data.sql`. Apply the migrations from the repository root, not from here:
+The shared web/desktop frontend uses Focal's Supabase project. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` point at it, and `attempts`, `mistakes` and `user_state` are three of its tables, created by `focal/supabase/migrations/0010_examtrack_data.sql`. Apply the migrations from the repository root, not from here:
 
 ```bash
 cd ..
 supabase db push
 ```
 
-There is no second project and no second sign-in. The second Supabase client, the separate-account settings card and the `VITE_FOCAL_SUPABASE_*` variables are gone; `web/` writes with the same client as the rest of the app.
+Both builds use one account. Desktop attaches its secure native session storage before mounting the shared frontend.
 
 Study sessions use one shared `study_sessions` table through `study_session_mutate` and `sync_read_changes`. Desktop and web write the same rows, and both calendars read them. Actual study intervals live in each row's `segments` JSON array; migration `0018` preserves existing intervals and removes the old interval table and RPC wrappers. Timer commands retain monotonic elapsed deltas and server-clock estimates. Ordinary Focal Web records continue through the generic cursor/change protocol.
 
@@ -18,8 +18,9 @@ A local-first VCE practice exam tracker built with React, Vite, shadcn/ui, Recha
 ## Development
 
 ```bash
+cd ..
 bun install
-bun run dev
+bun run --cwd web dev
 ```
 
 ## Supabase
@@ -71,3 +72,5 @@ bun run vtac:import
 ```
 
 The importer uses PDF.js and does not require Poppler or `pdftotext`.
+
+Desktop packages this frontend directly. Progress graphs live in `src/components/analytics` and use the shared canonical study sessions. Both packages use the repository root Bun workspace lockfile.

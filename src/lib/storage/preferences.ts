@@ -1,4 +1,4 @@
-import { openFocalDatabase } from "@/lib/storage/database"
+import { openFocalDatabase } from "./database"
 import { isTauri } from "@tauri-apps/api/core"
 
 export interface PreferenceDefinition {

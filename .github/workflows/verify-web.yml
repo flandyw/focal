@@ -4,11 +4,17 @@ on:
   pull_request:
     paths:
       - "web/**"
+      - "src/**"
+      - "package.json"
+      - "bun.lock"
       - ".github/workflows/verify-web.yml"
   push:
     branches: [main]
     paths:
       - "web/**"
+      - "src/**"
+      - "package.json"
+      - "bun.lock"
       - ".github/workflows/verify-web.yml"
 
 concurrency:

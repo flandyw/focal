@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   BookOpenText,
   Calculator,
   CalendarClock,
@@ -32,6 +33,7 @@ const ASSESSMENT_NAVIGATION: NavigationItem[] = [
 ]
 
 const ANALYSIS_NAVIGATION: NavigationItem[] = [
+  { id: "progress", label: "Progress", description: "Study patterns and progress graphs", icon: BarChart3 },
   { id: "mastery" as const, label: "Mastery", description: "Map curriculum strengths and gaps", icon: Map },
   { id: "goals" as const, label: "Goals", description: "Work backwards from score targets", icon: Target },
   { id: "predictor" as const, label: "Study score", description: "Estimate study scores and ATAR", icon: Calculator },

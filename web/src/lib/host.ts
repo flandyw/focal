@@ -2,6 +2,7 @@ import { toast } from "sonner"
 
 // Native hosts supply file dialogs; standalone web keeps browser downloads.
 export const examHost: {
+  studySessions?: () => Promise<import("../../../src/lib/types").StudySession[]>
   download?: (blob: Blob, name: string) => Promise<boolean>
   report?: (html: string) => Promise<void>
 } = {}

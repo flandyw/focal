@@ -19,7 +19,7 @@ on:
       - "bun.lock"
       - "Makefile"
       - ".github/workflows/verify-desktop.yml"
-      - "!web/**"
+      - "web/**"
       - "!android-native/**"
   push:
     branches: [main]
@@ -37,7 +37,7 @@ on:
       - "bun.lock"
       - "Makefile"
       - ".github/workflows/verify-desktop.yml"
-      - "!web/**"
+      - "web/**"
       - "!android-native/**"
 
 concurrency:

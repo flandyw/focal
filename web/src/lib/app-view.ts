@@ -8,6 +8,7 @@ export const APP_VIEWS = [
   "timetable",
   "sacs",
   "library",
+  "progress",
   "mastery",
   "goals",
   "predictor",

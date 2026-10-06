@@ -4,7 +4,7 @@ import {
   hydratePreferences,
   persistPreference,
   removePreference,
-} from "@/lib/storage/preferences"
+} from "../storage/preferences"
 
 function createSessionStorage(credentialKey: string): SupportedStorage {
   let cachedValue: string | null | undefined

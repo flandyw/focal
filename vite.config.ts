@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => ({
   server: { port: mode === "desktop" ? 1420 : 5173, strictPort: true, host: process.env.TAURI_DEV_HOST ?? false },
   plugins: [react(), tailwindcss(), mistakesPdfPlugin()],
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'katex'],
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
     },

@@ -1,31 +1,50 @@
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 
 export type BrowserFilter = "all" | "due" | "new" | "learning" | "review" | "mature" | "suspended"
-export type LibraryFilters = { search: string; browserFilter: BrowserFilter; category: string; topic: string; sort: string; examId?: string; provider?: string; resolution?: "all" | "unresolved" | "resolved" }
+export type LibrarySort = "due" | "newest" | "oldest" | "marks" | "question"
+export type LibraryFilters = {
+  search: string
+  browserFilter: BrowserFilter
+  category: string
+  topic: string
+  sort: LibrarySort
+  examId?: string
+  provider?: string
+  resolution?: "all" | "unresolved" | "resolved"
+}
 
-export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string, ExamAttempt>, dueIds: Set<string>, { search, browserFilter, category, topic, sort, examId = "all", provider = "all", resolution = "all" }: LibraryFilters) {
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const schedules = new Map(mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
-  return mistakes.filter((mistake) => {
-      const schedule = schedules.get(mistake.id)
+export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string, ExamAttempt>, dueIds: Set<string>, filters: LibraryFilters) {
+  const { browserFilter, category, topic, sort, examId = "all", provider = "all", resolution = "all" } = filters
+  const terms = filters.search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  return mistakes.map((mistake) => ({ mistake, schedule: getMistakeSchedule(mistake) }))
+    .filter(({ mistake, schedule }) => {
       const attempt = attemptMap.get(mistake.attemptId)
-      const matchesSearch = !normalizedSearch || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, attempt?.title, attempt?.subject]
-        .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch))
-      if (!matchesSearch || !schedule || (category !== "all" && mistake.category !== category) || (topic !== "all" && mistake.areaOfStudy !== topic)) return false
+      if (category !== "all" && mistake.category !== category) return false
+      if (topic !== "all" && mistake.areaOfStudy !== topic) return false
       if (examId !== "all" && (examId === "unlinked" ? Boolean(attempt) : mistake.attemptId !== examId)) return false
       if (provider !== "all" && attempt?.provider !== provider) return false
       if (resolution !== "all" && schedule.resolved !== (resolution === "resolved")) return false
-      if (browserFilter === "all") return true
-      if (browserFilter === "due") return dueIds.has(mistake.id)
-      if (browserFilter === "suspended") return Boolean(mistake.suspended)
-      if (browserFilter === "mature") return schedule.resolved && !mistake.suspended
-      if (browserFilter === "learning") return !mistake.suspended && (schedule.state === "learning" || schedule.state === "relearning")
-      return !mistake.suspended && schedule.state === browserFilter
-    }).toSorted((first, second) => {
-      if (sort === "newest") return second.createdAt.localeCompare(first.createdAt)
-      if (sort === "oldest") return first.createdAt.localeCompare(second.createdAt)
-      if (sort === "marks") return (second.marksLost ?? 0) - (first.marksLost ?? 0)
-      if (sort === "question") return first.question.localeCompare(second.question, undefined, { numeric: true })
-      return (schedules.get(first.id)?.dueAt ?? "").localeCompare(schedules.get(second.id)?.dueAt ?? "")
+      if (browserFilter === "suspended" && !mistake.suspended) return false
+      if (browserFilter !== "all" && browserFilter !== "suspended") {
+        if (mistake.suspended) return false
+        if (browserFilter === "due" && !dueIds.has(mistake.id)) return false
+        if (browserFilter === "mature" && !schedule.resolved) return false
+        if (browserFilter === "learning" && schedule.state !== "learning" && schedule.state !== "relearning") return false
+        if ((browserFilter === "new" || browserFilter === "review") && schedule.state !== browserFilter) return false
+      }
+      const text = [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.category, mistake.areaOfStudy, attempt?.title, attempt?.subject, attempt?.provider, attempt?.paper].filter(Boolean).join(" ").toLocaleLowerCase()
+      return terms.every((term) => text.includes(term))
     })
+    .sort((first, second) => {
+      let difference: number
+      switch (sort) {
+        case "newest": difference = Date.parse(second.mistake.createdAt) - Date.parse(first.mistake.createdAt); break
+        case "oldest": difference = Date.parse(first.mistake.createdAt) - Date.parse(second.mistake.createdAt); break
+        case "marks": difference = (second.mistake.marksLost ?? 0) - (first.mistake.marksLost ?? 0); break
+        case "question": difference = first.mistake.question.localeCompare(second.mistake.question, undefined, { numeric: true }); break
+        default: difference = Date.parse(first.schedule.dueAt) - Date.parse(second.schedule.dueAt)
+      }
+      return difference || first.mistake.id.localeCompare(second.mistake.id)
+    })
+    .map(({ mistake }) => mistake)
 }

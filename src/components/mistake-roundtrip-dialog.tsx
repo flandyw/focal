@@ -10,8 +10,9 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./u
 import { Textarea } from "./ui/textarea"
 
 /** Second half of Export → JSON: paste (or load) the chatbot's edited file and replace fields by mistake id. */
-export function MistakeRoundTripDialog({ mistakes, onExport, onOpenChange, onApply }: {
+export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExport, onOpenChange, onApply }: {
   mistakes: Mistake[]
+  singleMistake?: boolean
   onExport: () => void
   onOpenChange: (open: boolean) => void
   onApply: (edits: MistakeEdit[]) => void
@@ -50,8 +51,10 @@ export function MistakeRoundTripDialog({ mistakes, onExport, onOpenChange, onApp
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Re-import edited mistakes</DialogTitle>
-          <DialogDescription>Export mistakes as JSON, ask a chatbot to fix them, then load its reply here. Mistakes are matched by id and you review every change before it's saved.</DialogDescription>
+          <DialogTitle>{singleMistake ? "Reimport with changes" : "Re-import edited mistakes"}</DialogTitle>
+          <DialogDescription>{singleMistake
+            ? `Export “${mistakes[0]?.question ?? "this mistake"}” as JSON, ask a chatbot to fix it, then load its reply here. Only this mistake's matching id is accepted, and you review every change before it's saved.`
+            : "Export mistakes as JSON, ask a chatbot to fix them, then load its reply here. Mistakes are matched by id and you review every change before it's saved."}</DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field data-invalid={error ? true : undefined}>

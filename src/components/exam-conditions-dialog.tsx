@@ -3,7 +3,7 @@ import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
-import { formatTimer, getExamTimerState } from "../lib/exam-timer"
+import { formatTimer, getExamClock } from "../lib/exam-timer"
 import { updateExamSessionConditions, type ExamTimerSession } from "../lib/ongoing-timers"
 
 export function ExamConditionsDialog({ session, now, onSave, onClose }: {
@@ -29,13 +29,13 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   } catch (cause) {
     error = cause instanceof Error ? cause.message : "Check the exam conditions."
   }
-  const timer = preview ? getExamTimerState(preview.pausedAt ?? now, preview.startedAt, preview.readingMinutes, preview.writingMinutes, preview.marks) : undefined
+  const timer = preview ? getExamClock(preview, now) : undefined
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Edit exam conditions</DialogTitle>
-        <DialogDescription>{session.pausedAt !== undefined ? "Your exam stays paused while you edit." : "Your timer keeps running while you edit."} Writing time already used and question progress are preserved.</DialogDescription>
+        <DialogDescription>{session.pausedAt !== undefined ? "Your exam stays paused while you edit." : "Your timer keeps running while you edit."} Time already spent stays where it was, and question progress is kept.</DialogDescription>
       </DialogHeader>
       <form id="exam-conditions-form" onSubmit={(event: FormEvent) => {
         event.preventDefault()

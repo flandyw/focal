@@ -1,3 +1,4 @@
+import { getExamClock } from "./exam-timer"
 import { isSacUnit, type SacUnit } from "./sac"
 
 export type ExamTimerSession = {
@@ -15,6 +16,9 @@ export type ExamTimerSession = {
   pausedAt?: number
   pausedSeconds: number
   phase?: "reading" | "writing"
+  /** Active elapsed ms at which writing began, once it is fixed (reading skipped, or
+   *  writing already under way when conditions changed). Unset means `readingMinutes`. */
+  writingFromMs?: number
   workspaceItems?: ExamWorkspaceItem[]
 }
 
@@ -30,17 +34,18 @@ export function updateExamSessionConditions(session: ExamTimerSession, condition
   if (![readingMinutes, writingMinutes, marks].every((value) => Number.isInteger(value * 2))) throw new Error("Use whole or half minutes and marks.")
   const mappedMarks = (session.workspaceItems ?? []).reduce((total, item) => total + item.marks, 0)
   if (marks < mappedMarks) throw new Error(`Your questions use ${mappedMarks} marks. Adjust the question map before reducing the total below ${mappedMarks}.`)
-  const elapsed = Math.max(0, (session.pausedAt ?? now) - session.startedAt)
-  // Once writing has started, changing reading allocation must not reset it
-  // or reinterpret writing time as reading time.
-  const writingStarted = elapsed >= session.readingMinutes * 60_000
-  return {
-    ...session,
-    readingMinutes,
-    writingMinutes,
-    marks,
-    startedAt: writingStarted ? session.startedAt + (session.readingMinutes - readingMinutes) * 60_000 : session.startedAt,
-  }
+  const clock = getExamClock(session, now)
+  // Time already spent is history: once writing has started, pin its start so a new
+  // reading allocation can't turn it back into reading time, and cutting reading below
+  // what has been read starts writing now rather than reclassifying past reading.
+  const writingFromMs = clock.phase !== "reading" ? clock.writingStartMs
+    : readingMinutes * 60_000 < clock.elapsedMs ? clock.elapsedMs : undefined
+  return { ...session, readingMinutes, writingMinutes, marks, writingFromMs }
+}
+
+export function skipExamReading(session: ExamTimerSession, now = Date.now()): ExamTimerSession {
+  const clock = getExamClock(session, now)
+  return clock.phase === "reading" ? { ...session, writingFromMs: clock.elapsedMs, phase: "writing" } : session
 }
 
 export function pauseExamSession(session: ExamTimerSession, now = Date.now()): ExamTimerSession {
@@ -119,6 +124,7 @@ export function isExamTimerSession(value: unknown): value is ExamTimerSession {
     typeof value.readingMinutes === "number" && Number.isFinite(value.readingMinutes) && value.readingMinutes >= 0 &&
     typeof value.writingMinutes === "number" && Number.isFinite(value.writingMinutes) && value.writingMinutes > 0 &&
     typeof value.marks === "number" && Number.isFinite(value.marks) && value.marks > 0 &&
+    (value.writingFromMs === undefined || typeof value.writingFromMs === "number" && Number.isFinite(value.writingFromMs) && value.writingFromMs >= 0) &&
     (value.workspaceItems === undefined || Array.isArray(value.workspaceItems) && value.workspaceItems.every((item) =>
       isRecord(item) && typeof item.id === "string" && typeof item.label === "string" &&
       typeof item.marks === "number" && Number.isFinite(item.marks) && item.marks > 0 &&

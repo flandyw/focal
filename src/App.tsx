@@ -40,7 +40,8 @@ import {
 } from "./lib/exam-data"
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "./lib/storage"
 import { useSupabaseSync } from "./lib/sync"
-import { saveTimerSessionChange, useStudySessionSync } from "./lib/study-session-sync"
+import { canonicalNow, saveTimerSessionChange, useStudySessionSync } from "./lib/study-session-sync"
+import { getExamClock } from "./lib/exam-timer"
 import { suggestTimetableForAttempt, formatExamLabel } from "./lib/timetable"
 import { ExamPicker } from "./components/exam-picker"
 import type { ExamTimerPreset } from "./components/exam-timer-mode"
@@ -202,6 +203,25 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   useEffect(() => { latestData.current = data }, [data])
   useEffect(() => () => saveAppData(latestData.current), [])
   useEffect(prefetchPages, [])
+  // Reading hands over to writing on its own, whichever page is open. One phase_change
+  // per revision: the session prop stays stale while the save is in flight.
+  const publishedPhase = useRef<string | null>(null)
+  useEffect(() => {
+    const exam = data.activeExamTimer
+    if (!exam || exam.pausedAt !== undefined || exam.phase === "writing") return
+    const publish = () => {
+      const key = `${exam.id}:${exam.revision ?? 0}`
+      if (publishedPhase.current === key) return
+      publishedPhase.current = key
+      void saveActiveExamTimer({ ...exam, phase: "writing" })
+    }
+    const now = canonicalNow().getTime()
+    const clock = getExamClock(exam, now)
+    if (clock.phase !== "reading") return publish()
+    const id = window.setTimeout(publish, clock.endsAt.reading - now)
+    return () => window.clearTimeout(id)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- re-arms whenever the session changes, which refreshes the closure
+  }, [data.activeExamTimer])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => {
     if (embedded) return

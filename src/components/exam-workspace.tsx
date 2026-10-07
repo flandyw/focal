@@ -1,12 +1,11 @@
-import { useMemo, useState } from "react"
-import { ExternalLink, Flag, ListChecks, Plus, Sparkles, Trash2 } from "lucide-react"
-import { Badge } from "./ui/badge"
+import { useState } from "react"
+import { Circle, CircleCheck, CircleDot, Flag, Plus, Split, Trash2 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
-import { Field, FieldError, FieldLabel } from "./ui/field"
+import { FieldError } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { cn } from "../lib/utils"
 import type { ExamWorkspaceItem, ExamWorkspaceStatus } from "../lib/ongoing-timers"
 
 const nextStatus: Record<ExamWorkspaceStatus, ExamWorkspaceStatus> = {
@@ -16,48 +15,47 @@ const nextStatus: Record<ExamWorkspaceStatus, ExamWorkspaceStatus> = {
   "flagged": "done",
 }
 
-export function ExamWorkspace({ items, expectedMarks, totalMarks, paperUrl, reportUrl, onChange }: {
+const statusIcon = { "not-started": Circle, "in-progress": CircleDot, done: CircleCheck, flagged: Flag }
+const statusLabel = { "not-started": "Not started", "in-progress": "In progress", done: "Done", flagged: "Flagged" }
+const confidences = [["low", "Low"], ["medium", "Med"], ["high", "High"]] as const
+
+/** The paper's questions as a checklist: tick them off, flag ones to return to, and the
+ *  map prefills question-level marking when the paper is finished. */
+export function ExamWorkspace({ items, totalMarks, onChange }: {
   items: ExamWorkspaceItem[]
-  expectedMarks: number
   totalMarks: number
-  paperUrl?: string
-  reportUrl?: string
   onChange: (items: ExamWorkspaceItem[]) => void
 }) {
   const [label, setLabel] = useState("")
   const [marks, setMarks] = useState(1)
   const [checkpointCount, setCheckpointCount] = useState(10)
   const [error, setError] = useState<string | null>(null)
-  const doneMarks = useMemo(() => items.filter((item) => item.status === "done").reduce((total, item) => total + item.marks, 0), [items])
+  const doneMarks = items.filter((item) => item.status === "done").reduce((total, item) => total + item.marks, 0)
   const mappedMarks = items.reduce((total, item) => total + item.marks, 0)
   const flagged = items.filter((item) => item.status === "flagged").length
   const remainingMarks = Math.max(0, totalMarks - mappedMarks)
-  const paceDelta = doneMarks - expectedMarks
 
   function add() {
     if (!label.trim()) return setError("Enter a question or section label.")
     if (items.some((item) => item.label.trim().toLowerCase() === label.trim().toLowerCase())) return setError("That question or section is already mapped.")
     if (!Number.isFinite(marks) || marks <= 0) return setError("Marks must be greater than zero.")
-    if (marks > remainingMarks) return setError(`Only ${remainingMarks} exam marks remain unmapped.`)
+    if (marks > remainingMarks) return setError(`Only ${remainingMarks} marks are left to map.`)
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])
-    setLabel("")
-    setMarks(Math.min(1, Math.max(0.5, remainingMarks - marks)))
+    // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".
+    setLabel(label.trim().replace(/\d+$/, (number) => String(Number(number) + 1)).replace(/^[^\d]*$/, ""))
     setError(null)
   }
 
   function createCheckpoints() {
     const count = Math.max(1, Math.min(30, Math.round(checkpointCount)))
     const halfMarkUnits = Math.round(totalMarks * 2)
-    const baseUnits = Math.floor(halfMarkUnits / count)
-    if (baseUnits < 1) return setError("Use fewer checkpoints for this mark total.")
+    if (halfMarkUnits < count) return setError("Use fewer checkpoints for this mark total.")
     let remainingUnits = halfMarkUnits
-    const generated = Array.from({ length: count }, (_, index): ExamWorkspaceItem => {
-      const slotsLeft = count - index
-      const units = Math.floor(remainingUnits / slotsLeft)
+    onChange(Array.from({ length: count }, (_, index): ExamWorkspaceItem => {
+      const units = Math.floor(remainingUnits / (count - index))
       remainingUnits -= units
       return { id: crypto.randomUUID(), label: `Checkpoint ${index + 1}`, marks: units / 2, status: "not-started", confidence: "medium" }
-    })
-    onChange(generated)
+    }))
     setError(null)
   }
 
@@ -66,68 +64,64 @@ export function ExamWorkspace({ items, expectedMarks, totalMarks, paperUrl, repo
   }
 
   return (
-    <Card className="gap-5">
+    <Card className="min-w-0 gap-4">
       <CardHeader>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <CardTitle>Exam workspace</CardTitle>
-            <CardDescription className="mt-1">Track question progress, confidence, and flags without leaving the timed session.</CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {paperUrl ? <Button nativeButton={false} variant="outline" size="sm" render={<a href={paperUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Exam paper</Button> : null}
-            {reportUrl ? <Button nativeButton={false} variant="outline" size="sm" render={<a href={reportUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Assessment report</Button> : null}
-          </div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <CardTitle>Questions</CardTitle>
+          {items.length ? <CardDescription className="tabular-nums">
+            {doneMarks} of {mappedMarks} marks done{flagged ? ` · ${flagged} flagged` : ""}{remainingMarks ? ` · ${remainingMarks} unmapped` : ""}
+          </CardDescription> : null}
         </div>
+        {items.length ? <Progress className="mt-2" aria-label="Marks done" value={mappedMarks ? doneMarks / mappedMarks * 100 : 0} /> : (
+          <CardDescription>Map questions or equal checkpoints to track pace. The map prefills marking at the end.</CardDescription>
+        )}
       </CardHeader>
-      <CardContent className="grid gap-6">
-        {!items.length ? (
-          <div className="grid gap-4 rounded-xl border bg-muted/30 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <Field><FieldLabel htmlFor="workspace-checkpoints">Number of equal checkpoints</FieldLabel><Input id="workspace-checkpoints" type="number" min="1" max="30" value={checkpointCount} onChange={(event) => setCheckpointCount(event.target.valueAsNumber)} /></Field>
-            <Button className="w-full md:w-auto" variant="outline" onClick={createCheckpoints}><Sparkles />Create checkpoints</Button>
-          </div>
+      <CardContent className="grid gap-4">
+        {items.length ? (
+          <ul className="divide-y rounded-lg border">
+            {items.map((item) => {
+              const Icon = statusIcon[item.status]
+              return (
+                <li key={item.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Button variant="ghost" size="icon-sm" onClick={() => update(item.id, { status: nextStatus[item.status] })} aria-label={`${item.label}: ${statusLabel[item.status]}. Advance status`}>
+                      <Icon className={cn(item.status === "done" && "text-primary", item.status === "flagged" && "text-destructive")} />
+                    </Button>
+                    <span className={cn("truncate text-sm font-medium", item.status === "done" && "text-muted-foreground line-through")}>{item.label}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{item.marks} {item.marks === 1 ? "mark" : "marks"}</span>
+                    <Input className="h-7 min-w-0 flex-1 border-transparent bg-transparent text-xs shadow-none hover:border-input focus-visible:border-input" aria-label={`Note for ${item.label}`} value={item.note ?? ""} onChange={(event) => update(item.id, { note: event.target.value || undefined })} placeholder="Note" />
+                  </div>
+                  <div className="flex items-center gap-1 justify-self-end">
+                    <div className="flex rounded-md border p-0.5" role="group" aria-label={`Confidence for ${item.label}`}>
+                      {confidences.map(([value, text]) => (
+                        <button key={value} type="button" aria-pressed={item.confidence === value} onClick={() => update(item.id, { confidence: value })}
+                          className={cn("rounded px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground", item.confidence === value && "bg-muted font-medium text-foreground")}>
+                          {text}
+                        </button>
+                      ))}
+                    </div>
+                    <Button variant={item.status === "flagged" ? "secondary" : "ghost"} size="icon-sm" aria-pressed={item.status === "flagged"} onClick={() => update(item.id, { status: item.status === "flagged" ? "in-progress" : "flagged" })}><Flag /><span className="sr-only">Flag {item.label}</span></Button>
+                    <Button variant="ghost" size="icon-sm" onClick={() => onChange(items.filter((candidate) => candidate.id !== item.id))}><Trash2 /><span className="sr-only">Remove {item.label}</span></Button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_8rem_auto] md:items-end">
-          <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="workspace-label">Question or section</FieldLabel><Input id="workspace-label" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 4" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} /></Field>
-          <Field><FieldLabel htmlFor="workspace-marks">Marks</FieldLabel><Input id="workspace-marks" type="number" min="0.5" step="0.5" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} /></Field>
-          <Button className="w-full md:w-auto" onClick={add} disabled={remainingMarks <= 0}><Plus />Add item</Button>
-          <FieldError className="md:col-span-full">{error}</FieldError>
+        <div className="flex flex-wrap items-center gap-2">
+          {remainingMarks > 0 ? <>
+            <Input className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="0.5" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Button size="sm" variant="outline" onClick={add}><Plus />Add</Button>
+          </> : null}
+          {!items.length ? <>
+            <span className="px-1 text-xs text-muted-foreground">or</span>
+            <Input className="h-8 w-16" aria-label="Number of equal checkpoints" type="number" min="1" max="30" value={checkpointCount} onChange={(event) => setCheckpointCount(event.target.valueAsNumber)} />
+            <Button size="sm" variant="outline" onClick={createCheckpoints}><Split />Split into checkpoints</Button>
+          </> : null}
         </div>
-
-        {items.length ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Complete</p><p className="mt-1 text-2xl font-semibold tabular-nums">{doneMarks}/{mappedMarks}</p></div>
-              <div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Flagged</p><p className="mt-1 text-2xl font-semibold tabular-nums">{flagged}</p></div>
-              <div className="rounded-xl border bg-muted/20 p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Unmapped</p><p className="mt-1 text-2xl font-semibold tabular-nums">{remainingMarks}</p></div>
-            </div>
-            <div className="grid gap-2">
-              <div className="flex flex-col gap-1 text-sm sm:flex-row sm:justify-between">
-                <span>{doneMarks}/{mappedMarks || totalMarks} mapped marks complete</span>
-                <span className={paceDelta < -5 ? "text-destructive" : "text-muted-foreground"}>{paceDelta < -5 ? `${Math.abs(Math.round(paceDelta))} marks behind expected pace` : paceDelta > 5 ? `${Math.round(paceDelta)} marks ahead` : "On expected pace"}</span>
-              </div>
-              <Progress value={mappedMarks ? doneMarks / mappedMarks * 100 : 0} />
-            </div>
-            <div className="grid gap-3">
-              {items.map((item) => (
-                <div key={item.id} className="grid gap-4 rounded-xl border bg-card p-4 md:grid-cols-[minmax(0,1fr)_8rem_10rem_auto] md:items-center">
-                  <button type="button" className="min-w-0 text-left" onClick={() => update(item.id, { status: nextStatus[item.status] })}>
-                    <span className={item.status === "done" ? "font-medium line-through text-muted-foreground" : "font-medium"}>{item.label}</span>
-                    <Badge className="ml-2" variant="outline">{item.marks} marks</Badge>
-                    <span className="mt-1 block text-xs text-muted-foreground">Click to advance status</span>
-                  </button>
-                  <Select items={{ "not-started": "Not started", "in-progress": "In progress", flagged: "Flagged", done: "Done" }} value={item.status} onValueChange={(value) => update(item.id, { status: (value ?? "not-started") as ExamWorkspaceStatus })}><SelectTrigger className="w-full" size="sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="not-started">Not started</SelectItem><SelectItem value="in-progress">In progress</SelectItem><SelectItem value="flagged">Flagged</SelectItem><SelectItem value="done">Done</SelectItem></SelectContent></Select>
-                  <Select items={{ low: "Low confidence", medium: "Medium confidence", high: "High confidence" }} value={item.confidence} onValueChange={(value) => update(item.id, { confidence: (value ?? "medium") as ExamWorkspaceItem["confidence"] })}><SelectTrigger className="w-full" size="sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low confidence</SelectItem><SelectItem value="medium">Medium confidence</SelectItem><SelectItem value="high">High confidence</SelectItem></SelectContent></Select>
-                  <div className="flex items-center justify-end gap-1"><Button variant={item.status === "flagged" ? "secondary" : "ghost"} size="icon-sm" onClick={() => update(item.id, { status: item.status === "flagged" ? "in-progress" : "flagged" })}><Flag /><span className="sr-only">Toggle flag</span></Button><Button variant="ghost" size="icon-sm" onClick={() => onChange(items.filter((candidate) => candidate.id !== item.id))}><Trash2 /><span className="sr-only">Remove</span></Button></div>
-                  <Input className="md:col-span-full" aria-label={`Note for ${item.label}`} value={item.note ?? ""} onChange={(event) => update(item.id, { note: event.target.value || undefined })} placeholder="Optional note or reminder for marking" />
-                </div>
-              ))}
-            </div>
-            {mappedMarks !== totalMarks ? <p className="text-xs text-muted-foreground">Workspace covers {mappedMarks} of {totalMarks} exam marks. Add broad sections or individual questions—the final marking form will use whatever you map.</p> : null}
-          </>
-        ) : (
-          <div className="flex min-h-28 items-center gap-3 rounded-xl border border-dashed p-5 text-sm text-muted-foreground"><ListChecks className="size-5 shrink-0" /><span>Add questions or sections to enable checkpoint pacing and prefill question-level marking.</span></div>
-        )}
+        <FieldError>{error}</FieldError>
       </CardContent>
     </Card>
   )

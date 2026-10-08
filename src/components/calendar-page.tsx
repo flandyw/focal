@@ -12,6 +12,7 @@ import { Progress } from "./ui/progress"
 import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
 import { EventDialog } from "./event-dialog"
 import { PageHeader } from "./page-header"
+import { StudyTimeline } from "./study-timeline"
 import { WorkspacePage } from "./workspace-layout"
 import {
   addTask,
@@ -28,13 +29,14 @@ import {
   type DayPlan,
   type DayPlanSource,
 } from "../lib/day-plan"
-import { classPeriodsOn, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
+import { classPeriodsOn, periodSubjectName, subjectIdFor, subjectNameFor } from "../lib/class-timetable"
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
 import type { CalendarEvent, TimetableConfig } from "../lib/types"
 import type { TextEventDraft } from "../lib/calendarImport"
 import type { CanonicalStudySession } from "../lib/sync/sessionContract"
+import type { PastStudyLog } from "../lib/pastStudy"
 
 const today = () => localDate(new Date())
 
@@ -96,6 +98,7 @@ export function CalendarPage({
   onEventsChange,
   onOpenTimetable,
   onPlanSessions,
+  onLogStudy,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -109,6 +112,7 @@ export function CalendarPage({
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
   onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>
+  onLogStudy: (entry: PastStudyLog) => Promise<void>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -133,6 +137,23 @@ export function CalendarPage({
 
   function commit(update: (current: LearningWorkspace) => LearningWorkspace) {
     onChange((current) => ({ ...update(current), updatedAt: new Date().toISOString() }))
+  }
+
+  function selectDay(date: string) {
+    setSelected(date)
+    const [year, month] = date.split("-").map(Number)
+    setMonth(new Date(year, month - 1, 1))
+  }
+
+  async function planBlock(entry: { title: string; subjectId: string; start: string; end: string }) {
+    // Signed out there is no shared session store, so the block becomes a local study task.
+    if (await onPlanSessions([entry]) !== null) return
+    const start = new Date(entry.start)
+    commit((current) => addTask(current, {
+      title: entry.title, date: localDate(start), subject: subjectNameFor(entry.subjectId),
+      minutes: Math.round((Date.parse(entry.end) - start.getTime()) / 60_000),
+      detail: start.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }),
+    }))
   }
 
   function changeStatus(id: string, status: "completed" | "skipped" | "planned") {
@@ -216,7 +237,7 @@ export function CalendarPage({
       >
         <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
         <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import from chatbot</Button>
-        <Button onClick={() => { setMonth(new Date()); setSelected(today()) }} variant="outline"><RotateCcw />Today</Button>
+        <Button onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
         <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />
       </PageHeader>
 
@@ -235,6 +256,19 @@ export function CalendarPage({
       ) : null}
 
       <DayStats dueMistakes={plan.dueMistakes} plan={plan} progress={completion} />
+
+      <StudyTimeline
+        key={selected}
+        classes={classes}
+        date={selected}
+        events={data.events ?? []}
+        onDateChange={selectDay}
+        onLog={onLogStudy}
+        onPlan={planBlock}
+        onStartFocus={onStartFocus}
+        sessions={sessions}
+        subjects={subjects}
+      />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,27rem)] lg:gap-8">
         {/* The month and the load bars that summarise it are one thing, read together. */}

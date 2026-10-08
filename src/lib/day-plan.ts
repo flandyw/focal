@@ -193,15 +193,7 @@ function mergedMinutes(ranges: readonly { start: string; end: string }[]): numbe
   return Math.round(total / 60000)
 }
 
-/**
- * Projects one canonical study session exactly the way Focal desktop's calendar does:
- * it lands on the local date of its `startTime` (its first schedule block, or its start
- * when there is none), its minutes are its worked intervals, and a cancelled sitting is
- * never shown. Both apps then list the same sessions on the same days with the same
- * durations, from the one shared record.
- */
-export function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
-  if (session.state === "cancelled") return null
+function sessionSchedule(session: CanonicalStudySession) {
   const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
   const legacy = isRecord(nested) ? nested : {}
   const subjectIds = Array.isArray(legacy.subjectIds)
@@ -219,6 +211,32 @@ export function sessionItem(session: CanonicalStudySession): { item: DayItem; da
   const schedule = scheduleBlocks.length > 0
     ? scheduleBlocks
     : [{ start, end: new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() }]
+  return { subjectIds, schedule }
+}
+
+/** Where a session sits on a day's timeline: its schedule while planned, its worked
+ *  segments once started. An open segment runs to `now`. */
+export function sessionBlocks(session: CanonicalStudySession, now = Date.now()): { start: string; end: string; planned: boolean; live: boolean }[] {
+  if (session.state === "cancelled") return []
+  if (session.state === "planned") return sessionSchedule(session).schedule.map((block) => ({ ...block, planned: true, live: false }))
+  return session.segments.map((segment) => ({
+    start: segment.started_at,
+    end: segment.ended_at ?? new Date(Math.max(now, Date.parse(segment.started_at))).toISOString(),
+    planned: false,
+    live: segment.ended_at === null,
+  }))
+}
+
+/**
+ * Projects one canonical study session exactly the way Focal desktop's calendar does:
+ * it lands on the local date of its `startTime` (its first schedule block, or its start
+ * when there is none), its minutes are its worked intervals, and a cancelled sitting is
+ * never shown. Both apps then list the same sessions on the same days with the same
+ * durations, from the one shared record.
+ */
+export function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
+  if (session.state === "cancelled") return null
+  const { subjectIds, schedule } = sessionSchedule(session)
   const worked = session.state === "planned"
     ? schedule
     : session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])

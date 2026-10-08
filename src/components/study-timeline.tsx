@@ -13,7 +13,7 @@ import { cn } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
 import type { CanonicalStudySession } from "../lib/sync/sessionContract"
 
-const SNAP = 15
+const SNAP = 5
 const LAST_MINUTE = 24 * 60 - 1
 const QUICK_LOGS = [25, 45, 60, 90]
 

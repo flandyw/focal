@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { ChevronLeft, ChevronRight, Plus, Timer, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
@@ -18,8 +18,16 @@ const LAST_MINUTE = 24 * 60 - 1
 const QUICK_LOGS = [25, 45, 60, 90]
 
 type Tone = "class" | "event" | "studied" | "planned" | "live"
-interface Block { key: string; start: number; end: number; tone: Tone; label: string }
+interface Block {
+  key: string; start: number; end: number; tone: Tone
+  title: string; subject?: string; short: string
+  session?: CanonicalStudySession
+}
 type Range = { start: number; end: number }
+
+const DAY = 24 * 60
+const MIN_SPAN = 30
+const TICK_STEPS = [5, 10, 15, 30, 60, 120, 180, 360]
 
 const TONE: Record<Tone, string> = {
   class: "bg-muted-foreground/20",
@@ -59,12 +67,28 @@ const duration = (minutes: number) => minutes < 60 ? `${minutes}m` : `${Math.flo
 const snap = (minute: number) => Math.round(minute / SNAP) * SNAP
 const clamp = (minute: number) => Math.min(LAST_MINUTE, Math.max(0, minute))
 
+
+function clampWindow({ start, end }: Range): Range {
+  const span = Math.min(DAY, Math.max(MIN_SPAN, end - start))
+  const from = Math.min(DAY - span, Math.max(0, start))
+  return { start: from, end: from + span }
+}
+
+/** Zooms so the minute under `center` stays where it is on screen. */
+function zoomWindow(window: Range, factor: number, center: number): Range {
+  const span = window.end - window.start
+  const next = Math.min(DAY, Math.max(MIN_SPAN, span * factor))
+  const start = center - (center - window.start) / span * next
+  return clampWindow({ start, end: start + next })
+}
+
 /**
- * One day as a strip of hours: classes and events for context, study you did as solid
- * bars, study you planned as dashed ones. Drag across the empty track to log (past) or
- * plan (future) a block; tap for a 30-minute one. The composer below is the keyboard path.
+ * One day as a zoomable strip of hours: classes and events for context, study you did as
+ * solid bars, study you planned as dashed ones. Drag across the track to log (past) or plan
+ * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
+ * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onStartFocus }: {
+export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onStartFocus }: {
   date: string
   onDateChange: (date: string) => void
   sessions: CanonicalStudySession[]
@@ -73,6 +97,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   subjects: string[]
   onLog: (entry: PastStudyLog) => Promise<void>
   onPlan: (entry: { title: string; subjectId: string; start: string; end: string }) => Promise<void>
+  /** Absent when signed out: there is no shared store to remove a session from. */
+  onRemove?: (session: CanonicalStudySession) => Promise<void>
   onStartFocus: (subject: string | undefined, intent: string) => void
 }) {
   const [nowMs, setNowMs] = useState(Date.now)
@@ -93,27 +119,30 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     for (const period of classes) {
       const start = parseHhmm(period.startTime)
       const end = parseHhmm(period.endTime)
-      if (end > start) out.push({ key: `class-${period.period}-${start}`, start, end, tone: "class", label: `${period.subject || period.period} (class)` })
+      const title = period.subject || period.period
+      if (end > start) out.push({ key: `class-${period.period}-${start}`, start, end, tone: "class", title: `${title} (class)`, short: title.slice(0, 3) })
     }
     for (const event of events) {
       if (event.deleted_at) continue
       const start = minuteOf(date, event.startTime)
       const end = event.endTime ? minuteOf(date, event.endTime) : start + 60
-      if (end > 0 && start < 24 * 60) out.push({ key: `event-${event.id}`, start, end: Math.max(end, start + 15), tone: "event", label: event.title })
+      if (end > 0 && start < DAY) out.push({ key: `event-${event.id}`, start, end: Math.max(end, start + 15), tone: "event", title: event.title, short: event.title.slice(0, 3) })
     }
     for (const session of sessions) {
+      const subject = VCE_SUBJECTS.find((item) => item.id === session.subject_id)
       sessionBlocks(session, nowMs).forEach((block, index) => {
         const start = minuteOf(date, block.start)
         const end = minuteOf(date, block.end)
-        if (end <= 0 || start >= 24 * 60) return
+        if (end <= 0 || start >= DAY) return
         out.push({
-          key: `session-${session.id}-${index}`, start, end,
+          key: `session-${session.id}-${index}`, start, end, session,
           tone: block.live ? "live" : block.planned ? "planned" : "studied",
-          label: [session.title, VCE_SUBJECTS.find((subject) => subject.id === session.subject_id)?.name ?? session.subject_id].filter(Boolean).join(" · "),
+          title: session.title, subject: subject?.name ?? session.subject_id ?? undefined,
+          short: subject?.shortCode ?? session.title.slice(0, 3),
         })
       })
     }
-    return out.map((block) => ({ ...block, start: Math.max(0, block.start), end: Math.min(24 * 60, block.end) }))
+    return out.map((block) => ({ ...block, start: Math.max(0, block.start), end: Math.min(DAY, block.end) }))
   }, [classes, events, sessions, date, nowMs])
 
   const context = blocks.filter((block) => block.tone === "class" || block.tone === "event")
@@ -122,11 +151,55 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const planned = Math.round(study.filter((block) => block.tone === "planned").reduce((sum, block) => sum + block.end - block.start, 0))
   const lastEnd = Math.max(-1, ...study.filter((block) => block.tone === "studied" && block.end <= now).map((block) => block.end))
 
-  // The window hugs the day's content but always shows a usual 7am-11pm study day.
-  const from = Math.max(0, Math.floor(Math.min(7 * 60, ...blocks.map((block) => block.start)) / 60) * 60)
-  const to = Math.min(24 * 60, Math.ceil(Math.max(23 * 60, ...blocks.map((block) => block.end)) / 60) * 60)
-  const pct = (minute: number) => `${(Math.min(to, Math.max(from, minute)) - from) / (to - from) * 100}%`
-  const hours = Array.from({ length: (to - from) / 60 + 1 }, (_, index) => from + index * 60)
+  // Auto-fit hugs everything on the day (and "now"), padded and never tighter than six hours;
+  // an empty day shows the usual 7am-11pm so there is room to plan. Zooming overrides it.
+  const fit = useMemo<Range>(() => {
+    const marks = blocks.flatMap((block) => [block.start, block.end])
+    if (!marks.length) return { start: 7 * 60, end: 23 * 60 }
+    if (isToday) marks.push(now)
+    const start = Math.floor((Math.min(...marks) - 30) / 60) * 60
+    const end = Math.ceil((Math.max(...marks) + 30) / 60) * 60
+    const grow = Math.max(0, 6 * 60 - (end - start)) / 2
+    return clampWindow({ start: start - grow, end: end + grow })
+  }, [blocks, isToday, now])
+  const [view, setView] = useState<Range | null>(null)
+  const { start: from, end: to } = view ?? fit
+  const span = to - from
+  const winRef = useRef<Range>({ start: from, end: to })
+  useEffect(() => { winRef.current = { start: from, end: to } })
+
+  const [width, setWidth] = useState(800)
+  const lane = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = lane.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    observer.observe(el)
+    // Ctrl/⌘ + wheel (and trackpad pinch) zooms about the pointer; shift or sideways scroll pans.
+    const onWheel = (event: WheelEvent) => {
+      const window = winRef.current
+      const rect = el.getBoundingClientRect()
+      const size = window.end - window.start
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault()
+        setView(zoomWindow(window, Math.min(2, Math.max(0.5, Math.exp(event.deltaY * 0.01))), window.start + (event.clientX - rect.left) / rect.width * size))
+      } else if ((event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) && size < DAY) {
+        event.preventDefault()
+        const delta = (event.deltaX || event.deltaY) / rect.width * size
+        setView(clampWindow({ start: window.start + delta, end: window.end + delta }))
+      }
+    }
+    el.addEventListener("wheel", onWheel, { passive: false })
+    return () => { observer.disconnect(); el.removeEventListener("wheel", onWheel) }
+  }, [])
+
+  const left = (minute: number) => `${(Math.min(to, Math.max(from, minute)) - from) / span * 100}%`
+  const place = (start: number, end: number) => ({ left: left(start), width: `max(3px, ${(Math.min(to, end) - Math.max(from, start)) / span * 100}%)` })
+  const shown = (block: Block) => block.end > from && block.start < to
+  const pixels = (block: Block) => (Math.min(to, block.end) - Math.max(from, block.start)) / span * width
+  // Ticks thin out as the window widens so labels never collide.
+  const step = TICK_STEPS.find((candidate) => candidate / span * width >= 64) ?? 360
+  const ticks = Array.from({ length: Math.floor((to - from) / step) + 2 }, (_, index) => Math.ceil(from / step) * step + index * step).filter((minute) => minute <= to)
 
   // The subject you studied most recently is the one you most likely studied again.
   const recentSubject = useMemo(() => [...sessions]
@@ -135,18 +208,30 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
   const [draft, setDraft] = useState<Range | null>(null)
   const [drag, setDrag] = useState<{ anchor: number; current: number; moved: boolean } | null>(null)
+  const [editing, setEditing] = useState<{ kind: "start" | "end" | "move"; offset: number } | null>(null)
+  const [hover, setHover] = useState<number | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [subjectId, setSubjectId] = useState("")
   const [title, setTitle] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const lane = useRef<HTMLDivElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
 
+  function reveal(range: Range) {
+    if (range.start >= from && range.end <= to) return
+    const size = Math.max(span, (range.end - range.start) * 1.5)
+    const center = (range.start + range.end) / 2
+    setView(clampWindow({ start: center - size / 2, end: center + size / 2 }))
+  }
 
   function open(range: Range) {
     // A block that runs past "now" can only be logged up to now.
     const fixed = range.start < now && range.end > now ? { start: range.start, end: Math.floor(now) } : range
-    setDraft({ start: clamp(fixed.start), end: clamp(Math.max(fixed.end, fixed.start + 5)) })
+    const next = { start: clamp(fixed.start), end: clamp(Math.max(fixed.end, fixed.start + 5)) }
+    setDraft(next)
+    reveal(next)
+    setSelected(null)
     setSubjectId((current) => current || recentSubject)
     setError("")
     requestAnimationFrame(() => titleInput.current?.focus())
@@ -156,21 +241,33 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     open({ start: Math.max(0, Math.floor(now) - minutes), end: Math.floor(now) })
   }
 
+  function zoomBy(factor: number) {
+    const center = draft ? (draft.start + draft.end) / 2 : isToday && now >= from && now <= to ? now : (from + to) / 2
+    setView(zoomWindow({ start: from, end: to }, factor, center))
+  }
+
+  function zoomTo(block: Block) {
+    const size = Math.max(60, (block.end - block.start) * 2.5)
+    const center = (block.start + block.end) / 2
+    setView(clampWindow({ start: center - size / 2, end: center + size / 2 }))
+  }
+
   function minuteAt(clientX: number) {
     const rect = lane.current!.getBoundingClientRect()
-    return clamp(snap(from + Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * (to - from)))
+    return clamp(snap(from + Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * span))
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 || busy) return
     event.currentTarget.setPointerCapture(event.pointerId)
     const minute = minuteAt(event.clientX)
+    setSelected(null)
     setDrag({ anchor: minute, current: minute, moved: false })
   }
 
   function pointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!drag) return
     const current = minuteAt(event.clientX)
+    if (!drag) return setHover(event.pointerType === "mouse" ? current : null)
     if (current !== drag.current) setDrag({ ...drag, current, moved: true })
   }
 
@@ -180,8 +277,33 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     if (drag.moved && drag.current !== drag.anchor) return open({ start: Math.min(drag.anchor, drag.current), end: Math.max(drag.anchor, drag.current) })
     // A tap just after you finished studying means "I just did this": end it now.
     if (isToday && drag.anchor <= now && drag.anchor + 30 > now) return quick(30)
-    open({ start: drag.anchor, end: drag.anchor + 30 })
+    // A tap makes a block sized for the zoom: ten minutes when zoomed right in, half an hour otherwise.
+    open({ start: drag.anchor, end: drag.anchor + (span <= 60 ? 10 : span <= 120 ? 15 : 30) })
   }
+
+  /** Drag a draft's edges to resize it, or its body to move it, without reopening the form. */
+  const editProps = (kind: "start" | "end" | "move") => ({
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      if (!draft || event.button !== 0) return
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      setEditing({ kind, offset: minuteAt(event.clientX) - draft.start })
+    },
+    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
+      if (!editing || !draft) return
+      event.stopPropagation()
+      const minute = minuteAt(event.clientX)
+      if (editing.kind === "start") setDraft({ start: Math.min(minute, draft.end - SNAP), end: draft.end })
+      else if (editing.kind === "end") setDraft({ start: draft.start, end: Math.max(minute, draft.start + SNAP) })
+      else {
+        const length = draft.end - draft.start
+        const start = Math.max(0, Math.min(snap(minute - editing.offset), LAST_MINUTE - length))
+        setDraft({ start, end: start + length })
+      }
+    },
+    onPointerUp: () => setEditing(null),
+    onPointerCancel: () => setEditing(null),
+  })
 
   const mode = draft ? (draft.end <= now ? "log" : draft.start >= now ? "plan" : "invalid") : null
 
@@ -207,7 +329,31 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     }
   }
 
+  async function remove(session: CanonicalStudySession) {
+    try {
+      await onRemove?.(session)
+      toast("Study removed")
+      setSelected(null)
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not remove that study.")
+    } finally {
+      setConfirmRemove(false)
+    }
+  }
+
+  function select(block: Block) {
+    setSelected((current) => current === block.key ? null : block.key)
+    setConfirmRemove(false)
+    setDraft(null)
+  }
+
+  const picked = blocks.find((block) => block.key === selected)
   const selection = drag ? { start: Math.min(drag.anchor, drag.current), end: Math.max(drag.anchor, drag.current) || drag.anchor + 30 } : draft
+  const bubble = drag?.moved || editing
+    ? selection && { at: (selection.start + selection.end) / 2, text: `${clock(selection.start)}–${clock(selection.end)} · ${duration(selection.end - selection.start)}` }
+    : hover !== null ? { at: hover, text: clock(hover) } : null
+  // Blocks too narrow to carry any text still get a readable chip below the track.
+  const cramped = study.filter((block) => shown(block) && pixels(block) < 60)
   const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
   const relative = isToday ? "Today" : date === shiftDate(localDate(new Date(nowMs)), -1) ? "Yesterday" : date === shiftDate(localDate(new Date(nowMs)), 1) ? "Tomorrow" : null
 
@@ -238,17 +384,37 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             )}
           </div>
         </div>
-        <CardDescription>
-          {studied || planned ? [studied ? `${duration(studied)} studied` : null, planned ? `${duration(planned)} planned` : null].filter(Boolean).join(" · ") : "No study yet"}
-          {" · "}Drag across the track to {isToday ? "log or plan" : date < localDate(new Date(nowMs)) ? "log" : "plan"} a block
-        </CardDescription>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardDescription>
+            {studied || planned ? [studied ? `${duration(studied)} studied` : null, planned ? `${duration(planned)} planned` : null].filter(Boolean).join(" · ") : "No study yet"}
+            {" · "}Drag the track to {isToday ? "log or plan" : date < localDate(new Date(nowMs)) ? "log" : "plan"}
+          </CardDescription>
+          <div className="flex items-center gap-0.5" role="group" aria-label="Zoom">
+            <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-xs" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
+            <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-xs" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
+            <Button disabled={view === null} onClick={() => setView(null)} size="xs" title="Fit the day's study" variant="ghost"><ZoomIn />Fit</Button>
+            <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="xs" title="Show all 24 hours" variant="ghost"><Maximize2 />24h</Button>
+            {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="xs" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="relative select-none">
           {/* Context lane: what the day already holds. */}
-          {context.length ? <div className="relative mb-1 h-3">
-            {context.map((block) => (
-              <span className={cn("absolute inset-y-0 rounded-sm", TONE[block.tone])} key={block.key} style={{ left: pct(block.start), width: `calc(${pct(block.end)} - ${pct(block.start)})` }} title={`${block.label} · ${clock(block.start)}–${clock(block.end)}`} />
+          {context.some(shown) ? <div className="relative mb-1 h-4">
+            {context.filter(shown).map((block) => (
+              <button
+                aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
+                aria-pressed={selected === block.key}
+                className={cn("absolute inset-y-0 overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-4 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], selected === block.key && "ring-2 ring-foreground/60")}
+                key={block.key}
+                onClick={() => select(block)}
+                style={place(block.start, block.end)}
+                title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
+                type="button"
+              >
+                {pixels(block) >= 60 ? block.title : null}
+              </button>
             ))}
           </div> : null}
           {/* Study lane: the drag target. */}
@@ -257,40 +423,109 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             className="relative h-11 cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30"
             onPointerCancel={() => setDrag(null)}
             onPointerDown={pointerDown}
+            onPointerLeave={() => setHover(null)}
             onPointerMove={pointerMove}
             onPointerUp={pointerUp}
             ref={lane}
             role="group"
           >
-            {hours.slice(1, -1).map((hour) => <span aria-hidden className="absolute inset-y-0 w-px bg-border/60" key={hour} style={{ left: pct(hour) }} />)}
-            {study.map((block) => (
-              <span
-                className={cn("pointer-events-none absolute inset-y-1.5 overflow-hidden rounded-sm px-1 text-[0.625rem] leading-8 whitespace-nowrap", TONE[block.tone], block.tone === "planned" ? "text-primary" : "text-primary-foreground")}
-                key={block.key}
-                style={{ left: pct(block.start), width: `calc(${pct(block.end)} - ${pct(block.start)})` }}
-                title={`${block.label} · ${clock(block.start)}–${clock(block.end)}`}
-              >
-                {block.label}
-              </span>
-            ))}
+            {ticks.map((minute) => <span aria-hidden className="absolute inset-y-0 w-px bg-border/60" key={minute} style={{ left: left(minute) }} />)}
+            {study.filter(shown).map((block) => {
+              const room = pixels(block)
+              return (
+                <button
+                  aria-label={`${block.tone === "planned" ? "Planned" : "Studied"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
+                  aria-pressed={selected === block.key}
+                  className={cn("absolute inset-y-1.5 flex min-w-0 cursor-pointer flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "planned" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground")}
+                  key={block.key}
+                  onClick={() => select(block)}
+                  onDoubleClick={() => zoomTo(block)}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  style={place(block.start, block.end)}
+                  title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} (double-click to zoom)`}
+                  type="button"
+                >
+                  {room >= 60 ? <span className="block truncate font-medium">{block.title}</span> : room >= 26 ? <span className="block truncate">{block.short}</span> : null}
+                  {room >= 110 ? <span className="block truncate opacity-80">{clock(block.start)}–{clock(block.end)}</span> : null}
+                </button>
+              )
+            })}
             {selection ? (
-              <span className="pointer-events-none absolute inset-y-0.5 rounded-sm border-2 border-primary bg-primary/15" style={{ left: pct(selection.start), width: `calc(${pct(selection.end)} - ${pct(selection.start)})` }} />
+              <span
+                className={cn("absolute inset-y-0.5 rounded-sm border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
+                style={{ left: left(selection.start), width: `${(Math.min(to, selection.end) - Math.max(from, selection.start)) / span * 100}%` }}
+                {...(drag ? {} : editProps("move"))}
+              >
+                {drag ? null : (["start", "end"] as const).map((kind) => (
+                  <span aria-hidden className={cn("absolute inset-y-0 flex w-3 cursor-ew-resize items-center justify-center", kind === "start" ? "-left-2" : "-right-2")} key={kind} {...editProps(kind)}>
+                    <span className="h-5 w-1 rounded-full bg-primary" />
+                  </span>
+                ))}
+              </span>
             ) : null}
+            {hover !== null && !drag && !editing ? <span aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-foreground/30" style={{ left: left(hover) }} /> : null}
             {isToday && now >= from && now <= to ? (
-              <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: pct(now) }} />
+              <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }} />
             ) : null}
           </div>
           <div aria-hidden className="relative mt-1 h-4 text-[0.625rem] text-muted-foreground tabular-nums">
-            {hours.map((hour, index) => (
-              <span className={cn("absolute -translate-x-1/2", index % 2 === 1 && "max-sm:hidden", index === 0 && "translate-x-0", index === hours.length - 1 && "-translate-x-full")} key={hour} style={{ left: pct(hour) }}>
-                {clock(hour)}
-              </span>
-            ))}
+            {ticks.map((minute) => {
+              const at = (minute - from) / span * 100
+              return <span className={cn("absolute", at < 3 ? "" : at > 97 ? "-translate-x-full" : "-translate-x-1/2")} key={minute} style={{ left: `${at}%` }}>{clock(minute)}</span>
+            })}
+            {bubble ? (
+              <span className="absolute z-10 -translate-x-1/2 rounded bg-foreground px-1 whitespace-nowrap text-background" style={{ left: `${Math.min(88, Math.max(12, (bubble.at - from) / span * 100))}%` }}>{bubble.text}</span>
+            ) : null}
           </div>
-          <ul className="sr-only">
-            {blocks.map((block) => <li key={block.key}>{block.tone === "planned" ? "Planned: " : block.tone === "class" || block.tone === "event" ? "" : "Studied: "}{block.label}, {clock(block.start)} to {clock(block.end)}</li>)}
-          </ul>
+          {/* Where this window sits in the day: click or drag to pan. */}
+          {span < DAY ? (
+            <div
+              aria-label="Day overview. Drag to pan the timeline."
+              className="relative mt-1 h-3 cursor-ew-resize touch-none overflow-hidden rounded-sm bg-muted"
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); pan(event) }}
+              onPointerMove={(event) => { if (event.buttons) pan(event) }}
+              role="group"
+            >
+              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-0.5 rounded-[1px]", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
+              {isToday ? <span aria-hidden className="absolute inset-y-0 w-px bg-destructive" style={{ left: `${now / DAY * 100}%` }} /> : null}
+              <span aria-hidden className="absolute inset-y-0 rounded-sm border border-primary bg-primary/10" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
+            </div>
+          ) : null}
         </div>
+
+        {cramped.length ? (
+          <ul aria-label="Short blocks" className="flex flex-wrap gap-1">
+            {cramped.map((block) => (
+              <li key={block.key}>
+                <button className={cn("rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring", selected === block.key && "border-primary bg-accent")} onClick={() => select(block)} type="button">
+                  <span className="tabular-nums text-muted-foreground">{clock(block.start)}–{clock(block.end)}</span> {block.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {picked ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border p-2.5" role="region" aria-label="Selected block">
+            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", picked.tone === "planned" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{picked.title}</p>
+              <p className="truncate text-xs text-muted-foreground tabular-nums">
+                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", studied: "Studied", planned: "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button onClick={() => zoomTo(picked)} size="xs" variant="outline"><ZoomIn />Zoom</Button>
+              {picked.session ? <Button onClick={() => onStartFocus(picked.subject, picked.title)} size="xs" variant="outline"><Timer />{picked.tone === "planned" ? "Start" : "Study again"}</Button> : null}
+              {picked.session && onRemove && picked.tone !== "live" ? (
+                confirmRemove
+                  ? <Button onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>
+                  : <Button aria-label="Remove" onClick={() => setConfirmRemove(true)} size="xs" variant="outline"><Trash2 />Remove</Button>
+              ) : null}
+              <Button aria-label="Close details" onClick={() => setSelected(null)} size="icon-xs" variant="ghost"><X /></Button>
+            </div>
+          </div>
+        ) : null}
 
         {draft ? (
           <form className="grid gap-2 rounded-md border p-2.5" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
@@ -323,4 +558,10 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       </CardContent>
     </Card>
   )
+
+  function pan(event: ReactPointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const center = (event.clientX - rect.left) / rect.width * DAY
+    setView(clampWindow({ start: center - span / 2, end: center + span / 2 }))
+  }
 }

@@ -8,7 +8,7 @@ import { Input } from "./ui/input"
 import { sessionBlocks } from "../lib/day-plan"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
-import { studySubjectOptions } from "../lib/studySubjects"
+import { studySubjectOptions, subjectColor } from "../lib/studySubjects"
 import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/types"
 import { cn } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
@@ -21,7 +21,7 @@ const QUICK_LOGS = [25, 45, 60, 90]
 type Tone = "class" | "event" | "done" | "todo" | "live"
 interface Block {
   key: string; start: number; end: number; tone: Tone
-  title: string; subject?: string; short: string
+  title: string; subject?: string; short: string; color?: string
   session?: CanonicalStudySession
 }
 type Range = { start: number; end: number }
@@ -68,6 +68,15 @@ const duration = (minutes: number) => minutes < 60 ? `${minutes}m` : `${Math.flo
 const snap = (minute: number) => Math.round(minute / SNAP) * SNAP
 const clamp = (minute: number) => Math.min(LAST_MINUTE, Math.max(0, minute))
 
+
+/** Subject colour for a study block: solid when done, tinted and outlined when still to do. */
+function subjectStyle(block: Block, dim: boolean) {
+  const { color } = block
+  if (!color || dim) return undefined
+  return block.tone === "todo"
+    ? { borderColor: color, backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--foreground))` }
+    : { backgroundColor: color, color: "#fff" }
+}
 
 /** A timer that is running or paused owns its own intervals; those cannot be edited or ticked off. */
 const timing = (session: CanonicalStudySession) => isRunning(session) || isPaused(session)
@@ -157,7 +166,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
           key: `session-${session.id}-${index}`, start, end, session,
           tone: block.live ? "live" : session.completed || session.started_at !== null ? "done" : "todo",
           title: session.title, subject: subject?.name ?? session.subject_id ?? undefined,
-          short: subject?.shortCode ?? session.title.slice(0, 3),
+          short: subject?.shortCode ?? session.title.slice(0, 3), color: subjectColor(session.subject_id),
         })
       })
     }
@@ -435,6 +444,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
   // Study that has not finished cannot be done; otherwise a past block defaults to done and may be left undone.
   const done = draft ? draft.end <= now && (doneOverride ?? true) : false
+  const draftColor = subjectColor(subjectId)
   const clash = draft ? blocks.filter((block) => block.start < draft.end && block.end > draft.start) : []
   const mode = draft ? (done ? "log" : "plan") : null
 
@@ -596,7 +606,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
                   onClick={() => select(block)}
                   onDoubleClick={() => zoomTo(block)}
                   onKeyDown={(event) => blockKey(event, block)}
-                  style={{ ...place(block.start, block.end), top: 6 + (studyRows.row.get(live.key) ?? 0) * 34 }}
+                  style={{ ...place(block.start, block.end), top: 6 + (studyRows.row.get(live.key) ?? 0) * 34, ...subjectStyle(block, missed(block)) }}
                   {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(Math.round(block.end - block.start))} (double-click to zoom)`}
                   type="button"
@@ -605,7 +615,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
                   {room >= 110 ? <span className="block truncate opacity-80">{clock(block.start)}–{clock(block.end)}</span> : null}
                   {grab && room >= 24 ? (["start", "end"] as const).map((kind) => (
                     <span aria-hidden className={cn("absolute inset-y-0 flex w-2.5 cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} {...adjustProps(block, kind)}>
-                      <span className="h-4 w-0.5 rounded-full bg-primary" />
+                      <span className="h-4 w-0.5 rounded-full bg-current" />
                     </span>
                   )) : null}
                 </button>
@@ -614,12 +624,12 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             {selection ? (
               <span
                 className={cn("absolute inset-y-0.5 rounded-sm border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
-                style={{ left: left(selection.start), width: `${(Math.min(to, selection.end) - Math.max(from, selection.start)) / span * 100}%` }}
+                style={{ left: left(selection.start), width: `${(Math.min(to, selection.end) - Math.max(from, selection.start)) / span * 100}%`, ...(draft && draftColor ? { borderColor: draftColor, backgroundColor: `color-mix(in srgb, ${draftColor} 15%, transparent)` } : {}) }}
                 {...(drag ? {} : editProps("move"))}
               >
                 {drag ? null : (["start", "end"] as const).map((kind) => (
                   <span aria-hidden className={cn("absolute inset-y-0 flex w-3 cursor-ew-resize items-center justify-center", kind === "start" ? "-left-2" : "-right-2")} key={kind} {...editProps(kind)}>
-                    <span className="h-5 w-1 rounded-full bg-primary" />
+                    <span className="h-5 w-1 rounded-full bg-primary" style={draftColor ? { backgroundColor: draftColor } : undefined} />
                   </span>
                 ))}
               </span>
@@ -647,7 +657,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               onPointerMove={(event) => { if (event.buttons) pan(event) }}
               role="group"
             >
-              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-0.5 rounded-[1px]", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
+              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-0.5 rounded-[1px]", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
               {isToday ? <span aria-hidden className="absolute inset-y-0 w-px bg-destructive" style={{ left: `${now / DAY * 100}%` }} /> : null}
               <span aria-hidden className="absolute inset-y-0 rounded-sm border border-primary bg-primary/10" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
             </div>
@@ -659,7 +669,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             {cramped.map((block) => (
               <li key={block.key}>
                 <button className={cn("rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring", selected === block.key && "border-primary bg-accent")} onClick={() => select(block)} type="button">
-                  <span className="tabular-nums text-muted-foreground">{clock(block.start)}–{clock(block.end)}</span> {block.title}
+                  {block.color ? <span aria-hidden className="mr-1 inline-block size-1.5 rounded-full" style={{ backgroundColor: block.color }} /> : null}<span className="tabular-nums text-muted-foreground">{clock(block.start)}–{clock(block.end)}</span> {block.title}
                 </button>
               </li>
             ))}
@@ -668,7 +678,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
         {picked ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border p-2.5" role="region" aria-label="Selected block">
-            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
+            <span aria-hidden style={{ backgroundColor: picked.tone === "todo" ? undefined : picked.color, borderColor: picked.color }} className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{picked.title}</p>
               <p className="truncate text-xs text-muted-foreground tabular-nums">

@@ -17,3 +17,14 @@ export function studySubjectOptions(names: string[], subjects: readonly Subject[
   }
   return [...options.values()]
 }
+
+/** Every subject gets a colour: the VCE list's own, or a stable one derived from the name for anything else. */
+export function subjectColor(subjectId: string | null | undefined, subjects: readonly Subject[] = VCE_SUBJECTS): string | undefined {
+  if (!subjectId) return undefined
+  const id = studySubjectId(subjectId, subjects)
+  const known = subjects.find((subject) => subject.id === id)
+  if (known) return known.color
+  let hash = 0
+  for (const char of id.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  return `hsl(${hash % 360} 65% 42%)`
+}

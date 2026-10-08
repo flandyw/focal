@@ -436,7 +436,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; reschedule: (session: CanonicalStudySession, start: string, end: string) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -609,7 +609,43 @@ export function useStudySessionSync(
     return saved.length
   }
 
-  return { sessions, plan, control: async (session, action) => {
+  /** Move or resize a planned session's single schedule block. Only planned sessions: a logged one is terminal on the server. */
+  async function reschedule(session: CanonicalStudySession, start: string, end: string) {
+    if (!userId || !supabase) throw new Error("Sign in to move planned study.")
+    const nested = isRecord(session.metadata.legacy_metadata)
+    const target = nested ? session.metadata.legacy_metadata as Record<string, unknown> : session.metadata
+    const schedule = { ...(isRecord(target.schedule) ? target.schedule : {}), blocks: [{ start, end }] }
+    const metadata = nested ? { ...session.metadata, legacy_metadata: { ...target, schedule } } : { ...session.metadata, schedule }
+    const id = crypto.randomUUID()
+    const result = await publishCommand({ mutation_id: id, session_id: session.id, expected_revision: session.revision,
+      action: "save_progress", app: "examtrack", kind: session.kind, device_id: deviceId(),
+      title: session.title, subject_id: session.subject_id, metadata })
+    if (!result?.applied || !result.session) {
+      if (result?.session) acceptSessions([result.session])
+      throw new Error(`The block was not moved (${result?.reason ?? "unknown"}). It may have changed on another device.`)
+    }
+    acceptSessions([result.session])
+  }
+
+  /** Remove a planned or logged session: cancel it on the server, or drop it from this browser when signed out. */
+  async function remove(session: CanonicalStudySession) {
+    if (!userId || !supabase) {
+      localStorage.setItem("examtrack:past-study:guest", JSON.stringify(guestPastStudy().filter((item) => item.id !== session.id)))
+      acceptSessions(guestPastStudy(), true)
+      return
+    }
+    // No timing fields: a boundary estimate has no meaning for a session that finished days ago.
+    const result = await publishCommand({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
+      action: "cancel", app: "examtrack", kind: session.kind, device_id: deviceId(),
+      title: session.title, subject_id: session.subject_id, metadata: session.metadata })
+    if (result?.session) acceptSessions([result.session])
+    if (result?.session?.state === "cancelled") return
+    throw new Error(result?.reason === "session_terminal"
+      ? "The server does not allow removing logged study yet. Apply migration 0019 with `supabase db push`."
+      : `Study was not removed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
+  }
+
+  return { sessions, plan, reschedule, remove, control: async (session, action) => {
     const updated = await controlSession(session, action)
     if (updated) acceptSessions([updated])
   }, log }

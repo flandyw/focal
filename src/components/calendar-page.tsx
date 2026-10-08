@@ -100,6 +100,7 @@ export function CalendarPage({
   onPlanSessions,
   onLogStudy,
   onRemoveSession,
+  onRescheduleSession,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -115,6 +116,7 @@ export function CalendarPage({
   onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>
   onLogStudy: (entry: PastStudyLog) => Promise<void>
   onRemoveSession?: (session: CanonicalStudySession) => Promise<void>
+  onRescheduleSession?: (session: CanonicalStudySession, start: string, end: string) => Promise<void>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -268,6 +270,7 @@ export function CalendarPage({
         onLog={onLogStudy}
         onPlan={planBlock}
         onRemove={onRemoveSession}
+        onReschedule={onRescheduleSession}
         onStartFocus={onStartFocus}
         sessions={sessions}
         subjects={subjects}

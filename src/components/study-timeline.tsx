@@ -88,7 +88,7 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onStartFocus }: {
+export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onReschedule, onStartFocus }: {
   date: string
   onDateChange: (date: string) => void
   sessions: CanonicalStudySession[]
@@ -97,8 +97,10 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   subjects: string[]
   onLog: (entry: PastStudyLog) => Promise<void>
   onPlan: (entry: { title: string; subjectId: string; start: string; end: string }) => Promise<void>
-  /** Absent when signed out: there is no shared store to remove a session from. */
+  /** Removes a planned or logged session. */
   onRemove?: (session: CanonicalStudySession) => Promise<void>
+  /** Absent when signed out. Only planned blocks can move: a logged session is terminal on the server. */
+  onReschedule?: (session: CanonicalStudySession, start: string, end: string) => Promise<void>
   onStartFocus: (subject: string | undefined, intent: string) => void
 }) {
   const [nowMs, setNowMs] = useState(Date.now)
@@ -209,6 +211,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const [draft, setDraft] = useState<Range | null>(null)
   const [drag, setDrag] = useState<{ anchor: number; current: number; moved: boolean } | null>(null)
   const [editing, setEditing] = useState<{ kind: "start" | "end" | "move"; offset: number } | null>(null)
+  const [adjust, setAdjust] = useState<{ key: string; kind: "start" | "end" | "move"; offset: number; range: Range; moved: boolean; saving: boolean } | null>(null)
   const [hover, setHover] = useState<number | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -217,6 +220,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const titleInput = useRef<HTMLInputElement>(null)
+  const suppressClick = useRef(false)
 
   function reveal(range: Range) {
     if (range.start >= from && range.end <= to) return
@@ -305,6 +309,46 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     onPointerCancel: () => setEditing(null),
   })
 
+  /** A planned block with one schedule slot, fully inside the day, can be dragged or resized. */
+  const movable = (block: Block) => Boolean(onReschedule && block.tone === "planned" && block.session && block.start > 0 && block.end < DAY && blocks.filter((other) => other.session === block.session).length === 1)
+  const adjustProps = (block: Block, kind: "start" | "end" | "move") => ({
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button !== 0 || adjust?.saving) return
+      event.stopPropagation()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      setAdjust({ key: block.key, kind, offset: minuteAt(event.clientX) - block.start, range: { start: block.start, end: block.end }, moved: false, saving: false })
+    },
+    onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
+      if (!adjust || adjust.key !== block.key || adjust.saving) return
+      event.stopPropagation()
+      const minute = minuteAt(event.clientX)
+      const { range } = adjust
+      const next = adjust.kind === "start" ? { start: Math.min(minute, range.end - SNAP), end: range.end }
+        : adjust.kind === "end" ? { start: range.start, end: Math.max(minute, range.start + SNAP) }
+        : (() => {
+          const length = range.end - range.start
+          const start = Math.max(SNAP, Math.min(snap(minute - adjust.offset), DAY - SNAP - length))
+          return { start, end: start + length }
+        })()
+      if (next.start !== range.start || next.end !== range.end) setAdjust({ ...adjust, range: next, moved: true })
+    },
+    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
+      if (!adjust || adjust.key !== block.key || adjust.saving) return
+      if (!adjust.moved || !block.session) return setAdjust(null)
+      // The drag ended on this element, so the click that follows must not also select it.
+      event.preventDefault()
+      suppressClick.current = true
+      setTimeout(() => { suppressClick.current = false }, 100)
+      const { range } = adjust
+      setAdjust({ ...adjust, saving: true })
+      onReschedule!(block.session, isoAt(date, range.start), isoAt(date, range.end))
+        .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
+        .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
+        .finally(() => setAdjust(null))
+    },
+    onPointerCancel: () => setAdjust(null),
+  })
+
   const mode = draft ? (draft.end <= now ? "log" : draft.start >= now ? "plan" : "invalid") : null
 
   async function submit(event: FormEvent) {
@@ -342,6 +386,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   }
 
   function select(block: Block) {
+    if (suppressClick.current) { suppressClick.current = false; return }
     setSelected((current) => current === block.key ? null : block.key)
     setConfirmRemove(false)
     setDraft(null)
@@ -349,7 +394,9 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
   const picked = blocks.find((block) => block.key === selected)
   const selection = drag ? { start: Math.min(drag.anchor, drag.current), end: Math.max(drag.anchor, drag.current) || drag.anchor + 30 } : draft
-  const bubble = drag?.moved || editing
+  const bubble = adjust?.moved
+    ? { at: (adjust.range.start + adjust.range.end) / 2, text: `${clock(adjust.range.start)}–${clock(adjust.range.end)} · ${duration(adjust.range.end - adjust.range.start)}` }
+    : drag?.moved || editing
     ? selection && { at: (selection.start + selection.end) / 2, text: `${clock(selection.start)}–${clock(selection.end)} · ${duration(selection.end - selection.start)}` }
     : hover !== null ? { at: hover, text: clock(hover) } : null
   // Blocks too narrow to carry any text still get a readable chip below the track.
@@ -430,23 +477,30 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             role="group"
           >
             {ticks.map((minute) => <span aria-hidden className="absolute inset-y-0 w-px bg-border/60" key={minute} style={{ left: left(minute) }} />)}
-            {study.filter(shown).map((block) => {
+            {study.filter(shown).map((live) => {
+              const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
               const room = pixels(block)
+              const grab = movable(block)
               return (
                 <button
                   aria-label={`${block.tone === "planned" ? "Planned" : "Studied"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={selected === block.key}
-                  className={cn("absolute inset-y-1.5 flex min-w-0 cursor-pointer flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "planned" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground")}
+                  className={cn("absolute inset-y-1.5 flex min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "planned" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={() => select(block)}
                   onDoubleClick={() => zoomTo(block)}
-                  onPointerDown={(event) => event.stopPropagation()}
                   style={place(block.start, block.end)}
+                  {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 60 ? <span className="block truncate font-medium">{block.title}</span> : room >= 26 ? <span className="block truncate">{block.short}</span> : null}
                   {room >= 110 ? <span className="block truncate opacity-80">{clock(block.start)}–{clock(block.end)}</span> : null}
+                  {grab && room >= 24 ? (["start", "end"] as const).map((kind) => (
+                    <span aria-hidden className={cn("absolute inset-y-0 flex w-2.5 cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} {...adjustProps(block, kind)}>
+                      <span className="h-4 w-0.5 rounded-full bg-primary" />
+                    </span>
+                  )) : null}
                 </button>
               )
             })}

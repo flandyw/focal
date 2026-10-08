@@ -6,8 +6,8 @@ changes. Session lifecycle is a separate transactional protocol over canonical s
 
 ## Study sessions
 
-`study_sessions` is the single shared session table. Each row contains its schedule in
-`metadata`, lifecycle state, and actual study intervals in the `segments` JSON array.
+`study_sessions` is the single shared session table. Each row contains its time
+blocks in the `segments` JSON array, a `completed` flag, and `metadata`.
 Desktop and web both write that row through `study_session_mutate` and read it through
 `sync_read_changes`; their respective calendars render the same session IDs and intervals.
 There is no separate interval table or app-specific cloud session store.
@@ -45,18 +45,33 @@ identity changed between queue selection and network submission. Legacy calls ma
 Replaying an identical request returns
 that stored result. A reused mutation ID with a different request is rejected.
 
-States are `planned`, `running`, `paused`, `completed`, and `cancelled`; terminal rows are
-retained. Supported actions are `create`, `start`, `pause`, `resume`, `phase_change`,
-`save_progress`, `complete`, `cancel`, and `log`. Expected concurrency is returned as structured
-results such as `stale_revision`, `session_terminal`, and `invalid_transition`.
+There is one kind of session. A row has times (`segments`) and a `completed` flag, and nothing
+else about its life is stored:
 
-Migration `0017` adds `log` for past study: an expected-revision-zero command with 1–100 explicit
+- **completed**: the study happened. `log` creates a completed session; `save_progress` with
+  `completed` toggles it. Completed blocks must already have finished.
+- **running**: derived, an open interval (`segment_started_at` is set). `start`, `pause`, `resume`,
+  `phase_change` and `complete` drive the live timer.
+- **paused**: derived, `paused_at` is set on an unfinished session.
+- **scheduled**: derived, not completed and never timed. `create` makes one from `blocks`;
+  `start` replaces its slot with the real run.
+- **deleted**: `cancelled_at` is set. `cancel` deletes any session, done or not; the row is kept
+  as a tombstone so every device learns of the removal, and later commands get `session_terminal`.
+
+Any session that is not running or paused can be edited: `save_progress` accepts `blocks` (they
+replace the session's blocks, up to 100, at most 24 hours each, not overlapping) and `completed`.
+A session with no blocks cannot be completed. Expected concurrency is returned as structured
+results such as `stale_revision`, `session_terminal`, `invalid_transition`, `already_running`.
+
+Migration `0017` added `log` for past study: an expected-revision-zero command with 1–100 explicit
 `blocks` (`start`/`end` timestamps), a title and a subject. The server validates positive,
 non-overlapping, already-finished blocks (at most 24 hours each), then atomically creates a
 completed session, its segments, receipt and feed wakeup. Dates are user-entered historical
 evidence, not timer clock estimates, so the seven-day timer replay window does not apply.
+Migration `0020` replaced the old `state` column with `completed`, moved planned sessions' slots
+from `metadata.schedule` into `segments`, and made every non-running session editable and deletable.
 Desktop saves locally and publishes through normal sync. Signed-in web saves through the RPC;
-signed-out web logs stay in that browser and are not uploaded automatically on sign-in.
+signed-out web sessions stay in that browser and are not uploaded automatically on sign-in.
 
 ## Durable feed
 

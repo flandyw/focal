@@ -41,6 +41,7 @@ import {
 import type { AppView } from "../lib/app-view"
 import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "../lib/navigation"
 import type { useStudySessionSync } from "../lib/study-session-sync"
+import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import type { SyncStatus } from "../lib/sync"
 import { cn } from "../lib/utils"
 
@@ -54,7 +55,7 @@ function workedLabel(session: SessionSync["sessions"][number]) {
 }
 
 function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessions"]; onControl: SessionSync["control"] }) {
-  const active = sessions.filter((session) => session.originating_app !== "examtrack" && (session.state === "running" || session.state === "paused"))
+  const active = sessions.filter((session) => session.originating_app !== "examtrack" && (isRunning(session) || isPaused(session)))
   if (active.length === 0) return null
 
   // ponytail: no per-row pending state; the menu closes on click and sync polls the
@@ -82,7 +83,7 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
                     {session.title}
                     <span className="ml-1 text-muted-foreground">{workedLabel(session)}</span>
                   </DropdownMenuLabel>
-                  {session.state === "paused"
+                  {isPaused(session)
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}><Play aria-hidden />Resume</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => control(session, "pause")}><Pause aria-hidden />Pause</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => control(session, "complete")}><Check aria-hidden />Finish</DropdownMenuItem>

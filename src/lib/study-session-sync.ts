@@ -8,6 +8,9 @@ import type { PastStudyLog } from "./pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
 import {
   estimateServerNow,
+  isDeleted,
+  isPaused,
+  isRunning,
   observeServerClock,
   parseCanonicalStudySession,
   parseStudySessionMutationResult,
@@ -32,6 +35,43 @@ function guestPastStudy(): CanonicalStudySession[] {
     if (!session) throw new Error("Saved study data is unreadable; export it before resetting browser storage.")
     return session
   })
+}
+
+const GUEST_KEY = "examtrack:past-study:guest"
+type Block = { start: string; end: string }
+
+function saveGuest(sessions: CanonicalStudySession[]) {
+  localStorage.setItem(GUEST_KEY, JSON.stringify(sessions))
+}
+
+const blocksOf = (session: CanonicalStudySession): Block[] =>
+  session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
+
+/** Mirrors the server's block and completed bookkeeping for sessions that only exist in this browser. */
+function guestApply(session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }): CanonicalStudySession {
+  const blocks = (patch.blocks ?? blocksOf(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
+  const completed = patch.completed ?? session.completed
+  if (blocks.some((block, index) => !(Date.parse(block.end) > Date.parse(block.start)) || (index > 0 && Date.parse(block.start) < Date.parse(blocks[index - 1].end)))) {
+    throw new Error("Study blocks must end after they start and must not overlap.")
+  }
+  if (completed && (!blocks.length || blocks.some((block) => Date.parse(block.end) > Date.now()))) {
+    throw new Error("Study that has not finished yet cannot be marked done.")
+  }
+  return {
+    ...session, completed, revision: session.revision + 1, updated_at: new Date().toISOString(),
+    started_at: completed ? blocks[0].start : null, completed_at: completed ? blocks.at(-1)!.end : null,
+    accumulated_active_ms: completed ? blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0) : 0,
+    segments: patch.blocks ? blocks.map((block) => ({ id: crypto.randomUUID(), session_id: session.id, started_at: block.start, ended_at: block.end, phase: "focus" as const, source_device_id: deviceId() })) : session.segments,
+  }
+}
+
+function guestSession(id: string, fields: { title: string; subjectId?: string; blocks: Block[]; completed: boolean; metadata: Record<string, unknown> }): CanonicalStudySession {
+  const now = new Date().toISOString()
+  return guestApply({
+    id, kind: "focus", completed: false, phase: "focus", revision: 0, title: fields.title, subject_id: fields.subjectId ?? null,
+    originating_app: "examtrack", created_at: now, updated_at: now, started_at: null, paused_at: null, completed_at: null, cancelled_at: null,
+    accumulated_active_ms: 0, segment_started_at: null, metadata: fields.metadata, segments: [],
+  }, { blocks: fields.blocks, completed: fields.completed })
 }
 
 type TimerKind = "exam" | "sac" | "focus"
@@ -124,7 +164,7 @@ function reconcileSessionResult<T extends TimerSession>(
   }
   // A closing command has no session left to hand back, and neither has one that somebody
   // else closed. The cursor pull brings the closed row in either way.
-  if (!keepOpen || canonical.state === "completed" || canonical.state === "cancelled") return undefined
+  if (!keepOpen || canonical.completed || isDeleted(canonical)) return undefined
   return projectTimerSession(canonical, current, kind)
 }
 
@@ -147,16 +187,16 @@ function projectTimerSession<T extends TimerSession>(canonical: CanonicalStudySe
     subject,
     title: canonical.title,
     startedAt: now - studySessionActiveMilliseconds(canonical, now),
-    pausedAt: canonical.state === "paused" ? now : undefined,
+    pausedAt: isPaused(canonical) ? now : undefined,
   } as T
 }
 
 /** Did the command fail only because the session had already been put in the state it wanted? */
 function actionSatisfied(session: CanonicalStudySession, command: StudySessionCommand): boolean {
-  if (command.action === "start" || command.action === "resume") return session.state === "running"
-  if (command.action === "pause") return session.state === "paused"
-  if (command.action === "complete") return session.state === "completed"
-  if (command.action === "cancel") return session.state === "cancelled"
+  if (command.action === "start" || command.action === "resume") return isRunning(session)
+  if (command.action === "pause") return isPaused(session)
+  if (command.action === "complete") return session.completed
+  if (command.action === "cancel") return isDeleted(session)
   if (command.action === "phase_change") return session.phase === command.phase
   // `create` and `save_progress` carry no lifecycle claim, so there is nothing to contradict.
   return true
@@ -380,7 +420,7 @@ async function rememberCanonicalTiming(accountId: string, sessions: readonly Can
   const transaction = database.transaction(TIMING_STORE, "readwrite")
   const store = transaction.objectStore(TIMING_STORE)
   for (const session of sessions) {
-    const boundary = session.timing_at ?? (session.state === "running" ? session.segment_started_at : session.paused_at)
+    const boundary = session.timing_at ?? (isRunning(session) ? session.segment_started_at : session.paused_at)
     const elapsed = boundary ? Math.max(0, estimateServerNow(clockAnchor, nowMono) - Date.parse(boundary)) : 0
     store.put({ key: timingKey(accountId, session.id), accountId, sessionId: session.id,
       monotonicAt: nowMono - elapsed, timeOrigin, elapsedMs: 0 } satisfies SessionTiming)
@@ -436,7 +476,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; reschedule: (session: CanonicalStudySession, start: string, end: string) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -568,7 +608,6 @@ export function useStudySessionSync(
   }, [userId, setData])
 
   async function log(entry: PastStudyLog, id: string) {
-    const now = new Date().toISOString()
     const metadata = { subjectIds: [entry.subjectId], reflection: { notes: entry.notes }, createdVia: "manual", schedule: { blocks: entry.blocks } }
     let session: CanonicalStudySession
     if (userId && supabase) {
@@ -578,74 +617,65 @@ export function useStudySessionSync(
       if (!result?.applied || !result.session) throw new Error("Study was not saved. Try again after checking your account and connection.")
       session = result.session
     } else {
-      session = { id, kind: "focus", state: "completed", phase: "focus", revision: 1,
-        title: entry.title, subject_id: entry.subjectId, originating_app: "examtrack", created_at: now, updated_at: now,
-        started_at: entry.blocks[0].start, completed_at: entry.blocks.at(-1)!.end, paused_at: null, cancelled_at: null,
-        segment_started_at: null, accumulated_active_ms: entry.blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0), metadata,
-        segments: entry.blocks.map((block) => ({ id: crypto.randomUUID(), session_id: id, started_at: block.start, ended_at: block.end, phase: "focus", source_device_id: deviceId() })) }
-      const stored = guestPastStudy()
-      localStorage.setItem("examtrack:past-study:guest", JSON.stringify([...stored.filter((item) => item.id !== id), session]))
+      session = guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks: entry.blocks, completed: true, metadata })
+      saveGuest([...guestPastStudy().filter((item) => item.id !== id), session])
     }
     acceptSessions([session])
   }
 
-  /** Create planned sessions the desktop calendar shows as scheduled study. Null when signed out. */
+  /** Schedule study that has not happened yet: a session with times and `completed` false. */
   async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) {
-    if (!userId || !supabase) return null
     const saved: CanonicalStudySession[] = []
     for (const entry of entries) {
       const id = crypto.randomUUID()
+      const blocks = [{ start: entry.start, end: entry.end }]
       const metadata = {
         subjectIds: entry.subjectId ? [entry.subjectId] : [], createdVia: "manual",
-        description: entry.description, topics: entry.topics, schedule: { blocks: [{ start: entry.start, end: entry.end }] },
+        description: entry.description, topics: entry.topics, schedule: { blocks },
       }
-      const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
-        action: "create", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
-        title: entry.title, subject_id: entry.subjectId ?? null, metadata })
-      if (!result?.applied || !result.session) throw new Error(`"${entry.title}" was not saved. Check your connection and try again.`)
-      saved.push(result.session)
-      acceptSessions([result.session])
+      if (userId && supabase) {
+        const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
+          action: "create", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
+          title: entry.title, subject_id: entry.subjectId ?? null, metadata, blocks })
+        if (!result?.applied || !result.session) throw new Error(`"${entry.title}" was not saved. Check your connection and try again.`)
+        saved.push(result.session)
+      } else {
+        const session = guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks, completed: false, metadata })
+        saveGuest([...guestPastStudy(), session])
+        saved.push(session)
+      }
+      acceptSessions([saved.at(-1)!])
     }
     return saved.length
   }
 
-  /** Move or resize a planned session's single schedule block. Only planned sessions: a logged one is terminal on the server. */
-  async function reschedule(session: CanonicalStudySession, start: string, end: string) {
-    if (!userId || !supabase) throw new Error("Sign in to move planned study.")
-    const nested = isRecord(session.metadata.legacy_metadata)
-    const target = nested ? session.metadata.legacy_metadata as Record<string, unknown> : session.metadata
-    const schedule = { ...(isRecord(target.schedule) ? target.schedule : {}), blocks: [{ start, end }] }
-    const metadata = nested ? { ...session.metadata, legacy_metadata: { ...target, schedule } } : { ...session.metadata, schedule }
-    const id = crypto.randomUUID()
-    const result = await publishCommand({ mutation_id: id, session_id: session.id, expected_revision: session.revision,
-      action: "save_progress", app: "examtrack", kind: session.kind, device_id: deviceId(),
-      title: session.title, subject_id: session.subject_id, metadata })
-    if (!result?.applied || !result.session) {
-      if (result?.session) acceptSessions([result.session])
-      throw new Error(`The block was not moved (${result?.reason ?? "unknown"}). It may have changed on another device.`)
+  /** Move or resize a session's blocks, or mark it done or not done. Any session that is not running. */
+  async function edit(session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) {
+    if (!userId || !supabase) {
+      const next = guestApply(session, patch)
+      saveGuest(guestPastStudy().map((item) => item.id === session.id ? next : item))
+      return acceptSessions([next])
     }
-    acceptSessions([result.session])
+    const result = await publishCommand({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
+      action: "save_progress", app: "examtrack", device_id: deviceId(), ...patch })
+    if (result?.session) acceptSessions([result.session])
+    if (!result?.applied) throw new Error(`Study was not changed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
   }
 
-  /** Remove a planned or logged session: cancel it on the server, or drop it from this browser when signed out. */
+  /** Delete a session: cancel it on the server (a tombstone every device sees), or drop it from this browser when signed out. */
   async function remove(session: CanonicalStudySession) {
     if (!userId || !supabase) {
-      localStorage.setItem("examtrack:past-study:guest", JSON.stringify(guestPastStudy().filter((item) => item.id !== session.id)))
-      acceptSessions(guestPastStudy(), true)
-      return
+      saveGuest(guestPastStudy().filter((item) => item.id !== session.id))
+      return acceptSessions(guestPastStudy(), true)
     }
     // No timing fields: a boundary estimate has no meaning for a session that finished days ago.
     const result = await publishCommand({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
-      action: "cancel", app: "examtrack", kind: session.kind, device_id: deviceId(),
-      title: session.title, subject_id: session.subject_id, metadata: session.metadata })
+      action: "cancel", app: "examtrack", device_id: deviceId() })
     if (result?.session) acceptSessions([result.session])
-    if (result?.session?.state === "cancelled") return
-    throw new Error(result?.reason === "session_terminal"
-      ? "The server does not allow removing logged study yet. Apply migration 0019 with `supabase db push`."
-      : `Study was not removed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
+    if (!result?.session || !isDeleted(result.session)) throw new Error(`Study was not removed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
   }
 
-  return { sessions, plan, reschedule, remove, control: async (session, action) => {
+  return { sessions, plan, edit, remove, control: async (session, action) => {
     const updated = await controlSession(session, action)
     if (updated) acceptSessions([updated])
   }, log }
@@ -670,7 +700,7 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
     }
     const sameExam = next.activeExamTimer?.id === session.id
     const sameSac = next.activeSacTimer?.id === session.id
-    if (session.state === "completed" || session.state === "cancelled") {
+    if (session.completed || isDeleted(session)) {
       if (sameExam) { next = { ...next, activeExamTimer: undefined }; changed = true }
       if (sameSac) { next = { ...next, activeSacTimer: undefined }; changed = true }
       continue
@@ -688,7 +718,7 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
       const timer: ExamTimerSession = {
         ...(merged as ExamTimerSession), id: session.id, revision: session.revision,
         subject: session.subject_id ?? merged.subject ?? "", title: session.title,
-        startedAt: nowMs - elapsedMs, pausedAt: session.state === "paused" ? nowMs : undefined,
+        startedAt: nowMs - elapsedMs, pausedAt: isPaused(session) ? nowMs : undefined,
         pausedSeconds: merged.pausedSeconds ?? 0, phase: session.phase === "writing" ? "writing" : "reading",
       }
       if (!sameTimer(next.activeExamTimer, timer)) { next = { ...next, activeExamTimer: timer }; changed = true }
@@ -698,7 +728,7 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
       const timer: SacTimerSession = {
         ...(merged as SacTimerSession), id: session.id, revision: session.revision,
         subject: session.subject_id ?? merged.subject ?? "", title: session.title,
-        startedAt: nowMs - elapsedMs, pausedAt: session.state === "paused" ? nowMs : undefined,
+        startedAt: nowMs - elapsedMs, pausedAt: isPaused(session) ? nowMs : undefined,
         pausedSeconds: merged.pausedSeconds ?? 0,
       }
       if (!sameTimer(next.activeSacTimer, timer)) { next = { ...next, activeSacTimer: timer }; changed = true }
@@ -714,7 +744,7 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
 function adoptRemoteFocusSessionChange(session: CanonicalStudySession, nowMs: number): void {
   const local = loadFocusSession()
   if (local?.id !== session.id || (session.revision ?? 0) <= (local.revision ?? 0)) return
-  const closed = session.state === "completed" || session.state === "cancelled"
+  const closed = session.completed || isDeleted(session)
   const projected = closed ? undefined : projectTimerSession(session, local, "focus")
   adoptRemoteFocusSession(projected, nowMs)
   if (typeof window !== "undefined") {

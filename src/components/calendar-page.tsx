@@ -29,7 +29,7 @@ import {
   type DayPlan,
   type DayPlanSource,
 } from "../lib/day-plan"
-import { classPeriodsOn, periodSubjectName, subjectIdFor, subjectNameFor } from "../lib/class-timetable"
+import { classPeriodsOn, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
@@ -100,7 +100,7 @@ export function CalendarPage({
   onPlanSessions,
   onLogStudy,
   onRemoveSession,
-  onRescheduleSession,
+  onEditSession,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -113,10 +113,10 @@ export function CalendarPage({
   classTimetable?: TimetableConfig
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
-  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number | null>
+  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>
   onLogStudy: (entry: PastStudyLog) => Promise<void>
-  onRemoveSession?: (session: CanonicalStudySession) => Promise<void>
-  onRescheduleSession?: (session: CanonicalStudySession, start: string, end: string) => Promise<void>
+  onRemoveSession: (session: CanonicalStudySession) => Promise<void>
+  onEditSession: (session: CanonicalStudySession, patch: { blocks?: { start: string; end: string }[]; completed?: boolean }) => Promise<void>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -149,15 +149,14 @@ export function CalendarPage({
     setMonth(new Date(year, month - 1, 1))
   }
 
-  async function planBlock(entry: { title: string; subjectId: string; start: string; end: string }) {
-    // Signed out there is no shared session store, so the block becomes a local study task.
-    if (await onPlanSessions([entry]) !== null) return
-    const start = new Date(entry.start)
-    commit((current) => addTask(current, {
-      title: entry.title, date: localDate(start), subject: subjectNameFor(entry.subjectId),
-      minutes: Math.round((Date.parse(entry.end) - start.getTime()) / 60_000),
-      detail: start.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" }),
-    }))
+  async function setSessionDone(id: string, completed: boolean) {
+    const session = sessions.find((item) => item.id === id)
+    if (!session) return
+    try {
+      await onEditSession(session, { completed })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update that study.")
+    }
   }
 
   function changeStatus(id: string, status: "completed" | "skipped" | "planned") {
@@ -192,14 +191,7 @@ export function CalendarPage({
         return { title: draft.title, subjectId: event.subjectId, start: event.startTime, end: event.endTime!, description: draft.description, topics: draft.topics }
       })
       try {
-        const saved = await onPlanSessions(entries)
-        // Signed out there is no shared session store, so keep them as local study tasks.
-        if (saved === null) {
-          commit((current) => sessions.reduce((workspace, draft) => addTask(workspace, {
-            title: draft.title, date: draft.date, minutes: draft.durationMinutes, subject: draft.subjectIds[0],
-            detail: [draft.startTime, draft.location].filter(Boolean).join(" · "),
-          }), current))
-        }
+        await onPlanSessions(entries)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Study sessions could not be saved.")
       }
@@ -268,9 +260,9 @@ export function CalendarPage({
         events={data.events ?? []}
         onDateChange={selectDay}
         onLog={onLogStudy}
-        onPlan={planBlock}
+        onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
         onRemove={onRemoveSession}
-        onReschedule={onRescheduleSession}
+        onEdit={onEditSession}
         onStartFocus={onStartFocus}
         sessions={sessions}
         subjects={subjects}
@@ -399,6 +391,7 @@ export function CalendarPage({
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
+                        onSessionDone={setSessionDone}
                         onStatus={changeStatus}
                       />
                     ))}
@@ -425,6 +418,7 @@ export function CalendarPage({
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
+                        onSessionDone={setSessionDone}
                         onStatus={changeStatus}
                       />
                     ))}
@@ -589,6 +583,7 @@ function DayItemRow({
   onEditEvent,
   onMove,
   onNavigate,
+  onSessionDone,
   onStartFocus,
   onStatus,
 }: {
@@ -597,6 +592,7 @@ function DayItemRow({
   onEditEvent: (id: string) => void
   onMove: (id: string, date: string) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
+  onSessionDone: (id: string, completed: boolean) => void
   onStartFocus: (subject: string | undefined, intent: string) => void
   onStatus: (id: string, status: "completed" | "skipped" | "planned") => void
 }) {
@@ -618,9 +614,8 @@ function DayItemRow({
           {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (
-            <Badge className="shrink-0" variant="outline">
-              {item.status === "completed" ? "Studied" : item.status === "in-progress" ? "Studying" : "Planned"}
-            </Badge>
+            item.live ? <Badge className="shrink-0" variant="outline">Studying</Badge>
+              : done ? <Badge className="shrink-0" variant="secondary">Done</Badge> : null
           ) : item.kind === "task" ? (
             done ? (
               <Badge className="shrink-0" variant="secondary">Done</Badge>
@@ -642,6 +637,10 @@ function DayItemRow({
             ) : (
               <Button aria-label={`Reopen ${item.title}`} onClick={() => onStatus(item.id, "planned")} size="icon-sm" variant="ghost"><RotateCcw /></Button>
             )
+          ) : item.kind === "session" ? (
+            item.live ? null : done
+              ? <Button aria-label={`Mark ${item.title} not done`} onClick={() => onSessionDone(item.id, false)} size="icon-sm" variant="ghost"><RotateCcw /></Button>
+              : <Button aria-label={`Mark ${item.title} done`} onClick={() => onSessionDone(item.id, true)} size="icon-sm" variant="ghost"><Check /></Button>
           ) : item.kind === "mistakes" ? (
             <Button onClick={() => onNavigate("mistakes")} size="sm" variant="ghost">Review</Button>
           ) : item.kind === "sac" ? (

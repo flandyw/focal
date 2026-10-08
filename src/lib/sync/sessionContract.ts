@@ -1,5 +1,4 @@
 type StudySessionKind = "focus" | "exam" | "sac"
-type StudySessionState = "planned" | "running" | "paused" | "completed" | "cancelled"
 type StudySessionPhase = "focus" | "reading" | "writing"
 // ponytail: "examtrack" is the historical app id for Focal Web. It is frozen: Folio and the
 // web build send it, and Postgres rows already store it.
@@ -20,7 +19,8 @@ interface StudySessionSegment {
 export interface CanonicalStudySession {
   id: string
   kind: StudySessionKind
-  state: StudySessionState
+  /** The study happened. The only lifecycle fact besides `cancelled_at` (deleted); everything else is derived. */
+  completed: boolean
   phase: StudySessionPhase | null
   revision: number
   title: string
@@ -51,8 +51,10 @@ export interface StudySessionCommand {
   title?: string
   subject_id?: string | null
   metadata?: Record<string, unknown>
-  /** Explicit completed study blocks, accepted only by the log action. */
+  /** Explicit time blocks, accepted by log, create and save_progress. They replace the session's blocks and are refused while it is running. */
   blocks?: { start: string; end: string }[]
+  /** save_progress only: mark the session done or not done. Done blocks must already have finished. */
+  completed?: boolean
   /** Server-clock estimate captured from a server anchor and monotonic time, never Date.now(). */
   occurred_at?: string | null
   /** Monotonic milliseconds since this session's previous lifecycle boundary. */
@@ -69,7 +71,6 @@ export interface StudySessionMutationResult {
 }
 
 const SESSION_KINDS = new Set<unknown>(["focus", "exam", "sac"])
-const SESSION_STATES = new Set<unknown>(["planned", "running", "paused", "completed", "cancelled"])
 const SESSION_PHASES = new Set<unknown>(["focus", "reading", "writing"])
 const SESSION_APPS = new Set<unknown>(["focal", "examtrack", "folio"])
 
@@ -84,7 +85,7 @@ function nullableString(value: unknown): value is string | null {
 export function parseCanonicalStudySession(value: unknown): CanonicalStudySession | null {
   if (!isRecord(value)) return null
   if (
-    typeof value.id !== "string" || !SESSION_KINDS.has(value.kind) || !SESSION_STATES.has(value.state) ||
+    typeof value.id !== "string" || !SESSION_KINDS.has(value.kind) || typeof value.completed !== "boolean" ||
     !(value.phase === null || SESSION_PHASES.has(value.phase)) ||
     !Number.isSafeInteger(value.revision) || (value.revision as number) < 1 ||
     typeof value.title !== "string" || !nullableString(value.subject_id) || !SESSION_APPS.has(value.originating_app) ||
@@ -92,10 +93,8 @@ export function parseCanonicalStudySession(value: unknown): CanonicalStudySessio
     !nullableString(value.completed_at) || !nullableString(value.cancelled_at) ||
     !Number.isSafeInteger(value.accumulated_active_ms) || (value.accumulated_active_ms as number) < 0 ||
     !nullableString(value.segment_started_at) || !isRecord(value.metadata) || !Array.isArray(value.segments) ||
-    (value.state === "running" && (value.started_at === null || value.segment_started_at === null)) ||
-    (value.state === "paused" && (value.started_at === null || value.segment_started_at !== null)) ||
-    (value.state === "completed" && value.completed_at === null) ||
-    (value.state === "cancelled" && value.cancelled_at === null)
+    (value.segment_started_at !== null && value.started_at === null) ||
+    (value.completed === true && value.completed_at === null)
   ) return null
 
   const segments: StudySessionSegment[] = []
@@ -119,7 +118,7 @@ export function parseCanonicalStudySession(value: unknown): CanonicalStudySessio
   return {
     id: value.id,
     kind: value.kind as StudySessionKind,
-    state: value.state as StudySessionState,
+    completed: value.completed,
     phase: value.phase as StudySessionPhase | null,
     revision: value.revision as number,
     title: value.title,
@@ -139,6 +138,14 @@ export function parseCanonicalStudySession(value: unknown): CanonicalStudySessio
   }
 }
 
+/** A timer is running while it has an open interval. */
+export const isRunning = (session: CanonicalStudySession) => session.segment_started_at !== null
+/** Paused: started, stopped, and not finished. */
+export const isPaused = (session: CanonicalStudySession) =>
+  session.segment_started_at === null && session.paused_at !== null && !session.completed && session.cancelled_at === null
+/** Deleted sessions are kept as tombstones so every device learns of the removal. */
+export const isDeleted = (session: CanonicalStudySession) => session.cancelled_at !== null
+
 /** Uses only a server timestamp and a monotonic clock; system wall-clock skew is irrelevant. */
 export interface ServerClockAnchor {
   serverNowMs: number
@@ -157,7 +164,7 @@ export function estimateServerNow(anchor: ServerClockAnchor, monotonicNowMs: num
 }
 
 export function studySessionActiveMilliseconds(session: CanonicalStudySession, estimatedServerNowMs: number): number {
-  const currentSegmentMs = session.state === "running" && session.segment_started_at
+  const currentSegmentMs = session.segment_started_at
     ? Math.max(0, estimatedServerNowMs - Date.parse(session.segment_started_at))
     : 0
   return session.accumulated_active_ms + (Number.isFinite(currentSegmentMs) ? currentSegmentMs : 0)

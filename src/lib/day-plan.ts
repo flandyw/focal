@@ -2,7 +2,7 @@ import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 import { isCompletedSac, type SacRecord } from "./sac"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace"
-import type { CanonicalStudySession } from "./sync/sessionContract"
+import { isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract"
 import { subjectNameFor } from "./class-timetable"
 import { VCE_SUBJECTS, type CalendarEvent } from "./types"
 
@@ -28,7 +28,7 @@ export type DayItem =
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
   | { kind: "event"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean; multiDay: boolean }
-  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; status: "planned" | "in-progress" | "completed" }
+  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; done: boolean; live: boolean }
   | { kind: "logged-exam"; id: string; title: string; detail: string; minutes: number; completed: true }
   | { kind: "mistakes"; id: string; title: string; detail: string; minutes: number; count: number }
 
@@ -199,49 +199,46 @@ function sessionSchedule(session: CanonicalStudySession) {
   const subjectIds = Array.isArray(legacy.subjectIds)
     ? legacy.subjectIds.filter((id): id is string => typeof id === "string")
     : []
-  const scheduleBlocks = isRecord(legacy.schedule) && Array.isArray(legacy.schedule.blocks)
+  // A session's blocks are its segments, done or not. Only a row with none (a timer still on its
+  // first interval, or an old row) falls back to a stored schedule, then to start plus an hour,
+  // which is where the desktop files such a sitting.
+  const closed = session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
+  const stored = isRecord(legacy.schedule) && Array.isArray(legacy.schedule.blocks)
     ? legacy.schedule.blocks.flatMap((block) => {
       if (!isRecord(block) || typeof block.start !== "string" || typeof block.end !== "string") return []
       return [{ start: block.start, end: block.end }]
     })
     : []
   const start = session.started_at ?? session.created_at
-  // Without a schedule the desktop files the sitting under its start plus an hour, so
-  // the calendar lands it on the same day here.
-  const schedule = scheduleBlocks.length > 0
-    ? scheduleBlocks
+  const schedule = closed.length > 0 ? closed : stored.length > 0 ? stored
     : [{ start, end: new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() }]
-  return { subjectIds, schedule }
+  return { subjectIds, schedule, closed }
 }
 
-/** Where a session sits on a day's timeline: its schedule while planned, its worked
- *  segments once started. An open segment runs to `now`. */
-export function sessionBlocks(session: CanonicalStudySession, now = Date.now()): { start: string; end: string; planned: boolean; live: boolean }[] {
-  if (session.state === "cancelled") return []
-  if (session.state === "planned") return sessionSchedule(session).schedule.map((block) => ({ ...block, planned: true, live: false }))
-  return session.segments.map((segment) => ({
+/** Where a session sits on a day's timeline. An open interval runs to `now`. `done` is the
+ *  session's completed flag; a block that has not been started or finished is just not done. */
+export function sessionBlocks(session: CanonicalStudySession, now = Date.now()): { start: string; end: string; done: boolean; live: boolean }[] {
+  if (isDeleted(session)) return []
+  const blocks = session.segments.map((segment) => ({
     start: segment.started_at,
     end: segment.ended_at ?? new Date(Math.max(now, Date.parse(segment.started_at))).toISOString(),
-    planned: false,
+    done: session.completed,
     live: segment.ended_at === null,
   }))
+  return blocks.length > 0 ? blocks : sessionSchedule(session).schedule.map((block) => ({ ...block, done: session.completed, live: false }))
 }
 
 /**
  * Projects one canonical study session exactly the way Focal desktop's calendar does:
- * it lands on the local date of its `startTime` (its first schedule block, or its start
- * when there is none), its minutes are its worked intervals, and a cancelled sitting is
- * never shown. Both apps then list the same sessions on the same days with the same
- * durations, from the one shared record.
+ * it lands on the local date of its `startTime` (its first block, or its start when there
+ * is none), its minutes are its blocks, and a deleted session is never shown. Both apps then
+ * list the same sessions on the same days with the same durations, from the one shared record.
  */
 export function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
-  if (session.state === "cancelled") return null
-  const { subjectIds, schedule } = sessionSchedule(session)
-  const worked = session.state === "planned"
-    ? schedule
-    : session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
+  if (isDeleted(session)) return null
+  const { subjectIds, schedule, closed } = sessionSchedule(session)
   const span = { start: schedule[0].start, end: schedule[schedule.length - 1].end }
-  const minutes = worked.length > 0 ? mergedMinutes(worked) : mergedMinutes([span])
+  const minutes = closed.length > 0 ? mergedMinutes(closed) : mergedMinutes([span])
   return {
     date: localDate(new Date(schedule[0].start)),
     item: {
@@ -251,7 +248,8 @@ export function sessionItem(session: CanonicalStudySession): { item: DayItem; da
       detail: subjectIds.map(subjectLabel).filter(Boolean).join(" · ") || subjectLabel(session.subject_id ?? undefined),
       minutes,
       startTime: timeOf(schedule[0].start) ?? "",
-      status: session.state === "planned" ? "planned" : session.state === "completed" ? "completed" : "in-progress",
+      done: session.completed,
+      live: !session.completed && (isRunning(session) || isPaused(session)),
     },
   }
 }
@@ -265,7 +263,7 @@ function workOf(item: DayItem): { minutes: number; done: boolean } | null {
     return { minutes: item.minutes, done: item.status === "completed" }
   }
   if (item.kind === "sac") return { minutes: item.minutes, done: item.completed }
-  if (item.kind === "session") return { minutes: item.minutes, done: item.status === "completed" }
+  if (item.kind === "session") return { minutes: item.minutes, done: item.done }
   if (item.kind === "logged-exam") return { minutes: item.minutes, done: true }
   return null
 }

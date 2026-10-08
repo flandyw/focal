@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RotateCcw, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { sessionBlocks } from "../lib/day-plan"
+import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
 import { studySubjectOptions } from "../lib/studySubjects"
 import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/types"
@@ -17,7 +18,7 @@ const SNAP = 5
 const LAST_MINUTE = 24 * 60 - 1
 const QUICK_LOGS = [25, 45, 60, 90]
 
-type Tone = "class" | "event" | "studied" | "planned" | "live"
+type Tone = "class" | "event" | "done" | "todo" | "live"
 interface Block {
   key: string; start: number; end: number; tone: Tone
   title: string; subject?: string; short: string
@@ -32,9 +33,9 @@ const TICK_STEPS = [5, 10, 15, 30, 60, 120, 180, 360]
 const TONE: Record<Tone, string> = {
   class: "bg-muted-foreground/20",
   event: "bg-chart-5/70",
-  studied: "bg-primary",
+  done: "bg-primary",
   live: "bg-primary animate-pulse",
-  planned: "border border-dashed border-primary bg-primary/10",
+  todo: "border border-dashed border-primary bg-primary/10",
 }
 
 function shiftDate(date: string, days: number) {
@@ -68,6 +69,22 @@ const snap = (minute: number) => Math.round(minute / SNAP) * SNAP
 const clamp = (minute: number) => Math.min(LAST_MINUTE, Math.max(0, minute))
 
 
+/** A timer that is running or paused owns its own intervals; those cannot be edited or ticked off. */
+const timing = (session: CanonicalStudySession) => isRunning(session) || isPaused(session)
+
+/** Overlapping blocks go on separate rows, first free row wins, so nothing is drawn on top of anything else. */
+function pack(items: Block[]): { row: Map<string, number>; rows: number } {
+  const ends: number[] = []
+  const row = new Map<string, number>()
+  for (const block of items.toSorted((a, b) => a.start - b.start || a.end - b.end)) {
+    let index = ends.findIndex((end) => end <= block.start)
+    if (index < 0) index = ends.length
+    ends[index] = block.end
+    row.set(block.key, index)
+  }
+  return { row, rows: Math.max(1, ends.length) }
+}
+
 function clampWindow({ start, end }: Range): Range {
   const span = Math.min(DAY, Math.max(MIN_SPAN, end - start))
   const from = Math.min(DAY - span, Math.max(0, start))
@@ -84,11 +101,11 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
 
 /**
  * One day as a zoomable strip of hours: classes and events for context, study you did as
- * solid bars, study you planned as dashed ones. Drag across the track to log (past) or plan
+ * solid bars, study still to do as dashed ones (one kind of block, with a done flag). Drag across the track to log (past) or plan
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onReschedule, onStartFocus }: {
+export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onStartFocus }: {
   date: string
   onDateChange: (date: string) => void
   sessions: CanonicalStudySession[]
@@ -97,10 +114,10 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   subjects: string[]
   onLog: (entry: PastStudyLog) => Promise<void>
   onPlan: (entry: { title: string; subjectId: string; start: string; end: string }) => Promise<void>
-  /** Removes a planned or logged session. */
+  /** Deletes a session, done or not. */
   onRemove?: (session: CanonicalStudySession) => Promise<void>
-  /** Absent when signed out. Only planned blocks can move: a logged session is terminal on the server. */
-  onReschedule?: (session: CanonicalStudySession, start: string, end: string) => Promise<void>
+  /** Moves or resizes a session's block, or marks it done or not done. */
+  onEdit: (session: CanonicalStudySession, patch: { blocks?: { start: string; end: string }[]; completed?: boolean }) => Promise<void>
   onStartFocus: (subject: string | undefined, intent: string) => void
 }) {
   const [nowMs, setNowMs] = useState(Date.now)
@@ -138,7 +155,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
         if (end <= 0 || start >= DAY) return
         out.push({
           key: `session-${session.id}-${index}`, start, end, session,
-          tone: block.live ? "live" : block.planned ? "planned" : "studied",
+          tone: block.live ? "live" : session.completed || session.started_at !== null ? "done" : "todo",
           title: session.title, subject: subject?.name ?? session.subject_id ?? undefined,
           short: subject?.shortCode ?? session.title.slice(0, 3),
         })
@@ -149,9 +166,11 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
   const context = blocks.filter((block) => block.tone === "class" || block.tone === "event")
   const study = blocks.filter((block) => block.tone !== "class" && block.tone !== "event")
-  const studied = Math.round(study.filter((block) => block.tone !== "planned").reduce((sum, block) => sum + block.end - block.start, 0))
-  const planned = Math.round(study.filter((block) => block.tone === "planned").reduce((sum, block) => sum + block.end - block.start, 0))
-  const lastEnd = Math.max(-1, ...study.filter((block) => block.tone === "studied" && block.end <= now).map((block) => block.end))
+  const contextRows = pack(context.filter((block) => block.end > 0))
+  const studyRows = pack(study)
+  const studied = Math.round(study.filter((block) => block.tone !== "todo").reduce((sum, block) => sum + block.end - block.start, 0))
+  const planned = Math.round(study.filter((block) => block.tone === "todo").reduce((sum, block) => sum + block.end - block.start, 0))
+  const lastEnd = Math.max(-1, ...study.filter((block) => block.tone === "done" && block.end <= now).map((block) => block.end))
 
   // Auto-fit hugs everything on the day (and "now"), padded and never tighter than six hours;
   // an empty day shows the usual 7am-11pm so there is room to plan. Zooming overrides it.
@@ -205,7 +224,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
   // The subject you studied most recently is the one you most likely studied again.
   const recentSubject = useMemo(() => [...sessions]
-    .filter((session) => session.state !== "planned" && options.some((option) => option.id === session.subject_id))
+    .filter((session) => session.completed && options.some((option) => option.id === session.subject_id))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]?.subject_id ?? options[0]?.id ?? "", [sessions, options])
 
   const [draft, setDraft] = useState<Range | null>(null)
@@ -215,6 +234,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const [hover, setHover] = useState<number | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
+  const [doneOverride, setDoneOverride] = useState<boolean | null>(null)
   const [subjectId, setSubjectId] = useState("")
   const [title, setTitle] = useState("")
   const [busy, setBusy] = useState(false)
@@ -230,12 +250,11 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   }
 
   function open(range: Range) {
-    // A block that runs past "now" can only be logged up to now.
-    const fixed = range.start < now && range.end > now ? { start: range.start, end: Math.floor(now) } : range
-    const next = { start: clamp(fixed.start), end: clamp(Math.max(fixed.end, fixed.start + 5)) }
+    const next = { start: clamp(range.start), end: clamp(Math.max(range.end, range.start + 5)) }
     setDraft(next)
     reveal(next)
     setSelected(null)
+    setDoneOverride(null)
     setSubjectId((current) => current || recentSubject)
     setError("")
     requestAnimationFrame(() => titleInput.current?.focus())
@@ -309,8 +328,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     onPointerCancel: () => setEditing(null),
   })
 
-  /** A planned block with one schedule slot, fully inside the day, can be dragged or resized. */
-  const movable = (block: Block) => Boolean(onReschedule && block.tone === "planned" && block.session && block.start > 0 && block.end < DAY && blocks.filter((other) => other.session === block.session).length === 1)
+  /** Any block of a session that is not being timed, with one block, fully inside the day, can be dragged or resized. */
+  const movable = (block: Block) => Boolean(block.session && block.tone !== "live" && !timing(block.session) && block.start > 0 && block.end < DAY && blocks.filter((other) => other.session === block.session).length === 1)
   const adjustProps = (block: Block, kind: "start" | "end" | "move") => ({
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button !== 0 || adjust?.saving) return
@@ -341,7 +360,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       setTimeout(() => { suppressClick.current = false }, 100)
       const { range } = adjust
       setAdjust({ ...adjust, saving: true })
-      onReschedule!(block.session, isoAt(date, range.start), isoAt(date, range.end))
+      onEdit(block.session, { blocks: [{ start: isoAt(date, range.start), end: isoAt(date, range.end) }] })
         .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
         .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
         .finally(() => setAdjust(null))
@@ -349,7 +368,9 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     onPointerCancel: () => setAdjust(null),
   })
 
-  const mode = draft ? (draft.end <= now ? "log" : draft.start >= now ? "plan" : "invalid") : null
+  // Study that has not finished cannot be done; otherwise a past block defaults to done and may be left undone.
+  const done = draft ? draft.end <= now && (doneOverride ?? true) : false
+  const mode = draft ? (done ? "log" : "plan") : null
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -357,19 +378,27 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     const subject = options.find((option) => option.id === subjectId)
     if (!subject) return setError("Choose a subject.")
     if (!(draft.end > draft.start)) return setError("End must be after start.")
-    if (mode === "invalid") return setError("Logged study must have finished. Move the end back to now, or the start after now to plan it.")
     const entry = { title: title.trim() || `${subject.name} study`, subjectId: subject.id, start: isoAt(date, draft.start), end: isoAt(date, draft.end) }
     setBusy(true)
     try {
       if (mode === "log") await onLog({ subjectId: entry.subjectId, title: entry.title, blocks: [{ start: entry.start, end: entry.end }] })
       else await onPlan(entry)
-      toast.success(`${mode === "log" ? "Logged" : "Planned"} ${duration(draft.end - draft.start)} of ${subject.name}`)
+      toast.success(`${mode === "log" ? "Logged" : "Scheduled"} ${duration(draft.end - draft.start)} of ${subject.name}`)
       setDraft(null)
       setTitle("")
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not save. Try again.")
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function toggleDone(session: CanonicalStudySession) {
+    try {
+      await onEdit(session, { completed: !session.completed })
+      toast.success(session.completed ? "Marked not done" : "Marked done")
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not update that study.")
     }
   }
 
@@ -426,7 +455,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               </>
             ) : (
               <Button onClick={() => open({ start: 16 * 60, end: 17 * 60 })} size="xs" variant="outline">
-                <Plus />{date < localDate(new Date(nowMs)) ? "Log study" : "Plan study"}
+                <Plus />{date < localDate(new Date(nowMs)) ? "Log study" : "Add study"}
               </Button>
             )}
           </div>
@@ -448,15 +477,15 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       <CardContent className="grid gap-3">
         <div className="relative select-none">
           {/* Context lane: what the day already holds. */}
-          {context.some(shown) ? <div className="relative mb-1 h-4">
+          {context.some(shown) ? <div className="relative mb-1" style={{ height: contextRows.rows * 18 - 2 }}>
             {context.filter(shown).map((block) => (
               <button
                 aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
                 aria-pressed={selected === block.key}
-                className={cn("absolute inset-y-0 overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-4 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], selected === block.key && "ring-2 ring-foreground/60")}
+                className={cn("absolute h-4 overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-4 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], selected === block.key && "ring-2 ring-foreground/60")}
                 key={block.key}
                 onClick={() => select(block)}
-                style={place(block.start, block.end)}
+                style={{ ...place(block.start, block.end), top: (contextRows.row.get(block.key) ?? 0) * 18 }}
                 title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
                 type="button"
               >
@@ -467,7 +496,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
           {/* Study lane: the drag target. */}
           <div
             aria-label="Study timeline. Drag to select a time range."
-            className="relative h-11 cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30"
+            style={{ height: studyRows.rows * 34 + 10 }}
+            className="relative cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30"
             onPointerCancel={() => setDrag(null)}
             onPointerDown={pointerDown}
             onPointerLeave={() => setHover(null)}
@@ -483,13 +513,13 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               const grab = movable(block)
               return (
                 <button
-                  aria-label={`${block.tone === "planned" ? "Planned" : "Studied"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
+                  aria-label={`${block.tone === "todo" ? "Not done" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={selected === block.key}
-                  className={cn("absolute inset-y-1.5 flex min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "planned" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("absolute flex h-8 min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "todo" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={() => select(block)}
                   onDoubleClick={() => zoomTo(block)}
-                  style={place(block.start, block.end)}
+                  style={{ ...place(block.start, block.end), top: 6 + (studyRows.row.get(live.key) ?? 0) * 34 }}
                   {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} (double-click to zoom)`}
                   type="button"
@@ -561,17 +591,22 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
 
         {picked ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border p-2.5" role="region" aria-label="Selected block">
-            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", picked.tone === "planned" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
+            <span aria-hidden className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{picked.title}</p>
               <p className="truncate text-xs text-muted-foreground tabular-nums">
-                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", studied: "Studied", planned: "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
+                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", done: "Done", todo: "Not done", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1">
               <Button onClick={() => zoomTo(picked)} size="xs" variant="outline"><ZoomIn />Zoom</Button>
-              {picked.session ? <Button onClick={() => onStartFocus(picked.subject, picked.title)} size="xs" variant="outline"><Timer />{picked.tone === "planned" ? "Start" : "Study again"}</Button> : null}
-              {picked.session && onRemove && picked.tone !== "live" ? (
+              {picked.session && !timing(picked.session) ? (
+                <Button disabled={!picked.session.completed && picked.end > now} onClick={() => toggleDone(picked.session!)} size="xs" title={!picked.session.completed && picked.end > now ? "It hasn't finished yet" : undefined} variant="outline">
+                  {picked.session.completed ? <><RotateCcw />Not done</> : <><Check />Mark done</>}
+                </Button>
+              ) : null}
+              {picked.session ? <Button onClick={() => onStartFocus(picked.subject, picked.title)} size="xs" variant="outline"><Timer />{picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
+              {picked.session && picked.tone !== "live" ? (
                 confirmRemove
                   ? <Button onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>
                   : <Button aria-label="Remove" onClick={() => setConfirmRemove(true)} size="xs" variant="outline"><Trash2 />Remove</Button>
@@ -584,7 +619,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
         {draft ? (
           <form className="grid gap-2 rounded-md border p-2.5" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium">{mode === "plan" ? "Plan" : "Log"}</span>
+              <span className="font-medium">{mode === "plan" ? "Schedule" : "Log"}</span>
               <Input aria-label="Start time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, start: minute }) }} type="time" value={hhmm(draft.start)} />
               <span aria-hidden className="text-muted-foreground">–</span>
               <Input aria-label="End time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, end: minute }) }} type="time" value={hhmm(draft.end)} />
@@ -602,9 +637,13 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
                 ))}
               </div>
             )}
+            <label className={cn("flex w-fit items-center gap-2 text-xs", draft.end > now && "text-muted-foreground")}>
+              <input checked={done} className="size-3.5 accent-primary" disabled={draft.end > now} onChange={(event) => setDoneOverride(event.target.checked)} type="checkbox" />
+              Done{draft.end > now ? " (it hasn't finished yet)" : ""}
+            </label>
             <div className="flex gap-2">
               <Input className="h-8" onChange={(event) => setTitle(event.target.value)} placeholder={mode === "plan" ? "What will you study? (optional)" : "What did you study? (optional)"} ref={titleInput} value={title} />
-              <Button disabled={busy} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Plan" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
+              <Button disabled={busy} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Schedule" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
             </div>
             {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}
           </form>

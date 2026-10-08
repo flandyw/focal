@@ -29,7 +29,7 @@ import { requestTimerNotifications, useStudyTimer } from "../hooks/use-study-tim
 import type { FocusSessionSink } from "../lib/focus-session"
 import { sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { VCE_SUBJECTS } from "../lib/types"
 import { StudyPlanCard } from "./study-plan-card"
@@ -127,16 +127,16 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   const localSessionId = loadFocusSession()?.id
   const activeSession = (sessions ?? [])
-    .filter((session) => session.kind === "focus" && (session.state === "running" || session.state === "paused"))
-    .toSorted((left, right) => Number(right.state === "running") - Number(left.state === "running") || right.updated_at.localeCompare(left.updated_at))[0]
+    .filter((session) => session.kind === "focus" && (isRunning(session) || isPaused(session)))
+    .toSorted((left, right) => Number(isRunning(right)) - Number(isRunning(left)) || right.updated_at.localeCompare(left.updated_at))[0]
   const sharedSession = activeSession?.id === localSessionId ? undefined : activeSession
   const local = useStudyTimer({ subject, intent, onSessionChange, enabled: !sharedSession })
   const { settings, blocks, blocksToday, focusSecondsToday, updateSettings } = local
   const [sharedBusy, setSharedBusy] = useState(false)
   const sharedBusyRef = useRef(false)
   const [sharedFailure, setSharedFailure] = useState<{ key: string; message: string } | null>(null)
-  const now = useTickingNow(sharedSession?.state === "running" ? 1000 : 60_000)
-  const sharedSessionKey = sharedSession ? `${sharedSession.id}:${sharedSession.revision}:${sharedSession.state}` : ""
+  const now = useTickingNow(sharedSession && isRunning(sharedSession) ? 1000 : 60_000)
+  const sharedSessionKey = sharedSession ? `${sharedSession.id}:${sharedSession.revision}:${isRunning(sharedSession)}` : ""
   const sharedError = sharedFailure?.key === sharedSessionKey ? sharedFailure.message : ""
 
   async function controlShared(action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) {
@@ -157,14 +157,14 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // The canonical intervals own shared time; viewing a session never creates a second local log.
   const state = sharedSession ? {
     ...local.state, mode: "free" as const, freeStudy: true, studyOvertime: false,
-    running: sharedSession.state === "running", secondsLeft: 0, totalSeconds: 0, cycles: 0,
+    running: isRunning(sharedSession), secondsLeft: 0, totalSeconds: 0, cycles: 0,
     overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 1000),
   } : local.state
   const progress = sharedSession ? 0 : local.progress
   const sessionBusy = sharedBusy || local.sessionBusy || (!!sharedSession && !onControlSession)
   const actions = sharedSession ? {
     ...local,
-    toggle: () => void controlShared(sharedSession.state === "running" ? "pause" : "resume"),
+    toggle: () => void controlShared(isRunning(sharedSession) ? "pause" : "resume"),
     reset: () => void controlShared("cancel"),
     finishFreeStudy: () => void controlShared("complete"),
     selectMode: () => {},
@@ -200,7 +200,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     const today = localDate(now)
     return (sessions ?? []).flatMap((session) => {
       const projected = sessionItem(session)
-      if (!projected || projected.date !== today || projected.item.kind !== "session" || projected.item.status === "planned") return []
+      if (!projected || projected.date !== today || projected.item.kind !== "session" || !(projected.item.done || projected.item.live)) return []
       return [projected.item]
     })
   }, [now, sessions])

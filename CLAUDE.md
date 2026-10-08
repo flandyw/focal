@@ -32,7 +32,7 @@ There is no test suite. Verify with `check`, both builds, or running the app. `m
 
 **Sync.** Desktop, web, and the sibling app Folio share one Supabase project (`supabase/migrations`, apply from the repo root with `supabase db push`). Two protocols:
 - Generic cursor change feed (`sync_read_changes`) for ordinary records (attempts, mistakes, user_state, events…); realtime is only a wakeup.
-- Study sessions are a separate transactional protocol: one `study_sessions` table with intervals in a `segments` JSON array, mutated only via `study_session_mutate` with a `mutation_id`, `device_id`, and `expected_revision`. Never write sessions through `sync_apply_changes`.
+- Study sessions are a separate transactional protocol: one kind of `study_sessions` row (time blocks in a `segments` JSON array plus a `completed` flag; running/paused/scheduled are derived, `cancelled_at` marks deletion), mutated only via `study_session_mutate` with a `mutation_id`, `device_id`, and `expected_revision`. Never write sessions through `sync_apply_changes`.
 
 Read `docs/sync-protocol.md` before touching either. Historical `examtrack` storage keys and protocol identifiers are intentionally unchanged for saved-data and Folio compatibility; don't rename them.
 

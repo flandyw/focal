@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RotateCcw, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RotateCcw, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
@@ -34,7 +34,7 @@ const TONE: Record<Tone, string> = {
   class: "bg-muted-foreground/20",
   event: "bg-chart-5/70",
   done: "bg-primary",
-  live: "bg-primary animate-pulse",
+  live: "bg-primary motion-safe:animate-pulse",
   todo: "border border-dashed border-primary bg-primary/10",
 }
 
@@ -169,7 +169,11 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const contextRows = pack(context.filter((block) => block.end > 0))
   const studyRows = pack(study)
   const studied = Math.round(study.filter((block) => block.tone !== "todo").reduce((sum, block) => sum + block.end - block.start, 0))
-  const planned = Math.round(study.filter((block) => block.tone === "todo").reduce((sum, block) => sum + block.end - block.start, 0))
+  // A planned block whose time has gone by without being ticked off.
+  const missed = (block: Block) => block.tone === "todo" && block.end <= now
+  const minutesOf = (items: Block[]) => Math.round(items.reduce((sum, block) => sum + block.end - block.start, 0))
+  const planned = minutesOf(study.filter((block) => block.tone === "todo" && !missed(block)))
+  const notDone = minutesOf(study.filter(missed))
   const lastEnd = Math.max(-1, ...study.filter((block) => block.tone === "done" && block.end <= now).map((block) => block.end))
 
   // Auto-fit hugs everything on the day (and "now"), padded and never tighter than six hours;
@@ -275,9 +279,18 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     setView(clampWindow({ start: center - size / 2, end: center + size / 2 }))
   }
 
-  function minuteAt(clientX: number) {
+  /** Pulls a minute onto a nearby block edge or "now" (within ~8px) so blocks can sit flush. */
+  function magnet(minute: number) {
+    const reach = 8 / width * span
+    const edges = [...blocks.flatMap((block) => [block.start, block.end]), ...(isToday ? [now] : [])]
+    const near = edges.filter((edge) => Math.abs(edge - minute) <= reach).sort((a, b) => Math.abs(a - minute) - Math.abs(b - minute))[0]
+    return near === undefined ? minute : Math.round(near)
+  }
+
+  function minuteAt(clientX: number, magnetic = true) {
     const rect = lane.current!.getBoundingClientRect()
-    return clamp(snap(from + Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * span))
+    const minute = snap(from + Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * span)
+    return clamp(magnetic ? magnet(minute) : minute)
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
@@ -292,6 +305,10 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     const current = minuteAt(event.clientX)
     if (!drag) return setHover(event.pointerType === "mouse" ? current : null)
     if (current !== drag.current) setDrag({ ...drag, current, moved: true })
+    // Dragging against either end of the track scrolls the window along.
+    const rect = lane.current!.getBoundingClientRect()
+    const edge = event.clientX < rect.left + 24 ? -1 : event.clientX > rect.right - 24 ? 1 : 0
+    if (edge && span < DAY) setView(clampWindow({ start: from + edge * span * 0.03, end: to + edge * span * 0.03 }))
   }
 
   function pointerUp() {
@@ -310,12 +327,12 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       if (!draft || event.button !== 0) return
       event.stopPropagation()
       event.currentTarget.setPointerCapture(event.pointerId)
-      setEditing({ kind, offset: minuteAt(event.clientX) - draft.start })
+      setEditing({ kind, offset: minuteAt(event.clientX, kind !== "move") - draft.start })
     },
     onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
       if (!editing || !draft) return
       event.stopPropagation()
-      const minute = minuteAt(event.clientX)
+      const minute = minuteAt(event.clientX, editing.kind !== "move")
       if (editing.kind === "start") setDraft({ start: Math.min(minute, draft.end - SNAP), end: draft.end })
       else if (editing.kind === "end") setDraft({ start: draft.start, end: Math.max(minute, draft.start + SNAP) })
       else {
@@ -335,12 +352,12 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       if (event.button !== 0 || adjust?.saving) return
       event.stopPropagation()
       event.currentTarget.setPointerCapture(event.pointerId)
-      setAdjust({ key: block.key, kind, offset: minuteAt(event.clientX) - block.start, range: { start: block.start, end: block.end }, moved: false, saving: false })
+      setAdjust({ key: block.key, kind, offset: minuteAt(event.clientX, kind !== "move") - block.start, range: { start: block.start, end: block.end }, moved: false, saving: false })
     },
     onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
       if (!adjust || adjust.key !== block.key || adjust.saving) return
       event.stopPropagation()
-      const minute = minuteAt(event.clientX)
+      const minute = minuteAt(event.clientX, adjust.kind !== "move")
       const { range } = adjust
       const next = adjust.kind === "start" ? { start: Math.min(minute, range.end - SNAP), end: range.end }
         : adjust.kind === "end" ? { start: range.start, end: Math.max(minute, range.start + SNAP) }
@@ -358,15 +375,14 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       event.preventDefault()
       suppressClick.current = true
       setTimeout(() => { suppressClick.current = false }, 100)
-      persist(block, adjust, adjust.range)
+      persist(block, adjust.range, adjust.kind)
     },
     onPointerCancel: () => setAdjust(null),
-    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => nudge(event, block),
   })
 
-  function persist(block: Block, current: NonNullable<typeof adjust>, range: Range) {
+  function persist(block: Block, range: Range, kind: "start" | "end" | "move" = "move") {
     if (!block.session) return
-    setAdjust({ ...current, range, saving: true })
+    setAdjust({ key: block.key, kind, offset: 0, range, moved: true, saving: true })
     onEdit(block.session, { blocks: [{ start: isoAt(date, range.start), end: isoAt(date, range.end) }] })
       .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
       .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
@@ -385,11 +401,41 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     if (!event.altKey) range.end = range.start + block.end - block.start
     if (range.start === block.start && range.end === block.end) return
     reveal(range)
-    persist(block, { key: block.key, kind: event.altKey ? "end" : "move", offset: 0, range, moved: true, saving: true }, range)
+    persist(block, range, event.altKey ? "end" : "move")
+  }
+
+  /** Delete arms the remove confirmation for a focused session block; arrows nudge it. */
+  function blockKey(event: ReactKeyboardEvent<HTMLElement>, block: Block) {
+    if ((event.key === "Delete" || event.key === "Backspace") && block.session && block.tone !== "live") {
+      event.preventDefault()
+      setSelected(block.key)
+      setConfirmRemove(true)
+      setDraft(null)
+    } else nudge(event, block)
+  }
+
+  /** Puts a missed block at the next free five minutes from now, keeping its length. */
+  function restart(block: Block) {
+    const length = block.end - block.start
+    const start = Math.min(DAY - SNAP - length, Math.ceil(now / SNAP) * SNAP)
+    persist(block, { start, end: start + length })
+  }
+
+  async function repeatTomorrow(block: Block) {
+    const session = block.session
+    if (!session?.subject_id) return
+    const next = shiftDate(date, 1)
+    try {
+      await onPlan({ title: session.title, subjectId: session.subject_id, start: isoAt(next, block.start), end: isoAt(next, block.end) })
+      toast.success(`Planned again for ${clock(block.start)} tomorrow`)
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not plan that again.")
+    }
   }
 
   // Study that has not finished cannot be done; otherwise a past block defaults to done and may be left undone.
   const done = draft ? draft.end <= now && (doneOverride ?? true) : false
+  const clash = draft ? blocks.filter((block) => block.start < draft.end && block.end > draft.start) : []
   const mode = draft ? (done ? "log" : "plan") : null
 
   async function submit(event: FormEvent) {
@@ -449,7 +495,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     ? selection && { at: (selection.start + selection.end) / 2, text: `${clock(selection.start)}–${clock(selection.end)} · ${duration(selection.end - selection.start)}` }
     : hover !== null ? { at: hover, text: clock(hover) } : null
   // Blocks too narrow to carry any text still get a readable chip below the track.
-  const cramped = study.filter((block) => shown(block) && pixels(block) < 60)
+  const cramped = blocks.filter((block) => shown(block) && pixels(block) < 60)
   const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
   const relative = isToday ? "Today" : date === shiftDate(localDate(new Date(nowMs)), -1) ? "Yesterday" : date === shiftDate(localDate(new Date(nowMs)), 1) ? "Tomorrow" : null
 
@@ -471,6 +517,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
                   <Button onClick={() => open({ start: lastEnd, end: Math.floor(now) })} size="xs" variant="outline">Since {clock(lastEnd)}</Button>
                 ) : null}
                 {QUICK_LOGS.map((minutes) => <Button key={minutes} onClick={() => quick(minutes)} size="xs" variant="outline">{duration(minutes)}</Button>)}
+                <Button onClick={() => { const next = Math.ceil(now / 30) * 30; open({ start: next, end: next + 60 }) }} size="xs" variant="outline"><Plus />Plan</Button>
                 <Button onClick={() => onStartFocus(undefined, "")} size="xs" variant="ghost"><Timer />Start timer</Button>
               </>
             ) : (
@@ -482,7 +529,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardDescription>
-            {studied || planned ? [studied ? `${duration(studied)} studied` : null, planned ? `${duration(planned)} planned` : null].filter(Boolean).join(" · ") : "No study yet"}
+            {studied || planned || notDone ? [studied ? `${duration(studied)} studied` : null, planned ? `${duration(planned)} planned` : null, notDone ? `${duration(notDone)} missed` : null].filter(Boolean).join(" · ") : "No study yet"}
             {" · "}Drag the track to {isToday ? "log or plan" : date < localDate(new Date(nowMs)) ? "log" : "plan"}
           </CardDescription>
           <div className="flex items-center gap-0.5" role="group" aria-label="Zoom">
@@ -515,10 +562,17 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
           </div> : null}
           {/* Study lane: the drag target. */}
           <div
-            aria-label="Study timeline. Drag to select a time range."
+            aria-keyshortcuts="+ - 0 PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
             style={{ height: studyRows.rows * 34 + 10 }}
-            className="relative cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30"
-            onKeyDown={(event) => { if (event.key === "Escape") { setDrag(null); setSelected(null) } }}
+            className="relative cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { setDrag(null); setSelected(null) }
+              else if (event.key === "+" || event.key === "=") zoomBy(0.5)
+              else if (event.key === "-") zoomBy(2)
+              else if (event.key === "0") setView(null)
+              else if (event.key === "PageUp" || event.key === "PageDown") onDateChange(shiftDate(date, event.key === "PageUp" ? -1 : 1))
+            }}
             onPointerCancel={() => setDrag(null)}
             onPointerDown={pointerDown}
             onPointerLeave={() => setHover(null)}
@@ -527,22 +581,24 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             ref={lane}
             role="group"
           >
-            {ticks.map((minute) => <span aria-hidden className="absolute inset-y-0 w-px bg-border/60" key={minute} style={{ left: left(minute) }} />)}
+            {ticks.map((minute) => <span aria-hidden className={cn("absolute inset-y-0 w-px", minute % 60 === 0 ? "bg-border" : "bg-border/50")} key={minute} style={{ left: left(minute) }} />)}
+            {isToday && now > from ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 bg-background/50" style={{ width: left(Math.min(now, to)) }} /> : null}
             {study.filter(shown).map((live) => {
               const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
               const room = pixels(block)
               const grab = movable(block)
               return (
                 <button
-                  aria-label={`${block.tone === "todo" ? "Not done" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
+                  aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={selected === block.key}
-                  className={cn("absolute flex h-8 min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "todo" ? "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("absolute flex h-8 min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "todo" ? missed(block) ? "border-destructive bg-destructive/10 text-destructive" : "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={() => select(block)}
                   onDoubleClick={() => zoomTo(block)}
+                  onKeyDown={(event) => blockKey(event, block)}
                   style={{ ...place(block.start, block.end), top: 6 + (studyRows.row.get(live.key) ?? 0) * 34 }}
                   {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
-                  title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} (double-click to zoom)`}
+                  title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(Math.round(block.end - block.start))} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 60 ? <span className="block truncate font-medium">{block.title}</span> : room >= 26 ? <span className="block truncate">{block.short}</span> : null}
@@ -570,7 +626,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             ) : null}
             {hover !== null && !drag && !editing ? <span aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-foreground/30" style={{ left: left(hover) }} /> : null}
             {isToday && now >= from && now <= to ? (
-              <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }} />
+              <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }}><span className="absolute -top-0 left-1/2 size-2 -translate-x-1/2 rounded-full bg-destructive" /></span>
             ) : null}
           </div>
           <div aria-hidden className="relative mt-1 h-4 text-[0.625rem] text-muted-foreground tabular-nums">
@@ -616,7 +672,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{picked.title}</p>
               <p className="truncate text-xs text-muted-foreground tabular-nums">
-                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", done: "Done", todo: "Not done", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
+                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1">
@@ -626,6 +682,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
                   {picked.session.completed ? <><RotateCcw />Not done</> : <><Check />Mark done</>}
                 </Button>
               ) : null}
+              {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
+              {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="outline"><CalendarPlus />Repeat tomorrow</Button> : null}
               {picked.session ? <Button onClick={() => onStartFocus(picked.subject, picked.title)} size="xs" variant="outline"><Timer />{picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
               {picked.session && picked.tone !== "live" ? (
                 confirmRemove
@@ -647,6 +705,12 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               <span className="text-xs text-muted-foreground tabular-nums">{draft.end > draft.start ? duration(draft.end - draft.start) : ""}</span>
               <Button aria-label="Cancel" className="ml-auto" onClick={() => setDraft(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
             </div>
+            <div aria-label="Length" className="flex flex-wrap items-center gap-1" role="group">
+              {[15, 30, 45, 60, 90].map((minutes) => (
+                <Button key={minutes} onClick={() => setDraft({ ...draft, end: Math.min(LAST_MINUTE, draft.start + minutes) })} size="xs" type="button" variant={draft.end - draft.start === minutes ? "default" : "outline"}>{duration(minutes)}</Button>
+              ))}
+              {clash.length ? <span className="ml-1 text-xs text-muted-foreground">Overlaps {clash.slice(0, 2).map((block) => block.title).join(", ")}{clash.length > 2 ? ` +${clash.length - 2}` : ""}</span> : null}
+            </div>
             {options.length > 12 ? (
               <select aria-label="Subject" className="h-7 w-fit rounded-md border bg-background px-1.5 text-xs" onChange={(event) => setSubjectId(event.target.value)} value={subjectId}>
                 {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
@@ -663,8 +727,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               Done{draft.end > now ? " (it hasn't finished yet)" : ""}
             </label>
             <div className="flex gap-2">
-              <Input className="h-8" onChange={(event) => setTitle(event.target.value)} placeholder={mode === "plan" ? "What will you study? (optional)" : "What did you study? (optional)"} ref={titleInput} value={title} />
-              <Button disabled={busy} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Schedule" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
+              <Input className="h-8" onChange={(event) => setTitle(event.target.value)} placeholder={`${options.find((option) => option.id === subjectId)?.name ?? "Study"} study`} ref={titleInput} value={title} />
+              <Button disabled={busy || !(draft.end > draft.start)} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Schedule" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
             </div>
             {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}
           </form>

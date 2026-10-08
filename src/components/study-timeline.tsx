@@ -31,11 +31,11 @@ const MIN_SPAN = 30
 const TICK_STEPS = [5, 10, 15, 30, 60, 120, 180, 360]
 
 const TONE: Record<Tone, string> = {
-  class: "bg-muted-foreground/20",
-  event: "bg-chart-5/70",
-  done: "bg-primary",
-  live: "bg-primary motion-safe:animate-pulse",
-  todo: "border border-dashed border-primary bg-primary/10",
+  class: "border border-border bg-muted text-muted-foreground",
+  event: "border border-chart-5/30 bg-chart-5/10 text-foreground",
+  done: "border border-primary/35 bg-primary/20 text-foreground",
+  live: "border border-primary bg-primary/25 text-foreground",
+  todo: "border border-dashed border-primary/50 bg-primary/5 text-foreground",
 }
 
 function shiftDate(date: string, days: number) {
@@ -69,13 +69,15 @@ const snap = (minute: number) => Math.round(minute / SNAP) * SNAP
 const clamp = (minute: number) => Math.min(LAST_MINUTE, Math.max(0, minute))
 
 
-/** Subject colour for a study block: solid when done, tinted and outlined when still to do. */
+/** Keep subject hues consistent, with theme-aware surfaces and readable text. */
 function subjectStyle(block: Block, dim: boolean) {
   const { color } = block
   if (!color || dim) return undefined
-  return block.tone === "todo"
-    ? { borderColor: color, backgroundColor: `color-mix(in srgb, ${color} 14%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--foreground))` }
-    : { backgroundColor: color, color: "#fff" }
+  return {
+    borderColor: `color-mix(in srgb, ${color} ${block.tone === "live" ? 80 : 45}%, var(--border))`,
+    backgroundColor: `color-mix(in srgb, ${color} ${block.tone === "todo" ? 8 : 22}%, var(--card))`,
+    color: `color-mix(in srgb, ${color} 15%, var(--foreground))`,
+  }
 }
 
 /** A timer that is running or paused owns its own intervals; those cannot be edited or ticked off. */
@@ -504,65 +506,79 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
     : drag?.moved || editing
     ? selection && { at: (selection.start + selection.end) / 2, text: `${clock(selection.start)}–${clock(selection.end)} · ${duration(selection.end - selection.start)}` }
     : hover !== null ? { at: hover, text: clock(hover) } : null
-  // Blocks too narrow to carry any text still get a readable chip below the track.
-  const cramped = blocks.filter((block) => shown(block) && pixels(block) < 60)
+  // Blocks without room for their time range get a readable summary below the track.
+  const cramped = blocks.filter((block) => shown(block) && pixels(block) < 150)
   const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
   const relative = isToday ? "Today" : date === shiftDate(localDate(new Date(nowMs)), -1) ? "Yesterday" : date === shiftDate(localDate(new Date(nowMs)), 1) ? "Tomorrow" : null
 
   return (
-    <Card size="sm">
-      <CardHeader className="gap-1 pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1">
-            <Button aria-label="Previous day" onClick={() => onDateChange(shiftDate(date, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-            <CardTitle className="min-w-0 truncate" aria-live="polite">{relative ? `${relative} · ${dayLabel}` : dayLabel}</CardTitle>
-            <Button aria-label="Next day" onClick={() => onDateChange(shiftDate(date, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
-            {!isToday ? <Button onClick={() => onDateChange(localDate(new Date()))} size="xs" variant="outline">Today</Button> : null}
+    <Card className="gap-4 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(5)]">
+      <CardHeader className="gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Study timeline</p>
+            <div className="flex min-w-0 items-center gap-2">
+              <CardTitle className="min-w-0 text-base font-semibold sm:text-lg" aria-live="polite">{relative ? `${relative} · ${dayLabel}` : dayLabel}</CardTitle>
+              <div className="flex shrink-0 items-center rounded-lg border" role="group" aria-label="Change day">
+                <Button aria-label="Previous day" onClick={() => onDateChange(shiftDate(date, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+                <Button aria-label="Next day" onClick={() => onDateChange(shiftDate(date, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+              </div>
+              {!isToday ? <Button onClick={() => onDateChange(localDate(new Date()))} size="sm" variant="outline">Today</Button> : null}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-2">
             {isToday ? (
               <>
-                <span className="mr-1 text-xs text-muted-foreground">Just studied</span>
-                {lastEnd > 0 && now - lastEnd >= 5 && now - lastEnd <= 6 * 60 ? (
-                  <Button onClick={() => open({ start: lastEnd, end: Math.floor(now) })} size="xs" variant="outline">Since {clock(lastEnd)}</Button>
-                ) : null}
-                {QUICK_LOGS.map((minutes) => <Button key={minutes} onClick={() => quick(minutes)} size="xs" variant="outline">{duration(minutes)}</Button>)}
-                <Button onClick={() => { const next = Math.ceil(now / 30) * 30; open({ start: next, end: next + 60 }) }} size="xs" variant="outline"><Plus />Plan</Button>
-                <Button onClick={() => onStartFocus(undefined, "")} size="xs" variant="ghost"><Timer />Start timer</Button>
+                <Button onClick={() => { const next = Math.ceil(now / 30) * 30; open({ start: next, end: next + 60 }) }} size="sm" variant="outline"><Plus />Plan study</Button>
+                <Button onClick={() => onStartFocus(undefined, "")} size="sm"><Timer />Start timer</Button>
               </>
             ) : (
-              <Button onClick={() => open({ start: 16 * 60, end: 17 * 60 })} size="xs" variant="outline">
+              <Button onClick={() => open({ start: 16 * 60, end: 17 * 60 })} size="sm" variant="outline">
                 <Plus />{date < localDate(new Date(nowMs)) ? "Log study" : "Add study"}
               </Button>
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardDescription>
-            {studied || planned || notDone ? [studied ? `${duration(studied)} studied` : null, planned ? `${duration(planned)} planned` : null, notDone ? `${duration(notDone)} missed` : null].filter(Boolean).join(" · ") : "No study yet"}
-            {" · "}Drag the track to {isToday ? "log or plan" : date < localDate(new Date(nowMs)) ? "log" : "plan"}
-          </CardDescription>
-          <div className="flex items-center gap-0.5" role="group" aria-label="Zoom">
-            <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-xs" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
-            <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-xs" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
-            <Button disabled={view === null} onClick={() => setView(null)} size="xs" title="Fit the day's study" variant="ghost"><ZoomIn />Fit</Button>
-            <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="xs" title="Show all 24 hours" variant="ghost"><Maximize2 />24h</Button>
-            {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="xs" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums" aria-live="polite">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 font-medium text-primary"><Check className="size-3.5" />{duration(studied)} studied</span>
+            {planned ? <span className="rounded-md border border-dashed px-2.5 py-1.5 text-muted-foreground">{duration(planned)} planned</span> : null}
+            {notDone ? <span className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-destructive">{duration(notDone)} missed</span> : null}
           </div>
+          {isToday ? (
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Quick log study">
+              <span className="mr-2 text-xs text-muted-foreground">Just studied?</span>
+              {lastEnd > 0 && now - lastEnd >= 5 && now - lastEnd <= 6 * 60 ? (
+                <Button onClick={() => open({ start: lastEnd, end: Math.floor(now) })} size="sm" variant="outline">Since {clock(lastEnd)}</Button>
+              ) : null}
+              {QUICK_LOGS.map((minutes) => <Button className="tabular-nums" key={minutes} onClick={() => quick(minutes)} size="sm" variant="secondary">{duration(minutes)}</Button>)}
+            </div>
+          ) : null}
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardDescription className="text-xs">Drag the track to {isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}</CardDescription>
+          <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Zoom">
+            <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-sm" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
+            <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-sm" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
+            <span aria-hidden className="mx-1 h-3.5 w-px bg-border" />
+            <Button disabled={view === null} onClick={() => setView(null)} size="sm" title="Fit the day's study" variant="ghost"><ZoomIn />Fit</Button>
+            <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="sm" title="Show all 24 hours" variant="ghost"><Maximize2 />24h</Button>
+            {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="sm" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
+          </div>
+        </div>
         <div className="relative select-none">
           {/* Context lane: what the day already holds. */}
-          {context.some(shown) ? <div className="relative mb-1" style={{ height: contextRows.rows * 18 - 2 }}>
+          {context.some(shown) ? <div className="relative mb-3" style={{ height: contextRows.rows * 26 - 4 }}>
             {context.filter(shown).map((block) => (
               <button
                 aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
                 aria-pressed={selected === block.key}
-                className={cn("absolute h-4 overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-4 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], selected === block.key && "ring-2 ring-foreground/60")}
+                className={cn("absolute h-[22px] min-w-0 truncate rounded-md text-left text-[0.6875rem] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-2" : "px-0", selected === block.key && "ring-2 ring-foreground/60")}
                 key={block.key}
                 onClick={() => select(block)}
-                style={{ ...place(block.start, block.end), top: (contextRows.row.get(block.key) ?? 0) * 18 }}
+                style={{ ...place(block.start, block.end), top: (contextRows.row.get(block.key) ?? 0) * 26 }}
                 title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
                 type="button"
               >
@@ -573,8 +589,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
           {/* Study lane: the drag target. */}
           <div
             aria-keyshortcuts="+ - 0 PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
-            style={{ height: studyRows.rows * 34 + 10 }}
-            className="relative cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            style={{ height: studyRows.rows * 56 + 20 }}
+            className="relative cursor-crosshair touch-none overflow-hidden rounded-xl border bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             tabIndex={0}
             onKeyDown={(event) => {
               if (event.key === "Escape") { setDrag(null); setSelected(null) }
@@ -591,31 +607,31 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             ref={lane}
             role="group"
           >
-            {ticks.map((minute) => <span aria-hidden className={cn("absolute inset-y-0 w-px", minute % 60 === 0 ? "bg-border" : "bg-border/50")} key={minute} style={{ left: left(minute) }} />)}
-            {isToday && now > from ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 bg-background/50" style={{ width: left(Math.min(now, to)) }} /> : null}
+            {ticks.map((minute) => <span aria-hidden className={cn("absolute inset-y-0 w-px", minute % 60 === 0 ? "bg-border/70" : "bg-border/35")} key={minute} style={{ left: left(minute) }} />)}
+            {isToday && now > from ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 bg-background/25" style={{ width: left(Math.min(now, to)) }} /> : null}
             {study.filter(shown).map((live) => {
               const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
               const room = pixels(block)
               const grab = movable(block)
               return (
                 <button
-                  aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
+                  aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={selected === block.key}
-                  className={cn("absolute flex h-8 min-w-0 flex-col justify-center overflow-hidden rounded-sm px-1 text-left text-[0.625rem] leading-3 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], block.tone === "todo" ? missed(block) ? "border-destructive bg-destructive/10 text-destructive" : "text-primary" : "text-primary-foreground", selected === block.key && "ring-2 ring-foreground", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", selected === block.key && "ring-2 ring-ring ring-offset-2 ring-offset-card", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={() => select(block)}
                   onDoubleClick={() => zoomTo(block)}
                   onKeyDown={(event) => blockKey(event, block)}
-                  style={{ ...place(block.start, block.end), top: 6 + (studyRows.row.get(live.key) ?? 0) * 34, ...subjectStyle(block, missed(block)) }}
+                  style={{ ...place(block.start, block.end), top: 10 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
                   {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(Math.round(block.end - block.start))} (double-click to zoom)`}
                   type="button"
                 >
-                  {room >= 60 ? <span className="block truncate font-medium">{block.title}</span> : room >= 26 ? <span className="block truncate">{block.short}</span> : null}
-                  {room >= 110 ? <span className="block truncate opacity-80">{clock(block.start)}–{clock(block.end)}</span> : null}
-                  {grab && room >= 24 ? (["start", "end"] as const).map((kind) => (
+                  {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
+                  {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)}`}</span> : null}
+                  {grab && room >= 36 ? (["start", "end"] as const).map((kind) => (
                     <span aria-hidden className={cn("absolute inset-y-0 flex w-2.5 cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} {...adjustProps(block, kind)}>
-                      <span className="h-4 w-0.5 rounded-full bg-current" />
+                      <span className="h-4 w-0.5 rounded-full bg-current opacity-20 group-hover/block:opacity-60" />
                     </span>
                   )) : null}
                 </button>
@@ -623,7 +639,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             })}
             {selection ? (
               <span
-                className={cn("absolute inset-y-0.5 rounded-sm border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
+                className={cn("absolute inset-y-1 rounded-lg border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
                 style={{ left: left(selection.start), width: `${(Math.min(to, selection.end) - Math.max(from, selection.start)) / span * 100}%`, ...(draft && draftColor ? { borderColor: draftColor, backgroundColor: `color-mix(in srgb, ${draftColor} 15%, transparent)` } : {}) }}
                 {...(drag ? {} : editProps("move"))}
               >
@@ -639,37 +655,47 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }}><span className="absolute -top-0 left-1/2 size-2 -translate-x-1/2 rounded-full bg-destructive" /></span>
             ) : null}
           </div>
-          <div aria-hidden className="relative mt-1 h-4 text-[0.625rem] text-muted-foreground tabular-nums">
+          <div aria-hidden className="relative mt-2 h-5 text-[0.6875rem] text-muted-foreground tabular-nums">
             {ticks.map((minute) => {
               const at = (minute - from) / span * 100
               return <span className={cn("absolute", at < 3 ? "" : at > 97 ? "-translate-x-full" : "-translate-x-1/2")} key={minute} style={{ left: `${at}%` }}>{clock(minute)}</span>
             })}
             {bubble ? (
-              <span className="absolute z-10 -translate-x-1/2 rounded bg-foreground px-1 whitespace-nowrap text-background" style={{ left: `${Math.min(88, Math.max(12, (bubble.at - from) / span * 100))}%` }}>{bubble.text}</span>
+              <span className="absolute z-10 -translate-x-1/2 rounded-md bg-foreground px-2 py-0.5 whitespace-nowrap text-background shadow-sm" style={{ left: `${Math.min(88, Math.max(12, (bubble.at - from) / span * 100))}%` }}>{bubble.text}</span>
             ) : null}
           </div>
           {/* Where this window sits in the day: click or drag to pan. */}
           {span < DAY ? (
             <div
               aria-label="Day overview. Drag to pan the timeline."
-              className="relative mt-1 h-3 cursor-ew-resize touch-none overflow-hidden rounded-sm bg-muted"
+              className="relative mt-2 h-5 cursor-ew-resize touch-none overflow-hidden rounded-md border bg-muted/50"
               onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); pan(event) }}
               onPointerMove={(event) => { if (event.buttons) pan(event) }}
               role="group"
             >
-              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-0.5 rounded-[1px]", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
+              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-1.5 rounded-sm opacity-60", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
               {isToday ? <span aria-hidden className="absolute inset-y-0 w-px bg-destructive" style={{ left: `${now / DAY * 100}%` }} /> : null}
-              <span aria-hidden className="absolute inset-y-0 rounded-sm border border-primary bg-primary/10" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
+              <span aria-hidden className="absolute inset-y-0 rounded border border-primary/50 bg-primary/5" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
             </div>
           ) : null}
         </div>
 
         {cramped.length ? (
-          <ul aria-label="Short blocks" className="flex flex-wrap gap-1">
+          <ul aria-label="Short blocks" className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {cramped.map((block) => (
-              <li key={block.key}>
-                <button className={cn("rounded-full border px-2 py-0.5 text-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring", selected === block.key && "border-primary bg-accent")} onClick={() => select(block)} type="button">
-                  {block.color ? <span aria-hidden className="mr-1 inline-block size-1.5 rounded-full" style={{ backgroundColor: block.color }} /> : null}<span className="tabular-nums text-muted-foreground">{clock(block.start)}–{clock(block.end)}</span> {block.title}
+              <li className="min-w-0" key={block.key}>
+                <button
+                  aria-pressed={selected === block.key}
+                  className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-muted/15 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring", selected === block.key && "border-primary/50 bg-primary/5")}
+                  onClick={() => select(block)}
+                  type="button"
+                >
+                  <span aria-hidden className={cn("size-2 shrink-0 rounded-full", block.tone === "todo" ? "border border-dashed border-primary" : "bg-muted-foreground/40")} style={{ backgroundColor: block.tone === "todo" ? undefined : block.color, borderColor: block.color }} />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="truncate text-xs font-medium">{block.title}</span>
+                    <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{clock(block.start)}–{clock(block.end)}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Studying now" : ""}</span>
+                  </span>
+                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(Math.round(block.end - block.start))}</span>
                 </button>
               </li>
             ))}
@@ -677,7 +703,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
         ) : null}
 
         {picked ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border p-2.5" role="region" aria-label="Selected block">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected block">
             <span aria-hidden style={{ backgroundColor: picked.tone === "todo" ? undefined : picked.color, borderColor: picked.color }} className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{picked.title}</p>
@@ -706,7 +732,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
         ) : null}
 
         {draft ? (
-          <form className="grid gap-2 rounded-md border p-2.5" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
+          <form className="grid gap-2 rounded-xl border bg-muted/20 p-3 sm:p-4" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-medium">{mode === "plan" ? "Schedule" : "Log"}</span>
               <Input aria-label="Start time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, start: minute }) }} type="time" value={hhmm(draft.start)} />
@@ -736,8 +762,8 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
               <input checked={done} className="size-3.5 accent-primary" disabled={draft.end > now} onChange={(event) => setDoneOverride(event.target.checked)} type="checkbox" />
               Done{draft.end > now ? " (it hasn't finished yet)" : ""}
             </label>
-            <div className="flex gap-2">
-              <Input className="h-8" onChange={(event) => setTitle(event.target.value)} placeholder={`${options.find((option) => option.id === subjectId)?.name ?? "Study"} study`} ref={titleInput} value={title} />
+            <div className="flex flex-wrap gap-2">
+              <Input aria-label="Study title" className="h-8 min-w-0 flex-1 basis-40" onChange={(event) => setTitle(event.target.value)} placeholder={`${options.find((option) => option.id === subjectId)?.name ?? "Study"} study`} ref={titleInput} value={title} />
               <Button disabled={busy || !(draft.end > draft.start)} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Schedule" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
             </div>
             {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
 import { Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RotateCcw, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
@@ -358,15 +358,35 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
       event.preventDefault()
       suppressClick.current = true
       setTimeout(() => { suppressClick.current = false }, 100)
-      const { range } = adjust
-      setAdjust({ ...adjust, saving: true })
-      onEdit(block.session, { blocks: [{ start: isoAt(date, range.start), end: isoAt(date, range.end) }] })
-        .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
-        .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
-        .finally(() => setAdjust(null))
+      persist(block, adjust, adjust.range)
     },
     onPointerCancel: () => setAdjust(null),
+    onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => nudge(event, block),
   })
+
+  function persist(block: Block, current: NonNullable<typeof adjust>, range: Range) {
+    if (!block.session) return
+    setAdjust({ ...current, range, saving: true })
+    onEdit(block.session, { blocks: [{ start: isoAt(date, range.start), end: isoAt(date, range.end) }] })
+      .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
+      .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
+      .finally(() => setAdjust(null))
+  }
+
+  /** Arrow keys move a focused block by 5 minutes (15 with Shift); Alt resizes its end instead. */
+  function nudge(event: ReactKeyboardEvent<HTMLElement>, block: Block) {
+    const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+    if (!direction || adjust || !movable(block)) return
+    event.preventDefault()
+    const delta = direction * (event.shiftKey ? 15 : SNAP)
+    const range = event.altKey
+      ? { start: block.start, end: Math.max(block.start + SNAP, Math.min(DAY - SNAP, block.end + delta)) }
+      : { start: Math.max(SNAP, Math.min(block.start + delta, DAY - SNAP - (block.end - block.start))), end: 0 }
+    if (!event.altKey) range.end = range.start + block.end - block.start
+    if (range.start === block.start && range.end === block.end) return
+    reveal(range)
+    persist(block, { key: block.key, kind: event.altKey ? "end" : "move", offset: 0, range, moved: true, saving: true }, range)
+  }
 
   // Study that has not finished cannot be done; otherwise a past block defaults to done and may be left undone.
   const done = draft ? draft.end <= now && (doneOverride ?? true) : false
@@ -498,6 +518,7 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
             aria-label="Study timeline. Drag to select a time range."
             style={{ height: studyRows.rows * 34 + 10 }}
             className="relative cursor-crosshair touch-none overflow-hidden rounded-md border bg-muted/30"
+            onKeyDown={(event) => { if (event.key === "Escape") { setDrag(null); setSelected(null) } }}
             onPointerCancel={() => setDrag(null)}
             onPointerDown={pointerDown}
             onPointerLeave={() => setHover(null)}

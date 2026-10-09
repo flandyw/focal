@@ -1,4 +1,4 @@
-import { Clock3, Download, NotebookPen, Plus, Upload } from "lucide-react"
+import { Clock3, NotebookPen, Plus } from "lucide-react"
 
 import {
   CommandDialog,
@@ -18,16 +18,12 @@ export function AppCommandMenu({
   onViewChange,
   onLogExam,
   onLogMistake,
-  onExport,
-  onImport,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onViewChange: (view: AppView) => void
   onLogExam: () => void
   onLogMistake: () => void
-  onExport: () => void
-  onImport: () => void
 }) {
   function run(action: () => void) {
     onOpenChange(false)
@@ -64,11 +60,6 @@ export function AppCommandMenu({
               </span>
             </CommandItem>
           ))}
-        </CommandGroup>
-        <CommandSeparator />
-        <CommandGroup heading="Data">
-          <CommandItem value="export download backup data json" onSelect={() => run(onExport)}><Download />Export data</CommandItem>
-          <CommandItem value="import upload restore data json" onSelect={() => run(onImport)}><Upload />Import data</CommandItem>
         </CommandGroup>
       </CommandList>
     </CommandDialog>

@@ -2,8 +2,9 @@ import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
-import { useEffect, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Trash2, UserRound, X } from "lucide-react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { ModeToggle } from "./mode-toggle"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
@@ -38,7 +39,7 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport }: {
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
@@ -46,6 +47,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   examDifficulty?: ExamDifficultySettings
   onSubjectsChange: (subjects: string[]) => void
   onExamDifficultyChange: (settings: ExamDifficultySettings) => void
+  onExport: () => void
+  onImport: (file: File) => Promise<void>
 }) {
   const auth = useChatGPT()
   const [email, setEmail] = useState("")
@@ -60,6 +63,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const [customSubject, setCustomSubject] = useState("")
   const [providerToAdd, setProviderToAdd] = useState("")
   const [section, setSection] = useState<string>("subjects")
+  const importInput = useRef<HTMLInputElement>(null)
   const difficulty = resolveDifficultySettings(examDifficulty)
 
   function updateDifficulty(changes: Partial<ExamDifficultySettings>) {
@@ -97,13 +101,15 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "subjects", label: "Subjects", icon: BookOpen },
     { id: "difficulty", label: "Difficulty", icon: SlidersHorizontal },
     { id: "account", label: "Account", icon: UserRound },
+    { id: "appearance", label: "Appearance", icon: Sun },
+    { id: "data", label: "Data", icon: Database },
     ...(AI_ENABLED ? [{ id: "ai", label: "AI", icon: Sparkles }, { id: "updates", label: "Updates", icon: Download }] : []),
   ] as const
   const active = sections.some((item) => item.id === section) ? section : "subjects"
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Settings" description={AI_ENABLED ? "Subjects, difficulty calibration, sync, and AI analysis." : "Subjects, difficulty calibration, and sync."} />
+      <PageHeader title="Settings" description={AI_ENABLED ? "Subjects, difficulty calibration, sync, appearance, data, and AI analysis." : "Subjects, difficulty calibration, sync, appearance, and data."} />
 
       <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start lg:grid-cols-[13rem_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:px-0">
@@ -280,6 +286,30 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 </form>
               )}
               {accountMessage ? <p role="status" className="pb-4 text-sm text-muted-foreground">{accountMessage}</p> : null}
+            </Section>
+          ) : null}
+
+          {active === "appearance" ? (
+            <Section title="Appearance" description="Choose how Focal looks on this device.">
+              <Row title="Theme" description="Use light mode, dark mode, or follow your system.">
+                <ModeToggle />
+              </Row>
+            </Section>
+          ) : null}
+
+          {active === "data" ? (
+            <Section title="Data" description="Back up your Focal data or restore it from a JSON file.">
+              <Row title="Export data" description="Download a backup of your current data.">
+                <Button variant="outline" onClick={onExport}><Download />Export data</Button>
+              </Row>
+              <Row title="Import data" description="Replace your current data with a backup. You’ll be asked to confirm before anything is replaced.">
+                <Button variant="outline" onClick={() => importInput.current?.click()}><Upload />Import data</Button>
+                <input ref={importInput} className="hidden" type="file" accept="application/json" onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void onImport(file)
+                  event.currentTarget.value = ""
+                }} />
+              </Row>
             </Section>
           ) : null}
 

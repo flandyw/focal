@@ -1,11 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import {
-  AlertCircle,
-  Download,
-  MoreHorizontal,
-  Plus,
-  Upload,
-} from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { Button } from "./components/ui/button"
@@ -14,19 +8,12 @@ import { PastStudyForm } from "./components/planning/PastStudyForm"
 import type { CalendarEvent, TimetableConfig } from "./lib/types"
 import { studySubjectOptions } from "./lib/studySubjects"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "./components/ui/dropdown-menu"
-import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "./components/ui/sidebar"
 import { Skeleton } from "./components/ui/skeleton"
 import { Toaster } from "./components/ui/sonner"
-import { ModeToggle } from "./components/mode-toggle"
 import {
   EMPTY_APP_DATA,
   getDueMistakes,
@@ -50,11 +37,8 @@ import type { ExamDifficultySettings } from "./lib/exam-difficulty"
 import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
-import {
-  AppSidebar,
-  CommandMenuTrigger,
-} from "./components/app-navigation"
-import { ALL_NAVIGATION, getViewLabel } from "./lib/navigation"
+import { AppSidebar } from "./components/app-navigation"
+import { ALL_NAVIGATION } from "./lib/navigation"
 import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
@@ -151,7 +135,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   // A calendar task hands the study timer its subject and intent when focused.
   const [focusPreset, setFocusPreset] = useState<{ subject?: string; intent: string } | undefined>()
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
-  const importInput = useRef<HTMLInputElement>(null)
   const sync = useSupabaseSync(data, setData)
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
@@ -643,37 +626,18 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onViewChange={setView}
         onSignOut={() => { void sync.signOut().catch((error: unknown) => { toast.error(error instanceof Error ? error.message : "Could not sign out.") }) }}
         onControlSession={studySessionSync.control}
+        onLogExam={openNewExam}
+        onLogPastStudy={() => setPastStudyId(crypto.randomUUID())}
+        onLogMistake={() => openNewMistake()}
+        onSearch={() => setCommandOpen(true)}
       />}
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-4 lg:px-6 2xl:px-8">
-          {!embedded && <SidebarTrigger />}
-          <span className="text-sm font-medium">{getViewLabel(view)}</span>
-          <div className="ml-auto flex items-center gap-1">
-            {!embedded && <>
-              <CommandMenuTrigger onClick={() => setCommandOpen(true)} />
-              <Button size="sm" variant="outline" onClick={() => setPastStudyId(crypto.randomUUID())}>Log past study</Button>
-              <Button size="sm" onClick={openNewExam}>
-                <Plus />
-                <span className="hidden sm:inline">Log exam</span>
-                <span className="sr-only sm:hidden">Log exam</span>
-              </Button>
-            </>}
-            {!embedded && <ModeToggle />}
-            <input ref={importInput} className="sr-only" type="file" accept="application/json" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importData(file); event.currentTarget.value = "" }} />
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}><MoreHorizontal /><span className="sr-only">Data actions</span></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => downloadAppData(data)}><Download />Export data</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importInput.current?.click()}><Upload />Import data</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
+          {!embedded && <SidebarTrigger className="mb-3 md:hidden" />}
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
@@ -734,7 +698,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
           {view === "predictor" ? <>{referencesLoading || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
-          {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} /></Suspense> : null}
+          {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
           </div>
         </main>
       </SidebarInset>
@@ -769,8 +733,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             onViewChange={setView}
             onLogExam={openNewExam}
             onLogMistake={() => openNewMistake()}
-            onExport={() => downloadAppData(data)}
-            onImport={() => importInput.current?.click()}
           />
         </Suspense>
       ) : null}

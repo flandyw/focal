@@ -5,6 +5,9 @@ import {
   MonitorPlay,
   Pause,
   Play,
+  Plus,
+  Clock3,
+  NotebookPen,
   Check,
   Trash2,
   Search,
@@ -13,7 +16,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { Button } from "./ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +38,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  SidebarTrigger,
   useSidebar,
 } from "./ui/sidebar"
 import type { AppView } from "../lib/app-view"
@@ -134,6 +137,10 @@ export function AppSidebar({
   onViewChange,
   onSignOut,
   onControlSession,
+  onLogExam,
+  onLogPastStudy,
+  onLogMistake,
+  onSearch,
 }: {
   view: AppView
   dueMistakes: number
@@ -144,6 +151,10 @@ export function AppSidebar({
   onViewChange: (view: AppView) => void
   onSignOut: () => void
   onControlSession: SessionSync["control"]
+  onLogExam: () => void
+  onLogPastStudy: () => void
+  onLogMistake: () => void
+  onSearch: () => void
 }) {
   const { setOpenMobile } = useSidebar()
   const accountLabel = user?.email || "Account"
@@ -155,20 +166,46 @@ export function AppSidebar({
     setOpenMobile(false)
   }
 
+  function run(action: () => void) {
+    setOpenMobile(false)
+    action()
+  }
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="pb-1">
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          onClick={() => navigate("calendar")}
-        >
-          <img src="/focal-icon.svg" alt="" className="size-6 shrink-0" />
-          <span className="flex items-center gap-1.5 font-semibold group-data-[collapsible=icon]:hidden">
-            Focal
-            <SyncIndicator status={syncStatus} />
-          </span>
-        </button>
+        <div className="flex items-center group-data-[collapsible=icon]:flex-col">
+          <button
+            type="button"
+            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:px-1"
+            aria-label="Focal home"
+            onClick={() => navigate("calendar")}
+          >
+            <img src="/focal-icon.svg" alt="" className="size-6 shrink-0" />
+            <span className="flex items-center gap-1.5 font-semibold group-data-[collapsible=icon]:hidden">
+              Focal
+              <SyncIndicator status={syncStatus} />
+            </span>
+          </button>
+          <SidebarTrigger className="shrink-0" />
+        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
+                <Plus aria-hidden />
+                <span>Add</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-52">
+                <DropdownMenuItem onClick={() => run(onLogExam)}><Plus aria-hidden />Log exam</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onLogPastStudy)}><Clock3 aria-hidden />Log past study</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onLogMistake)}><NotebookPen aria-hidden />Log mistake</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => run(onSearch)}><Search aria-hidden />Search actions</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-1 px-1">
         {NAVIGATION_GROUPS.map((group) => <SidebarGroup className="p-1.5" key={group.label}>
@@ -228,20 +265,5 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
-  )
-}
-
-export function CommandMenuTrigger({ onClick }: { onClick: () => void }) {
-  return (
-    <>
-      <Button variant="outline" size="sm" className="hidden min-w-40 justify-start text-muted-foreground sm:flex" onClick={onClick}>
-        <Search aria-hidden />
-        <span>Search actions</span>
-        <kbd className="ml-auto rounded border bg-muted px-1 font-sans text-[10px] text-muted-foreground">⌘K</kbd>
-      </Button>
-      <Button variant="ghost" size="icon-sm" className="sm:hidden" aria-label="Search pages and actions" onClick={onClick}>
-        <Search aria-hidden />
-      </Button>
-    </>
   )
 }

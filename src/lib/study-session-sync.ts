@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
 import type { AppData } from "./exam-data"
+import { toast } from "sonner"
 import { saveAppData } from "./storage"
 import { supabase } from "./supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "./ongoing-timers"
-import { SessionRefusedError } from "./focus-session"
+import { announce, backoffMs, classifyFailure, coalesced, onAnnounce, requestResult, transactionDone, withFlushLock } from "./outbox"
 import type { PastStudyLog } from "./pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
 import {
@@ -18,12 +19,12 @@ import {
   type CanonicalStudySession,
   type StudySessionAction,
   type StudySessionCommand,
-  type StudySessionMutationResult,
 } from "./sync/sessionContract"
 
 const OUTBOX_DB = "examtrack-sync"
 const META_STORE = "sync-meta"
 const TIMING_STORE = "session-timing"
+const SESSION_OUTBOX = "session-outbox"
 const DEVICE_KEY = "examtrack:study-session-device:v1"
 const CURSOR_KEY = "examtrack:study-session-cursor:v1"
 
@@ -106,13 +107,13 @@ export function saveTimerSessionChange(
   terminalAction?: "cancel" | "complete",
 ): Promise<FocusTimerSession | undefined>
 /**
- * One lifecycle action, one call, one answer. The server state machine is the only queue:
- * the canonical session comes back in the response, and a failure is reported to the user
- * rather than parked in a local outbox for later replay. Signed out means local-only.
+ * One lifecycle action. The command is committed to the durable outbox first and the local timer
+ * moves at once; delivery, retries and conflicts with other devices are the outbox's problem
+ * (see `drainSessionQueue`). Signed out means local-only: the timer is the whole truth.
  *
- * The result is always what the *server* did. Blending the requested state into the server's
- * revision would let a rejected command masquerade as an applied one, which is how a timer
- * ends up reading `paused` in the browser and `running` on the server.
+ * The returned timer is the one the user asked for, with the revision the caller already had.
+ * The server's row is adopted by the hook once every command queued for the session has been
+ * answered, so a pending local move is never overwritten by an older server state.
  */
 export async function saveTimerSessionChange(
   previous: TimerSession | undefined,
@@ -124,48 +125,11 @@ export async function saveTimerSessionChange(
   if (!session) return undefined
   const id = session.id ?? crypto.randomUUID()
   const current = next ? { ...next, id } : session
+  const accountId = await queueAccountId()
+  if (!supabase || accountId === "guest") return next ? current : undefined
   const action = terminalAction ?? actionFor(previous, next, kind)
-  const command = await buildCommand(previous, current, kind, action, id)
-  const result = await publishCommand(command)
-  // No account, no server, so there is nothing to reconcile against and the local
-  // timer is the whole truth.
-  if (!result) return next ? current : undefined
-  return reconcileSessionResult(result, command, current, next !== undefined, kind)
-}
-
-/**
- * Turns a server answer into the local session, or throws because the answer refused it.
- *
- * Three outcomes, and no fourth:
- *   - the command was applied          -> the server's row, projected
- *   - it was not applied, but the row  -> the server's row, projected
- *     is already in the state asked for
- *   - neither                         -> the command was refused; report it
- *
- * Blending the requested state into the server's revision is what this replaces. That
- * produced a timer reading `paused` in the browser while the server still counted it as
- * `running`, and the next cursor pull snapped the readout forward by however long the
- * disagreement had lasted.
- */
-function reconcileSessionResult<T extends TimerSession>(
-  result: StudySessionMutationResult,
-  command: StudySessionCommand,
-  current: T,
-  keepOpen: boolean,
-  kind: TimerKind,
-): T | undefined {
-  const canonical = result.session
-  if (!canonical) throw new Error("The server sent a session response with no session")
-  if (!result.applied && !actionSatisfied(canonical, command)) {
-    // The refusal still carries the row the server holds. Hand it over so the caller's
-    // next attempt is built on that revision instead of the one this command guessed.
-    throw new SessionRefusedError(`This timer changed on another device (${result.reason ?? "unknown"}).`,
-      projectTimerSession(canonical, current, kind))
-  }
-  // A closing command has no session left to hand back, and neither has one that somebody
-  // else closed. The cursor pull brings the closed row in either way.
-  if (!keepOpen || canonical.completed || isDeleted(canonical)) return undefined
-  return projectTimerSession(canonical, current, kind)
+  await queueCommand(accountId, await buildCommand(previous, current, kind, action, id, accountId))
+  return next ? current : undefined
 }
 
 /**
@@ -191,33 +155,37 @@ function projectTimerSession<T extends TimerSession>(canonical: CanonicalStudySe
   } as T
 }
 
-/** Did the command fail only because the session had already been put in the state it wanted? */
-function actionSatisfied(session: CanonicalStudySession, command: StudySessionCommand): boolean {
-  if (command.action === "start" || command.action === "resume") return isRunning(session)
-  if (command.action === "pause") return isPaused(session)
-  if (command.action === "complete") return session.completed
-  if (command.action === "cancel") return isDeleted(session)
-  if (command.action === "phase_change") return session.phase === command.phase
-  // `create` and `save_progress` carry no lifecycle claim, so there is nothing to contradict.
-  return true
+/** The command did not apply, but the session is already where it would have put it. */
+function alreadyDone(session: CanonicalStudySession, command: StudySessionCommand): boolean {
+  switch (command.action) {
+    case "start": case "resume": return isRunning(session)
+    case "pause": return isPaused(session)
+    case "complete": return session.completed
+    case "cancel": return isDeleted(session)
+    case "phase_change": return session.phase === command.phase
+    // The row exists: a replay after its receipt was pruned, not a conflict.
+    case "create": case "log": return true
+    // An edit that did not apply is a conflict, never a success.
+    case "save_progress": return false
+  }
 }
 
+/** Pause, resume, complete or delete a session another device (or an earlier visit) started. */
 export async function controlSession(
   session: CanonicalStudySession,
   action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">,
-): Promise<CanonicalStudySession | undefined> {
-  const accountId = await commandAccountId()
-  const command: StudySessionCommand = {
+): Promise<void> {
+  const accountId = await queueAccountId()
+  if (!supabase || accountId === "guest") throw new Error("Sign in to control a shared study session.")
+  if ((await readQueue(accountId)).some((entry) => entry.sessionId === session.id)) {
+    throw new Error("The last change to this session is still syncing.")
+  }
+  await queueCommand(accountId, {
     mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
     action, device_id: deviceId(), app: "examtrack", kind: session.kind, phase: session.phase ?? "focus",
     title: session.title, subject_id: session.subject_id ?? undefined, metadata: session.metadata,
     ...await captureCommandTiming(accountId, session.id, action),
-  }
-  const result = await publishCommand(command)
-  if (result && !result.applied && result.session && !actionSatisfied(result.session, command)) {
-    throw new Error(`This timer changed on another device (${result.reason ?? "unknown"}).`)
-  }
-  return result?.session ?? undefined
+  })
 }
 
 async function buildCommand(
@@ -226,13 +194,13 @@ async function buildCommand(
   kind: TimerKind,
   action: StudySessionAction,
   id: string,
+  accountId: string,
 ): Promise<StudySessionCommand> {
-  const accountId = await commandAccountId()
   return {
     mutation_id: crypto.randomUUID(),
     session_id: id,
-    // The same timer ID through start → pause → resume → complete, versioned only by the
-    // revision the server last handed back.
+    // The same timer ID through start → pause → resume → complete. This is only the floor: the
+    // outbox raises it to the newest revision it knows and counts the commands queued ahead.
     expected_revision: current.revision ?? previous?.revision ?? 0,
     action,
     device_id: deviceId(),
@@ -246,25 +214,257 @@ async function buildCommand(
   }
 }
 
-/** The only write path for a session. Throws with a readable message so the UI can say so.
- *  Returns null when there is no server to answer, and the full verdict otherwise. */
-async function publishCommand(command: StudySessionCommand): Promise<StudySessionMutationResult | null> {
-  const accountId = await commandAccountId()
-  if (!supabase || accountId === "guest") return null
-  const { data, error } = await supabase.rpc("study_session_mutate", {
-    p_command: { ...command, expected_user_id: accountId },
-  })
-  if (error) throw new Error(error.message)
-  const result = parseStudySessionMutationResult(data)
-  if (!result) throw new Error("The server sent an unreadable session response")
+/* ------------------------------------------------------------------ */
+/* the durable outbox                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every session write is a command in IndexedDB before anything else happens to it, and leaves
+ * only when the server has answered it. That makes four promises:
+ *
+ *  - Nothing is lost. A closed tab, a crash or a dead network leaves the command on disk; the
+ *    next run sends it. Only a definite answer from the server removes it.
+ *  - Nothing applies twice. The `mutation_id` is minted once and a command that may have
+ *    reached the server is frozen (`sent`), so every retry is byte-identical and the server
+ *    replays its stored answer instead of acting again.
+ *  - Order holds per session. A session's commands go one at a time, oldest first, each
+ *    expecting the revision the one before it produced. Different sessions never wait on each other.
+ *  - Other devices win fairly. If the server's row moved on first, a lifecycle command (a
+ *    transition) is retried against the new row under a fresh mutation and the server decides
+ *    whether it still makes sense; an edit of values (blocks, completed) is never silently laid
+ *    over another device's change, it is reported.
+ */
+interface Queued {
+  seq?: number
+  accountId: string
+  sessionId: string
+  command: StudySessionCommand
+  /** An attempt may have reached the server, so the command must not change until it answers. */
+  sent: boolean
+  attempts: number
+  /** Epoch ms; the command is not tried before this. */
+  retryAt: number
+  rebases: number
+  queuedAt: number
+}
+
+const MAX_REBASES = 5
+const LIFECYCLE_ACTIONS = new Set<StudySessionAction>(["start", "pause", "resume", "phase_change", "complete", "cancel"])
+
+/** The signed-in account the mounted hook serves. Offline, auth.getSession() cannot be trusted to answer. */
+let signedInAccount: string | null = null
+/** Newest revision seen per session, from answers and from the feed. */
+const knownRevisions = new Map<string, number>()
+const revisionKey = (accountId: string, sessionId: string) => `${accountId}\u0000${sessionId}`
+
+function noteRevisions(accountId: string, sessions: readonly CanonicalStudySession[]) {
+  for (const session of sessions) {
+    const key = revisionKey(accountId, session.id)
+    if ((knownRevisions.get(key) ?? 0) < session.revision) knownRevisions.set(key, session.revision)
+  }
+}
+
+async function queueAccountId(): Promise<string> {
+  return signedInAccount ?? commandAccountId()
+}
+
+/** What the mounted hook does with the outbox's news. */
+interface QueueSink {
+  /** Rows the server returned for answered commands (applied or refused). */
+  delivered(rows: CanonicalStudySession[]): Promise<void>
+  rejected(message: string): void
+}
+let queueSink: QueueSink | null = null
+
+async function queueStore(mode: IDBTransactionMode) {
+  const transaction = (await openOutboxDatabase()).transaction(SESSION_OUTBOX, mode)
+  return { transaction, store: transaction.objectStore(SESSION_OUTBOX) }
+}
+
+async function readQueue(accountId: string): Promise<Queued[]> {
+  const { transaction, store } = await queueStore("readonly")
+  const all = await requestResult(store.getAll() as IDBRequest<Queued[]>)
+  await transactionDone(transaction)
+  return all.filter((entry) => entry.accountId === accountId)
+}
+
+async function writeEntry(entry: Queued): Promise<void> {
+  const { transaction, store } = await queueStore("readwrite")
+  store.put(entry)
+  await transactionDone(transaction)
+}
+
+/**
+ * Freeze the entry before it is sent. Read-modify-write in one transaction: an edit that was
+ * folded into this still-unsent entry a moment ago is in the copy returned here, not overwritten
+ * by the older copy the drain scanned. Undefined when the entry is already gone.
+ */
+async function claimEntry(seq: number): Promise<Queued | undefined> {
+  const { transaction, store } = await queueStore("readwrite")
+  const fresh = await requestResult(store.get(seq) as IDBRequest<Queued | undefined>)
+  if (fresh && !fresh.sent) store.put({ ...fresh, sent: true })
+  await transactionDone(transaction)
+  return fresh
+}
+
+async function deleteEntry(seq: number): Promise<void> {
+  const { transaction, store } = await queueStore("readwrite")
+  store.delete(seq)
+  await transactionDone(transaction)
+}
+
+/** Write-ahead: resolves once the command is on disk, not once the server has seen it. */
+async function enqueueCommand(accountId: string, command: StudySessionCommand): Promise<void> {
+  const { transaction, store } = await queueStore("readwrite")
+  const queued = (await requestResult(store.getAll() as IDBRequest<Queued[]>)).filter((entry) => entry.accountId === accountId)
+  // The same command twice (a retried log or create) is one command.
+  if (queued.some((entry) => entry.command.mutation_id === command.mutation_id)) return void await transactionDone(transaction)
+  const ahead = queued.filter((entry) => entry.sessionId === command.session_id)
+  const last = ahead.at(-1)
+  if (last && !last.sent && last.command.action === "save_progress" && command.action === "save_progress") {
+    // Two unsent edits of one session are one edit; the later fields win. Identity and position are the earlier command's.
+    store.put({ ...last, command: { ...last.command, ...command, mutation_id: last.command.mutation_id, expected_revision: last.command.expected_revision } })
+  } else {
+    // A command applied by the server raises the revision by exactly one, so a chain of n queued
+    // commands expects the newest known revision plus n.
+    const base = Math.max(knownRevisions.get(revisionKey(accountId, command.session_id)) ?? 0, command.expected_revision)
+    store.put({ accountId, sessionId: command.session_id, command: { ...command, expected_revision: base + ahead.length },
+      sent: false, attempts: 0, retryAt: 0, rebases: 0, queuedAt: Date.now() } satisfies Queued)
+  }
+  await transactionDone(transaction)
+}
+
+/** The boundary happened now, whether or not the server has heard of it; the next command measures from here. */
+async function queueCommand(accountId: string, command: StudySessionCommand): Promise<void> {
+  await enqueueCommand(accountId, command)
+  await commitCommandTiming(accountId, command.session_id, command.action)
+  announce()
+  await queueSink?.delivered([])
+  requestFlush()
+}
+
+const flushSessionQueue = coalesced(async () => {
+  const accountId = signedInAccount
+  if (!accountId || !supabase) return
+  scheduleWake(await withFlushLock(`focal-session-outbox:${accountId}`, () => drainSessionQueue(accountId)))
+})
+
+let wakeTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleWake(at: number | null) {
+  clearTimeout(wakeTimer)
+  if (at !== null) wakeTimer = setTimeout(requestFlush, Math.max(250, Math.min(60_000, at - Date.now())))
+}
+
+/** Start delivery. Safe to call from anywhere, any number of times. */
+function requestFlush(): Promise<void> {
+  return flushSessionQueue().catch((error: unknown) => console.error("Could not flush the study-session outbox:", error))
+}
+
+/**
+ * Sends every due command, oldest first. Returns when nothing more can go now, with the time
+ * the earliest held command becomes due (null when nothing is waiting).
+ */
+async function drainSessionQueue(accountId: string): Promise<number | null> {
+  let wake: number | null = null
+  const soonest = (at: number) => { wake = wake === null ? at : Math.min(wake, at) }
+  for (;;) {
+    if (signedInAccount !== accountId) return wake
+    const now = Date.now()
+    const waiting = new Set<string>()
+    let entry: Queued | undefined
+    wake = null
+    for (const candidate of await readQueue(accountId)) {
+      // A held command holds back everything after it in its own session, and only there.
+      if (waiting.has(candidate.sessionId)) continue
+      if (candidate.retryAt > now) { waiting.add(candidate.sessionId); soonest(candidate.retryAt); continue }
+      entry = candidate
+      break
+    }
+    if (!entry || !await deliver(accountId, entry, soonest)) return wake
+  }
+}
+
+/** Sends one command and files the answer. False means stop draining: the network or the account is down. */
+async function deliver(accountId: string, scanned: Queued, soonest: (at: number) => void): Promise<boolean> {
+  const entry = await claimEntry(scanned.seq!)
+  if (!entry) return true
+  const { command } = entry
+  let data: unknown = null
+  let error: { message: string; code?: string } | null = null
+  let status = 0
+  try {
+    ({ data, error, status } = await supabase!.rpc("study_session_mutate", { p_command: { ...command, expected_user_id: accountId } }))
+  } catch (thrown) {
+    error = { message: String(thrown) }
+  }
+  const result = error ? null : parseStudySessionMutationResult(data)
+  if (error || !result) {
+    const failure = error ? classifyFailure(status, error) : "retry"
+    if (failure === "hold") { soonest(Date.now() + 15_000); return false }
+    if (failure === "retry") {
+      const attempts = entry.attempts + 1
+      const retryAt = Date.now() + backoffMs(attempts)
+      await writeEntry({ ...entry, sent: true, attempts, retryAt })
+      soonest(retryAt)
+      return status !== 0
+    }
+    // The server read the command and refused it for good (invalid blocks, bad timing...). Retrying cannot change that.
+    console.error("The server refused a study-session command:", command, error)
+    await deleteEntry(entry.seq!)
+    queueSink?.rejected(`A change to "${command.title || "a study session"}" was refused: ${error!.message}`)
+    await queueSink?.delivered([])
+    announce()
+    return true
+  }
   clockAnchor = observeServerClock(result.server_now, performance.now())
-  // The boundary is real now, so it may move the local anchor -- but the server's own boundary
-  // is the better anchor, so it wins when there is one. Only a command the server accepted
-  // moved a real boundary, so a rejected one leaves the anchor where it was.
-  const sessions = result.applied && result.session ? [result.session] : []
-  const anchored = await rememberCanonicalTiming(accountId, sessions)
-  if (!anchored && result.applied) await commitCommandTiming(accountId, command.session_id, command.action)
-  return result
+  const session = result.session
+  if (session) noteRevisions(accountId, [session])
+  if (result.applied || (session && alreadyDone(session, command))) {
+    await deleteEntry(entry.seq!)
+  } else if (session && result.reason === "stale_revision" && LIFECYCLE_ACTIONS.has(command.action) && entry.rebases < MAX_REBASES) {
+    // Another device moved the session on first. The user's move is a transition, not a value, so try
+    // it on the row the server holds; the server judges whether it still makes sense. It is a new
+    // request, so a new mutation. The old timing described a boundary on the old timeline.
+    await writeEntry({ ...entry, sent: false, retryAt: 0, rebases: entry.rebases + 1,
+      command: { ...command, mutation_id: crypto.randomUUID(), expected_revision: session.revision,
+        occurred_at: undefined, elapsed_since_previous_ms: undefined } })
+  } else {
+    await deleteEntry(entry.seq!)
+    queueSink?.rejected(refusalMessage(result.reason, command, session))
+  }
+  await queueSink?.delivered(session ? [session] : [])
+  announce()
+  return true
+}
+
+function refusalMessage(reason: string | null, command: StudySessionCommand, session: CanonicalStudySession | null): string {
+  const name = `"${command.title || session?.title || "A study session"}"`
+  if (reason === "session_terminal") return `${name} was deleted on another device.`
+  if (reason === "not_found") return `${name} no longer exists.`
+  return `${name} was changed on another device, so this change was not applied.`
+}
+
+/** What the screen shows: the server's sessions with this device's unanswered commands laid on top. */
+function overlaySessions(canonical: ReadonlyMap<string, CanonicalStudySession>, queue: readonly Queued[]): CanonicalStudySession[] {
+  const view = new Map(canonical)
+  for (const { command } of queue) {
+    const base = view.get(command.session_id)
+    try {
+      if (command.action === "create" || command.action === "log") {
+        if (!base) view.set(command.session_id, guestSession(command.session_id, { title: command.title ?? "", subjectId: command.subject_id ?? undefined,
+          blocks: command.blocks ?? [], completed: command.action === "log", metadata: command.metadata ?? {} }))
+      } else if (base && command.action === "save_progress" && (command.blocks || command.completed !== undefined)) {
+        view.set(base.id, guestApply(base, { blocks: command.blocks, completed: command.completed }))
+      } else if (base && command.action === "cancel") {
+        view.set(base.id, { ...base, cancelled_at: new Date().toISOString(), revision: base.revision + 1 })
+      }
+      // ponytail: timer lifecycle commands are not drawn onto the list; the timer screens run on their own
+      // local state, and the list catches up when the command is answered.
+    } catch {
+      // A command the overlay cannot build is still sent; the server's answer is what counts.
+    }
+  }
+  return [...view.values()].toSorted((left, right) => left.created_at.localeCompare(right.created_at))
 }
 
 function actionFor(previous: TimerSession | undefined, next: TimerSession | undefined, kind: TimerKind): StudySessionAction {
@@ -432,30 +632,21 @@ async function rememberCanonicalTiming(accountId: string, sessions: readonly Can
 function openOutboxDatabase(): Promise<IDBDatabase> {
   if (outboxDatabase) return outboxDatabase
   outboxDatabase = new Promise((resolve, reject) => {
-    const request = indexedDB.open(OUTBOX_DB, 2)
+    const request = indexedDB.open(OUTBOX_DB, 3)
     request.onupgradeneeded = () => {
       const database = request.result
       if (!database.objectStoreNames.contains(META_STORE)) database.createObjectStore(META_STORE, { keyPath: "key" })
       if (!database.objectStoreNames.contains(TIMING_STORE)) database.createObjectStore(TIMING_STORE, { keyPath: "key" })
+      if (!database.objectStoreNames.contains(SESSION_OUTBOX)) database.createObjectStore(SESSION_OUTBOX, { keyPath: "seq", autoIncrement: true })
     }
-    request.onsuccess = () => resolve(request.result)
+    // A newer tab upgrading the schema must not wait on this one forever.
+    request.onsuccess = () => {
+      request.result.onversionchange = () => { request.result.close(); outboxDatabase = null }
+      resolve(request.result)
+    }
     request.onerror = () => reject(request.error ?? new Error("Could not open the local study-session outbox"))
   })
   return outboxDatabase
-}
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error("Local outbox read failed"))
-  })
-}
-
-function transactionDone(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = transaction.onerror = () => reject(transaction.error ?? new Error("Local outbox transaction failed"))
-  })
 }
 
 /**
@@ -476,40 +667,81 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
   const readWholeState = useRef(false)
   const canonicalSessions = useRef(new Map<string, CanonicalStudySession>())
+  /** This account's unanswered commands. A session in here belongs to this device until they are answered. */
+  const queue = useRef<Queued[]>([])
   const [sessions, setSessions] = useState<CanonicalStudySession[]>([])
+  const [queued, setQueued] = useState(0)
 
-  const acceptSessions = (incoming: readonly CanonicalStudySession[], replace = false) => {
+  const render = useCallback(() => {
+    setSessions(overlaySessions(canonicalSessions.current, queue.current))
+    setQueued(queue.current.length)
+  }, [])
+
+  const acceptSessions = useCallback((incoming: readonly CanonicalStudySession[], replace = false) => {
     const next = replace ? new Map<string, CanonicalStudySession>() : new Map(canonicalSessions.current)
     for (const session of incoming) {
       const previous = next.get(session.id)
       if (!previous || previous.revision <= session.revision) next.set(session.id, session)
     }
     canonicalSessions.current = next
-    setSessions([...next.values()].toSorted((left, right) => left.created_at.localeCompare(right.created_at)))
-  }
+    if (userId) noteRevisions(userId, incoming)
+    render()
+  }, [userId, render])
+
+  const refreshQueue = useCallback(async () => {
+    queue.current = userId ? await readQueue(userId) : []
+    render()
+  }, [userId, render])
 
   useEffect(() => {
     if (!userId || !supabase) {
       initialized.current = false
       canonicalSessions.current = new Map()
+      queue.current = []
       try { acceptSessions(guestPastStudy(), true) }
       catch (error) { console.error("Could not load past study:", error); setSessions([]) }
       return
     }
     canonicalSessions.current = new Map()
+    queue.current = []
     readWholeState.current = false
     setSessions([])
+    signedInAccount = userId
     let cancelled = false
     let pulling = false
-    /** Offline start, back online: publish the timer the user is looking at. One call, no queue. */
+    /** Server rows whose session has no unanswered local command become the local timer. */
+    const adopt = async (rows: readonly CanonicalStudySession[]) => {
+      const owned = new Set(queue.current.map((entry) => entry.sessionId))
+      const settled = rows.filter((row) => !owned.has(row.id))
+      if (settled.length === 0) return
+      await rememberCanonicalTiming(userId, settled)
+      const projected = await applyCanonicalSessions(settled, estimateNow(), dataRef.current)
+      if (projected !== dataRef.current) {
+        dataRef.current = projected
+        saveAppData(projected)
+        setData(projected)
+      }
+    }
+    queueSink = {
+      delivered: async (rows) => {
+        if (cancelled) return
+        acceptSessions(rows)
+        await refreshQueue()
+        // The newest row the feed or an answer has brought, not the one this answer carried: the feed
+        // may have delivered a later revision while the session was held back.
+        await adopt(rows.flatMap((row) => canonicalSessions.current.get(row.id) ?? []))
+      },
+      rejected: (message) => toast.error("A study change was not applied", { description: message }),
+    }
+    /** A timer that predates the outbox (or was started signed out) is not on the server: queue its start once. */
     const publishLocalTimer = async () => {
-      const known = new Set(canonicalSessions.current.keys())
+      const known = new Set([...canonicalSessions.current.keys(), ...queue.current.map((entry) => entry.sessionId)])
       const exam = dataRef.current.activeExamTimer
       const sac = dataRef.current.activeSacTimer
       try {
@@ -541,13 +773,8 @@ export function useStudySessionSync(
             return session ? [session] : []
           }) : []
           acceptSessions(sessions, raw.mode === "snapshot")
-          await rememberCanonicalTiming(userId, sessions)
-          const projected = await applyCanonicalSessions(sessions, estimateNow(), dataRef.current)
-          if (projected !== dataRef.current) {
-            dataRef.current = projected
-            saveAppData(projected)
-            setData(projected)
-          }
+          await refreshQueue()
+          await adopt(sessions)
           const page = raw.mode === "changes" && Array.isArray(raw.rows) ? raw.rows : []
           cursor = raw.mode === "snapshot" ? raw.head : page.reduce((highest, item) =>
             isRecord(item) && typeof item.seq === "number" ? Math.max(highest, item.seq) : highest, cursor)
@@ -563,11 +790,12 @@ export function useStudySessionSync(
     }
 
     const start = async () => {
+      // Commands left on disk by a closed tab or a dead connection go before anything else.
+      await refreshQueue()
+      void requestFlush()
       await pull()
       if (cancelled) return
       initialized.current = true
-      // A timer that was started offline is not on the server yet. Publishing it once is the
-      // whole reconciliation story: no queue, no replay, just "tell the server what I have".
       await publishLocalTimer()
       await pull()
     }
@@ -579,8 +807,8 @@ export function useStudySessionSync(
         void pull()
       })
       .subscribe()
-    const onOnline = () => void pull().then(() => publishLocalTimer())
-    const onFocus = () => void pull()
+    const onOnline = () => { void requestFlush(); void pull().then(() => publishLocalTimer()) }
+    const onFocus = () => { void requestFlush(); void pull() }
     const checkpoint = () => {
       const current = dataRef.current
       for (const timer of [current.activeExamTimer, current.activeSacTimer]) {
@@ -590,7 +818,13 @@ export function useStudySessionSync(
     const onVisibility = () => {
       if (document.visibilityState === "visible") { checkpoint(); onFocus() }
     }
-    const timer = window.setInterval(() => void pull(), 15_000)
+    // Another tab queued, sent or settled something: look again.
+    const stopAnnounce = onAnnounce(() => { void refreshQueue(); void pull(); void requestFlush() })
+    // A refreshed token is what ends an auth hold.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") void requestFlush()
+    })
+    const timer = window.setInterval(onFocus, 15_000)
     const timingTimer = window.setInterval(checkpoint, 1_000)
     window.addEventListener("online", onOnline)
     window.addEventListener("focus", onFocus)
@@ -598,6 +832,11 @@ export function useStudySessionSync(
     return () => {
       cancelled = true
       initialized.current = false
+      queueSink = null
+      signedInAccount = null
+      scheduleWake(null)
+      stopAnnounce()
+      subscription.unsubscribe()
       clearInterval(timer)
       clearInterval(timingTimer)
       window.removeEventListener("online", onOnline)
@@ -605,61 +844,62 @@ export function useStudySessionSync(
       document.removeEventListener("visibilitychange", onVisibility)
       void supabase?.removeChannel(channel)
     }
-  }, [userId, setData])
+  }, [userId, setData, acceptSessions, refreshQueue])
+
+  /** Commit the command, show its effect, start delivery. Resolves when it is safe on disk. */
+  async function submit(command: StudySessionCommand) {
+    await queueCommand(userId!, command)
+  }
 
   async function log(entry: PastStudyLog, id: string) {
     const metadata = { subjectIds: [entry.subjectId], reflection: { notes: entry.notes }, createdVia: "manual", schedule: { blocks: entry.blocks } }
-    let session: CanonicalStudySession
     if (userId && supabase) {
-      const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
+      // The checks the server will make, made here first so a bad entry is a readable error now, not a rejection later.
+      guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks: entry.blocks, completed: true, metadata })
+      await submit({ mutation_id: id, session_id: id, expected_revision: 0,
         action: "log", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
         title: entry.title, subject_id: entry.subjectId, metadata, blocks: entry.blocks })
-      if (!result?.applied || !result.session) throw new Error("Study was not saved. Try again after checking your account and connection.")
-      session = result.session
     } else {
-      session = guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks: entry.blocks, completed: true, metadata })
+      const session = guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks: entry.blocks, completed: true, metadata })
       saveGuest([...guestPastStudy().filter((item) => item.id !== id), session])
+      acceptSessions([session])
     }
-    acceptSessions([session])
   }
 
   /** Schedule study that has not happened yet: a session with times and `completed` false. */
   async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) {
-    const saved: CanonicalStudySession[] = []
-    for (const entry of entries) {
+    const planned = entries.map((entry) => {
       const id = crypto.randomUUID()
       const blocks = [{ start: entry.start, end: entry.end }]
       const metadata = {
         subjectIds: entry.subjectId ? [entry.subjectId] : [], createdVia: "manual",
         description: entry.description, topics: entry.topics, schedule: { blocks },
       }
+      return { entry, id, blocks, metadata, session: guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks, completed: false, metadata }) }
+    })
+    for (const { entry, id, blocks, metadata, session } of planned) {
       if (userId && supabase) {
-        const result = await publishCommand({ mutation_id: id, session_id: id, expected_revision: 0,
+        await submit({ mutation_id: id, session_id: id, expected_revision: 0,
           action: "create", app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
           title: entry.title, subject_id: entry.subjectId ?? null, metadata, blocks })
-        if (!result?.applied || !result.session) throw new Error(`"${entry.title}" was not saved. Check your connection and try again.`)
-        saved.push(result.session)
       } else {
-        const session = guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks, completed: false, metadata })
         saveGuest([...guestPastStudy(), session])
-        saved.push(session)
+        acceptSessions([session])
       }
-      acceptSessions([saved.at(-1)!])
     }
-    return saved.length
+    return planned.length
   }
 
   /** Move or resize a session's blocks, or mark it done or not done. Any session that is not running. */
   async function edit(session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) {
+    const next = guestApply(session, patch)
     if (!userId || !supabase) {
-      const next = guestApply(session, patch)
       saveGuest(guestPastStudy().map((item) => item.id === session.id ? next : item))
       return acceptSessions([next])
     }
-    const result = await publishCommand({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
+    await submit({ mutation_id: crypto.randomUUID(), session_id: session.id,
+      expected_revision: canonicalSessions.current.get(session.id)?.revision ?? session.revision,
       action: "save_progress", app: "examtrack", device_id: deviceId(), ...patch })
-    if (result?.session) acceptSessions([result.session])
-    if (!result?.applied) throw new Error(`Study was not changed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
   }
 
   /** Delete a session: cancel it on the server (a tombstone every device sees), or drop it from this browser when signed out. */
@@ -669,16 +909,19 @@ export function useStudySessionSync(
       return acceptSessions(guestPastStudy(), true)
     }
     // No timing fields: a boundary estimate has no meaning for a session that finished days ago.
-    const result = await publishCommand({ mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
+    await submit({ mutation_id: crypto.randomUUID(), session_id: session.id,
+      expected_revision: canonicalSessions.current.get(session.id)?.revision ?? session.revision,
       action: "cancel", app: "examtrack", device_id: deviceId() })
-    if (result?.session) acceptSessions([result.session])
-    if (!result?.session || !isDeleted(result.session)) throw new Error(`Study was not removed (${result?.reason ?? "unknown"}). It may have changed on another device.`)
   }
 
-  return { sessions, plan, edit, remove, control: async (session, action) => {
-    const updated = await controlSession(session, action)
-    if (updated) acceptSessions([updated])
-  }, log }
+  return { sessions, queued, plan, edit, remove, log, control: async (session, action) => {
+    await controlSession(session, action)
+    // Hold the caller's spinner until the server has answered, as long as it answers promptly.
+    await requestFlush()
+    if (userId && (await readQueue(userId)).some((entry) => entry.sessionId === session.id)) {
+      toast("Saved on this device", { description: "It will sync when the connection is back." })
+    }
+  } }
 }
 
 function estimateNow(): number {

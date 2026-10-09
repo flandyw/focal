@@ -4,6 +4,7 @@ import { isExamDifficultySettings } from "./exam-difficulty"
 import { isExamProgression } from "./exam-progression"
 import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
 import { migrateSacRecords } from "./sac"
+import { announce, classifyFailure, requestResult, transactionDone, withFlushLock } from "./outbox"
 import { supabase } from "./supabase"
 
 const DB_NAME = "examtrack-app-sync"
@@ -16,6 +17,9 @@ const TIMETABLE_ROW = "timetable_config"
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const OWNER_META_KEY = "owner"
 const TOMBSTONE_KEY = "examtrack:sync:tombstones:v1"
+// A change the server refuses for good is almost always a deployment gap (a migration not
+// applied yet), so it is parked and retried rather than dropped.
+const PARK_MS = 5 * 60_000
 
 type Entity = "attempts" | "mistakes" | "user_state" | "events" | "timetable_config"
 type Operation = "put" | "delete"
@@ -29,6 +33,8 @@ type PendingRow = AppRow & {
   lamport: number
   attempted: boolean
   queuedAt: number
+  /** The server refused this change outright; it is held (never dropped) until then. */
+  retryAt?: number
 }
 type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean; feedVersion?: number }
 // Bump when APP_ENTITIES grows: rows of a newly understood entity were skipped by earlier cursors.
@@ -69,20 +75,6 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onerror = () => reject(request.error ?? new Error("Could not open the Focal sync database"))
   })
   return database
-}
-
-function requestResult<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error("Local sync storage request failed"))
-  })
-}
-
-function transactionDone(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve()
-    transaction.onabort = transaction.onerror = () => reject(transaction.error ?? new Error("Local sync transaction failed"))
-  })
 }
 
 const accountMetaKey = (accountId: string) => `account:${accountId}`
@@ -225,11 +217,7 @@ async function synchronize(data: AppData, userId: string, deviceId: string): Pro
     await bootstrap(data, userId)
     meta = await readMeta(userId)
   }
-  for (let pass = 0; pass < 4; pass++) {
-    const pending = await readOutbox(userId)
-    if (!pending.length) break
-    await flush(pending, userId, deviceId)
-  }
+  await flushAppOutbox(userId, deviceId)
   await pull(userId)
   // ponytail: no localStorage write here; the caller owns persistence, and a late projection must not clobber newer state.
   return projectAppRows(data, userId)
@@ -359,52 +347,37 @@ function isTombstoned(entity: Entity, rowId: string, rowUpdatedAt: string, tombs
 }
 
 /**
- * SIMPLEST IS LAW: the outbox is a failure log, not a holding pen. Every change goes to the
- * server immediately; only what the server refuses is queued for the retry loop. This is why
- * a delete can never be overtaken by a stale projection — the row is gone server-side and
- * gone from the applied-rows store in the same call.
+ * Write-ahead. A change is durable in the outbox before the network is touched, so closing the
+ * tab, losing the connection or crashing mid-request cannot lose it, and the projection (which
+ * keeps pending rows local) cannot resurrect a deleted row or revert an edit while it is in
+ * flight. Delivery starts at once; whatever does not land stays queued for synchronize().
  */
 export async function pushAppChanges(accountId: string, changes: readonly AppRow[]): Promise<void> {
   if (!changes.length) return
-  if (!supabase) return queueAppChanges(accountId, changes)
-  const failed: AppRow[] = []
-  for (const change of changes) {
-    try {
-      await pushRowNow(accountId, change)
-    } catch {
-      failed.push(change)
-    }
+  await queueAppChanges(accountId, changes)
+  announce()
+  if (!supabase) return
+  try {
+    await flushAppOutbox(accountId)
+  } catch (error) {
+    console.warn("Sync change stays queued:", error)
   }
-  await queueAppChanges(accountId, failed)
+  announce()
 }
 
-/** Publish one change and record it as applied. Throws when the server will not take it. */
-async function pushRowNow(accountId: string, change: AppRow): Promise<void> {
-  if (!supabase) throw new Error("Supabase is not configured")
-  const db = await openDatabase()
-  const read = db.transaction([ROWS], "readonly")
-  const rows = await requestResult(read.objectStore(ROWS).getAll() as IDBRequest<AppliedRow[]>)
-  await transactionDone(read)
-  const current = rows.find((row) => row.accountId === accountId &&
-    logicalKey(row.entity, row.rowId) === logicalKey(change.entity, change.rowId))
-  const deviceId = appSyncDeviceId()
-  const changeId = crypto.randomUUID()
-  const { data, error } = await supabase.rpc("sync_apply_changes", {
-    p_expected_user_id: accountId,
-    p_changes: [{ change_id: changeId, client_id: deviceId, entity: change.entity, row_id: change.rowId,
-      operation: change.operation, payload: change.operation === "put" ? change.payload : null,
-      expected_seq: current?.seq ?? 0 }],
+/**
+ * Sends everything that is due, one flusher at a time across tabs. A stale answer rebases the
+ * entry into a new one, so a few passes settle a burst of concurrent edits from other devices.
+ */
+export function flushAppOutbox(accountId: string, deviceId = appSyncDeviceId()): Promise<void> {
+  return withFlushLock(`focal-app-outbox:${accountId}`, async () => {
+    for (let pass = 0; pass < 4; pass++) {
+      const now = Date.now()
+      const due = (await readOutbox(accountId)).filter((entry) => (entry.retryAt ?? 0) <= now)
+      if (!due.length) return
+      await flush(due, accountId, deviceId)
+    }
   })
-  if (error) throw error
-  const receipt = isRecord(data) && Array.isArray(data.receipts)
-    ? data.receipts.find((item) => isRecord(item) && item.change_id === changeId) : undefined
-  const seq = isRecord(receipt) && typeof receipt.seq === "number" ? receipt.seq : (current?.seq ?? 0) + 1
-  const write = db.transaction([ROWS], "readwrite")
-  write.objectStore(ROWS).put({ key: rowKey(accountId, change.entity, change.rowId), accountId,
-    entity: change.entity, rowId: change.rowId, operation: change.operation, payload: change.payload,
-    seq, lamport: Math.max(0, current?.lamport ?? 0) + 1, clientId: deviceId,
-    updatedAt: new Date().toISOString() } satisfies AppliedRow)
-  await transactionDone(write)
 }
 
 function legacyStamp(row: AppRow | AppliedRow): string {
@@ -420,19 +393,37 @@ async function flush(changes: PendingRow[], accountId: string, deviceId: string)
   const db = await openDatabase()
   const transaction = db.transaction([OUTBOX], "readwrite")
   const store = transaction.objectStore(OUTBOX)
-  for (const change of changes) store.put({ ...change, attempted: true })
+  for (const change of changes) if (!change.attempted) store.put({ ...change, attempted: true })
   await transactionDone(transaction)
-  const { data, error } = await supabase.rpc("sync_apply_changes", {
+  const { data, error, status } = await supabase.rpc("sync_apply_changes", {
     p_expected_user_id: accountId,
     p_changes: changes.map((change) => ({
       change_id: change.changeId, client_id: deviceId, entity: change.entity, row_id: change.rowId,
       operation: change.operation, payload: change.payload, expected_seq: change.expectedSeq,
     })),
   })
-  if (error) throw error
+  if (error) {
+    // Network, server or auth trouble: nothing is wrong with the changes, so all of them wait.
+    if (classifyFailure(status, error) !== "reject") throw error
+    // The server refused something. A batch fails as a whole, so find the offender by sending
+    // alone; one bad row must not hold the rest of the account's edits hostage.
+    if (changes.length > 1) {
+      for (const change of changes) await flush([change], accountId, deviceId)
+      return
+    }
+    console.error("The server refused a sync change; it is held and retried later:", changes[0], error)
+    const transaction = db.transaction([OUTBOX], "readwrite")
+    transaction.objectStore(OUTBOX).put({ ...changes[0], attempted: true, retryAt: Date.now() + PARK_MS })
+    await transactionDone(transaction)
+    return
+  }
   if (!isRecord(data) || !Array.isArray(data.receipts) || !Array.isArray(data.stale)) throw new Error("Malformed sync_apply_changes response")
-  const receipts = data.receipts.flatMap((item) => isRecord(item) && typeof item.change_id === "string" ? [item.change_id] : [])
-  await removeOutbox(accountId, receipts)
+  const acknowledged = new Map<string, number>()
+  for (const item of data.receipts) {
+    if (isRecord(item) && typeof item.change_id === "string") acknowledged.set(item.change_id, Number(item.seq) || 0)
+  }
+  await settleAcknowledged(accountId, deviceId, changes.flatMap((change) =>
+    acknowledged.has(change.changeId) ? [{ change, seq: acknowledged.get(change.changeId)! }] : []))
   for (const item of data.stale) {
     if (!isRecord(item) || typeof item.change_id !== "string") throw new Error("Malformed stale sync result")
     const stale = changes.find((change) => change.changeId === item.change_id)
@@ -440,6 +431,36 @@ async function flush(changes: PendingRow[], accountId: string, deviceId: string)
     const current = isRecord(item.current) ? parseAppliedRow(accountId, item.current) : null
     await rebaseOutbox(stale, current)
   }
+}
+
+/**
+ * Receipts remove the entries and record each row at the seq the server gave it, in one
+ * transaction. Without the second half, the next edit to the same row would be queued against
+ * the seq before this one and come back stale from the server for no real conflict.
+ */
+async function settleAcknowledged(accountId: string, deviceId: string, acknowledged: Array<{ change: PendingRow; seq: number }>): Promise<void> {
+  if (!acknowledged.length) return
+  const db = await openDatabase()
+  const transaction = db.transaction([OUTBOX, ROWS], "readwrite")
+  const outbox = transaction.objectStore(OUTBOX)
+  const rows = transaction.objectStore(ROWS)
+  const queued = await requestResult(outbox.getAll() as IDBRequest<PendingRow[]>)
+  for (const { change, seq } of acknowledged) {
+    outbox.delete(change.changeId)
+    if (seq <= 0) continue // The feed pull will record it.
+    const payload = change.operation === "put" ? change.payload : null
+    rows.put({ key: rowKey(accountId, change.entity, change.rowId), accountId, entity: change.entity, rowId: change.rowId,
+      operation: change.operation, payload, seq, lamport: change.lamport, clientId: deviceId,
+      updatedAt: new Date().toISOString() } satisfies AppliedRow)
+    // Later unsent edits to this row were made on top of this one: they build on it, not on its predecessor.
+    for (const later of queued) {
+      if (later.accountId === accountId && !later.attempted && later.changeId !== change.changeId &&
+          logicalKey(later.entity, later.rowId) === logicalKey(change.entity, change.rowId)) {
+        outbox.put({ ...later, expectedSeq: seq, basePayload: payload })
+      }
+    }
+  }
+  await transactionDone(transaction)
 }
 
 function parseAppliedRow(accountId: string, raw: Record<string, unknown>): AppliedRow | null {
@@ -478,7 +499,7 @@ async function rebaseOutbox(change: PendingRow, remote: AppliedRow | null): Prom
   const meta = metaValue ?? defaultMeta(change.accountId)
   const rebased: PendingRow = {
     ...change, changeId: crypto.randomUUID(), expectedSeq: remote?.seq ?? 0,
-    basePayload: currentPayload, payload: merged, lamport: ++meta.lamport, attempted: false, queuedAt: Date.now(),
+    basePayload: currentPayload, payload: merged, lamport: ++meta.lamport, attempted: false, queuedAt: Date.now(), retryAt: undefined,
   }
   outbox.delete(change.changeId)
   outbox.put(rebased)
@@ -524,17 +545,6 @@ function mergeObject(base: Record<string, unknown>, local: Record<string, unknow
     } else if (remoteValue !== undefined) merged[key] = remoteValue
   }
   return merged
-}
-
-async function removeOutbox(accountId: string, ids: string[]): Promise<void> {
-  if (!ids.length) return
-  const db = await openDatabase()
-  const transaction = db.transaction([OUTBOX], "readwrite")
-  const store = transaction.objectStore(OUTBOX)
-  const all = await requestResult(store.getAll() as IDBRequest<PendingRow[]>)
-  const owned = new Set(all.filter((entry) => entry.accountId === accountId && ids.includes(entry.changeId)).map((entry) => entry.changeId))
-  for (const id of owned) store.delete(id)
-  await transactionDone(transaction)
 }
 
 async function readOutbox(accountId: string): Promise<PendingRow[]> {

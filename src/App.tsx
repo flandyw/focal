@@ -155,9 +155,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const sync = useSupabaseSync(data, setData)
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
-  const examSaveStatus = sync.status === "synced"
+  // Timer moves queue durably and reach the server a moment later: "saved" means both outboxes are empty.
+  const examSaveStatus = sync.status === "synced" && studySessionSync.queued === 0
     ? "Saved to your account. Open Focal on another device and sign in to the same account to continue."
-    : sync.status === "syncing" ? "Saving to your account. Wait for confirmation before switching devices."
+    : sync.status === "syncing" || sync.status === "synced" ? "Saving to your account. Wait for confirmation before switching devices."
     : sync.status === "error" ? "Saved on this device. Cloud sync failed; reconnect before switching devices."
     : sync.status === "unconfigured" ? "Saved on this device. Cloud sync is not configured."
     : "Saved on this device. Sign in to save across devices."
@@ -519,7 +520,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   function deleteAttempt(attempt: ExamAttempt) {
     const related = data.mistakes.filter((mistake) => mistake.attemptId === attempt.id)
     // Local first, so it is gone on the next paint. The sync effect then pushes the delete
-    // straight to the server (see pushAppChanges) — nothing waits on the retry loop.
+    // to the server from the outbox (see pushAppChanges) — nothing waits on the retry loop.
     setData((current) => removeAttempt(current, attempt.id))
     toast("Exam deleted", {
       action: {

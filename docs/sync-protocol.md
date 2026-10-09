@@ -91,13 +91,34 @@ safety poll.
 
 ## Local durability
 
-Focal desktop stores local records and ordered session commands in SQLite. The server
-does not impose a single-active-session constraint; clients may have concurrent canonical
-sessions. Focal Web stores session commands and ordinary app changes in
-account-scoped IndexedDB before publishing. Lifecycle commands stay ordered; unsent
-`save_progress` commands may coalesce by session. Ordinary writes coalesce only within the
-same stable entity and row. Replayed RPC requests keep the same UUID until a receipt arrives;
-stale revisions/sequences are rebased only when the requested transition remains valid.
+Desktop and web share one IndexedDB implementation (`src/lib/outbox.ts` plus the two lanes below).
+Both lanes are write-ahead: a change is committed to IndexedDB before the network is touched, and
+leaves only when the server has answered it. One flusher per account runs across tabs (Web Locks);
+a network or server failure keeps the change and backs off, an expired session holds it without
+counting an attempt, and a plain 400/409/413/422 is a refusal. Flushes start on enqueue, startup,
+reconnect, focus, visibility, token refresh, a realtime wakeup, a peer tab, and a timer.
+
+- **Session commands** (`study-session-sync.ts`, store `session-outbox`). Every timer move, plan, log,
+  edit and delete is a command with a `mutation_id` minted once. A command that may have reached the
+  server is frozen, so a retry is byte-identical and the server replays its receipt. A session's
+  commands go one at a time, oldest first, and a queued chain expects the newest known revision plus
+  the commands ahead of it. Unsent `save_progress` commands for one session fold into one.
+  Timing (`occurred_at`, `elapsed_since_previous_ms`) is captured when the user acts, not when sent.
+  A stale answer retries a lifecycle command against the server's row under a new `mutation_id` with
+  timing dropped (up to five times), and the server judges whether the transition still holds. A
+  stale edit of values (`blocks`, `completed`) is never laid over another device's change: it is
+  dropped and reported. Other refusals are reported and dropped. Server rows for a session with
+  unanswered local commands are held back from the timers until the queue for it drains, then the
+  newest row is adopted. The calendar list shows queued plan, log, edit and delete commands
+  immediately.
+- **App rows** (`app-sync.ts`, stores `outbox`/`rows`). Same rules, with `expected_seq`
+  compare-and-set and the field-aware rebase described below. A receipt records the row at its new
+  seq in the same transaction that removes the entry. A batch the server refuses is re-sent one
+  change at a time so one bad row cannot hold up the rest; the refused change is parked for five
+  minutes and retried, never dropped (a refusal is usually a migration that is not applied yet).
+
+Known ceiling: React state is saved to localStorage and diffed into the outbox by an effect, so a
+crash in the few milliseconds between an edit and that effect loses the edit.
 
 Focal Web timer metadata (year, provider, paper, marks, reading/writing limits, workspace
 items, and SAC details) remains in canonical session metadata. Live timer state and its old
@@ -128,6 +149,9 @@ monotonic/server-anchored offline timing while retaining the same command RPC an
 protocol. Migration `0018` replaces the wrapper stack with one mutation implementation and
 one session table. Session RLS denies direct writes; authenticated users use the canonical mutation
 and cursor-read RPCs.
+
+Migration `0021` lets the versioned (`expected_seq`) branch of `sync_apply_changes` accept
+`events` and `timetable_config`; before it, those writes raised 22023 and never reached the log.
 
 `sync_apply_changes` rejects `study_sessions`; the `sync_changes` view also rejects writes
 for that entity. This prevents an old generic LWW client from creating a second session

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { User } from "@supabase/supabase-js"
 import { EMPTY_APP_DATA, type AppData } from "./exam-data"
 import { supabase } from "./supabase"
+import { onAnnounce } from "./outbox"
 import { appSyncHealth, associateAppSyncAccount, diffAppData, pushAppChanges, recordLocalChanges, sameValue, syncAppData } from "./app-sync"
 
 const OWNER_KEY = "examtrack:sync:owner:v1"
@@ -48,7 +49,9 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
     window.addEventListener("examtrack:sync-wakeup", refreshSync)
     document.addEventListener("visibilitychange", refreshSync)
     const interval = window.setInterval(refreshSync, 30_000)
+    const stopAnnounce = onAnnounce(refreshSync)
     return () => {
+      stopAnnounce()
       window.removeEventListener("online", refreshSync)
       window.removeEventListener("focus", refreshSync)
       window.removeEventListener("examtrack:sync-wakeup", refreshSync)
@@ -65,8 +68,8 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (activeAccount.current !== accountId) return
       recordLocalChanges(old, data)
       if (!accountId) return
-      // Push first; only what the server refuses lands in the queue. Keeps every keystroke
-      // off the retry loop and deletes immediate.
+      // Write-ahead: durable in the outbox first, then sent at once. Whatever the server does not
+      // take stays queued and the sync loop below retries it.
       await pushAppChanges(accountId, diffAppData(old, data))
       if (activeAccount.current !== accountId) return
       previous.current = data

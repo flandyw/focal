@@ -41,7 +41,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
   if (data.length === 0) {
     return (
       <section className="border-t border-border/70 pt-5">
-        <h3 className="text-sm font-semibold mb-1">Subject Breakdown</h3>
+        <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Subject Breakdown</h3>
         <p className="text-xs text-muted-foreground">No study data for this period.</p>
       </section>
     )
@@ -49,7 +49,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
 
   return (
     <section className="border-t border-border/70 pt-5">
-      <h3 className="text-sm font-semibold mb-4">Subject Breakdown</h3>
+      <h3 className="font-heading text-xl font-normal tracking-tight mb-4">Subject Breakdown</h3>
 
       <div className="flex items-center gap-6">
         <div className="relative flex h-36 w-36 shrink-0 items-center justify-center">

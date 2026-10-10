@@ -8,7 +8,7 @@ import { buildAttemptBenchmarks, type AssessmentReference, type ExamAttempt } fr
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 
 const chartConfig = {
-  percentile: { label: "Estimated percentile", color: "#16a34a" },
+  percentile: { label: "Estimated percentile", color: "var(--chart-2)" },
 }
 
 function formatTick(value: number) {

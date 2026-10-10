@@ -505,7 +505,7 @@ export function MistakeSheet({
                 </Field>
               ) : null}
 
-              <div className="border-t pt-5"><h3 className="font-semibold">01 · The question</h3><p className="mt-1 text-sm text-muted-foreground">Keep the original task and exam context together.</p></div>
+              <div className="border-t pt-5"><h3 className="focal-section-title">01 · The question</h3><p className="mt-1 text-sm text-muted-foreground">Keep the original task and exam context together.</p></div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="mistake-exam">Exam (optional)</FieldLabel>
@@ -570,7 +570,7 @@ export function MistakeSheet({
 
               </Field> : null}
 
-              <div className="border-t pt-5"><h3 className="font-semibold">02 · Organise</h3><p className="mt-1 text-sm text-muted-foreground">Add labels to find patterns and build focused practice sets.</p></div>
+              <div className="border-t pt-5"><h3 className="focal-section-title">02 · Organise</h3><p className="mt-1 text-sm text-muted-foreground">Add labels to find patterns and build focused practice sets.</p></div>
               <Field>
                 <FieldLabel>Category</FieldLabel>
                 <Select value={category} onValueChange={(value) => setCategory(value as MistakeCategory)}>
@@ -600,7 +600,7 @@ export function MistakeSheet({
                 </Field>
               </div>
 
-              <div className="border-t pt-5"><h3 className="font-semibold">03 · The takeaway</h3><p className="mt-1 text-sm text-muted-foreground">Write the lesson you want to remember next time.</p></div>
+              <div className="border-t pt-5"><h3 className="focal-section-title">03 · The takeaway</h3><p className="mt-1 text-sm text-muted-foreground">Write the lesson you want to remember next time.</p></div>
               <MarkdownField id="explanation" label="What went wrong?" rows={5} value={explanation} onChange={setExplanation} placeholder="Describe the gap: what was misunderstood, omitted, unsupported, unclear, or done inaccurately?" hint="Describe the error precisely enough to recognise it next time." />
 
               <MarkdownField id="correction" label="Improved response or method" rows={5} value={correction} onChange={setCorrection} placeholder="Write the correct idea, evidence, structure, process, or answer you should use next time." />

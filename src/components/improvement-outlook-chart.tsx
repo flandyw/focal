@@ -8,8 +8,8 @@ import { buildSubjectOutlooks, type SubjectOutlook } from "../lib/performance-in
 import type { ExamDifficultySettings } from "../lib/exam-difficulty"
 
 const chartConfig = {
-  currentAverage: { label: "Recent average", color: "#2563eb" },
-  projectedNext: { label: "Trend projection", color: "#f59e0b" },
+  currentAverage: { label: "Recent average", color: "var(--chart-3)" },
+  projectedNext: { label: "Trend projection", color: "var(--chart-4)" },
 }
 
 function formatSubject(value: string) {

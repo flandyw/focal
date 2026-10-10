@@ -15,10 +15,10 @@ import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { getAttemptPerformance, type ExamDifficultySettings } from "../lib/exam-difficulty"
 
 const chartConfig = {
-  percentage: { label: "VCAA-aligned %", color: "#16a34a" },
-  average: { label: "Overall average", color: "#ca8a04" },
-  vcaaMeanPercentage: { label: "Est. VCAA mean", color: "#2563eb" },
-  aPlusCutoffPercentage: { label: "Official A+ cutoff", color: "#dc2626" },
+  percentage: { label: "VCAA-aligned %", color: "var(--chart-2)" },
+  average: { label: "Overall average", color: "var(--chart-4)" },
+  vcaaMeanPercentage: { label: "Est. VCAA mean", color: "var(--chart-3)" },
+  aPlusCutoffPercentage: { label: "Official A+ cutoff", color: "var(--chart-1)" },
 }
 
 type TrendPoint = {

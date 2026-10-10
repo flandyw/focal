@@ -6,8 +6,8 @@ import type { Mistake } from "../lib/exam-data"
 import { buildRevisionPriorities } from "../lib/mistake-review"
 
 const chartConfig = {
-  unresolved: { label: "Unresolved", color: "#dc2626" },
-  resolved: { label: "Resolved", color: "#16a34a" },
+  unresolved: { label: "Unresolved", color: "var(--chart-1)" },
+  resolved: { label: "Resolved", color: "var(--chart-2)" },
 }
 
 export function RevisionPriorityChart({ mistakes }: { mistakes: Mistake[] }) {

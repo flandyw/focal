@@ -132,14 +132,14 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
         <header className="grid gap-3">
           <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back to exams</Button>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
+            <h1 className="focal-page-title">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
             <p className="mt-1 text-sm text-muted-foreground">Two steps: which paper, then your mark. Everything else is optional.</p>
           </div>
         </header>
 
         <FieldGroup>
           <section className="grid gap-5" aria-labelledby="exam-step-paper">
-            <h2 id="exam-step-paper" className="text-base font-medium">1. Paper</h2>
+            <h2 id="exam-step-paper" className="focal-section-title">1. Paper</h2>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="subject">Subject</FieldLabel>
@@ -168,7 +168,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
           </section>
 
           <section className="grid gap-5 border-t pt-8" aria-labelledby="exam-step-result">
-            <h2 id="exam-step-result" className="text-base font-medium">2. Result</h2>
+            <h2 id="exam-step-result" className="focal-section-title">2. Result</h2>
             <div className="grid items-end gap-5 sm:grid-cols-[1fr_1fr_auto]">
               <Field data-invalid={error ? true : undefined}>
                 <FieldLabel htmlFor="raw-score">Mark</FieldLabel>
@@ -178,7 +178,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
                 <FieldLabel htmlFor="raw-max">Out of</FieldLabel>
                 <Input id="raw-max" type="number" min="0.5" step="0.5" value={rawMax} onChange={(event) => setRawMax(event.target.valueAsNumber)} />
               </Field>
-              <p className="pb-1.5 text-3xl font-semibold tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
+              <p className="pb-1.5 focal-stat-value tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
             </div>
             {scaled && reference ? (
               <FieldDescription>
@@ -189,7 +189,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
           </section>
 
           <section className="grid gap-2 border-t pt-8" aria-label="Optional details">
-            <h2 className="text-base font-medium">Optional details</h2>
+            <h2 className="focal-section-title">Optional details</h2>
             <details className="group rounded-lg border px-4 py-3">
               <summary className="cursor-pointer text-sm font-medium">Comment{comment ? " ·" : ""} <span className="font-normal text-muted-foreground">{comment ? "added" : "what went well or what to improve"}</span></summary>
               <Field className="mt-3">

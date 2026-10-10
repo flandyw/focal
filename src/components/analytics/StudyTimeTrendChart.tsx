@@ -105,7 +105,7 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
   if (chartData.length === 0) {
     return (
       <section className="border-t border-border/70 pt-5">
-        <h3 className="text-sm font-semibold mb-1">Study Time Trends</h3>
+        <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Study Time Trends</h3>
         <p className="text-xs text-muted-foreground">No study data for this period.</p>
       </section>
     )
@@ -113,7 +113,7 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
 
   return (
     <section className="border-t border-border/70 pt-5">
-      <h3 className="text-sm font-semibold mb-4">Study Time Trends</h3>
+      <h3 className="font-heading text-xl font-normal tracking-tight mb-4">Study Time Trends</h3>
       <ResponsiveContainer width="100%" height={220}>
         <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />

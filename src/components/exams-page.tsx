@@ -326,10 +326,10 @@ function StatRow({ data }: { data: AppData }) {
     // ponytail: cell borders come from each cell's own border-r/b plus a container border-t/l,
     // so the rules stay on the exact column/row boundaries at every breakpoint. (The old
     // per-breakpoint border-l/border-t mix drifted by one padding step on some columns.)
-    <div className="grid grid-cols-2 overflow-hidden rounded-lg border bg-card lg:grid-cols-4">
+    <div className="grid grid-cols-2 overflow-hidden border-y bg-transparent lg:grid-cols-4">
       <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Practice exams</p>
-        <p className="text-3xl font-semibold tabular-nums leading-none">{stats.count}</p>
+        <p className="focal-stat-value tabular-nums">{stats.count}</p>
         <p className="text-xs text-muted-foreground">
           {stats.count === 0
             ? "Log your first paper to begin"
@@ -339,8 +339,8 @@ function StatRow({ data }: { data: AppData }) {
       </div>
       <div className="flex min-w-0 flex-col gap-1.5 border-b border-r p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">VCAA-aligned average</p>
-        <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-semibold tabular-nums leading-none">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <p className="focal-stat-value tabular-nums">
             {stats.count === 0 ? "—" : `${stats.average.toFixed(1)}%`}
           </p>
           {stats.count >= 2 && stats.trend !== "flat" ? (
@@ -367,13 +367,13 @@ function StatRow({ data }: { data: AppData }) {
       </div>
       <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Best mark</p>
-        <p className="text-3xl font-semibold tabular-nums leading-none">{stats.best.toFixed(1)}%</p>
+        <p className="focal-stat-value tabular-nums">{stats.best.toFixed(1)}%</p>
         <p className="text-xs text-muted-foreground">Your strongest recorded practice result</p>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5 border-b p-4 sm:p-5">
         <p className="text-sm text-muted-foreground">Mistake cards</p>
         <div className="flex items-baseline gap-2">
-          <p className="text-3xl font-semibold tabular-nums leading-none">{total === 0 ? "—" : due}</p>
+          <p className="focal-stat-value tabular-nums">{total === 0 ? "—" : due}</p>
           <p className="text-xs text-muted-foreground">
             {total === 0 ? "none logged" : `due of ${total}`}
           </p>

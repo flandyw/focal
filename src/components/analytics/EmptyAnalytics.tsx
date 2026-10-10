@@ -26,10 +26,10 @@ export function EmptyAnalytics({ onNewSession }: EmptyAnalyticsProps) {
               : { duration: 4, repeat: Infinity, ease: "easeInOut" }
           }
         >
-          <BarChart3 className="h-10 w-10 text-muted-foreground/25" aria-hidden="true" />
+          <BarChart3 className="h-10 w-10 text-primary/60" aria-hidden="true" />
         </motion.div>
       </motion.div>
-      <motion.h2 variants={staggerItem} className="mb-2 text-base font-semibold">
+      <motion.h2 variants={staggerItem} className="mb-2 font-heading text-2xl font-normal">
         No study analytics yet
       </motion.h2>
       <motion.p

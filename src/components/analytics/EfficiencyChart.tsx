@@ -13,7 +13,7 @@ export function EfficiencyChart({ data }: EfficiencyChartProps) {
   if (data.length === 0) {
     return (
       <section className="border-t border-border/70 pt-5">
-        <h3 className="text-sm font-semibold mb-1">Study Efficiency</h3>
+        <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Study Efficiency</h3>
         <p className="text-xs text-muted-foreground">No confidence reflections recorded for this period.</p>
       </section>
     )
@@ -21,7 +21,7 @@ export function EfficiencyChart({ data }: EfficiencyChartProps) {
 
   return (
     <section className="border-t border-border/70 pt-5">
-      <h3 className="text-sm font-semibold mb-4">Study Efficiency</h3>
+      <h3 className="font-heading text-xl font-normal tracking-tight mb-4">Study Efficiency</h3>
       <p className="text-xs text-muted-foreground mb-4">
         Minutes studied vs. confidence level (1-5)
       </p>

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { Button } from "./components/ui/button"
@@ -38,7 +38,7 @@ import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import { AppSidebar } from "./components/app-navigation"
-import { ALL_NAVIGATION } from "./lib/navigation"
+import { ALL_NAVIGATION, getViewLabel } from "./lib/navigation"
 import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
@@ -632,12 +632,18 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onSearch={() => setCommandOpen(true)}
       />}
       <SidebarInset className="min-w-0">
+        {!embedded && <header className="flex h-14 items-center gap-3 border-b border-border px-4 sm:px-6 lg:px-10">
+          <SidebarTrigger className="md:group-has-data-[state=expanded]/sidebar-wrapper:hidden" />
+          <span className="focal-eyebrow hidden text-muted-foreground sm:inline">Your study space</span>
+          <span aria-hidden className="hidden text-border sm:inline">/</span>
+          <span className="text-xs text-muted-foreground">{getViewLabel(view)}</span>
+          <Button className="ml-auto gap-2 text-muted-foreground" size="sm" variant="ghost" onClick={() => setCommandOpen(true)} aria-label="Search pages and actions"><Search className="size-3.5" /><span className="hidden sm:inline">Search</span><kbd className="hidden border border-border px-1 py-0.5 text-[10px] sm:inline" aria-hidden>⌘ / Ctrl K</kbd></Button>
+        </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" className="w-full min-w-0 p-4 sm:p-5 lg:p-6 2xl:p-8">
-          {!embedded && <SidebarTrigger className="mb-3 md:group-has-data-[state=expanded]/sidebar-wrapper:hidden" />}
+        <main id="main-content" className="w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>

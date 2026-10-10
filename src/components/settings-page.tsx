@@ -119,7 +119,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               type="button"
               aria-current={active === id ? "page" : undefined}
               onClick={() => setSection(id)}
-              className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+              className="flex shrink-0 items-center gap-2 rounded-xs border-l-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             >
               <Icon className="size-4" />{label}
             </button>
@@ -408,7 +408,7 @@ function Section({ title, description, action, children }: { title: string; desc
     <section className="min-w-0">
       <header className="flex items-start justify-between gap-4 border-b pb-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          <h2 className="focal-section-title">{title}</h2>
           <p className="mt-1 max-w-[62ch] text-sm text-muted-foreground text-pretty">{description}</p>
         </div>
         {action}

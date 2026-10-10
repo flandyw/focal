@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { PanelLeft } from "lucide-react"
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -26,7 +27,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "15.5rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -186,7 +187,7 @@ function Sidebar({
           dir={dir}
           data-sidebar="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className={cn("w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden", className)}
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -257,7 +258,8 @@ function SidebarTrigger({
     <Button
       data-sidebar="trigger"
       variant="ghost"
-      size="sm"
+      size="icon-sm"
+      aria-label="Toggle navigation"
       className={cn(className)}
       onClick={(event) => {
         onClick?.(event)
@@ -265,7 +267,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      Menu
+      <PanelLeft aria-hidden className="size-4" strokeWidth={1.5} />
     </Button>
   )
 }

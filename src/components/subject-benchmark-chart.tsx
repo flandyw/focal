@@ -11,9 +11,9 @@ import {
 } from "../lib/exam-data"
 
 const chartConfig = {
-  averageMark: { label: "Your average", color: "#16a34a" },
-  vcaaMeanPercentage: { label: "Est. VCAA mean", color: "#2563eb" },
-  aPlusCutoffPercentage: { label: "Official A+ cutoff", color: "#dc2626" },
+  averageMark: { label: "Your average", color: "var(--chart-2)" },
+  vcaaMeanPercentage: { label: "Est. VCAA mean", color: "var(--chart-3)" },
+  aPlusCutoffPercentage: { label: "Official A+ cutoff", color: "var(--chart-1)" },
 }
 
 function formatSubject(value: string) {

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "./ui/card"
 import { cn } from "../lib/utils"
 
 export function WorkspacePage({ children, className }: { children: ReactNode; className?: string }) {
@@ -15,10 +15,10 @@ export function MetricGrid({ children, className }: { children: ReactNode; class
 
 export function MetricCard({ label, value, children }: { label: string; value: ReactNode; children?: ReactNode }) {
   return (
-    <Card size="sm" className="min-w-0 justify-between">
+    <Card size="sm" className="min-w-0 justify-between border-x-0 border-b-0 border-t-2 border-t-primary/40 rounded-none bg-transparent">
       <CardHeader className="gap-1">
         <CardDescription className="text-[10px] font-medium leading-tight uppercase tracking-wide sm:text-xs">{label}</CardDescription>
-        <CardTitle className="text-xl font-semibold tabular-nums sm:text-2xl lg:text-3xl 2xl:text-4xl">{value}</CardTitle>
+        <div className="focal-stat-value tabular-nums">{value}</div>
       </CardHeader>
       {children ? <CardContent className="hidden text-sm text-muted-foreground sm:block">{children}</CardContent> : null}
     </Card>
@@ -35,7 +35,7 @@ export function SectionHeading({ id, title, description, action, className }: {
   return (
     <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
       <div className="min-w-0 space-y-1">
-        <h2 id={id} className="text-lg font-semibold tracking-tight xl:text-xl">{title}</h2>
+        <h2 id={id} className="focal-section-title">{title}</h2>
         <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">{description}</p>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

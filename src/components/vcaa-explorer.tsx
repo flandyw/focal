@@ -25,9 +25,9 @@ import { getKnownExamConditions } from "../lib/exam-conditions"
 import { getCachedVcaaExams, getVcaaExamCompanions, getVcaaExamPaper, getVcaaExamProvider, type VcaaStudyResources } from "../lib/vcaa-resources"
 
 const chartConfig = {
-  aPlusCutoffPercentage: { label: "A+ cutoff", color: "#dc2626" },
-  meanPercentage: { label: "Estimated mean", color: "#2563eb" },
-  medianPercentage: { label: "Estimated median", color: "#ca8a04" },
+  aPlusCutoffPercentage: { label: "A+ cutoff", color: "var(--chart-1)" },
+  meanPercentage: { label: "Estimated mean", color: "var(--chart-3)" },
+  medianPercentage: { label: "Estimated median", color: "var(--chart-4)" },
 } satisfies ChartConfig
 
 function formatPercent(value: number | null) {

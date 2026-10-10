@@ -6,7 +6,7 @@ import type { Mistake } from "../lib/exam-data"
 import { buildReviewForecast } from "../lib/performance-insights"
 
 const chartConfig = {
-  due: { label: "Cards due", color: "#f59e0b" },
+  due: { label: "Cards due", color: "var(--chart-4)" },
 }
 
 export function ReviewForecastChart({ mistakes }: { mistakes: Mistake[] }) {

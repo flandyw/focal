@@ -93,7 +93,7 @@ export function ExamTable({
       <section id="all-exams" aria-labelledby="all-exams-title" className="grid scroll-mt-20 gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 id="all-exams-title" className="text-lg font-semibold xl:text-xl">All exams</h2>
+            <h2 id="all-exams-title" className="focal-section-title">All exams</h2>
             <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Search, edit, log mistakes, or expand a row for its VCAA distribution. Scroll sideways to reach every column on a narrow screen.</p>
           </div>
           <Input className="w-full sm:w-80" aria-label="Search exams" placeholder="Search exams…" value={query} onChange={(event) => setQuery(event.target.value)} />

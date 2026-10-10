@@ -270,10 +270,10 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  if (!data.hasData) {
  return (
  <div className="h-full">
- <div className="space-y-5 px-6 py-5 min-[1200px]:px-8 min-[1200px]:py-6">
+ <div className="space-y-8">
  <div className="border-b border-border/70 pb-4">
- <h1 className="text-xl font-semibold tracking-tight">Progress</h1>
- <p className="mt-1 text-sm text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
+ <h1 className="focal-page-title">Progress</h1>
+ <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
  </div>
  <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} /></div>
  </div>
@@ -284,7 +284,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  return (
  <div className="h-full">
  <motion.div
- className="px-6 py-5 min-[1200px]:px-8 min-[1200px]:py-6"
+ className="w-full min-w-0"
  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
  animate={{ opacity: 1, y: 0 }}
  transition={reduceMotion ? REDUCED_TRANSITION : TRANSITION.view}
@@ -301,10 +301,10 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  className="flex flex-wrap items-end justify-between gap-3 border-b border-border/70 pb-4"
  >
  <div>
- <h1 className="text-xl font-semibold tracking-tight">Progress</h1>
- <p className="mt-1 text-sm text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
+ <h1 className="focal-page-title">Progress</h1>
+ <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
  </div>
-<div className="flex items-center gap-1">
+<div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
  <Button
  type="button"
  size="sm"
@@ -315,9 +315,9 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  <Download /> Export CSV
  </Button>
  {range !== 0 && (
-<div className="flex items-center gap-1">
+<div className="flex min-w-0 max-w-full items-center gap-1">
  <Button type="button" size="icon-sm" variant="outline" onClick={() => setPeriodOffset((value) => value + 1)} aria-label="Previous period"><ChevronLeft /></Button>
-<span className="min-w-48 text-center text-xs tabular-nums text-muted-foreground">{formatPeriod(range, periodEnd)}</span>
+<span className="min-w-0 px-1 text-center text-xs tabular-nums text-muted-foreground">{formatPeriod(range, periodEnd)}</span>
  {periodOffset > 0 && <Button type="button" size="xs" variant="ghost" onClick={() => setPeriodOffset(0)}>Today</Button>}
  <Button type="button" size="icon-sm" variant="outline" disabled={periodOffset === 0} onClick={() => setPeriodOffset((value) => Math.max(0, value - 1))} aria-label="Next period"><ChevronRight /></Button>
  </div>
@@ -428,7 +428,7 @@ function RangeToggle({
  reduceMotion: boolean
 }) {
  return (
-<div className="flex gap-px rounded-md border border-border/70 bg-background/55 p-px">
+<div className="flex max-w-full gap-3 border-b border-border">
  {RANGE_OPTIONS.map((opt) => {
  const isActive = value === opt.value
  return (
@@ -444,9 +444,9 @@ function RangeToggle({
  : { type:"spring", stiffness: 520, damping: 34, mass: 0.65 }
  }
  className={cn(
-"rounded-md px-2 py-0.5 text-xs font-medium transition-colors",
+"border-b-2 border-transparent px-1 py-2 text-xs font-medium whitespace-nowrap transition-colors",
  isActive
- ?"bg-background text-foreground shadow-sm"
+ ?"border-primary text-primary"
  :"text-muted-foreground hover:text-foreground",
  )}
  aria-pressed={isActive}
@@ -523,7 +523,7 @@ function AnalyticsHighlights({
  const topSubject = topSubjectId ? getSubjectById(topSubjectId) : null
  return (
  <section className="border-t border-border/70 pt-5">
- <h3 className="text-sm font-semibold">Highlights</h3>
+ <h3 className="font-heading text-xl font-normal tracking-tight">Highlights</h3>
  <div className="mt-3 grid divide-y divide-border/50 border-y border-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
  <Highlight label="Most productive day" value={bestDay ? formatDay(bestDay.date) : "No study yet"} detail={bestDay ? formatMinutesLong(bestDay.minutes) : undefined} />
  <Highlight label="Peak study hour" value={peakHour ? formatHour(peakHour.hour) : "No pattern yet"} detail={peakHour ? formatMinutesLong(peakHour.minutes) : undefined} />
@@ -559,7 +559,7 @@ function KpiCard({
  whileHover={hoverLift(reduceMotion)}
  className="relative px-4 py-3 transition-colors hover:bg-accent/20"
  >
- <div className="text-2xl font-semibold tabular-nums leading-tight">
+ <div className="focal-stat-value tabular-nums">
  {value}
  </div>
  <div className="mt-1 text-caption text-muted-foreground">
@@ -646,9 +646,9 @@ function FilterChip({
  : { type:"spring", stiffness: 520, damping: 34, mass: 0.65 }
  }
  className={cn(
-"inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-caption font-medium transition-colors",
+"inline-flex shrink-0 items-center gap-1.5 rounded-xs border px-2.5 py-1 text-xs font-medium transition-colors",
  active
- ?"border-foreground/25 bg-background/70 text-foreground"
+ ?"border-primary/30 bg-primary/5 text-primary"
  :"border-border/60 bg-background/30 text-muted-foreground hover:text-foreground",
  )}
  >

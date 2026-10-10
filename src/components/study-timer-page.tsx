@@ -255,7 +255,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     <div className="grid gap-6 lg:gap-8">
       <Card className="min-w-0 gap-0 py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-          <div className="flex gap-1 rounded-lg bg-muted p-1" aria-label="Study mode" role="group">
+          <div className="flex gap-1 border-b pb-2" aria-label="Study mode" role="group">
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
@@ -265,7 +265,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               {sharedSession.title ? ` · ${sharedSession.title}` : ""}
             </p>
           ) : (
-            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[16rem_18rem]">
+            <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:w-auto lg:max-w-[34rem] lg:flex-1">
               <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
               <Input aria-label="Intent" id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Intent, e.g. redo the 2023 organic paper" value={intent} />
             </div>
@@ -311,9 +311,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
         <div className="grid grid-cols-3 divide-x border-t text-center">
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="text-xl font-semibold tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="text-xl font-semibold tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="text-xl font-semibold tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
+          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
 
@@ -545,10 +545,10 @@ export function StudyTimerPage({
   return (
     <WorkspacePage>
       <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
-        <div className="mb-4 flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-balance xl:text-3xl">{embedded ? "Timed paper" : "Study timer"}</h1>
-            <p className="max-w-[68ch] text-sm text-pretty text-muted-foreground">
+            <h1 className="focal-page-title text-balance">{embedded ? "Timed paper" : "Study timer"}</h1>
+            <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-pretty text-muted-foreground">
               {embedded
                 ? "Sit a timed paper. Every session feeds your study record."
                 : "Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record."}

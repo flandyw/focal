@@ -5,9 +5,9 @@ import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from ".
 import type { StudyScoreTrendPoint } from "../lib/study-score"
 
 const chartConfig = {
-  studyScore: { label: "Estimated study score", color: "#2563eb" },
-  low: { label: "Lower likely range", color: "#93c5fd" },
-  high: { label: "Upper likely range", color: "#93c5fd" },
+  studyScore: { label: "Estimated study score", color: "var(--chart-3)" },
+  low: { label: "Lower likely range", color: "color-mix(in oklch, var(--chart-3) 35%, var(--card))" },
+  high: { label: "Upper likely range", color: "color-mix(in oklch, var(--chart-3) 35%, var(--card))" },
 }
 
 function formatTick(value: number) {

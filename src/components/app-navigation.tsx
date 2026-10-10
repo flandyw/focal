@@ -1,4 +1,5 @@
 import { Fragment } from "react"
+import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -34,6 +35,13 @@ import type { SyncStatus } from "../lib/sync"
 import { cn } from "../lib/utils"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
+
+const NAVIGATION_ICONS = {
+  calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
+  timetable: CalendarRange, sacs: GraduationCap, library: Library,
+  progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
+  predictor: TrendingUp, vcaa: ChartColumn,
+}
 
 /** Minutes actually spent in a sitting: finished segments plus the one in progress. */
 function workedLabel(session: SessionSync["sessions"][number]) {
@@ -156,28 +164,27 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar>
-      <SidebarHeader className="pb-1">
+    <Sidebar className="focal-navigation">
+      <SidebarHeader className="gap-5 px-5 pt-7 pb-5">
         <div className="flex items-center">
           <button
             type="button"
-            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
-            <img src="/focal-icon.svg" alt="" className="size-6 shrink-0" />
-            <span className="flex items-center gap-1.5 font-semibold">
-              Focal
-              <SyncIndicator status={syncStatus} />
-            </span>
+            <span className="font-heading text-[2.75rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal<span className="text-chart-1">.</span></span>
           </button>
-          <SidebarTrigger className="shrink-0" />
+          <SidebarTrigger className="shrink-0 text-sidebar-foreground/60" />
         </div>
+        <p className="focal-eyebrow -mt-3 text-sidebar-foreground/70">A little closer, every day.</p>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
-                <span>Add</span>
+              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
+                <Plus aria-hidden />
+                <span className="flex-1">Add to your study</span>
+                <ChevronDown aria-hidden className="size-3! opacity-60" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52">
                 <DropdownMenuItem onClick={() => run(onLogExam)}>Log exam</DropdownMenuItem>
@@ -190,19 +197,24 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent className="gap-1 px-1">
-        {NAVIGATION_GROUPS.map((group) => <SidebarGroup className="p-1.5" key={group.label}>
-          <SidebarGroupLabel className="h-7 px-1.5">{group.label}</SidebarGroupLabel>
+      <SidebarContent className="gap-4 px-3">
+        <button type="button" onClick={() => run(onSearch)} className="mx-2 flex items-center gap-2 border-b border-sidebar-border pb-3 text-xs text-sidebar-foreground/80 hover:text-sidebar-primary"><Search className="size-3.5" aria-hidden /><span>Search anything</span><span className="ml-auto text-[10px]" aria-hidden>⌘ / Ctrl K</span></button>
+        {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>
+          <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3"><span aria-hidden className="font-normal opacity-50">0{index + 1}</span>{group.label}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {group.items.map((item) => (
+              {group.items.map((item) => {
+                const Icon = NAVIGATION_ICONS[item.id as keyof typeof NAVIGATION_ICONS]
+                return (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     isActive={view === item.id}
                     aria-current={view === item.id ? "page" : undefined}
                     tooltip={item.label}
+                    className="h-9 gap-3 rounded-xs px-3 text-[13px]"
                     onClick={() => navigate(item.id)}
                   >
+                    <Icon aria-hidden className="size-4! opacity-70" strokeWidth={1.5} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                   {item.id === "mistakes" && dueMistakes > 0 ? (
@@ -212,22 +224,24 @@ export function AppSidebar({
                     <SidebarMenuBadge aria-label={`${plannedTasks} study tasks due`}>{plannedTasks}</SidebarMenuBadge>
                   ) : null}
                 </SidebarMenuItem>
-              ))}
+              )})}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>)}
       </SidebarContent>
-      <SidebarFooter className="gap-3 pt-3">
+      <SidebarFooter className="gap-3 px-5 pt-4 pb-5">
         <SharedSessions sessions={sessions} onControl={onControlSession} />
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
+                <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/60" strokeWidth={1.25} />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate">{accountLabel}</span>
-                  <span className="text-xs text-muted-foreground">{accountStatus}</span>
+                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>
                 </span>
+                <ArrowUpRight aria-hidden className="ml-auto size-3.5! opacity-50" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>

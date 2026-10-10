@@ -6,7 +6,7 @@ import type { ExamAttempt, Mistake } from "../lib/exam-data"
 import { buildFocusPriorities, type FocusPriority } from "../lib/performance-insights"
 
 const chartConfig = {
-  priorityScore: { label: "Priority score", color: "#dc2626" },
+  priorityScore: { label: "Priority score", color: "var(--chart-1)" },
 }
 
 function formatArea(value: string) {

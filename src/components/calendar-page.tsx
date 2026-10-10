@@ -228,8 +228,8 @@ export function CalendarPage({
   return (
     <WorkspacePage>
       <PageHeader
-        title="Calendar and day plan"
-        description="Everything scheduled for a day, in one place: study tasks, SACs, exams, and what your revision queue owes you."
+        title="Make time for what matters."
+        description="Your calendar and day plan. Bring study, classes, assessments, and revision into a little more focus."
       >
         <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
         <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import from chatbot</Button>
@@ -268,7 +268,7 @@ export function CalendarPage({
         subjects={subjects}
       />
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,27rem)] lg:gap-8">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,23rem)] xl:gap-8">
         {/* The month and the load bars that summarise it are one thing, read together. */}
         <div className="grid min-w-0 content-start gap-4">
         <Card>
@@ -299,9 +299,9 @@ export function CalendarPage({
                     aria-label={`${day.date}, ${day.load} item${day.load === 1 ? "" : "s"}, ${formatMinutes(day.minutes)} of study`}
                     aria-pressed={active}
                     className={cn(
-                      "flex aspect-square min-h-0 min-w-0 flex-col gap-1 overflow-hidden rounded-md border p-1 text-left transition-colors hover:bg-accent/60",
+                      "focal-calendar-day flex aspect-square min-h-0 min-w-0 flex-col gap-1 overflow-hidden rounded-xs border border-transparent border-t-border p-1.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring sm:p-2",
                       !day.inMonth && "opacity-40",
-                      active && "border-primary bg-accent",
+                      active && "border-primary bg-primary text-primary-foreground hover:bg-primary/90 [&_.text-muted-foreground]:text-primary-foreground/80 [&_.text-primary]:text-primary-foreground",
                       day.isToday && !active && "border-primary/40",
                     )}
                     key={day.date}
@@ -515,13 +515,12 @@ function DayStats({ plan, progress, dueMistakes }: {
     },
   ]
   return (
-    <dl className="grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4">
+    <dl className="grid grid-cols-2 border-b border-border sm:grid-cols-4">
       {cells.map((cell, index) => (
-        // Hairlines only between cells: the container's own border is the outer edge, so a
-        // hairline that repeated the grid would read as a heavier, second frame.
+        // The shared lower rule and internal hairlines keep these figures in one strip.
         <div
           className={cn(
-            "min-w-0 p-3",
+            "min-w-0 px-3 py-4 first:pl-0 sm:px-5",
             index % 2 === 1 && "border-border border-l",
             index >= 2 && "border-border border-t sm:border-t-0",
             index === 2 && "sm:border-border sm:border-l",
@@ -529,8 +528,8 @@ function DayStats({ plan, progress, dueMistakes }: {
           key={cell.label}
         >
           <dt className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">{cell.label}</dt>
-          <dd className="mt-0.5 flex flex-col text-xl leading-none font-semibold tabular-nums">
-            {cell.value}
+          <dd className="mt-2 flex flex-col gap-1 tabular-nums">
+            <span className="focal-stat-value">{cell.value}</span>
             {cell.bar}
             <span className="mt-1 text-xs font-normal text-muted-foreground">{cell.note}</span>
           </dd>

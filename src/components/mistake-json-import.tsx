@@ -42,7 +42,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | null>(null)
   const prompt = buildMistakeImportPrompt()
-  const attemptOptions = [{ value: "", label: "Uncategorised (no exam)" }, ...attempts.map((attempt) => ({
+  const attemptOptions = [{ value: "", label: "Uncategorised (no exam)" }, ...attempts.toSorted((first, second) => second.completedAt.localeCompare(first.completedAt)).map((attempt) => ({
     value: attempt.id,
     label: `${attempt.title} · ${attempt.paper}`,
   }))]

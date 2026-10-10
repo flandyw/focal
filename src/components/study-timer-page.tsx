@@ -420,7 +420,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           </div>
           <div className="grid gap-3 border-t pt-4">
             <h3 className="text-sm font-medium">Durations</h3>
-          <div className="grid grid-cols-2 gap-3 [&_[data-slot=field]]:gap-1.5">
+          <div className="grid grid-cols-2 gap-3">
             <NumberField
               id="timer-work"
               label="Focus (min)"

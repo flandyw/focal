@@ -1,19 +1,4 @@
 import { Fragment } from "react"
-import {
-  LogIn,
-  LogOut,
-  MonitorPlay,
-  Pause,
-  Play,
-  Plus,
-  Clock3,
-  NotebookPen,
-  Check,
-  Trash2,
-  Search,
-  Settings2,
-  UserRound,
-} from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -75,7 +60,6 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Shared study sessions" />}>
-            <MonitorPlay aria-hidden />
             <span>Shared sessions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
@@ -87,10 +71,10 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
                     <span className="ml-1 text-muted-foreground">{workedLabel(session)}</span>
                   </DropdownMenuLabel>
                   {isPaused(session)
-                    ? <DropdownMenuItem onClick={() => control(session, "resume")}><Play aria-hidden />Resume</DropdownMenuItem>
-                    : <DropdownMenuItem onClick={() => control(session, "pause")}><Pause aria-hidden />Pause</DropdownMenuItem>}
-                  <DropdownMenuItem onClick={() => control(session, "complete")}><Check aria-hidden />Finish</DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}><Trash2 aria-hidden />Cancel</DropdownMenuItem>
+                    ? <DropdownMenuItem onClick={() => control(session, "resume")}>Resume</DropdownMenuItem>
+                    : <DropdownMenuItem onClick={() => control(session, "pause")}>Pause</DropdownMenuItem>}
+                  <DropdownMenuItem onClick={() => control(session, "complete")}>Finish</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}>Cancel</DropdownMenuItem>
                 </DropdownMenuGroup>
                 {index < active.length - 1 ? <DropdownMenuSeparator /> : null}
               </Fragment>
@@ -172,17 +156,17 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar>
       <SidebarHeader className="pb-1">
-        <div className="flex items-center group-data-[collapsible=icon]:flex-col">
+        <div className="flex items-center">
           <button
             type="button"
-            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:px-1"
+            className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
             <img src="/focal-icon.svg" alt="" className="size-6 shrink-0" />
-            <span className="flex items-center gap-1.5 font-semibold group-data-[collapsible=icon]:hidden">
+            <span className="flex items-center gap-1.5 font-semibold">
               Focal
               <SyncIndicator status={syncStatus} />
             </span>
@@ -193,15 +177,14 @@ export function AppSidebar({
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
-                <Plus aria-hidden />
                 <span>Add</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52">
-                <DropdownMenuItem onClick={() => run(onLogExam)}><Plus aria-hidden />Log exam</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => run(onLogPastStudy)}><Clock3 aria-hidden />Log past study</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => run(onLogMistake)}><NotebookPen aria-hidden />Log mistake</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onLogExam)}>Log exam</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onLogPastStudy)}>Log past study</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onLogMistake)}>Log mistake</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => run(onSearch)}><Search aria-hidden />Search actions</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onSearch)}>Search actions</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
@@ -220,7 +203,6 @@ export function AppSidebar({
                     tooltip={item.label}
                     onClick={() => navigate(item.id)}
                   >
-                    <item.icon />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                   {item.id === "mistakes" && dueMistakes > 0 ? (
@@ -242,8 +224,7 @@ export function AppSidebar({
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
-                <UserRound aria-hidden />
-                <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
+                <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate">{accountLabel}</span>
                   <span className="text-xs text-muted-foreground">{accountStatus}</span>
                 </span>
@@ -252,12 +233,11 @@ export function AppSidebar({
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="truncate">{accountLabel}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>
-                    <Settings2 aria-hidden />
                     Settings
                   </DropdownMenuItem>
                   {user
-                    ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}><LogOut aria-hidden />Sign out</DropdownMenuItem>
-                    : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}><LogIn aria-hidden />Sign in</DropdownMenuItem>}
+                    ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}>Sign out</DropdownMenuItem>
+                    : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in</DropdownMenuItem>}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>

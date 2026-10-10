@@ -1,5 +1,3 @@
-import { Clock3, NotebookPen, Plus } from "lucide-react"
-
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,15 +35,12 @@ export function AppCommandMenu({
         <CommandEmpty>No matching action.</CommandEmpty>
         <CommandGroup heading="Quick actions">
           <CommandItem value="log practice exam add result" onSelect={() => run(onLogExam)}>
-            <Plus />
             Log practice exam
           </CommandItem>
           <CommandItem value="log mistake add revision card" onSelect={() => run(onLogMistake)}>
-            <NotebookPen />
             Log mistake
           </CommandItem>
           <CommandItem value="start exam timer timed practice" onSelect={() => run(() => onViewChange("focus"))}>
-            <Clock3 />
             Start timed paper
           </CommandItem>
         </CommandGroup>
@@ -53,7 +48,6 @@ export function AppCommandMenu({
         <CommandGroup heading="Go to">
           {ALL_NAVIGATION.map((item) => (
             <CommandItem key={item.id} value={`${item.label} ${item.description}`} onSelect={() => run(() => onViewChange(item.id))}>
-              <item.icon />
               <span className="min-w-0 flex-1">
                 <span className="block">{item.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{item.description}</span>

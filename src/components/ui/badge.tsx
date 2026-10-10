@@ -43,7 +43,6 @@ function Badge({
     ),
     render,
     state: {
-      slot: "badge",
       variant,
     },
   })

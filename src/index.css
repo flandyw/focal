@@ -2,10 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/instrument-sans";
-/* ponytail: katex ships unlayered, so it wins over Tailwind's preflight wherever it
-   lands. It lives in the entry stylesheet, not in the lazily loaded markdown chunk,
-   so typeset maths is never a frame of raw LaTeX and survives a failed chunk load. */
-@import "katex/dist/katex.min.css";
 @import "./typeset.css";
 
 @custom-variant dark (&:is(.dark *));

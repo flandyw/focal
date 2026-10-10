@@ -1,5 +1,4 @@
-import { Fragment } from "react"
-import { AppCommandMenu } from "./app-command-menu"
+import { Fragment, lazy, Suspense, useState } from "react"
 import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp, Users } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,6 +35,7 @@ import type { SyncStatus } from "../lib/sync"
 import { cn } from "../lib/utils"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
+const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => ({ default: module.AppCommandMenu })))
 
 const NAVIGATION_ICONS = {
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
@@ -155,6 +155,8 @@ export function AppSidebar({
   onCommandOpenChange: (open: boolean) => void
 }) {
   const { setOpen, setOpenMobile } = useSidebar()
+  const [commandLoaded, setCommandLoaded] = useState(false)
+  if (commandOpen && !commandLoaded) setCommandLoaded(true)
   const accountLabel = user?.email || "Account"
   const accountStatus = user ? "Signed in" : "Not signed in"
   const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
@@ -168,6 +170,12 @@ export function AppSidebar({
     setOpenMobile(false)
     action()
   }
+
+  const searchButton = <button type="button" aria-label="Search anything" onClick={onSearch} className="mx-2 flex h-8 items-center gap-2 rounded-xs px-3 text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden">
+    <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
+    <span className="flex-1 text-left text-[13px]">Search</span>
+    <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>⌘K</kbd>
+  </button>
 
   return (
     <Sidebar collapsible="icon" className="focal-navigation">
@@ -203,7 +211,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
-        <AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} />
+        {commandOpen || commandLoaded ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} /></Suspense> : searchButton}
         <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 items-center justify-center rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></button>
         {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>
           <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3"><span aria-hidden className="font-normal opacity-50">0{index + 1}</span>{group.label}</SidebarGroupLabel>

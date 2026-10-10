@@ -56,8 +56,9 @@ async function loadTimetableWithStatus(signal: AbortSignal): Promise<Timetable |
     .then((value: unknown) => (isTimetable(value) ? value : null))
 }
 
-export function useReferenceData() {
+export function useReferenceData(needScaling = false) {
   const [reloadToken, setReloadToken] = useState(0)
+  const [scalingRequested, setScalingRequested] = useState(needScaling)
   const [references, setReferences] = useState<AssessmentReference[]>([])
   const [referencesGeneratedAt, setReferencesGeneratedAt] = useState<string | null>(null)
   const [referencesStatus, setReferencesStatus] = useState<ResourceStatus>("loading")
@@ -68,6 +69,8 @@ export function useReferenceData() {
   const [scalingStatus, setScalingStatus] = useState<ResourceStatus>("loading")
   const [timetable, setTimetable] = useState<Timetable | null>(null)
   const [timetableStatus, setTimetableStatus] = useState<ResourceStatus>("loading")
+  // Latch the first visit so leaving the predictor never aborts or repeats its request.
+  if (needScaling && !scalingRequested) setScalingRequested(true)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -110,23 +113,6 @@ export function useReferenceData() {
       }).catch(() => {
         if (active) setStudiesStatus("error")
       })
-
-      // Scaling (~1.1MB) is only needed by the predictor, so load it last.
-      // Idle first, then also wait until the predictor/view that needs it is
-      // likely — here simply a second idle tick keeps startup light.
-      fetchDeferred(() => {
-        if (!active) return
-        void fetchJson<{ references?: ScalingReference[] }>(
-          "/vtac-scaling-reports.json",
-          controller.signal,
-        ).then((result) => {
-          if (!active) return
-          setScalingReferences(usableScaling(result.references))
-          setScalingStatus("ready")
-        }).catch(() => {
-          if (active) setScalingStatus("error")
-        })
-      })
     })
 
     void loadTimetableWithStatus(controller.signal).then((result) => {
@@ -142,6 +128,21 @@ export function useReferenceData() {
       controller.abort()
     }
   }, [reloadToken])
+
+  useEffect(() => {
+    if (!scalingRequested) return
+    const controller = new AbortController()
+    // Keep the result when navigating away so returning needs no fetch or parse.
+    void fetchJson<{ references?: ScalingReference[] }>("/vtac-scaling-reports.json", controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        setScalingReferences(usableScaling(result.references))
+        setScalingStatus("ready")
+      }).catch(() => {
+        if (!controller.signal.aborted) setScalingStatus("error")
+      })
+    return () => controller.abort()
+  }, [scalingRequested, reloadToken])
 
   const reload = useCallback(() => {
     setReferencesStatus("loading")

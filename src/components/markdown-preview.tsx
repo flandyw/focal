@@ -5,6 +5,8 @@ import remarkMath from "remark-math"
 import type { Root, Element } from "hast"
 import { remarkLatex } from "../lib/remark-latex"
 import { cn } from "../lib/utils"
+// Vite loads this CSS before evaluating the lazy chunk, keeping maths styled on first render.
+import "katex/dist/katex.min.css"
 
 const components: Components = {
   pre: ({ node, children }) => {

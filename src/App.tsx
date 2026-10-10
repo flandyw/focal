@@ -30,7 +30,6 @@ import { useSupabaseSync } from "./lib/sync"
 import { canonicalNow, saveTimerSessionChange, useStudySessionSync } from "./lib/study-session-sync"
 import { getExamClock } from "./lib/exam-timer"
 import { suggestTimetableForAttempt, formatExamLabel } from "./lib/timetable"
-import { ExamPicker } from "./components/exam-picker"
 import type { ExamTimerPreset } from "./components/exam-timer-mode"
 import type { StudyTimerMode } from "./components/study-timer-page"
 import type { ExamDifficultySettings } from "./lib/exam-difficulty"
@@ -48,6 +47,7 @@ import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, t
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
+const ExamPicker = lazy(() => import("./components/exam-picker").then((module) => ({ default: module.ExamPicker })))
 
 const ExamSheet = lazy(() =>
   import("./components/exam-sheet").then((module) => ({ default: module.ExamSheet })),
@@ -91,22 +91,6 @@ const ClassTimetablePage = lazy(() =>
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
-
-// Warm the page chunks once the browser is idle so navigating is instant.
-function prefetchPages() {
-  const warm = () => {
-    for (const load of [
-      () => import("./components/exams-page"), () => import("./components/study-timer-page"),
-      () => import("./components/mistakes-page"), () => import("./components/calendar-page"),
-      () => import("./components/goals-page"), () => import("./components/stoplight-page"),
-      () => import("./components/exam-library"), () => import("./components/vcaa-explorer"),
-      () => import("./components/sac-page"), () => import("./components/study-score-predictor"),
-      () => import("./components/settings-page"),
-    ]) load().catch(() => {})
-  }
-  if ("requestIdleCallback" in window) requestIdleCallback(warm, { timeout: 4000 })
-  else setTimeout(warm, 2000)
-}
 
 export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const [view, setView] = useState<AppView>(() => embedded ? "exams" : loadAppView(
@@ -155,7 +139,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     studiesStatus,
     scalingStatus,
     reload: reloadReferences,
-  } = useReferenceData()
+  } = useReferenceData(view === "predictor")
 
   const referenceLoadFailed = [referencesStatus, studiesStatus, scalingStatus].includes("error")
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
@@ -183,7 +167,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const latestData = useRef(data)
   useEffect(() => { latestData.current = data }, [data])
   useEffect(() => () => saveAppData(latestData.current), [])
-  useEffect(prefetchPages, [])
   // Reading hands over to writing on its own, whichever page is open. One phase_change
   // per revision: the session prop stays stale while the save is in flight.
   const publishedPhase = useRef<string | null>(null)
@@ -697,7 +680,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={data.sacRecords} subjects={references.map((reference) => reference.studyName)} preferredSubjects={data.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
           {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
-          {view === "predictor" ? <>{referencesLoading || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
+          {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={references} attempts={data.attempts} preferredSubjects={data.subjects} studies={resourceStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
           </div>
@@ -713,7 +696,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <MistakeSheet open attempts={data.attempts} studies={resourceStudies} initialAttemptId={mistakeAttemptId} initialMistake={editingMistake} storageUserId={sync.user?.id} items={data.learning.curriculumAreas.filter((item) => item.group && !item.archivedAt)} onOpenChange={setMistakeOpen} onSave={saveMistake} />
         </Suspense>
       ) : null}
-      {timetable ? (
+      {trackerOpen && timetable ? (
+        <Suspense fallback={null}>
         <ExamPicker
           open={trackerOpen}
           onOpenChange={setTrackerOpen}
@@ -725,6 +709,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           subjectMatchCount={subjectExamIds.length}
           trackedCount={data.trackedExamIds.length}
         />
+        </Suspense>
       ) : null}
       {!embedded && <Toaster position="bottom-right" />}
     </SidebarProvider>

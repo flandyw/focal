@@ -203,8 +203,8 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
-        <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); run(onSearch) }} className="mx-2 flex h-8 items-center gap-2 rounded-xs px-3 text-[13px] text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /><span className="group-data-[collapsible=icon]:hidden">Search</span><kbd className="ml-auto rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden" aria-hidden>⌘K</kbd></button>
-        {commandOpen && <div className="-mt-2 group-data-[collapsible=icon]:hidden"><AppCommandMenu onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} /></div>}
+        <AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} />
+        <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 items-center justify-center rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></button>
         {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>
           <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3"><span aria-hidden className="font-normal opacity-50">0{index + 1}</span>{group.label}</SidebarGroupLabel>
           <SidebarGroupContent>

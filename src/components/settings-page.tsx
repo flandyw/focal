@@ -5,6 +5,7 @@ import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { ModeToggle } from "./mode-toggle"
+import { AccentPicker } from "./accent-picker"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
@@ -293,6 +294,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <Section title="Appearance" description="Choose how Focal looks on this device.">
               <Row title="Theme" description="Use light mode, dark mode, or follow your system.">
                 <ModeToggle />
+              </Row>
+              <Row title="Accent" description="Pick the colour used for primary actions and focus on this device.">
+                <AccentPicker />
               </Row>
             </Section>
           ) : null}

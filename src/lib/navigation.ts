@@ -38,7 +38,3 @@ export const SETTINGS_ITEM = {
 }
 
 export const ALL_NAVIGATION = [...APP_NAVIGATION, SETTINGS_ITEM]
-
-export function getViewLabel(view: AppView) {
-  return ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Focal"
-}

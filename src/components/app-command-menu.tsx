@@ -1,5 +1,5 @@
 import {
-  CommandDialog,
+  Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
@@ -11,13 +11,11 @@ import type { AppView } from "../lib/app-view"
 import { ALL_NAVIGATION } from "../lib/navigation"
 
 export function AppCommandMenu({
-  open,
   onOpenChange,
   onViewChange,
   onLogExam,
   onLogMistake,
 }: {
-  open: boolean
   onOpenChange: (open: boolean) => void
   onViewChange: (view: AppView) => void
   onLogExam: () => void
@@ -29,8 +27,8 @@ export function AppCommandMenu({
   }
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search Focal" description="Navigate or run an action">
-      <CommandInput placeholder="Search pages and actions…" autoFocus />
+    <Command className="rounded-sm border border-sidebar-border shadow-md">
+      <CommandInput placeholder="Search pages and actions…" autoFocus onKeyDown={(event) => { if (event.key === "Escape") onOpenChange(false) }} />
       <CommandList>
         <CommandEmpty>No matching action.</CommandEmpty>
         <CommandGroup heading="Quick actions">
@@ -56,6 +54,6 @@ export function AppCommandMenu({
           ))}
         </CommandGroup>
       </CommandList>
-    </CommandDialog>
+    </Command>
   )
 }

@@ -141,6 +141,56 @@
   --sidebar-ring: var(--ring);
 }
 
+/* Accent palettes override only the interactive colours. Sage is the :root default.
+   Dark selectors are doubled so they outrank the light accent selectors. */
+[data-accent="blue"] {
+  --primary: #2f5d8c;
+  --primary-foreground: #fbfcfe;
+  --secondary: #e4ebf3;
+  --secondary-foreground: #2c4d70;
+  --accent: #e1e9f2;
+  --accent-foreground: #2f5d8c;
+  --ring: #5b82ad;
+  --sidebar-accent: #d9e3ee;
+  --sidebar-accent-foreground: #24476b;
+}
+
+[data-accent="clay"] {
+  --primary: #9a4f32;
+  --primary-foreground: #fdf9f6;
+  --secondary: #f2e4dc;
+  --secondary-foreground: #7a3b24;
+  --accent: #f0e2d8;
+  --accent-foreground: #9a4f32;
+  --ring: #b8704f;
+  --sidebar-accent: #ecdcd0;
+  --sidebar-accent-foreground: #7d3d25;
+}
+
+.dark[data-accent="blue"] {
+  --primary: #a9c4e4;
+  --primary-foreground: #17293d;
+  --secondary: #2a3a4d;
+  --secondary-foreground: #cadcf0;
+  --accent: #303f52;
+  --accent-foreground: #d3e3f6;
+  --ring: #8fb0d6;
+  --sidebar-accent: #2e3f54;
+  --sidebar-accent-foreground: #cfe1f5;
+}
+
+.dark[data-accent="clay"] {
+  --primary: #e2b49c;
+  --primary-foreground: #3a2218;
+  --secondary: #42302a;
+  --secondary-foreground: #f0d5c6;
+  --accent: #4a3430;
+  --accent-foreground: #f3d9c9;
+  --ring: #d69a7c;
+  --sidebar-accent: #46312a;
+  --sidebar-accent-foreground: #f1d6c6;
+}
+
 @layer base {
   * { @apply border-border outline-ring/50; }
   html { @apply scroll-smooth font-sans; }

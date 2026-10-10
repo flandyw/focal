@@ -1,5 +1,6 @@
 import { Fragment } from "react"
-import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp } from "lucide-react"
+import { AppCommandMenu } from "./app-command-menu"
+import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -68,7 +69,8 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Shared study sessions" />}>
-            <span>Shared sessions</span>
+            <Users aria-hidden className="opacity-70" strokeWidth={1.5} />
+            <span className="group-data-[collapsible=icon]:hidden">Shared sessions</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             {active.map((session, index) => (
@@ -133,6 +135,8 @@ export function AppSidebar({
   onLogPastStudy,
   onLogMistake,
   onSearch,
+  commandOpen,
+  onCommandOpenChange,
 }: {
   view: AppView
   dueMistakes: number
@@ -147,8 +151,10 @@ export function AppSidebar({
   onLogPastStudy: () => void
   onLogMistake: () => void
   onSearch: () => void
+  commandOpen: boolean
+  onCommandOpenChange: (open: boolean) => void
 }) {
-  const { setOpenMobile } = useSidebar()
+  const { setOpen, setOpenMobile } = useSidebar()
   const accountLabel = user?.email || "Account"
   const accountStatus = user ? "Signed in" : "Not signed in"
   const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
@@ -164,12 +170,12 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar className="focal-navigation">
-      <SidebarHeader className="gap-5 px-5 pt-7 pb-5">
-        <div className="flex items-center">
+    <Sidebar collapsible="icon" className="focal-navigation">
+      <SidebarHeader className="gap-5 px-5 pt-7 pb-5 group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-3">
+        <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
@@ -177,14 +183,13 @@ export function AppSidebar({
           </button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/60" />
         </div>
-        <p className="focal-eyebrow -mt-3 text-sidebar-foreground/70">A little closer, every day.</p>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
                 <Plus aria-hidden />
-                <span className="flex-1">Add to your study</span>
-                <ChevronDown aria-hidden className="size-3! opacity-60" />
+                <span className="flex-1 group-data-[collapsible=icon]:hidden">Add to your study</span>
+                <ChevronDown aria-hidden className="size-3! opacity-60 group-data-[collapsible=icon]:hidden" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52">
                 <DropdownMenuItem onClick={() => run(onLogExam)}>Log exam</DropdownMenuItem>
@@ -198,7 +203,8 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3">
-        <button type="button" onClick={() => run(onSearch)} className="mx-2 flex items-center gap-2 border-b border-sidebar-border pb-3 text-xs text-sidebar-foreground/80 hover:text-sidebar-primary"><Search className="size-3.5" aria-hidden /><span>Search anything</span><span className="ml-auto text-[10px]" aria-hidden>⌘ / Ctrl K</span></button>
+        <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); run(onSearch) }} className="mx-2 flex items-center gap-2 border-b border-sidebar-border pb-3 text-xs text-sidebar-foreground/80 hover:text-sidebar-primary group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-b-0 group-data-[collapsible=icon]:pb-0"><Search className="size-3.5" aria-hidden /><span className="group-data-[collapsible=icon]:hidden">Search anything</span><span className="ml-auto text-[10px] group-data-[collapsible=icon]:hidden" aria-hidden>⌘ / Ctrl K</span></button>
+        {commandOpen && <div className="mx-2 -mt-2 group-data-[collapsible=icon]:hidden"><AppCommandMenu onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} /></div>}
         {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>
           <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3"><span aria-hidden className="font-normal opacity-50">0{index + 1}</span>{group.label}</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -229,7 +235,7 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>)}
       </SidebarContent>
-      <SidebarFooter className="gap-3 px-5 pt-4 pb-5">
+      <SidebarFooter className="gap-3 px-5 pt-4 pb-5 group-data-[collapsible=icon]:px-2">
         <SharedSessions sessions={sessions} onControl={onControlSession} />
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
@@ -237,11 +243,11 @@ export function AppSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
                 <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/60" strokeWidth={1.25} />
-                <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{accountLabel}</span>
                   <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>
                 </span>
-                <ArrowUpRight aria-hidden className="ml-auto size-3.5! opacity-50" />
+                <ArrowUpRight aria-hidden className="ml-auto size-3.5! opacity-50 group-data-[collapsible=icon]:hidden" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuGroup>

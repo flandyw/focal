@@ -202,7 +202,7 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent className="gap-4 px-3">
+      <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
         <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); run(onSearch) }} className="mx-2 flex items-center gap-2 border-b border-sidebar-border pb-3 text-xs text-sidebar-foreground/80 hover:text-sidebar-primary group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-b-0 group-data-[collapsible=icon]:pb-0"><Search className="size-3.5" aria-hidden /><span className="group-data-[collapsible=icon]:hidden">Search anything</span><span className="ml-auto text-[10px] group-data-[collapsible=icon]:hidden" aria-hidden>⌘ / Ctrl K</span></button>
         {commandOpen && <div className="mx-2 -mt-2 group-data-[collapsible=icon]:hidden"><AppCommandMenu onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogMistake={() => run(onLogMistake)} /></div>}
         {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>

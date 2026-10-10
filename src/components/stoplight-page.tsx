@@ -28,11 +28,11 @@ type Filter = keyof typeof FILTERS
 
 // Selected state always carries the label too, so colour is never the only signal.
 const SELECTED: Record<StoplightRating, string> = {
-  red: "border-red-700 bg-red-700 text-white hover:bg-red-700/90 hover:text-white dark:border-red-500 dark:bg-red-600",
-  amber: "border-amber-600 bg-amber-500 text-black hover:bg-amber-500/90 hover:text-black dark:border-amber-500 dark:bg-amber-500",
-  green: "border-green-700 bg-green-700 text-white hover:bg-green-700/90 hover:text-white dark:border-green-500 dark:bg-green-600",
+  red: "border-stoplight-red bg-stoplight-red text-white hover:border-stoplight-red hover:bg-stoplight-red hover:text-white dark:text-background dark:hover:text-background",
+  amber: "border-stoplight-amber bg-stoplight-amber text-[#30230f] hover:border-stoplight-amber hover:bg-stoplight-amber/90 hover:text-[#30230f]",
+  green: "border-stoplight-green bg-stoplight-green text-white hover:border-stoplight-green hover:bg-stoplight-green hover:text-white dark:text-background dark:hover:text-background",
 }
-const SEGMENT: Record<StoplightRating, string> = { red: "bg-red-600", amber: "bg-amber-500", green: "bg-green-600" }
+const SEGMENT: Record<StoplightRating, string> = { red: "bg-stoplight-red", amber: "bg-stoplight-amber", green: "bg-stoplight-green" }
 
 function CountBar({ items }: { items: CurriculumArea[] }) {
   const counts = RATINGS.map(({ id }) => items.filter((item) => item.rating === id).length)

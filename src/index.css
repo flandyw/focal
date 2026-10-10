@@ -45,6 +45,9 @@
   --chart-3: #597d92;
   --chart-4: #a18538;
   --chart-5: #91739b;
+  --stoplight-red: #b54b45;
+  --stoplight-amber: #c48a24;
+  --stoplight-green: #398062;
   --chart-mean: var(--chart-3);
   --chart-median: var(--chart-2);
   --chart-deviation: var(--chart-5);
@@ -79,6 +82,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-stoplight-red: var(--stoplight-red);
+  --color-stoplight-amber: var(--stoplight-amber);
+  --color-stoplight-green: var(--stoplight-green);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -131,6 +137,9 @@
   --chart-3: #8db5c9;
   --chart-4: #cbb365;
   --chart-5: #b39ebd;
+  --stoplight-red: #e88f86;
+  --stoplight-amber: #e2b45a;
+  --stoplight-green: #8ec3a5;
   --sidebar: #20291f;
   --sidebar-foreground: #b8c4ae;
   --sidebar-primary: var(--primary);

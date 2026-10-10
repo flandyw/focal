@@ -516,6 +516,7 @@ function RecentExams({
             {recent.map((attempt) => {
               const reference = findAttemptReferenceForYear(attempt, references, comparisonYear)
               const analysis = analyseAttempt(attempt, reference)
+              const performance = getAttemptPerformance(attempt, data.examDifficulty)
               return (
                 <li key={attempt.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0 flex-1 space-y-0.5">
@@ -542,6 +543,9 @@ function RecentExams({
                       {reference ? `${analysis.scaledScore.toFixed(1)}/${reference.maxScore}` : `${attempt.rawScore}/${attempt.rawMax}`}
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                         {reference ? "scaled" : `${analysis.percentage.toFixed(1)}%`}
+                        {performance.provider && performance.adjustment !== 0
+                          ? ` · ${performance.provider} ${performance.adjustment > 0 ? "+" : ""}${performance.adjustment.toFixed(1)} → ${performance.alignedPercentage.toFixed(1)}% aligned`
+                          : null}
                       </span>
                     </span>
                   </div>

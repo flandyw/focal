@@ -507,6 +507,16 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     : hover !== null ? { at: hover, text: clock(hover) } : null
   // Blocks without room for their time range get a readable summary below the track.
   const cramped = blocks.filter((block) => shown(block) && pixels(block) < 150)
+  const crampedKeys = new Set(cramped.map((block) => block.session?.id ?? block.key))
+  const crampedBySession = new Map<string, Block[]>()
+  for (const block of blocks) {
+    const key = block.session?.id ?? block.key
+    if (!crampedKeys.has(key)) continue
+    const group = crampedBySession.get(key) ?? []
+    group.push(block)
+    crampedBySession.set(key, group)
+  }
+  const crampedGroups = [...crampedBySession.values()]
   const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
   const relative = isToday ? "Today" : date === shiftDate(localDate(new Date(nowMs)), -1) ? "Yesterday" : date === shiftDate(localDate(new Date(nowMs)), 1) ? "Tomorrow" : null
 
@@ -681,23 +691,44 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
         {cramped.length ? (
           <ul aria-label="Short blocks" className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {cramped.map((block) => (
+            {crampedGroups.map((group) => {
+              const block = group[0]
+              const start = Math.min(...group.map((item) => item.start))
+              const end = Math.max(...group.map((item) => item.end))
+              const minutes = group.reduce((sum, item) => sum + item.end - item.start, 0)
+              const active = group.some((item) => selected === item.key)
+              return (
               <li className="min-w-0" key={block.key}>
                 <button
-                  aria-pressed={selected === block.key}
-                  className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-muted/15 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring", selected === block.key && "border-primary/50 bg-primary/5")}
+                  aria-pressed={active}
+                  className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-muted/15 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring", active && "border-primary/50 bg-primary/5")}
                   onClick={() => select(block)}
                   type="button"
                 >
                   <span aria-hidden className={cn("size-2 shrink-0 rounded-full", block.tone === "todo" ? "border border-dashed border-primary" : "bg-muted-foreground/40")} style={{ backgroundColor: block.tone === "todo" ? undefined : block.color, borderColor: block.color }} />
                   <span className="grid min-w-0 flex-1 gap-0.5">
                     <span className="truncate text-xs font-medium">{block.title}</span>
-                    <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{clock(block.start)}–{clock(block.end)}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Studying now" : ""}</span>
+                    <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{clock(start)}–{clock(end)}{group.length > 1 ? ` · ${group.length} intervals` : ""}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Studying now" : ""}</span>
                   </span>
-                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(Math.round(block.end - block.start))}</span>
+                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(Math.round(minutes))}</span>
                 </button>
+                {group.length > 1 ? (
+                  <details className="px-3 py-2 text-xs">
+                    <summary className="cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-ring">View intervals</summary>
+                    <ul className="mt-2 grid gap-1">
+                      {group.map((item, index) => (
+                        <li key={item.key}>
+                          <button aria-pressed={selected === item.key} className="w-full rounded px-2 py-1 text-left tabular-nums hover:bg-muted focus-visible:outline-ring" onClick={() => select(item)} type="button">
+                            {index + 1}. {clock(item.start)}–{clock(item.end)} · {duration(Math.round(item.end - item.start))}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
               </li>
-            ))}
+              )
+            })}
           </ul>
         ) : null}
 

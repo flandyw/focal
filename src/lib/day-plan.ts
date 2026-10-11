@@ -190,7 +190,7 @@ function mergedMinutes(ranges: readonly { start: string; end: string }[]): numbe
     }
   }
   if (current) total += current.end - current.start
-  return Math.round(total / 60000)
+  return total / 60000
 }
 
 function sessionSchedule(session: CanonicalStudySession) {
@@ -228,27 +228,30 @@ export function sessionBlocks(session: CanonicalStudySession, now = Date.now()):
   return blocks.length > 0 ? blocks : sessionSchedule(session).schedule.map((block) => ({ ...block, done: session.completed, live: false }))
 }
 
-/**
- * Projects one canonical study session exactly the way Focal desktop's calendar does:
- * it lands on the local date of its `startTime` (its first block, or its start when there
- * is none), its minutes are its blocks, and a deleted session is never shown. Both apps then
- * list the same sessions on the same days with the same durations, from the one shared record.
- */
-export function sessionItem(session: CanonicalStudySession): { item: DayItem; date: string } | null {
+/** Count only the blocks touching this local day, including work in an unfinished timer.
+ *  Keep fractional minutes until the day's total is rounded, so short blocks add up. */
+export function sessionItem(session: CanonicalStudySession, date: string, now = Date.now()): { item: DayItem; date: string } | null {
   if (isDeleted(session)) return null
-  const { subjectIds, schedule, closed } = sessionSchedule(session)
-  const span = { start: schedule[0].start, end: schedule[schedule.length - 1].end }
-  const minutes = closed.length > 0 ? mergedMinutes(closed) : mergedMinutes([span])
+  const { subjectIds } = sessionSchedule(session)
+  const dayStart = new Date(`${date}T00:00:00`)
+  const dayEnd = new Date(dayStart)
+  dayEnd.setDate(dayEnd.getDate() + 1)
+  const blocks = sessionBlocks(session, now).flatMap((block) => {
+    const start = Math.max(dayStart.getTime(), Date.parse(block.start))
+    const end = Math.min(dayEnd.getTime(), Date.parse(block.end))
+    return end > start ? [{ start: new Date(start).toISOString(), end: new Date(end).toISOString() }] : []
+  })
+  if (!blocks.length) return null
   return {
-    date: localDate(new Date(schedule[0].start)),
+    date,
     item: {
       kind: "session",
       id: session.id,
       title: session.title,
       detail: subjectIds.map(subjectLabel).filter(Boolean).join(" · ") || subjectLabel(session.subject_id ?? undefined),
-      minutes,
-      startTime: timeOf(schedule[0].start) ?? "",
-      done: session.completed,
+      minutes: mergedMinutes(blocks),
+      startTime: timeOf(blocks[0].start) ?? "",
+      done: session.completed || session.started_at !== null,
       live: !session.completed && (isRunning(session) || isPaused(session)),
     },
   }
@@ -275,7 +278,7 @@ export function isDayItemDone(item: DayItem) {
   return workOf(item)?.done ?? false
 }
 
-export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timetable | null): DayPlan {
+export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timetable | null, now = Date.now()): DayPlan {
   const items: DayItem[] = []
 
   for (const task of data.learning.tasks) {
@@ -292,8 +295,8 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     items.push(eventItem(event, date, days))
   }
   for (const session of data.sessions ?? []) {
-    const projected = sessionItem(session)
-    if (projected && projected.date === date) items.push(projected.item)
+    const projected = sessionItem(session, date, now)
+    if (projected) items.push(projected.item)
   }
   for (const attempt of data.attempts) {
     if (localDate(new Date(attempt.completedAt)) !== date) continue
@@ -352,6 +355,8 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     date,
     items,
     ...totals,
+    plannedMinutes: Math.round(totals.plannedMinutes),
+    completedMinutes: Math.round(totals.completedMinutes),
     totalCount: totals.plannedCount + totals.completedCount,
     dueMistakes: dueMistakes.length,
   }
@@ -365,7 +370,7 @@ export function buildCalendarMonth(month: Date, data: DayPlanSource, timetable: 
   const grid = Array.from({ length: 42 }, (_, index) => {
     const date = shiftDays(cursor, index)
     const key = localDate(date)
-    const plan = buildDayPlan(key, data, timetable)
+    const plan = buildDayPlan(key, data, timetable, now.getTime())
     return {
       date: key,
       day: date.getDate(),

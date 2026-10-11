@@ -199,15 +199,15 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const todaysSittings = useMemo(() => {
     const today = localDate(now)
     return (sessions ?? []).flatMap((session) => {
-      const projected = sessionItem(session)
-      if (!projected || projected.date !== today || projected.item.kind !== "session" || !(projected.item.done || projected.item.live)) return []
+      const projected = sessionItem(session, today, now.getTime())
+      if (!projected || projected.item.kind !== "session" || !(projected.item.done || projected.item.live)) return []
       return [projected.item]
     })
   }, [now, sessions])
   const todaysRecord = todaysSittings.length > 0 ? todaysSittings : null
   const recordCount = todaysRecord?.length ?? blocksToday
   const recordSeconds = todaysRecord
-    ? todaysRecord.reduce((total, item) => total + item.minutes * 60, 0)
+    ? Math.round(todaysRecord.reduce((total, item) => total + item.minutes, 0)) * 60
     : focusSecondsToday
 
   // One authored moment: the readout re-enters when the phase changes, and a
@@ -331,7 +331,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                   <div className="min-w-0">
                     <p className="font-medium">{item.title || "Focus block"}</p>
                     <p className="text-sm text-muted-foreground">
-                      {[item.detail || subject, `${item.minutes} min`].filter(Boolean).join(" · ")}
+                      {[item.detail || subject, `${Math.round(item.minutes)} min`].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                   <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" />

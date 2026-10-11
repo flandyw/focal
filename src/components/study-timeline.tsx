@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
-import { sessionBlocks } from "../lib/day-plan"
+import { sessionBlocks, sessionItem } from "../lib/day-plan"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
 import { studySubjectOptions, subjectColor } from "../lib/studySubjects"
@@ -116,8 +116,9 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onStartFocus }: {
+export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onStartFocus }: {
   date: string
+  nowMs: number
   onDateChange: (date: string) => void
   sessions: CanonicalStudySession[]
   classes: TimetablePeriod[]
@@ -131,11 +132,6 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   onEdit: (session: CanonicalStudySession, patch: { blocks?: { start: string; end: string }[]; completed?: boolean }) => Promise<void>
   onStartFocus: (subject: string | undefined, intent: string) => void
 }) {
-  const [nowMs, setNowMs] = useState(Date.now)
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 30_000)
-    return () => clearInterval(timer)
-  }, [])
   const isToday = date === localDate(new Date(nowMs))
   const now = minuteOf(date, new Date(nowMs).toISOString())
 
@@ -179,7 +175,10 @@ export function StudyTimeline({ date, onDateChange, sessions, classes, events, s
   const study = blocks.filter((block) => block.tone !== "class" && block.tone !== "event")
   const contextRows = pack(context.filter((block) => block.end > 0))
   const studyRows = pack(study)
-  const studied = Math.round(study.filter((block) => block.tone !== "todo").reduce((sum, block) => sum + block.end - block.start, 0))
+  const studied = Math.round(sessions.reduce((sum, session) => {
+    const projected = sessionItem(session, date, nowMs)
+    return sum + (projected?.item.kind === "session" && projected.item.done ? projected.item.minutes : 0)
+  }, 0))
   // A planned block whose time has gone by without being ticked off.
   const missed = (block: Block) => block.tone === "todo" && block.end <= now
   const minutesOf = (items: Block[]) => Math.round(items.reduce((sum, block) => sum + block.end - block.start, 0))

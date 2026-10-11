@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react"
 import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -56,6 +57,7 @@ function formatDayTitle(date: string) {
 }
 
 function formatMinutes(minutes: number) {
+  minutes = Math.round(minutes)
   if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
@@ -126,10 +128,11 @@ export function CalendarPage({
   const [error, setError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [eventDialog, setEventDialog] = useState<{ event: CalendarEvent | null; key: number } | null>(null)
+  const now = useTickingNow(30_000)
 
   const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
-  const days = useMemo(() => buildCalendarMonth(month, source, timetable), [month, source, timetable])
-  const plan = useMemo(() => buildDayPlan(selected, source, timetable), [selected, source, timetable])
+  const days = useMemo(() => buildCalendarMonth(month, source, timetable, now), [month, source, timetable, now])
+  const plan = useMemo(() => buildDayPlan(selected, source, timetable, now.getTime()), [selected, source, timetable, now])
   const overdue = useMemo(
     () => (selected >= today() ? overdueTasks(data.learning.tasks, today()) : []),
     [data.learning.tasks, selected],
@@ -257,6 +260,7 @@ export function CalendarPage({
         key={selected}
         classes={classes}
         date={selected}
+        nowMs={now.getTime()}
         events={data.events ?? []}
         onDateChange={selectDay}
         onLog={onLogStudy}
@@ -505,8 +509,8 @@ function DayStats({ plan, progress, dueMistakes }: {
     },
     {
       label: "Study logged",
-      value: formatMinutes(plan.plannedMinutes + plan.completedMinutes),
-      note: `${plan.totalCount} of ${plan.totalCount} item${plan.totalCount === 1 ? "" : "s"} on the day`,
+      value: formatMinutes(plan.completedMinutes),
+      note: `${plan.completedCount} item${plan.completedCount === 1 ? "" : "s"} logged on the day`,
     },
     {
       label: "Due for review",
@@ -600,7 +604,7 @@ function DayItemRow({
   const isTask = item.kind === "task"
   const meta = [
     item.kind === "task" ? item.subject : item.detail,
-    item.minutes ? `${item.minutes} min` : undefined,
+    item.minutes ? `${Math.round(item.minutes)} min` : undefined,
     "startTime" in item ? item.startTime : undefined,
   ].filter(Boolean).join(" · ")
 

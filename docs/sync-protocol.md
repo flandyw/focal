@@ -157,6 +157,21 @@ Migration `0021` lets the versioned (`expected_seq`) branch of `sync_apply_chang
 for that entity. This prevents an old generic LWW client from creating a second session
 representation.
 
+## Short study fragments
+
+Migration `0022` merges completed focus fragments under two minutes for the same
+subject, separated by at most five minutes. It runs on completion/logging and
+also consolidates existing history. Original intervals preserve active time and
+breaks; overlaps, unknown subjects, exams and intervening work on another subject
+remain separate. Groups stop at 100 blocks or the command metadata size limit.
+
+The receiving session keeps its ID. Absorbed rows become revisioned tombstones,
+and both changes enter the usual cursor feed. Original metadata is retained in
+`metadata.auto_merge_sources`; mutation receipts include the merged timeline and
+remain idempotent. Folio must adopt that timeline, including the earlier start,
+from receipts as well as feed updates. Offline sessions merge after upload;
+browser guest logs are not part of this shared account policy.
+
 ## Checks
 
 This repo has no test suite (see `AGENTS.md`). Verify changes with:

@@ -219,6 +219,8 @@ function sessionSchedule(session: CanonicalStudySession) {
  *  session's completed flag; a block that has not been started or finished is just not done. */
 export function sessionBlocks(session: CanonicalStudySession, now = Date.now()): { start: string; end: string; done: boolean; live: boolean }[] {
   if (isDeleted(session)) return []
+  // A paused timer with all empty intervals pruned has no study to draw.
+  if (session.started_at !== null && session.segments.length === 0 && session.accumulated_active_ms === 0 && !isRunning(session)) return []
   const blocks = session.segments.map((segment) => ({
     start: segment.started_at,
     end: segment.ended_at ?? new Date(Math.max(now, Date.parse(segment.started_at))).toISOString(),

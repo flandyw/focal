@@ -64,7 +64,11 @@ const clock = (minute: number) => {
   const m = Math.round(minute % 60)
   return `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${h < 12 ? "am" : "pm"}`
 }
-const duration = (minutes: number) => minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`
+const duration = (minutes: number) => {
+  if (minutes > 0 && minutes < 1) return minutes < 1 / 60 ? "<1s" : `${Math.round(minutes * 60)}s`
+  const rounded = Math.round(minutes)
+  return rounded < 60 ? `${rounded}m` : `${Math.floor(rounded / 60)}h${rounded % 60 ? ` ${rounded % 60}m` : ""}`
+}
 const snap = (minute: number) => Math.round(minute / SNAP) * SNAP
 const clamp = (minute: number) => Math.min(LAST_MINUTE, Math.max(0, minute))
 
@@ -633,7 +637,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   onKeyDown={(event) => blockKey(event, block)}
                   style={{ ...place(block.start, block.end), top: 10 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
                   {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
-                  title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(Math.round(block.end - block.start))} (double-click to zoom)`}
+                  title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
@@ -710,7 +714,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                     <span className="truncate text-xs font-medium">{block.title}</span>
                     <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{clock(start)}–{clock(end)}{group.length > 1 ? ` · ${group.length} intervals` : ""}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Studying now" : ""}</span>
                   </span>
-                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(Math.round(minutes))}</span>
+                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(minutes)}</span>
                 </button>
                 {group.length > 1 ? (
                   <details className="px-3 py-2 text-xs">
@@ -719,7 +723,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                       {group.map((item, index) => (
                         <li key={item.key}>
                           <button aria-pressed={selected === item.key} className="w-full rounded px-2 py-1 text-left tabular-nums hover:bg-muted focus-visible:outline-ring" onClick={() => select(item)} type="button">
-                            {index + 1}. {clock(item.start)}–{clock(item.end)} · {duration(Math.round(item.end - item.start))}
+                            {index + 1}. {clock(item.start)}–{clock(item.end)} · {duration(item.end - item.start)}
                           </button>
                         </li>
                       ))}
@@ -738,7 +742,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{picked.title}</p>
               <p className="truncate text-xs text-muted-foreground tabular-nums">
-                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(Math.round(picked.end - picked.start)), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
+                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(picked.end - picked.start), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1">

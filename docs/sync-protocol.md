@@ -185,6 +185,16 @@ including mutation IDs, timing and revisions, so a timeout or restart retries
 the same receipt instead of creating more intervals. Pending newer local actions
 are reconciled after the frozen batch is acknowledged.
 
+Migration `0024` extends cleanup to running and paused exam/SAC sessions, including
+existing sessions. Open intervals and lifecycle timestamps survive cleanup so
+resuming still works. It also removes bursts of three or more closed intervals
+under 30 seconds starting in the same minute, phase and device; these are the
+repeated intervals that round to `0m`. This is a deliberate chatter heuristic;
+isolated real short intervals survive. Unfinished focus sessions retain their
+interval positions for Folio's positional replay and are cleaned at completion.
+Folio checkpoints cannot reverse an acknowledged remote pause, and exam mutation
+receipts immediately replace pruned local intervals when the journal is settled.
+
 ## Checks
 
 This repo has no test suite (see `AGENTS.md`). Verify changes with:

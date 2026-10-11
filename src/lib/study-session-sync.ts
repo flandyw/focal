@@ -421,10 +421,12 @@ async function deliver(accountId: string, scanned: Queued, soonest: (at: number)
   if (session) noteRevisions(accountId, [session])
   if (result.applied || (session && alreadyDone(session, command))) {
     await deleteEntry(entry.seq!)
-  } else if (session && result.reason === "stale_revision" && LIFECYCLE_ACTIONS.has(command.action) && entry.rebases < MAX_REBASES) {
+  } else if (session && result.reason === "stale_revision" && LIFECYCLE_ACTIONS.has(command.action) && entry.rebases < MAX_REBASES &&
+      command.occurred_at == null && command.elapsed_since_previous_ms === undefined) {
     // Another device moved the session on first. The user's move is a transition, not a value, so try
     // it on the row the server holds; the server judges whether it still makes sense. It is a new
-    // request, so a new mutation. The old timing described a boundary on the old timeline.
+    // request, so a new mutation. Timed boundaries belong to their original timeline and
+    // must never be replayed at receipt time after another device has advanced it.
     await writeEntry({ ...entry, sent: false, retryAt: 0, rebases: entry.rebases + 1,
       command: { ...command, mutation_id: crypto.randomUUID(), expected_revision: session.revision,
         occurred_at: undefined, elapsed_since_previous_ms: undefined } })

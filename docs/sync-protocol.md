@@ -172,6 +172,19 @@ remain idempotent. Folio must adopt that timeline, including the earlier start,
 from receipts as well as feed updates. Offline sessions merge after upload;
 browser guest logs are not part of this shared account policy.
 
+Migration `0023` removes closed intervals shorter than one second and exact copies
+of intervals (within a session or another completed focus session of the same
+subject). It runs whenever focus study is completed or edited and repairs existing
+completed history. Empty sessions become deleted tombstones. Revisions and the
+cursor feed carry the cleanup to both apps. Matching uses full timestamps, not
+minute labels; genuine short intervals that happen within the same minute remain.
+
+Focal refuses to rebase stale timed commands onto another timeline. Folio freezes
+its full outstanding command batch in durable preferences before each RPC,
+including mutation IDs, timing and revisions, so a timeout or restart retries
+the same receipt instead of creating more intervals. Pending newer local actions
+are reconciled after the frozen batch is acknowledged.
+
 ## Checks
 
 This repo has no test suite (see `AGENTS.md`). Verify changes with:

@@ -93,6 +93,15 @@ export interface StudySession {
 
 }
 
+export const EVENT_TYPES: Array<{ value: EventType; label: string }> = [
+  { value: "event", label: "Event" },
+  { value: "sac", label: "SAC" },
+  { value: "practice-sac", label: "Practice SAC" },
+  { value: "exam", label: "Exam" },
+  { value: "assignment", label: "Assignment" },
+  { value: "homework", label: "Homework" },
+  { value: "other", label: "Other" },
+]
 export interface CalendarEvent {
   id: string;
   title: string;

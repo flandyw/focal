@@ -12,7 +12,7 @@ import { studySubjectOptions, subjectColor } from "../lib/studySubjects"
 import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/types"
 import { cn } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
-import type { CanonicalStudySession } from "../lib/sync/sessionContract"
+import type { CanonicalStudySession, StudySessionEdit } from "../lib/sync/sessionContract"
 
 const SNAP = 5
 const LAST_MINUTE = 24 * 60 - 1
@@ -120,7 +120,7 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onStartFocus }: {
+export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onOpenSession, onStartFocus }: {
   date: string
   nowMs: number
   onDateChange: (date: string) => void
@@ -133,7 +133,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   /** Deletes a session, done or not. */
   onRemove?: (session: CanonicalStudySession) => Promise<void>
   /** Moves or resizes a session's block, or marks it done or not done. */
-  onEdit: (session: CanonicalStudySession, patch: { blocks?: { start: string; end: string }[]; completed?: boolean }) => Promise<void>
+  onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
+  onOpenSession: (session: CanonicalStudySession) => void
   onStartFocus: (subject: string | undefined, intent: string) => void
 }) {
   const isToday = date === localDate(new Date(nowMs))
@@ -746,6 +747,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1">
+              {picked.session && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
               <Button onClick={() => zoomTo(picked)} size="xs" variant="outline"><ZoomIn />Zoom</Button>
               {picked.session && !timing(picked.session) ? (
                 <Button disabled={!picked.session.completed && picked.end > now} onClick={() => toggleDone(picked.session!)} size="xs" title={!picked.session.completed && picked.end > now ? "It hasn't finished yet" : undefined} variant="outline">

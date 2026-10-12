@@ -19,6 +19,7 @@ import {
   type CanonicalStudySession,
   type StudySessionAction,
   type StudySessionCommand,
+  type StudySessionEdit,
 } from "./sync/sessionContract"
 
 const OUTBOX_DB = "examtrack-sync"
@@ -49,17 +50,23 @@ const blocksOf = (session: CanonicalStudySession): Block[] =>
   session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
 
 /** Mirrors the server's block and completed bookkeeping for sessions that only exist in this browser. */
-function guestApply(session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }): CanonicalStudySession {
+function guestApply(session: CanonicalStudySession, patch: StudySessionEdit): CanonicalStudySession {
+  if (isRunning(session) || isPaused(session) || isDeleted(session)) throw new Error("Stop the timer before editing this session.")
+  if (patch.title !== undefined && (!patch.title.trim() || patch.title.length > 512)) throw new Error("Enter a title of 1–512 characters.")
   const blocks = (patch.blocks ?? blocksOf(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
   const completed = patch.completed ?? session.completed
-  if (blocks.some((block, index) => !(Date.parse(block.end) > Date.parse(block.start)) || (index > 0 && Date.parse(block.start) < Date.parse(blocks[index - 1].end)))) {
+  if (blocks.length > 100) throw new Error("Enter up to 100 study blocks.")
+  if (blocks.some((block, index) => Date.parse(block.end) - Date.parse(block.start) > 86_400_000 || !(Date.parse(block.end) > Date.parse(block.start)) || (index > 0 && Date.parse(block.start) < Date.parse(blocks[index - 1].end)))) {
     throw new Error("Study blocks must end after they start and must not overlap.")
   }
   if (completed && (!blocks.length || blocks.some((block) => Date.parse(block.end) > Date.now()))) {
     throw new Error("Study that has not finished yet cannot be marked done.")
   }
   return {
-    ...session, completed, revision: session.revision + 1, updated_at: new Date().toISOString(),
+    ...session, title: patch.title ?? session.title,
+    subject_id: patch.subject_id === undefined ? session.subject_id : patch.subject_id,
+    metadata: patch.metadata ?? session.metadata,
+    completed, revision: session.revision + 1, updated_at: new Date().toISOString(),
     started_at: completed ? blocks[0].start : null, completed_at: completed ? blocks.at(-1)!.end : null,
     accumulated_active_ms: completed ? blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0) : 0,
     segments: patch.blocks ? blocks.map((block) => ({ id: crypto.randomUUID(), session_id: session.id, started_at: block.start, ended_at: block.end, phase: "focus" as const, source_device_id: deviceId() })) : session.segments,
@@ -455,8 +462,8 @@ function overlaySessions(canonical: ReadonlyMap<string, CanonicalStudySession>, 
       if (command.action === "create" || command.action === "log") {
         if (!base) view.set(command.session_id, guestSession(command.session_id, { title: command.title ?? "", subjectId: command.subject_id ?? undefined,
           blocks: command.blocks ?? [], completed: command.action === "log", metadata: command.metadata ?? {} }))
-      } else if (base && command.action === "save_progress" && (command.blocks || command.completed !== undefined)) {
-        view.set(base.id, guestApply(base, { blocks: command.blocks, completed: command.completed }))
+      } else if (base && command.action === "save_progress") {
+        view.set(base.id, guestApply(base, command))
       } else if (base && command.action === "cancel") {
         view.set(base.id, { ...base, cancelled_at: new Date().toISOString(), revision: base.revision + 1 })
       }
@@ -669,7 +676,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -869,10 +876,10 @@ export function useStudySessionSync(
   }
 
   /** Schedule study that has not happened yet: a session with times and `completed` false. */
-  async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) {
+  async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) {
     const planned = entries.map((entry) => {
       const id = crypto.randomUUID()
-      const blocks = [{ start: entry.start, end: entry.end }]
+      const blocks = entry.blocks ?? [{ start: entry.start, end: entry.end }]
       const metadata = {
         subjectIds: entry.subjectId ? [entry.subjectId] : [], createdVia: "manual",
         description: entry.description, topics: entry.topics, schedule: { blocks },
@@ -893,8 +900,8 @@ export function useStudySessionSync(
   }
 
   /** Move or resize a session's blocks, or mark it done or not done. Any session that is not running. */
-  async function edit(session: CanonicalStudySession, patch: { blocks?: Block[]; completed?: boolean }) {
-    const next = guestApply(session, patch)
+  async function edit(session: CanonicalStudySession, patch: StudySessionEdit) {
+    const next = guestApply(canonicalSessions.current.get(session.id) ?? session, patch)
     if (!userId || !supabase) {
       saveGuest(guestPastStudy().map((item) => item.id === session.id ? next : item))
       return acceptSessions([next])

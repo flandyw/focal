@@ -10,17 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "./ui/textarea"
 import { classPeriodsOn, isTimetableBreakLabel, periodMatchesSubject, periodSubjectName, subjectIdFor, subjectNameFor } from "../lib/class-timetable"
 import { localDate } from "../lib/learning-workspace"
-import type { CalendarEvent, EventType, TimetableConfig, TimetablePeriod } from "../lib/types"
+import { EVENT_TYPES, type CalendarEvent, type EventType, type TimetableConfig, type TimetablePeriod } from "../lib/types"
 
-const TYPES: Array<{ value: EventType; label: string }> = [
-  { value: "event", label: "Event" },
-  { value: "sac", label: "SAC" },
-  { value: "practice-sac", label: "Practice SAC" },
-  { value: "exam", label: "Exam" },
-  { value: "assignment", label: "Assignment" },
-  { value: "homework", label: "Homework" },
-  { value: "other", label: "Other" },
-]
 const REPEATS = [
   { value: "none", label: "Does not repeat" },
   { value: "weekly", label: "Every week" },
@@ -148,9 +139,9 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="event-type">Type</FieldLabel>
-              <Select items={TYPES} value={type} onValueChange={(value) => value && setType(value as EventType)}>
+              <Select items={EVENT_TYPES} value={type} onValueChange={(value) => value && setType(value as EventType)}>
                 <SelectTrigger className="w-full" id="event-type"><SelectValue /></SelectTrigger>
-                <SelectContent>{TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+                <SelectContent>{EVENT_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
             <Field>

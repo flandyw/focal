@@ -61,6 +61,8 @@ export interface StudySessionCommand {
   elapsed_since_previous_ms?: number
 }
 
+export type StudySessionEdit = Pick<StudySessionCommand, "title" | "subject_id" | "metadata" | "blocks" | "completed">
+
 export interface StudySessionMutationResult {
   ok: boolean
   applied: boolean

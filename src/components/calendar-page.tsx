@@ -11,6 +11,7 @@ import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
+import { StudySessionDialog } from "./study-session-dialog"
 import { EventDialog } from "./event-dialog"
 import { PageHeader } from "./page-header"
 import { StudyTimeline } from "./study-timeline"
@@ -36,7 +37,7 @@ import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
 import type { CalendarEvent, TimetableConfig } from "../lib/types"
 import type { TextEventDraft } from "../lib/calendarImport"
-import type { CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, type StudySessionEdit, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import type { PastStudyLog } from "../lib/pastStudy"
 
 const today = () => localDate(new Date())
@@ -103,6 +104,7 @@ export function CalendarPage({
   onLogStudy,
   onRemoveSession,
   onEditSession,
+  onConvertSession,
 }: {
   data: DayPlanSource
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
@@ -115,10 +117,11 @@ export function CalendarPage({
   classTimetable?: TimetableConfig
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
-  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[] }>) => Promise<number>
+  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: { start: string; end: string }[] }>) => Promise<number>
   onLogStudy: (entry: PastStudyLog) => Promise<void>
   onRemoveSession: (session: CanonicalStudySession) => Promise<void>
-  onEditSession: (session: CanonicalStudySession, patch: { blocks?: { start: string; end: string }[]; completed?: boolean }) => Promise<void>
+  onConvertSession: (session: CanonicalStudySession, events: CalendarEvent[]) => Promise<void>
+  onEditSession: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -128,6 +131,7 @@ export function CalendarPage({
   const [error, setError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [eventDialog, setEventDialog] = useState<{ event: CalendarEvent | null; key: number } | null>(null)
+  const [editingSession, setEditingSession] = useState<CanonicalStudySession | null>(null)
   const now = useTickingNow(30_000)
 
   const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
@@ -150,6 +154,12 @@ export function CalendarPage({
     setSelected(date)
     const [year, month] = date.split("-").map(Number)
     setMonth(new Date(year, month - 1, 1))
+  }
+
+  function editSession(id: string) {
+    const session = sessions.find((item) => item.id === id)
+    if (!session || isRunning(session) || isPaused(session)) return
+    setEditingSession(session)
   }
 
   async function setSessionDone(id: string, completed: boolean) {
@@ -254,6 +264,31 @@ export function CalendarPage({
         />
       ) : null}
 
+      {editingSession ? <StudySessionDialog
+        key={editingSession.id}
+        session={sessions.find((item) => item.id === editingSession.id) ?? editingSession}
+        subjects={subjects}
+        onClose={() => setEditingSession(null)}
+        onEdit={async (session, patch) => {
+          await onEditSession(session, patch)
+          if (patch.blocks?.length) selectDay(localDate(new Date(patch.blocks[0].start)))
+        }}
+        onRemove={onRemoveSession}
+        onConvert={async (session, events) => {
+          await onConvertSession(session, events)
+          selectDay(localDate(new Date(events[0].startTime)))
+        }}
+        onDuplicate={async (patch) => {
+          const nested = patch.metadata?.legacy_metadata
+          const metadata = nested && typeof nested === "object" ? nested as Record<string, unknown> : patch.metadata
+          await onPlanSessions([{ title: patch.title!, subjectId: patch.subject_id ?? undefined,
+            start: patch.blocks![0].start, end: patch.blocks!.at(-1)!.end, blocks: patch.blocks,
+            description: typeof metadata?.description === "string" ? metadata.description : undefined,
+            topics: Array.isArray(metadata?.topics) ? metadata.topics.filter((topic): topic is string => typeof topic === "string") : undefined }])
+          selectDay(localDate(new Date(patch.blocks![0].start)))
+        }}
+      /> : null}
+
       <DayStats dueMistakes={plan.dueMistakes} plan={plan} progress={completion} />
 
       <StudyTimeline
@@ -267,6 +302,7 @@ export function CalendarPage({
         onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
         onRemove={onRemoveSession}
         onEdit={onEditSession}
+        onOpenSession={(session) => editSession(session.id)}
         onStartFocus={onStartFocus}
         sessions={sessions}
         subjects={subjects}
@@ -395,6 +431,7 @@ export function CalendarPage({
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
+                        onEditSession={editSession}
                         onSessionDone={setSessionDone}
                         onStatus={changeStatus}
                       />
@@ -422,6 +459,7 @@ export function CalendarPage({
                         onMove={move}
                         onNavigate={onNavigate}
                         onStartFocus={onStartFocus}
+                        onEditSession={editSession}
                         onSessionDone={setSessionDone}
                         onStatus={changeStatus}
                       />
@@ -584,6 +622,7 @@ function DayItemRow({
   item,
   onArchive,
   onEditEvent,
+  onEditSession,
   onMove,
   onNavigate,
   onSessionDone,
@@ -592,6 +631,7 @@ function DayItemRow({
 }: {
   item: DayItem
   onArchive: (id: string) => void
+  onEditSession: (id: string) => void
   onEditEvent: (id: string) => void
   onMove: (id: string, date: string) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
@@ -631,6 +671,7 @@ function DayItemRow({
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
         <span className="flex shrink-0 items-center gap-0.5">
+          {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}
           {isTask ? (
             item.status === "planned" ? (
               <>

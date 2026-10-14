@@ -28,7 +28,7 @@ export type DayItem =
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
   | { kind: "event"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean; multiDay: boolean }
-  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; done: boolean; live: boolean }
+  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; done: boolean; live: boolean; paused?: boolean }
   | { kind: "logged-exam"; id: string; title: string; detail: string; minutes: number; completed: true }
   | { kind: "mistakes"; id: string; title: string; detail: string; minutes: number; count: number }
 
@@ -219,6 +219,11 @@ function sessionSchedule(session: CanonicalStudySession) {
  *  session's completed flag; a block that has not been started or finished is just not done. */
 export function sessionBlocks(session: CanonicalStudySession, now = Date.now()): { start: string; end: string; done: boolean; live: boolean }[] {
   if (isDeleted(session)) return []
+  if (session.started_at !== null && !session.segments.length) {
+    // An incomplete timer payload must never fall back to the original planned schedule.
+    const start = session.segment_started_at
+    return isRunning(session) && start ? [{ start, end: new Date(Math.max(now, Date.parse(start))).toISOString(), done: false, live: true }] : []
+  }
   // A paused timer with all empty intervals pruned has no study to draw.
   if (session.started_at !== null && session.segments.length === 0 && session.accumulated_active_ms === 0 && !isRunning(session)) return []
   const blocks = session.segments.map((segment) => ({
@@ -255,6 +260,7 @@ export function sessionItem(session: CanonicalStudySession, date: string, now = 
       startTime: timeOf(blocks[0].start) ?? "",
       done: session.completed || session.started_at !== null,
       live: !session.completed && (isRunning(session) || isPaused(session)),
+      paused: isPaused(session),
     },
   }
 }

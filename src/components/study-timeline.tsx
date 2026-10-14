@@ -135,7 +135,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   /** Moves or resizes a session's block, or marks it done or not done. */
   onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
   onOpenSession: (session: CanonicalStudySession) => void
-  onStartFocus: (subject: string | undefined, intent: string) => void
+  onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
 }) {
   const isToday = date === localDate(new Date(nowMs))
   const now = minuteOf(date, new Date(nowMs).toISOString())
@@ -756,7 +756,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               ) : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
               {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="outline"><CalendarPlus />Repeat tomorrow</Button> : null}
-              {picked.session ? <Button onClick={() => onStartFocus(picked.subject, picked.title)} size="xs" variant="outline"><Timer />{picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
+              {picked.session ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.completed ? undefined : picked.session?.id)} size="xs" variant="outline"><Timer />{picked.session && isPaused(picked.session) ? "Resume" : picked.session && isRunning(picked.session) ? "Open timer" : picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
               {picked.session && picked.tone !== "live" ? (
                 confirmRemove
                   ? <Button onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>

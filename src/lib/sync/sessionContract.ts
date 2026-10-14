@@ -145,8 +145,31 @@ export const isRunning = (session: CanonicalStudySession) => session.segment_sta
 /** Paused: started, stopped, and not finished. */
 export const isPaused = (session: CanonicalStudySession) =>
   session.segment_started_at === null && session.paused_at !== null && !session.completed && session.cancelled_at === null
+/** Scheduled study has not started; its segments describe planned time, never worked time. */
+export const isPlanned = (session: CanonicalStudySession) =>
+  !session.completed && session.cancelled_at === null && session.started_at === null &&
+  session.segment_started_at === null && session.paused_at === null
+
 /** Deleted sessions are kept as tombstones so every device learns of the removal. */
 export const isDeleted = (session: CanonicalStudySession) => session.cancelled_at !== null
+
+/** Original intent survives replacing a plan's segments with actual timer intervals. */
+export function studySessionPlan(session: CanonicalStudySession) {
+  const legacy = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : {}
+  const metadata = { ...legacy, ...session.metadata }
+  const schedule = isRecord(metadata.schedule) && Array.isArray(metadata.schedule.blocks) ? metadata.schedule.blocks : []
+  const candidates = isPlanned(session) && session.segments.length
+    ? session.segments.map((segment) => ({ start: segment.started_at, end: segment.ended_at })) : schedule
+  const blocks = candidates.flatMap((block) => {
+    if (!isRecord(block) || typeof block.start !== "string" || typeof block.end !== "string") return []
+    const start = Date.parse(block.start), end = Date.parse(block.end)
+    return Number.isFinite(start) && Number.isFinite(end) && end > start && end - start <= 86_400_000
+      ? [{ start: block.start, end: block.end }] : []
+  }).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
+  return { blocks, milliseconds: blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0),
+    description: typeof metadata.description === "string" ? metadata.description : "",
+    topics: Array.isArray(metadata.topics) ? [...new Set(metadata.topics.filter((topic): topic is string => typeof topic === "string" && !!topic.trim()))] : [] }
+}
 
 /** Uses only a server timestamp and a monotonic clock; system wall-clock skew is irrelevant. */
 export interface ServerClockAnchor {

@@ -1,6 +1,8 @@
 import { Suspense, lazy, useMemo, useRef, useState } from "react"
 import {
   Bell,
+  CalendarPlus,
+  Pencil,
   BellOff,
   Check,
   Coffee,
@@ -26,10 +28,13 @@ import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
 import { TimerReadout } from "./timer-readout"
 import { requestTimerNotifications, useStudyTimer } from "../hooks/use-study-timer"
+import type { useStudySessionSync } from "../lib/study-session-sync"
+import { StudySessionDialog } from "./study-session-dialog"
+import type { StudySessionEdit } from "../lib/sync/sessionContract"
 import type { FocusSessionSink } from "../lib/focus-session"
 import { sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { isPaused, isRunning, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { VCE_SUBJECTS } from "../lib/types"
 import { StudyPlanCard } from "./study-plan-card"
@@ -112,16 +117,26 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, examActive = false }: {
   subjects: string[]
   preferredSubjects: string[]
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
+  examActive?: boolean
   onSessionChange?: FocusSessionSink
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
   /** The shared sittings, so Focal's own study shows here as well as the calendar's. */
   sessions?: CanonicalStudySession[]
-  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) => Promise<void>
+  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">) => Promise<void>
 }) {
+  const [planFilter, setPlanFilter] = useState("all")
+  const [planSearch, setPlanSearch] = useState("")
+  const [planLimit, setPlanLimit] = useState(10)
+  const [planBusy, setPlanBusy] = useState<string | null>(null)
+  const planBusyRef = useRef(false)
+  const [planError, setPlanError] = useState("")
+  const [editingPlan, setEditingPlan] = useState<CanonicalStudySession | null>(null)
+  const [creatingPlan, setCreatingPlan] = useState(false)
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
 
@@ -136,10 +151,53 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const sharedBusyRef = useRef(false)
   const [sharedFailure, setSharedFailure] = useState<{ key: string; message: string } | null>(null)
   const now = useTickingNow(sharedSession && isRunning(sharedSession) ? 1000 : 60_000)
+  const planned = useMemo(() => (sessions ?? []).filter((session) => session.kind === "focus" && isPlanned(session))
+    .toSorted((a, b) => Date.parse(studySessionPlan(a).blocks[0]?.start ?? "9999-01-01") - Date.parse(studySessionPlan(b).blocks[0]?.start ?? "9999-01-01")), [sessions])
+  const todayEnd = new Date(now); todayEnd.setHours(24, 0, 0, 0)
+  const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+  const visiblePlans = planned.filter((session) => {
+    const plan = studySessionPlan(session)
+    const text = [session.title, session.subject_id, VCE_SUBJECTS.find((subject) => subject.id === session.subject_id)?.name, plan.description, ...plan.topics].join(" ").toLowerCase()
+    if (!text.includes(planSearch.trim().toLowerCase())) return false
+    if (planFilter === "overdue") return !!plan.blocks.length && Date.parse(plan.blocks.at(-1)!.end) < now.getTime()
+    if (planFilter === "today") return plan.blocks.some((block) => Date.parse(block.start) < todayEnd.getTime() && Date.parse(block.end) > todayStart.getTime())
+    if (planFilter === "upcoming") return plan.blocks.some((block) => Date.parse(block.end) >= now.getTime())
+    return true
+  })
+  const blockedPlan = examActive ? "Stop the exam timer before starting a plan."
+    : localSessionId || activeSession || local.state.running ? "Finish your current session before starting a plan." : ""
+  async function startPlan(session: CanonicalStudySession) {
+    if (!onControlSession || planBusyRef.current || blockedPlan) return
+    planBusyRef.current = true; setPlanBusy(session.id); setPlanError("")
+    try { await onControlSession(session, "start") }
+    catch (error) { setPlanError(error instanceof Error ? error.message : "Could not start the plan.") }
+    finally { planBusyRef.current = false; setPlanBusy(null) }
+  }
+  async function copyPlan(patch: StudySessionEdit) {
+    if (!plannedActions || !patch.blocks?.length) throw new Error("Enter at least one time block.")
+    const metadata = patch.metadata ?? {}
+    const legacy = metadata.legacy_metadata
+    const details = legacy && typeof legacy === "object" && !Array.isArray(legacy) ? { ...legacy, ...metadata } : metadata
+    await plannedActions.plan([{ title: patch.title ?? "Study", subjectId: patch.subject_id ?? undefined,
+      start: patch.blocks[0].start, end: patch.blocks.at(-1)!.end, blocks: patch.blocks,
+      description: typeof details.description === "string" ? details.description : undefined,
+      topics: Array.isArray(details.topics) ? details.topics.filter((topic): topic is string => typeof topic === "string") : undefined }])
+  }
+  function newPlan() {
+    const start = new Date(now); start.setSeconds(0, 0)
+    const end = new Date(start.getTime() + 30 * 60_000)
+    const id = crypto.randomUUID(), stamp = start.toISOString()
+    setCreatingPlan(true)
+    setEditingPlan({ id, kind: "focus", completed: false, phase: "focus", revision: 0,
+      title: "", subject_id: subject || null, originating_app: "examtrack", created_at: stamp, updated_at: stamp,
+      started_at: null, paused_at: null, completed_at: null, cancelled_at: null, accumulated_active_ms: 0,
+      segment_started_at: null, metadata: {}, segments: [{ id: crypto.randomUUID(), session_id: id,
+        started_at: stamp, ended_at: end.toISOString(), phase: "focus", source_device_id: null }] })
+  }
   const sharedSessionKey = sharedSession ? `${sharedSession.id}:${sharedSession.revision}:${isRunning(sharedSession)}` : ""
   const sharedError = sharedFailure?.key === sharedSessionKey ? sharedFailure.message : ""
 
-  async function controlShared(action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) {
+  async function controlShared(action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">) {
     if (!sharedSession || !onControlSession || sharedBusyRef.current) return
     sharedBusyRef.current = true
     setSharedBusy(true)
@@ -308,6 +366,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               </div>
             ) : null}
           </TimerReadout>
+          {sharedSession && studySessionPlan(sharedSession).milliseconds > 0 ? <p className="mt-4 text-center text-sm text-muted-foreground">
+            {Math.round(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 60_000)} of {Math.round(studySessionPlan(sharedSession).milliseconds / 60_000)} planned minutes worked
+            {studySessionActiveMilliseconds(sharedSession, now.getTime()) >= studySessionPlan(sharedSession).milliseconds ? " · Goal reached; finish when you’re ready." : ""}
+          </p> : null}
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
         <div className="grid grid-cols-3 divide-x border-t text-center">
@@ -316,6 +378,40 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
+
+      <section className="grid gap-3" aria-labelledby="planned-study-title">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <SectionHeading id="planned-study-title" title={`Planned study · ${planned.length}`} description="Start the same session here or in Folio. Only time you work counts." />
+          {plannedActions ? <Button onClick={newPlan} variant="outline"><CalendarPlus />Plan study</Button> : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Input aria-label="Search planned study" className="sm:max-w-xs" placeholder="Search title, subject or topics" value={planSearch} onChange={(event) => { setPlanSearch(event.target.value); setPlanLimit(10) }} />
+          {[["all", "All"], ["today", "Today"], ["overdue", "Overdue"], ["upcoming", "Upcoming"]].map(([value, label]) =>
+            <Button key={value} aria-pressed={planFilter === value} size="sm" variant={planFilter === value ? "secondary" : "outline"} onClick={() => { setPlanFilter(value); setPlanLimit(10) }}>{label}</Button>)}
+        </div>
+        {blockedPlan && planned.length ? <p className="text-sm text-muted-foreground">{blockedPlan}</p> : null}
+        {planError ? <p role="alert" className="text-sm text-destructive">{planError}</p> : null}
+        {visiblePlans.slice(0, planLimit).map((session) => {
+          const plan = studySessionPlan(session)
+          return <Card key={session.id} size="sm"><CardContent className="grid gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0"><h3 className="break-words font-medium">{session.title}</h3><p className="text-sm text-muted-foreground">{VCE_SUBJECTS.find((subject) => subject.id === session.subject_id)?.name ?? session.subject_id ?? "No subject"} · {Math.round(plan.milliseconds / 60_000)} min planned</p></div>
+              <div className="flex gap-2"><Button disabled={!!blockedPlan || !!planBusy || !onControlSession} onClick={() => void startPlan(session)} size="sm"><Play />{planBusy === session.id ? "Starting…" : "Start session"}</Button>
+                {plannedActions ? <Button aria-label={`Edit ${session.title}`} onClick={() => { setCreatingPlan(false); setEditingPlan(session) }} size="icon-sm" variant="outline"><Pencil /></Button> : null}</div>
+            </div>
+            <div className="text-xs text-muted-foreground">{plan.blocks.slice(0, 3).map((block) => <p key={block.start}>{new Date(block.start).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} – {new Date(block.end).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>)}{plan.blocks.length > 3 ? <p>{plan.blocks.length} scheduled blocks</p> : null}</div>
+            {plan.description ? <p className="line-clamp-3 whitespace-pre-wrap text-sm">{plan.description}</p> : null}
+            {plan.topics.length ? <p className="text-sm text-muted-foreground">Topics: {plan.topics.join(" · ")}</p> : null}
+          </CardContent></Card>
+        })}
+        {!visiblePlans.length ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">{planned.length ? "No plans match these filters." : "Plan study here or on the calendar. Your plans also appear in Folio when you connect the same account."}</p> : null}
+        {visiblePlans.length > planLimit ? <Button onClick={() => setPlanLimit((limit) => limit + 10)} variant="outline">Show more plans</Button> : null}
+      </section>
+      {editingPlan && plannedActions ? <StudySessionDialog key={editingPlan.id}
+        session={(sessions ?? []).find((session) => session.id === editingPlan.id) ?? editingPlan}
+        subjects={preferredSubjects} allowConvert={false} creating={creatingPlan} onCreate={copyPlan}
+        onClose={() => setEditingPlan(null)} onEdit={plannedActions.edit} onRemove={plannedActions.remove}
+        onDuplicate={copyPlan} onConvert={async () => { throw new Error("Convert study to events from the calendar.") }} /> : null}
 
       <div className="grid items-start gap-6 lg:gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="grid min-w-0 gap-3" aria-labelledby="today-title">
@@ -524,6 +620,7 @@ export function StudyTimerPage({
   onModeChange,
   onFocusSessionChange,
   onControlSession,
+  plannedActions,
   exam,
   embedded = false,
 }: {
@@ -531,13 +628,14 @@ export function StudyTimerPage({
   /** The student's own subjects, floated to the top of the picker. */
   preferredSubjects: string[]
   mode: StudyTimerMode
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
   focusPreset?: { subject?: string; intent: string }
   /** The shared sittings, so today's focus time includes study done in Focal or Folio. */
   sessions?: CanonicalStudySession[]
   onModeChange: (mode: StudyTimerMode) => void
   /** Focus blocks mirror as `kind: "focus"`; a paper mirrors as `kind: "exam"`. */
   onFocusSessionChange: FocusSessionSink
-  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">) => Promise<void>
+  onControlSession?: (session: CanonicalStudySession, action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">) => Promise<void>
   exam: ExamTimerModeProps
   /** The desktop app owns the study timer, so only timed papers are offered. */
   embedded?: boolean
@@ -561,7 +659,7 @@ export function StudyTimerPage({
         </div>
 
         {!embedded && <TabsContent className="mt-0" value="focus">
-          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} />
         </TabsContent>}
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

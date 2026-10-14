@@ -11,6 +11,7 @@ import {
   estimateServerNow,
   isDeleted,
   isPaused,
+  isPlanned,
   isRunning,
   observeServerClock,
   parseCanonicalStudySession,
@@ -53,6 +54,7 @@ const blocksOf = (session: CanonicalStudySession): Block[] =>
 function guestApply(session: CanonicalStudySession, patch: StudySessionEdit): CanonicalStudySession {
   if (isRunning(session) || isPaused(session) || isDeleted(session)) throw new Error("Stop the timer before editing this session.")
   if (patch.title !== undefined && (!patch.title.trim() || patch.title.length > 512)) throw new Error("Enter a title of 1–512 characters.")
+  if (patch.metadata && new TextEncoder().encode(JSON.stringify(patch.metadata)).length > 60_000) throw new Error("Plan details are too long. Shorten the notes or topics.")
   const blocks = (patch.blocks ?? blocksOf(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
   const completed = patch.completed ?? session.completed
   if (blocks.length > 100) throw new Error("Enter up to 100 study blocks.")
@@ -71,6 +73,33 @@ function guestApply(session: CanonicalStudySession, patch: StudySessionEdit): Ca
     accumulated_active_ms: completed ? blocks.reduce((sum, block) => sum + Date.parse(block.end) - Date.parse(block.start), 0) : 0,
     segments: patch.blocks ? blocks.map((block) => ({ id: crypto.randomUUID(), session_id: session.id, started_at: block.start, ended_at: block.end, phase: "focus" as const, source_device_id: deviceId() })) : session.segments,
   }
+}
+
+/** Local projection of lifecycle commands. Planned segments are replaced at Start. */
+function controlProjection(session: CanonicalStudySession, action: StudySessionAction, at: number): CanonicalStudySession {
+  if (isDeleted(session)) throw new Error("This session was deleted.")
+  if (action === "start" && !isPlanned(session)) throw new Error("This session has already started.")
+  if (action === "resume" && !isPaused(session)) throw new Error("This session is not paused.")
+  if (action === "pause" && !isRunning(session)) throw new Error("This session is not running.")
+  if (action === "complete" && !isRunning(session) && !isPaused(session)) throw new Error("Start the session before finishing it.")
+  const stamp = new Date(at).toISOString()
+  let segments = action === "start" ? [] : [...session.segments]
+  if (action === "start" || action === "resume") {
+    segments.push({ id: `local:${session.id}:${stamp}`, session_id: session.id, started_at: stamp,
+      ended_at: null, phase: session.phase ?? "focus", source_device_id: deviceId() })
+  } else segments = segments.map((segment) => segment.ended_at === null
+    ? { ...segment, ended_at: new Date(Math.max(at, Date.parse(segment.started_at) + 1)).toISOString() } : segment)
+  const accumulated = segments.reduce((sum, segment) => sum + (segment.ended_at ? Math.max(0, Date.parse(segment.ended_at) - Date.parse(segment.started_at)) : 0), 0)
+  const metadata = { ...session.metadata }
+  if (action === "start" && !metadata.schedule) metadata.schedule = { blocks: blocksOf(session) }
+  return { ...session, metadata, segments, revision: session.revision + 1, updated_at: stamp,
+    started_at: action === "start" ? stamp : session.started_at,
+    segment_started_at: action === "start" || action === "resume" ? stamp : null,
+    paused_at: action === "pause" ? stamp : null,
+    completed: action === "complete" || session.completed,
+    completed_at: action === "complete" ? stamp : session.completed_at,
+    cancelled_at: action === "cancel" ? stamp : null,
+    accumulated_active_ms: accumulated, timing_at: stamp }
 }
 
 function guestSession(id: string, fields: { title: string; subjectId?: string; blocks: Block[]; completed: boolean; metadata: Record<string, unknown> }): CanonicalStudySession {
@@ -180,13 +209,12 @@ function alreadyDone(session: CanonicalStudySession, command: StudySessionComman
 /** Pause, resume, complete or delete a session another device (or an earlier visit) started. */
 export async function controlSession(
   session: CanonicalStudySession,
-  action: Extract<StudySessionAction, "pause" | "resume" | "complete" | "cancel">,
+  action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">,
+  expectedAccountId?: string,
 ): Promise<void> {
   const accountId = await queueAccountId()
   if (!supabase || accountId === "guest") throw new Error("Sign in to control a shared study session.")
-  if ((await readQueue(accountId)).some((entry) => entry.sessionId === session.id)) {
-    throw new Error("The last change to this session is still syncing.")
-  }
+  if (expectedAccountId && accountId !== expectedAccountId) throw new Error("Your account changed. Reopen this session before continuing.")
   await queueCommand(accountId, {
     mutation_id: crypto.randomUUID(), session_id: session.id, expected_revision: session.revision,
     action, device_id: deviceId(), app: "examtrack", kind: session.kind, phase: session.phase ?? "focus",
@@ -456,7 +484,7 @@ function refusalMessage(reason: string | null, command: StudySessionCommand, ses
 /** What the screen shows: the server's sessions with this device's unanswered commands laid on top. */
 function overlaySessions(canonical: ReadonlyMap<string, CanonicalStudySession>, queue: readonly Queued[]): CanonicalStudySession[] {
   const view = new Map(canonical)
-  for (const { command } of queue) {
+  for (const { command, queuedAt } of queue) {
     const base = view.get(command.session_id)
     try {
       if (command.action === "create" || command.action === "log") {
@@ -464,11 +492,9 @@ function overlaySessions(canonical: ReadonlyMap<string, CanonicalStudySession>, 
           blocks: command.blocks ?? [], completed: command.action === "log", metadata: command.metadata ?? {} }))
       } else if (base && command.action === "save_progress") {
         view.set(base.id, guestApply(base, command))
-      } else if (base && command.action === "cancel") {
-        view.set(base.id, { ...base, cancelled_at: new Date().toISOString(), revision: base.revision + 1 })
+      } else if (base && ["start", "pause", "resume", "complete", "cancel"].includes(command.action)) {
+        view.set(base.id, controlProjection(base, command.action, command.occurred_at ? Date.parse(command.occurred_at) : queuedAt))
       }
-      // ponytail: timer lifecycle commands are not drawn onto the list; the timer screens run on their own
-      // local state, and the list catches up when the command is answered.
     } catch {
       // A command the overlay cannot build is still sent; the server's answer is what counts.
     }
@@ -521,7 +547,7 @@ function deviceId(): string {
   return id
 }
 
-type AccountSyncMeta = { key: string; accountId: string; cursor: number }
+type AccountSyncMeta = { key: string; accountId: string; cursor: number; sessions?: CanonicalStudySession[] }
 type SessionTiming = { key: string; accountId: string; sessionId: string; monotonicAt: number; timeOrigin: number; elapsedMs: number }
 const metadataKey = (accountId: string) => `account:${accountId}`
 const timingKey = (accountId: string, sessionId: string) => `${accountId}\u0000${sessionId}`
@@ -546,6 +572,16 @@ async function writeSyncMeta(meta: AccountSyncMeta): Promise<void> {
   const database = await openOutboxDatabase()
   const transaction = database.transaction(META_STORE, "readwrite")
   transaction.objectStore(META_STORE).put(meta)
+  await transactionDone(transaction)
+}
+
+async function cacheSessions(accountId: string, sessions: readonly CanonicalStudySession[]): Promise<void> {
+  const database = await openOutboxDatabase()
+  const transaction = database.transaction(META_STORE, "readwrite")
+  const store = transaction.objectStore(META_STORE)
+  const key = metadataKey(accountId)
+  const previous = await requestResult(store.get(key) as IDBRequest<AccountSyncMeta | undefined>)
+  store.put({ ...previous, key, accountId, cursor: previous?.cursor ?? 0, sessions: [...sessions] })
   await transactionDone(transaction)
 }
 
@@ -580,7 +616,7 @@ async function captureCommandTiming(accountId: string, sessionId: string, action
   const prior = await readCommandTiming(accountId, sessionId)
   const monotonicAt = performance.now()
   const timeOrigin = performance.timeOrigin
-  const elapsed = elapsedSinceBoundary(prior, monotonicAt, timeOrigin)
+  const elapsed = action === "start" ? 0 : elapsedSinceBoundary(prior, monotonicAt, timeOrigin)
   const occurredAt = clockAnchor ? new Date(estimateServerNow(clockAnchor, monotonicAt)).toISOString() : null
   return { occurred_at: occurredAt, elapsed_since_previous_ms: elapsed }
 }
@@ -741,6 +777,7 @@ export function useStudySessionSync(
       delivered: async (rows) => {
         if (cancelled) return
         acceptSessions(rows)
+        await cacheSessions(userId, [...canonicalSessions.current.values()])
         await refreshQueue()
         // The newest row the feed or an answer has brought, not the one this answer carried: the feed
         // may have delivered a later revision while the session was held back.
@@ -788,7 +825,7 @@ export function useStudySessionSync(
           cursor = raw.mode === "snapshot" ? raw.head : page.reduce((highest, item) =>
             isRecord(item) && typeof item.seq === "number" ? Math.max(highest, item.seq) : highest, cursor)
           const meta = await readSyncMeta(userId)
-          await writeSyncMeta({ ...meta, cursor })
+          await writeSyncMeta({ ...meta, cursor, sessions: [...canonicalSessions.current.values()] })
           if (raw.mode === "snapshot" || cursor >= raw.head || page.length < 1000) break
         }
       } catch (error) {
@@ -799,6 +836,9 @@ export function useStudySessionSync(
     }
 
     const start = async () => {
+      const cached = (await readSyncMeta(userId)).sessions
+      if (cancelled) return
+      if (cached) acceptSessions(cached.flatMap((row) => parseCanonicalStudySession(row) ?? []))
       // Commands left on disk by a closed tab or a dead connection go before anything else.
       await refreshQueue()
       void requestFlush()
@@ -820,6 +860,9 @@ export function useStudySessionSync(
     const onFocus = () => { void requestFlush(); void pull() }
     const checkpoint = () => {
       const current = dataRef.current
+      for (const session of overlaySessions(canonicalSessions.current, queue.current)) {
+        if (isRunning(session)) void checkpointSessionTiming(userId, session.id)
+      }
       for (const timer of [current.activeExamTimer, current.activeSacTimer]) {
         if (timer?.id && timer.pausedAt === undefined) void checkpointSessionTiming(userId, timer.id)
       }
@@ -901,7 +944,9 @@ export function useStudySessionSync(
 
   /** Move or resize a session's blocks, or mark it done or not done. Any session that is not running. */
   async function edit(session: CanonicalStudySession, patch: StudySessionEdit) {
-    const next = guestApply(canonicalSessions.current.get(session.id) ?? session, patch)
+    const current = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id) ?? session
+    if (current.revision !== session.revision) throw new Error("This session changed. Reopen it before saving your changes.")
+    const next = guestApply(current, patch)
     if (!userId || !supabase) {
       saveGuest(guestPastStudy().map((item) => item.id === session.id ? next : item))
       return acceptSessions([next])
@@ -924,7 +969,22 @@ export function useStudySessionSync(
   }
 
   return { sessions, queued, plan, edit, remove, log, control: async (session, action) => {
-    await controlSession(session, action)
+    const current = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id)
+    if (!current) throw new Error("This session no longer exists. Refresh and try again.")
+    if ((action === "start" || action === "resume") && current.kind === "focus" &&
+        (dataRef.current.activeExamTimer || dataRef.current.activeSacTimer)) {
+      throw new Error("Stop the exam or SAC timer before starting regular study.")
+    }
+    if ((action === "start" || action === "resume") && sessions.some((row) => row.id !== current.id && isRunning(row))) {
+      throw new Error("Pause or finish your running session before starting another.")
+    }
+    const next = controlProjection(current, action, estimateNow())
+    if (!userId || !supabase) {
+      saveGuest(guestPastStudy().map((row) => row.id === current.id ? next : row))
+      acceptSessions([next])
+      return
+    }
+    await controlSession({ ...current, revision: canonicalSessions.current.get(current.id)?.revision ?? 0 }, action, userId)
     // Hold the caller's spinner until the server has answered, as long as it answers promptly.
     await requestFlush()
     if (userId && (await readQueue(userId)).some((entry) => entry.sessionId === session.id)) {

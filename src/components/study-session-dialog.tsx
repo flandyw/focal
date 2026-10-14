@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { CalendarPlus, Copy, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
@@ -17,8 +17,11 @@ function localTime(iso: string) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, -1).replace(/:00\.000$/, "").replace(/\.000$/, "")
 }
 
-export function StudySessionDialog({ session, subjects, onClose, onEdit, onDuplicate, onRemove, onConvert }: {
+export function StudySessionDialog({ session, subjects, onClose, onEdit, onDuplicate, onRemove, onConvert, creating = false, onCreate, allowConvert = true }: {
   session: CanonicalStudySession
+  creating?: boolean
+  allowConvert?: boolean
+  onCreate?: (patch: StudySessionEdit) => Promise<void>
   subjects: string[]
   onClose: () => void
   onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
@@ -27,7 +30,9 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   onConvert: (session: CanonicalStudySession, events: CalendarEvent[]) => Promise<void>
 }) {
   const legacy = session.metadata.legacy_metadata
-  const metadata = legacy && typeof legacy === "object" && !Array.isArray(legacy) ? legacy as Record<string, unknown> : session.metadata
+  const metadata = { ...(legacy && typeof legacy === "object" && !Array.isArray(legacy) ? legacy as Record<string, unknown> : {}), ...session.metadata }
+  delete metadata.legacy_metadata
+  const [openedRevision] = useState(session.revision)
   const [title, setTitle] = useState(session.title)
   const [subject, setSubject] = useState(session.subject_id ?? "")
   const [notes, setNotes] = useState(typeof metadata.description === "string" ? metadata.description : "")
@@ -36,6 +41,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   const [converting, setConverting] = useState(false)
   const [eventType, setEventType] = useState<EventType>("event")
   const [location, setLocation] = useState("")
+  const busyRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,6 +50,22 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
 
   function updateBlock(id: string, patch: Partial<{ start: string; end: string }>) {
     setBlocks((current) => current.map((block) => block.id === id ? { ...block, ...patch } : block))
+    setError(null)
+  }
+
+  function movePlan(days: number | null) {
+    const first = blocks.map((block) => Date.parse(block.start)).filter(Number.isFinite).sort((a, b) => a - b)[0]
+    if (first === undefined) return
+    const target = new Date()
+    if (days !== null) {
+      target.setDate(target.getDate() + days)
+      const old = new Date(first)
+      target.setHours(old.getHours(), old.getMinutes(), 0, 0)
+    } else target.setSeconds(0, 0)
+    const delta = target.getTime() - first
+    setBlocks((current) => current.map((block) => ({ ...block,
+      start: Number.isFinite(Date.parse(block.start)) ? localTime(new Date(Date.parse(block.start) + delta).toISOString()) : block.start,
+      end: Number.isFinite(Date.parse(block.end)) ? localTime(new Date(Date.parse(block.end) + delta).toISOString()) : block.end })))
     setError(null)
   }
 
@@ -58,20 +80,28 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
       return { start: start.toISOString(), end: end.toISOString() }
     }).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
     if (sorted.some((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))) throw new Error("Time blocks must not overlap.")
-    const details = { ...metadata, subjectIds: subject ? [subject] : [], description: notes.trim(), topics: topics.split("\n").map((topic) => topic.trim()).filter(Boolean), schedule: { blocks: sorted } }
-    return { title: title.trim(), subject_id: subject || null, blocks: sorted, metadata: legacy ? { ...session.metadata, legacy_metadata: details } : details }
+    const details = { ...metadata, subjectIds: subject ? [subject] : [], description: notes.trim(), topics: [...new Set(topics.split("\n").map((topic) => topic.trim()).filter(Boolean))], schedule: session.started_at === null ? { blocks: sorted } : metadata.schedule ?? { blocks: sorted } }
+    return { title: title.trim(), subject_id: subject || null, blocks: sorted, metadata: legacy ? { ...session.metadata, ...details, legacy_metadata: details } : details }
   }
 
   async function submit(action: "save" | "duplicate" | "delete" | "convert") {
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     try {
+      if (!creating && session.revision !== openedRevision) throw new Error("This session changed while you were editing. Close and reopen it before saving.")
       if (isDeleted(session) || isRunning(session) || isPaused(session)) throw new Error("This session has changed. Close the editor and stop its timer before editing.")
       if (action === "convert" && (session.completed || session.started_at !== null)) throw new Error("Only planned study can be converted to an event.")
       if (action === "delete") await onRemove(session)
       else {
         const changes = patch()
-        if (action === "save") await onEdit(session, changes)
+        if (action === "save") {
+          if (creating) {
+            if (!onCreate) throw new Error("Planning is unavailable. Reopen the timer and try again.")
+            await onCreate(changes)
+          } else await onEdit(session, changes)
+        }
         if (action === "duplicate") await onDuplicate(changes)
         if (action === "convert") {
           const now = new Date().toISOString()
@@ -91,19 +121,19 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
           await onConvert(session, events)
         }
       }
-      toast({ save: "Study session updated", duplicate: "Study session duplicated", delete: "Study session deleted", convert: "Study session converted to event" }[action])
+      toast({ save: creating ? "Study session planned" : "Study session updated", duplicate: "Study session duplicated", delete: "Study session deleted", convert: "Study session converted to event" }[action])
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save that change.")
-    } finally { setBusy(false) }
+    } finally { busyRef.current = false; setBusy(false) }
   }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose() }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{converting ? "Convert study to event" : "Edit study session"}</DialogTitle>
-          <DialogDescription>{converting ? "Save these details as calendar events and remove the planned study session. Each time block becomes a separate event." : "Change the details, reschedule study, or split it into blocks with breaks."}</DialogDescription>
+          <DialogTitle>{converting ? "Convert study to event" : creating ? "Plan study session" : "Edit study session"}</DialogTitle>
+          <DialogDescription>{converting ? "Save these details as calendar events and remove the planned study session. Each time block becomes a separate event." : creating ? "Schedule one or more study blocks with breaks. You can start the same plan here or in Folio." : "Change the details, reschedule study, or split it into blocks with breaks."}</DialogDescription>
         </DialogHeader>
         <fieldset disabled={busy} className="min-w-0">
           <FieldGroup>
@@ -120,12 +150,17 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
             </Field>
             <div className="grid gap-3" role="group" aria-label="Time blocks">
               <p className="text-sm font-medium">Time blocks · {Math.round(totalMinutes)} min total</p>
+              {session.started_at === null ? <div className="flex flex-wrap gap-2">
+                <Button size="xs" variant="outline" onClick={() => movePlan(0)}>Move to today</Button>
+                <Button size="xs" variant="outline" onClick={() => movePlan(1)}>Move to tomorrow</Button>
+                <Button size="xs" variant="outline" onClick={() => movePlan(null)}>Move to now</Button>
+              </div> : null}
               {blocks.map((block, index) => (
                 <div key={block.id} className="grid gap-2 rounded-lg border p-3">
                   <div className="flex items-center justify-between"><span className="text-xs font-medium">Block {index + 1}</span><Button aria-label={`Remove block ${index + 1}`} disabled={blocks.length === 1} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button></div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Field><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input id={`session-start-${block.id}`} type="datetime-local" step="0.001" value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
-                    <Field><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input id={`session-end-${block.id}`} type="datetime-local" step="0.001" value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
+                  <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                    <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
+                    <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
                   </div>
                   <div className="flex flex-wrap gap-1" role="group" aria-label={`Block ${index + 1} duration`}>
                     {[15, 25, 30, 45, 60, 90, 120, 180].map((minutes) => <Button key={minutes} size="xs" variant="outline" disabled={!Number.isFinite(Date.parse(block.start))} onClick={() => updateBlock(block.id, { end: localTime(new Date(Date.parse(block.start) + minutes * 60_000).toISOString()) })}>{minutes}m</Button>)}
@@ -148,15 +183,15 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
         </fieldset>
         <DialogFooter className="flex-wrap sm:justify-between">
           <div className="flex flex-wrap gap-1.5">
-            {converting ? <Button disabled={busy} variant="outline" onClick={() => setConverting(false)}>Back to study</Button> : <>
+            {creating ? null : converting ? <Button disabled={busy} variant="outline" onClick={() => setConverting(false)}>Back to study</Button> : <>
               <Button disabled={busy} variant={confirmDelete ? "destructive" : "outline"} onClick={() => confirmDelete ? void submit("delete") : setConfirmDelete(true)}><Trash2 />{confirmDelete ? "Delete for good?" : "Delete"}</Button>
               <Button disabled={busy} variant="outline" onClick={() => submit("duplicate")}><Copy />Duplicate</Button>
-              {!session.completed && session.started_at === null ? <Button disabled={busy} variant="outline" onClick={() => { setConverting(true); setConfirmDelete(false) }}><CalendarPlus />Convert to event</Button> : null}
+              {allowConvert && !session.completed && session.started_at === null ? <Button disabled={busy} variant="outline" onClick={() => { setConverting(true); setConfirmDelete(false) }}><CalendarPlus />Convert to event</Button> : null}
             </>}
           </div>
           <div className="flex gap-1.5">
             <Button disabled={busy} variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={busy} onClick={() => submit(converting ? "convert" : "save")}>{busy ? "Saving…" : converting ? "Convert to event" : "Save changes"}</Button>
+            <Button disabled={busy} onClick={() => submit(converting ? "convert" : "save")}>{busy ? "Saving…" : converting ? "Convert to event" : creating ? "Plan session" : "Save changes"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

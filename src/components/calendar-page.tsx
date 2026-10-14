@@ -111,7 +111,7 @@ export function CalendarPage({
   sessions: CanonicalStudySession[]
   onChange: (update: LearningWorkspaceUpdate) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
-  onStartFocus: (subject: string | undefined, intent: string) => void
+  onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   timetable: Timetable | null
   subjects: string[]
   classTimetable?: TimetableConfig
@@ -636,7 +636,7 @@ function DayItemRow({
   onMove: (id: string, date: string) => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onSessionDone: (id: string, completed: boolean) => void
-  onStartFocus: (subject: string | undefined, intent: string) => void
+  onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   onStatus: (id: string, status: "completed" | "skipped" | "planned") => void
 }) {
   const [more, setMore] = useState(false)
@@ -657,7 +657,7 @@ function DayItemRow({
           {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (
-            item.live ? <Badge className="shrink-0" variant="outline">Studying</Badge>
+            item.live ? <Badge className="shrink-0" variant="outline">{item.paused ? "Paused" : "Studying"}</Badge>
               : done ? <Badge className="shrink-0" variant="secondary">Done</Badge> : null
           ) : item.kind === "task" ? (
             done ? (
@@ -671,6 +671,7 @@ function DayItemRow({
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
         <span className="flex shrink-0 items-center gap-0.5">
+          {item.kind === "session" && (!done || item.live) ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" variant="outline"><Timer />{item.live ? "Open timer" : "Start"}</Button> : null}
           {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}
           {isTask ? (
             item.status === "planned" ? (

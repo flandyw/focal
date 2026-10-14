@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, Minus, Plus, RotateCcw, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, MousePointer2, Minus, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
@@ -251,6 +251,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   const [editing, setEditing] = useState<{ kind: "start" | "end" | "move"; offset: number } | null>(null)
   const [adjust, setAdjust] = useState<{ key: string; kind: "start" | "end" | "move"; offset: number; range: Range; moved: boolean; saving: boolean } | null>(null)
   const [hover, setHover] = useState<number | null>(null)
+  const [razor, setRazor] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [doneOverride, setDoneOverride] = useState<boolean | null>(null)
@@ -309,7 +310,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || busy) return
+    if (event.button !== 0 || busy || razor) return
     event.currentTarget.setPointerCapture(event.pointerId)
     const minute = minuteAt(event.clientX)
     setSelected(null)
@@ -317,7 +318,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   function pointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const current = minuteAt(event.clientX)
+    const current = minuteAt(event.clientX, !razor)
     if (!drag) return setHover(event.pointerType === "mouse" ? current : null)
     if (current !== drag.current) setDrag({ ...drag, current, moved: true })
     // Dragging against either end of the track scrolls the window along.
@@ -448,6 +449,33 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     }
   }
 
+  /** A block the razor can cut: one that may be edited, whose session has a subject for the new half. */
+  const splittable = (block: Block) => movable(block) && Boolean(block.session?.subject_id)
+  /** Where a click without a pointer cuts: the current time if it is inside the block, else the middle. */
+  const splitPoint = (block: Block) => snap(isToday && now - block.start >= SNAP && block.end - now >= SNAP ? now : (block.start + block.end) / 2)
+
+  /** Razor: the session keeps the first part and a new session takes the rest (notes stay with the first). The new part is made first so a failure cannot lose study. */
+  async function split(block: Block, cut: number) {
+    const session = block.session
+    if (!session?.subject_id || !splittable(block) || busy) return
+    if (cut - block.start < SNAP || block.end - cut < SNAP) return void toast.error(`Cut at least ${SNAP} minutes from either end.`)
+    const rest = { title: session.title, subjectId: session.subject_id, start: isoAt(date, cut), end: isoAt(date, block.end) }
+    let created = false
+    setBusy(true)
+    try {
+      if (block.tone === "done") await onLog({ subjectId: rest.subjectId, title: rest.title, blocks: [{ start: rest.start, end: rest.end }] })
+      else await onPlan(rest)
+      created = true
+      await onEdit(session, { blocks: [{ start: isoAt(date, block.start), end: isoAt(date, cut) }] })
+      toast.success(`Split at ${clock(cut)}`)
+      setSelected(null)
+    } catch (failure) {
+      toast.error(`${created ? "The second part was added, but the first could not be shortened. " : ""}${failure instanceof Error ? failure.message : "Could not split that block."}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   // Study that has not finished cannot be done; otherwise a past block defaults to done and may be left undone.
   const done = draft ? draft.end <= now && (doneOverride ?? true) : false
   const draftColor = subjectColor(subjectId)
@@ -572,7 +600,12 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardDescription className="text-xs">Drag the track to {isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}</CardDescription>
+          <CardDescription className="text-xs">{razor ? "Click a study block to split it where you click" : `Drag the track to ${isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}`}</CardDescription>
+          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Tool">
+            <Button aria-pressed={!razor} onClick={() => setRazor(false)} size="icon-sm" title="Select (V)" variant={razor ? "ghost" : "secondary"}><MousePointer2 /><span className="sr-only">Select tool</span></Button>
+            <Button aria-pressed={razor} onClick={() => { setRazor(true); setDraft(null); setSelected(null) }} size="icon-sm" title="Razor: split a study block (C)" variant={razor ? "secondary" : "ghost"}><Scissors /><span className="sr-only">Razor tool</span></Button>
+          </div>
           <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Zoom">
             <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-sm" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
             <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-sm" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
@@ -580,6 +613,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             <Button disabled={view === null} onClick={() => setView(null)} size="sm" title="Fit the day's study" variant="ghost"><ZoomIn />Fit</Button>
             <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="sm" title="Show all 24 hours" variant="ghost"><Maximize2 />24h</Button>
             {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="sm" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
+          </div>
           </div>
         </div>
         <div className="relative select-none">
@@ -602,12 +636,13 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
           </div> : null}
           {/* Study lane: the drag target. */}
           <div
-            aria-keyshortcuts="+ - 0 PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
+            aria-keyshortcuts="+ - 0 C V PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
             style={{ height: studyRows.rows * 56 + 20 }}
             className="relative cursor-crosshair touch-none overflow-hidden rounded-xl border bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             tabIndex={0}
             onKeyDown={(event) => {
-              if (event.key === "Escape") { setDrag(null); setSelected(null) }
+              if (event.key === "Escape") { setDrag(null); setSelected(null); setRazor(false) }
+              else if (event.key === "c" || event.key === "v") setRazor(event.key === "c")
               else if (event.key === "+" || event.key === "=") zoomBy(0.5)
               else if (event.key === "-") zoomBy(2)
               else if (event.key === "0") setView(null)
@@ -631,21 +666,21 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                 <button
                   aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={selected === block.key}
-                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", selected === block.key && "ring-2 ring-ring ring-offset-2 ring-offset-card", grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", selected === block.key && "ring-2 ring-ring ring-offset-2 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
-                  onClick={() => select(block)}
-                  onDoubleClick={() => zoomTo(block)}
+                  onClick={(event) => razor ? split(block, event.detail ? minuteAt(event.clientX, false) : splitPoint(block)) : select(block)}
+                  onDoubleClick={() => { if (!razor) zoomTo(block) }}
                   onKeyDown={(event) => blockKey(event, block)}
                   style={{ ...place(block.start, block.end), top: 10 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
-                  {...(grab ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
+                  {...(grab && !razor ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
                   {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)}`}</span> : null}
-                  {grab && room >= 36 ? (["start", "end"] as const).map((kind) => (
-                    <span aria-hidden className={cn("absolute inset-y-0 flex w-2.5 cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} {...adjustProps(block, kind)}>
-                      <span className="h-4 w-0.5 rounded-full bg-current opacity-20 group-hover/block:opacity-60" />
+                  {grab && !razor ? (["start", "end"] as const).map((kind) => (
+                    <span aria-hidden className={cn("absolute inset-y-0 flex cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} style={{ width: "min(0.625rem, 34%)" }} {...adjustProps(block, kind)}>
+                      <span className="h-4 w-0.5 rounded-full bg-current opacity-50 group-hover/block:opacity-90" />
                     </span>
                   )) : null}
                 </button>
@@ -664,7 +699,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                 ))}
               </span>
             ) : null}
-            {hover !== null && !drag && !editing ? <span aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-foreground/30" style={{ left: left(hover) }} /> : null}
+            {hover !== null && !drag && !editing ? <span aria-hidden className={cn("pointer-events-none absolute inset-y-0", razor ? "w-0.5 bg-foreground/70" : "w-px bg-foreground/30")} style={{ left: left(hover) }} /> : null}
             {isToday && now >= from && now <= to ? (
               <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }}><span className="absolute -top-0 left-1/2 size-2 -translate-x-1/2 rounded-full bg-destructive" /></span>
             ) : null}
@@ -754,6 +789,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   {picked.session.completed ? <><RotateCcw />Not done</> : <><Check />Mark done</>}
                 </Button>
               ) : null}
+              {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="outline"><Scissors />Split</Button> : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
               {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="outline"><CalendarPlus />Repeat tomorrow</Button> : null}
               {picked.session ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.completed ? undefined : picked.session?.id)} size="xs" variant="outline"><Timer />{picked.session && isPaused(picked.session) ? "Resume" : picked.session && isRunning(picked.session) ? "Open timer" : picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}

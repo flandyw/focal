@@ -104,6 +104,7 @@ export function CalendarPage({
   onLogStudy,
   onRemoveSession,
   onEditSession,
+  onMergeSessions,
   onConvertSession,
 }: {
   data: DayPlanSource
@@ -122,6 +123,7 @@ export function CalendarPage({
   onRemoveSession: (session: CanonicalStudySession) => Promise<void>
   onConvertSession: (session: CanonicalStudySession, events: CalendarEvent[]) => Promise<void>
   onEditSession: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
+  onMergeSessions: (sessions: CanonicalStudySession[]) => Promise<void>
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
@@ -302,6 +304,7 @@ export function CalendarPage({
         onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
         onRemove={onRemoveSession}
         onEdit={onEditSession}
+        onMerge={onMergeSessions}
         onOpenSession={(session) => editSession(session.id)}
         onStartFocus={onStartFocus}
         sessions={sessions}

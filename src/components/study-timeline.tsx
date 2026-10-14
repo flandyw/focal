@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { CalendarPlus, Check, ChevronLeft, ChevronRight, Crosshair, Maximize2, MousePointer2, Minus, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, Crosshair, Maximize2, Merge, MousePointer2, Minus, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
@@ -120,7 +120,7 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onOpenSession, onStartFocus }: {
+export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onMerge, onOpenSession, onStartFocus }: {
   date: string
   nowMs: number
   onDateChange: (date: string) => void
@@ -134,6 +134,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   onRemove?: (session: CanonicalStudySession) => Promise<void>
   /** Moves or resizes a session's block, or marks it done or not done. */
   onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
+  onMerge: (sessions: CanonicalStudySession[]) => Promise<void>
   onOpenSession: (session: CanonicalStudySession) => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
 }) {
@@ -253,6 +254,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   const [hover, setHover] = useState<number | null>(null)
   const [razor, setRazor] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
+  const [selecting, setSelecting] = useState(false)
+  const [selectedSessions, setSelectedSessions] = useState<string[]>([])
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [doneOverride, setDoneOverride] = useState<boolean | null>(null)
   const [subjectId, setSubjectId] = useState("")
@@ -270,6 +273,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   function open(range: Range) {
+    if (busy) return
+    setSelecting(false)
+    setSelectedSessions([])
     const next = { start: clamp(range.start), end: clamp(Math.max(range.end, range.start + 5)) }
     setDraft(next)
     reveal(next)
@@ -310,7 +316,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || busy || razor) return
+    if (event.button !== 0 || busy || razor || selecting) return
     event.currentTarget.setPointerCapture(event.pointerId)
     const minute = minuteAt(event.clientX)
     setSelected(null)
@@ -408,7 +414,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   /** Arrow keys move a focused block by 5 minutes (15 with Shift); Alt resizes its end instead. */
   function nudge(event: ReactKeyboardEvent<HTMLElement>, block: Block) {
     const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
-    if (!direction || adjust || !movable(block)) return
+    if (!direction || adjust || busy || selecting || !movable(block)) return
     event.preventDefault()
     const delta = direction * (event.shiftKey ? 15 : SNAP)
     const range = event.altKey
@@ -422,6 +428,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
   /** Delete arms the remove confirmation for a focused session block; arrows nudge it. */
   function blockKey(event: ReactKeyboardEvent<HTMLElement>, block: Block) {
+    if (busy || selecting) return
     if ((event.key === "Delete" || event.key === "Backspace") && block.session && block.tone !== "live") {
       event.preventDefault()
       setSelected(block.key)
@@ -525,13 +532,50 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   function select(block: Block) {
+    if (busy) return
     if (suppressClick.current) { suppressClick.current = false; return }
+    if (selecting) {
+      const session = block.session
+      if (!session || session.kind !== "focus" || timing(session)) return
+      setSelectedSessions((current) => current.includes(session.id) ? current.filter((id) => id !== session.id) : [...current, session.id])
+      return
+    }
     setSelected((current) => current === block.key ? null : block.key)
     setConfirmRemove(false)
     setDraft(null)
   }
 
   const picked = blocks.find((block) => block.key === selected)
+  const mergeSessions = selectedSessions.flatMap((id) => sessions.find((session) => session.id === id) ?? [])
+  const mergeError = mergeSessions.length !== selectedSessions.length || mergeSessions.some((session) => session.cancelled_at !== null || timing(session) || session.kind !== "focus")
+    ? "A selected session changed. Select your sessions again."
+    : mergeSessions.some((session) => session.subject_id !== mergeSessions[0].subject_id || session.completed !== mergeSessions[0].completed)
+    ? "Select sessions with the same subject and done/planned status."
+    : null
+  const blockSelected = (block: Block) => selecting ? Boolean(block.session && selectedSessions.includes(block.session.id)) : selected === block.key
+
+  function selectionMode(enabled: boolean) {
+    setSelecting(enabled)
+    setSelectedSessions([])
+    setRazor(false)
+    setSelected(null)
+    setDraft(null)
+    setDrag(null)
+  }
+
+  async function merge() {
+    if (busy || adjust || mergeError || mergeSessions.length < 2) return
+    setBusy(true)
+    try {
+      await onMerge(mergeSessions)
+      toast.success(`Merged ${mergeSessions.length} sessions`)
+      selectionMode(false)
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not merge those sessions.")
+    } finally {
+      setBusy(false)
+    }
+  }
   const selection = drag ? { start: Math.min(drag.anchor, drag.current), end: Math.max(drag.anchor, drag.current) || drag.anchor + 30 } : draft
   const bubble = adjust?.moved
     ? { at: (adjust.range.start + adjust.range.end) / 2, text: `${clock(adjust.range.start)}–${clock(adjust.range.end)} · ${duration(adjust.range.end - adjust.range.start)}` }
@@ -600,11 +644,12 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardDescription className="text-xs">{razor ? "Click a study block to split it where you click" : `Drag the track to ${isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}`}</CardDescription>
+          <CardDescription className="text-xs">{selecting ? "Click study sessions to select them, then merge" : razor ? "Click a study block to split it where you click" : `Drag the track to ${isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}`}</CardDescription>
           <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Tool">
-            <Button aria-pressed={!razor} onClick={() => setRazor(false)} size="icon-sm" title="Select (V)" variant={razor ? "ghost" : "secondary"}><MousePointer2 /><span className="sr-only">Select tool</span></Button>
-            <Button aria-pressed={razor} onClick={() => { setRazor(true); setDraft(null); setSelected(null) }} size="icon-sm" title="Razor: split a study block (C)" variant={razor ? "secondary" : "ghost"}><Scissors /><span className="sr-only">Razor tool</span></Button>
+            <Button aria-pressed={!razor && !selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(false)} size="icon-sm" title="Select (V)" variant={razor || selecting ? "ghost" : "secondary"}><MousePointer2 /><span className="sr-only">Select tool</span></Button>
+            <Button aria-pressed={razor} disabled={busy || adjust !== null} onClick={() => { selectionMode(false); setRazor(true) }} size="icon-sm" title="Razor: split a study block (C)" variant={razor ? "secondary" : "ghost"}><Scissors /><span className="sr-only">Razor tool</span></Button>
+            <Button aria-pressed={selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(!selecting)} size="sm" title="Select sessions to merge" variant={selecting ? "secondary" : "ghost"}><CheckCheck />Select sessions</Button>
           </div>
           <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Zoom">
             <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-sm" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
@@ -622,7 +667,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             {context.filter(shown).map((block) => (
               <button
                 aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
-                aria-pressed={selected === block.key}
+                aria-pressed={blockSelected(block)}
                 className={cn("absolute h-[22px] min-w-0 truncate rounded-md text-left text-[0.6875rem] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-2" : "px-0", selected === block.key && "ring-2 ring-foreground/60")}
                 key={block.key}
                 onClick={() => select(block)}
@@ -641,8 +686,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             className="relative cursor-crosshair touch-none overflow-hidden rounded-xl border bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             tabIndex={0}
             onKeyDown={(event) => {
-              if (event.key === "Escape") { setDrag(null); setSelected(null); setRazor(false) }
-              else if (event.key === "c" || event.key === "v") setRazor(event.key === "c")
+              if (busy || adjust) return
+              if (event.key === "Escape") selectionMode(false)
+              else if (event.key === "c" || event.key === "v") { selectionMode(false); setRazor(event.key === "c") }
               else if (event.key === "+" || event.key === "=") zoomBy(0.5)
               else if (event.key === "-") zoomBy(2)
               else if (event.key === "0") setView(null)
@@ -661,15 +707,16 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             {study.filter(shown).map((live) => {
               const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
               const room = pixels(block)
-              const grab = movable(block)
+              const grab = movable(block) && !selecting && !busy
               return (
                 <button
                   aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
-                  aria-pressed={selected === block.key}
-                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", selected === block.key && "ring-2 ring-ring ring-offset-2 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  aria-pressed={blockSelected(block)}
+                  disabled={selecting && (block.session?.kind !== "focus" || timing(block.session))}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "ring-2 ring-ring ring-offset-2 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={(event) => razor ? split(block, event.detail ? minuteAt(event.clientX, false) : splitPoint(block)) : select(block)}
-                  onDoubleClick={() => { if (!razor) zoomTo(block) }}
+                  onDoubleClick={() => { if (!razor && !selecting) zoomTo(block) }}
                   onKeyDown={(event) => blockKey(event, block)}
                   style={{ ...place(block.start, block.end), top: 10 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
                   {...(grab && !razor ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
@@ -736,11 +783,12 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               const start = Math.min(...group.map((item) => item.start))
               const end = Math.max(...group.map((item) => item.end))
               const minutes = group.reduce((sum, item) => sum + item.end - item.start, 0)
-              const active = group.some((item) => selected === item.key)
+              const active = group.some(blockSelected)
               return (
               <li className="min-w-0" key={block.key}>
                 <button
                   aria-pressed={active}
+                  disabled={selecting && (!block.session || block.session.kind !== "focus" || timing(block.session))}
                   className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-muted/15 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring", active && "border-primary/50 bg-primary/5")}
                   onClick={() => select(block)}
                   type="button"
@@ -758,7 +806,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                     <ul className="mt-2 grid gap-1">
                       {group.map((item, index) => (
                         <li key={item.key}>
-                          <button aria-pressed={selected === item.key} className="w-full rounded px-2 py-1 text-left tabular-nums hover:bg-muted focus-visible:outline-ring" onClick={() => select(item)} type="button">
+                          <button aria-pressed={blockSelected(item)} disabled={selecting && (!item.session || item.session.kind !== "focus" || timing(item.session))} className="w-full rounded px-2 py-1 text-left tabular-nums hover:bg-muted focus-visible:outline-ring" onClick={() => select(item)} type="button">
                             {index + 1}. {clock(item.start)}–{clock(item.end)} · {duration(item.end - item.start)}
                           </button>
                         </li>
@@ -772,7 +820,18 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
           </ul>
         ) : null}
 
-        {picked ? (
+        {selecting ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected sessions">
+            <div className="min-w-0 flex-1" aria-live="polite">
+              <p className="text-sm font-medium">{selectedSessions.length} sessions selected</p>
+              <p className={cn("text-xs", mergeError ? "text-destructive" : "text-muted-foreground")}>{mergeError ?? "Merge whole sessions, keeping the first title, breaks, and notes. Overlapping time counts once."}</p>
+            </div>
+            <Button disabled={busy || adjust !== null || selectedSessions.length < 2 || Boolean(mergeError)} onClick={merge} size="sm"><Merge />{busy ? "Merging…" : "Merge"}</Button>
+            <Button disabled={busy} onClick={() => selectionMode(false)} size="sm" variant="outline">Cancel</Button>
+          </div>
+        ) : null}
+
+        {picked && !selecting ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected block">
             <span aria-hidden style={{ backgroundColor: picked.tone === "todo" ? undefined : picked.color, borderColor: picked.color }} className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
             <div className="min-w-0 flex-1">

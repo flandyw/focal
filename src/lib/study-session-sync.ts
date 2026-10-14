@@ -7,6 +7,7 @@ import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "./ong
 import { announce, backoffMs, classifyFailure, coalesced, onAnnounce, requestResult, transactionDone, withFlushLock } from "./outbox"
 import type { PastStudyLog } from "./pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
+import { sessionBlocks } from "./day-plan"
 import {
   estimateServerNow,
   isDeleted,
@@ -712,7 +713,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -968,7 +969,68 @@ export function useStudySessionSync(
       action: "cancel", app: "examtrack", device_id: deviceId() })
   }
 
-  return { sessions, queued, plan, edit, remove, log, control: async (session, action) => {
+  async function merge(chosen: CanonicalStudySession[]) {
+    const first = chosen[0]
+    const ids = new Set(chosen.map((session) => session.id))
+    if (chosen.length < 2 || chosen.length > 100 || ids.size !== chosen.length) throw new Error("Select 2–100 different sessions.")
+    if (chosen.some((session) => session.kind !== "focus" || isDeleted(session) || isRunning(session) || isPaused(session) ||
+      session.subject_id !== first.subject_id || session.completed !== first.completed)) {
+      throw new Error("Select stopped study sessions with the same subject and done/planned status.")
+    }
+    const current = userId && supabase ? [...canonicalSessions.current.values()] : guestPastStudy()
+    if (chosen.some((session) => current.find((row) => row.id === session.id)?.revision !== session.revision)) {
+      throw new Error("A selected session changed. Select your sessions again.")
+    }
+    const blocks: Block[] = []
+    for (const block of chosen.flatMap((session) => sessionBlocks(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))) {
+      if (!Number.isFinite(Date.parse(block.start)) || !Number.isFinite(Date.parse(block.end)) || Date.parse(block.end) <= Date.parse(block.start)) {
+        throw new Error("A selected session has invalid study times.")
+      }
+      const last = blocks.at(-1)
+      if (last && Date.parse(block.start) <= Date.parse(last.end)) {
+        if (Date.parse(block.end) > Date.parse(last.end)) last.end = block.end
+      } else blocks.push({ start: block.start, end: block.end })
+    }
+    const details = chosen.map((session) => ({ ...(isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : {}), ...session.metadata }))
+    const descriptions = details.flatMap((metadata) => typeof metadata.description === "string" && metadata.description.trim() ? [metadata.description.trim()] : [])
+    const notes = details.flatMap((metadata) => isRecord(metadata.reflection) && typeof metadata.reflection.notes === "string" && metadata.reflection.notes.trim() ? [metadata.reflection.notes.trim()] : [])
+    const metadata = {
+      ...first.metadata,
+      description: [...new Set(descriptions)].join("\n\n"),
+      topics: [...new Set(details.flatMap((metadata) => Array.isArray(metadata.topics) ? metadata.topics.filter((topic): topic is string => typeof topic === "string") : []))],
+      reflection: { ...(isRecord(details[0].reflection) ? details[0].reflection : {}), notes: [...new Set(notes)].join("\n\n") },
+      schedule: first.completed ? first.metadata.schedule : { blocks },
+      // ponytail: retain source details within the existing 60 KiB metadata ceiling; use separate history storage for larger groups.
+      merge_sources: chosen.map((session) => ({ id: session.id, title: session.title, metadata: session.metadata })),
+    }
+    const patch = { blocks, metadata }
+    const next = guestApply(first, patch)
+    if (!userId || !supabase) {
+      const merged = current.flatMap((session) => session.id === first.id ? [next] : ids.has(session.id) ? [] : [session])
+      saveGuest(merged)
+      acceptSessions(merged, true)
+      return
+    }
+    // ponytail: merging needs an online transaction; add a compound outbox command if offline merging becomes necessary.
+    if ((await readQueue(userId)).some((entry) => ids.has(entry.sessionId))) {
+      throw new Error("Wait for the selected sessions to sync before merging.")
+    }
+    const { data: result, error } = await supabase.rpc("study_session_merge", {
+      p_command: { mutation_id: crypto.randomUUID(), session_id: first.id, expected_revision: first.revision,
+        expected_user_id: userId, action: "save_progress", app: "examtrack", device_id: deviceId(), ...patch },
+      p_sources: chosen.map((session) => ({ id: session.id, revision: session.revision })),
+    })
+    if (error) throw new Error(error.message)
+    if (!isRecord(result) || !Array.isArray(result.sessions) || typeof result.server_now !== "string") throw new Error("Could not confirm the merge. Refresh before trying again.")
+    const merged = result.sessions.map(parseCanonicalStudySession)
+    if (merged.length !== chosen.length || merged.some((session) => !session)) throw new Error("Could not confirm the merge. Refresh before trying again.")
+    clockAnchor = observeServerClock(result.server_now, performance.now())
+    acceptSessions(merged as CanonicalStudySession[])
+    await cacheSessions(userId, [...canonicalSessions.current.values()])
+    announce()
+  }
+
+  return { sessions, queued, plan, edit, remove, merge, log, control: async (session, action) => {
     const current = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id)
     if (!current) throw new Error("This session no longer exists. Refresh and try again.")
     if ((action === "start" || action === "resume") && current.kind === "focus" &&

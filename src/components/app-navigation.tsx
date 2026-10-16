@@ -101,6 +101,9 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
   syncing: "Syncing…",
   pending: "Changes queued to sync",
   error: "Sync failed. Retry from settings",
+  restoring: "Restoring your account…",
+  reconnecting: "Reconnecting. Changes stay on this device",
+  "sign-in-required": "Session ended. Sign in again to sync",
   "signed-out": "Not signed in. Stored on this device",
   unconfigured: "Cloud sync is not configured. Stored on this device",
 }
@@ -114,8 +117,8 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
       className={cn(
         "size-2 shrink-0 rounded-full bg-muted-foreground/40",
         status === "synced" && "bg-primary",
-        status === "error" && "bg-destructive",
-        (status === "syncing" || status === "pending") && "animate-pulse bg-primary",
+        (status === "error" || status === "sign-in-required") && "bg-destructive",
+        (status === "syncing" || status === "pending" || status === "restoring" || status === "reconnecting") && "animate-pulse bg-primary",
       )}
     />
   )
@@ -158,7 +161,8 @@ export function AppSidebar({
   const [commandLoaded, setCommandLoaded] = useState(false)
   if (commandOpen && !commandLoaded) setCommandLoaded(true)
   const accountLabel = user?.email || "Account"
-  const accountStatus = user ? "Signed in" : "Not signed in"
+  const accountStatus = syncStatus === "sign-in-required" ? "Sign in again" : syncStatus === "restoring" ? "Restoring account…"
+    : syncStatus === "reconnecting" ? "Reconnecting…" : user ? "Signed in" : "Not signed in"
   const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
 
   function navigate(nextView: AppView) {
@@ -263,6 +267,7 @@ export function AppSidebar({
                   <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>
                     Settings
                   </DropdownMenuItem>
+                  {user && syncStatus === "sign-in-required" ? <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in again</DropdownMenuItem> : null}
                   {user
                     ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}>Sign out</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in</DropdownMenuItem>}

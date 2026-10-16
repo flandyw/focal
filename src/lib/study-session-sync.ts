@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import type { AppData } from "./exam-data"
 import { toast } from "sonner"
 import { saveAppData } from "./storage"
-import { supabase } from "./supabase"
+import { supabase, withSupabaseSession } from "./supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "./ongoing-timers"
 import { announce, backoffMs, classifyFailure, coalesced, onAnnounce, requestResult, transactionDone, withFlushLock } from "./outbox"
 import type { PastStudyLog } from "./pastStudy"
@@ -429,9 +429,9 @@ async function deliver(accountId: string, scanned: Queued, soonest: (at: number)
   let error: { message: string; code?: string } | null = null
   let status = 0
   try {
-    ({ data, error, status } = await supabase!.rpc("study_session_mutate", { p_command: { ...command, expected_user_id: accountId } }))
+    ({ data, error, status } = await withSupabaseSession(accountId, () => supabase!.rpc("study_session_mutate", { p_command: { ...command, expected_user_id: accountId } })))
   } catch (thrown) {
-    error = { message: String(thrown) }
+    error = { message: String(thrown), code: isRecord(thrown) && typeof thrown.code === "string" ? thrown.code : undefined }
   }
   const result = error ? null : parseStudySessionMutationResult(data)
   if (error || !result) {
@@ -804,10 +804,11 @@ export function useStudySessionSync(
       try {
         let cursor = (await readSyncMeta(userId)).cursor
         for (;;) {
-          const { data: raw, error } = await supabase!.rpc("sync_read_changes", {
+          const { data: raw, error } = await withSupabaseSession(userId, () => supabase!.rpc("sync_read_changes", {
             p_after: readCursorFor(cursor, canonicalSessions.current.size, readWholeState.current),
             p_limit: 1000, p_expected_user_id: userId,
-          })
+          }))
+          if (cancelled) return
           if (error) throw error
           if (!isRecord(raw) || typeof raw.head !== "number" || typeof raw.server_now !== "string") throw new Error("Malformed sync_read_changes response")
           if (raw.mode !== "snapshot" && raw.mode !== "changes") throw new Error("Malformed sync_read_changes mode")
@@ -1015,11 +1016,11 @@ export function useStudySessionSync(
     if ((await readQueue(userId)).some((entry) => ids.has(entry.sessionId))) {
       throw new Error("Wait for the selected sessions to sync before merging.")
     }
-    const { data: result, error } = await supabase.rpc("study_session_merge", {
+    const { data: result, error } = await withSupabaseSession(userId, () => supabase!.rpc("study_session_merge", {
       p_command: { mutation_id: crypto.randomUUID(), session_id: first.id, expected_revision: first.revision,
         expected_user_id: userId, action: "save_progress", app: "examtrack", device_id: deviceId(), ...patch },
       p_sources: chosen.map((session) => ({ id: session.id, revision: session.revision })),
-    })
+    }))
     if (error) throw new Error(error.message)
     if (!isRecord(result) || !Array.isArray(result.sessions) || typeof result.server_now !== "string") throw new Error("Could not confirm the merge. Refresh before trying again.")
     const merged = result.sessions.map(parseCanonicalStudySession)

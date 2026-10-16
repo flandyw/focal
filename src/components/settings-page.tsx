@@ -52,7 +52,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   onImport: (file: File) => Promise<void>
 }) {
   const auth = useChatGPT()
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(sync.user?.email ?? "")
   const [password, setPassword] = useState("")
   const [accountLoading, setAccountLoading] = useState(false)
   const [accountMessage, setAccountMessage] = useState<string | null>(null)
@@ -63,7 +63,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const [subjectToAdd, setSubjectToAdd] = useState("")
   const [customSubject, setCustomSubject] = useState("")
   const [providerToAdd, setProviderToAdd] = useState("")
-  const [section, setSection] = useState<string>("subjects")
+  const [section, setSection] = useState<string>(sync.status === "signed-out" || sync.status === "sign-in-required" ? "account" : "subjects")
   const importInput = useRef<HTMLInputElement>(null)
   const difficulty = resolveDifficultySettings(examDifficulty)
 
@@ -245,13 +245,15 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <Section
               title="Account"
               description="Sign in to sync exams, SACs, and mistakes across devices."
-              action={sync.user ? <Badge variant="secondary"><Cloud />{sync.status === "syncing" ? "Syncing" : sync.status === "error" ? "Sync failed" : "Synced"}</Badge> : null}
+              action={sync.user ? <Badge variant="secondary"><Cloud />{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
+                : sync.status === "sign-in-required" ? "Sign in again" : sync.status === "reconnecting" || sync.status === "restoring" ? "Reconnecting"
+                : sync.status === "pending" ? `${sync.pendingCount} queued` : "Sync failed"}</Badge> : null}
             >
               {!sync.configured ? (
                 <p className="py-4 text-sm text-muted-foreground">Add the Supabase URL and publishable key to enable account sync.</p>
-              ) : sync.user ? (
+              ) : sync.user && sync.status !== "sign-in-required" ? (
                 <Row title={sync.user.email ?? "Signed in"} description="Local changes continue saving if sync is temporarily unavailable.">
-                  <Button variant="outline" onClick={() => void sync.signOut()}><LogOut />Sign out</Button>
+                  <Button variant="outline" onClick={() => { void sync.signOut().catch(() => setAccountMessage("Could not sign out. Try again.")) }}><LogOut />Sign out</Button>
                 </Row>
               ) : (
                 <form className="grid max-w-md gap-3 py-4" onSubmit={async (event) => {
@@ -260,14 +262,17 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   setAccountMessage(null)
                   try {
                     await sync.signIn(email, password)
+                    setPassword("")
                   } catch (error) {
                     setAccountMessage(error instanceof Error ? error.message : "Could not sign in.")
                   } finally {
                     setAccountLoading(false)
                   }
                 }}>
+                  {sync.status === "sign-in-required" ? <p role="status" className="text-sm text-destructive">Your session ended. Sign in again to resume sync. Saved work and queued changes are kept on this device.</p>
+                    : sync.status === "restoring" || sync.status === "reconnecting" ? <p role="status" className="text-sm text-muted-foreground">Reconnecting to your saved account. Changes stay on this device.</p> : null}
                   <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" aria-label="Email address" required />
-                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" aria-label="Password" minLength={8} required />
+                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" aria-label="Password" required />
                   <div className="flex gap-2">
                     <Button type="submit" disabled={accountLoading}><Cloud />Sign in</Button>
                     <Button type="button" variant="outline" disabled={accountLoading} onClick={async (event) => {

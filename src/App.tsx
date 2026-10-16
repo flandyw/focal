@@ -19,6 +19,9 @@ import {
   EMPTY_APP_DATA,
   getDueMistakes,
   recordMistakeReview,
+  reduceMistakeReviews,
+  mistakeReviewDayStart,
+  normalizeMistakeReviewPreferences,
   type ReviewRating,
   removeAttempt,
   type AppData,
@@ -126,9 +129,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     : sync.status === "syncing" || sync.status === "synced" ? "Saving to your account. Wait for confirmation before switching devices."
     : sync.status === "error" ? "Saved on this device. Cloud sync failed; reconnect before switching devices."
     : sync.status === "unconfigured" ? "Saved on this device. Cloud sync is not configured."
+    : sync.status === "restoring" || sync.status === "reconnecting" ? "Saved on this device. Reconnecting to your account."
     : "Saved on this device. Sign in to save across devices."
   const examSyncAction = sync.status === "error" ? { label: "Retry sync", onClick: sync.retry }
-    : sync.status === "signed-out" ? { label: "Sign in", onClick: () => setView("settings") } : undefined
+    : sync.status === "signed-out" || sync.status === "sign-in-required" ? { label: "Sign in", onClick: () => setView("settings") } : undefined
   const {
     references,
     referencesGeneratedAt,
@@ -504,7 +508,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   function reviewMistake(mistake: Mistake, rating: ReviewRating) {
     setData((current) => ({
       ...current,
-      mistakes: current.mistakes.map((item) => item.id === mistake.id ? recordMistakeReview(item, rating) : item),
+      mistakes: current.mistakes.map((item) => item.id === mistake.id ? recordMistakeReview(item, rating, new Date().toISOString(), current.mistakeReviewPreferences, current.mistakes) : item),
     }))
     toast.success(`${rating[0].toUpperCase()}${rating.slice(1)} recorded`)
   }
@@ -623,6 +627,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" className="w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
+          {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+            <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
+            <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>
+          </div> : null}
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
@@ -695,7 +703,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage embedded={embedded} subjects={[...new Set(references.map((reference) => reference.studyName))]} preferredSubjects={data.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "stoplight" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StoplightPage data={data} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onApplyLinks={applyLinks} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={data} references={references} subjects={[...new Set(references.map((reference) => reference.studyName))]} onChange={saveLearning} onPlanGoal={planGoal} /></Suspense> : null}
-          {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
+          {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
+            setData((current) => {
+              const now = Date.now()
+              const changes = reduceMistakeReviews(current.mistakes, days, target, now)
+              return { ...current, mistakeReviewPreferences: { ...normalizeMistakeReviewPreferences(current.mistakeReviewPreferences), lighterUntil: new Date(mistakeReviewDayStart(now, days)).toISOString(), lighterDailyTarget: target, updatedAt: new Date(now).toISOString() }, mistakes: current.mistakes.map((m) => changes.has(m.id) ? { ...m, dueAt: changes.get(m.id)!, updatedAt: new Date(now).toISOString() } : m) }
+            })
+            toast.success("Lighter review period started")
+          }} data={data} studies={resourceStudies} onLog={() => openNewMistake()} onEdit={(mistake) => { setEditingMistake(mistake); setMistakeOpen(true) }} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights }))} onSaveAlternativeDeck={(alternativeMistakeDeck) => setData((current) => ({ ...current, alternativeMistakeDeck }))} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={data.sacRecords} subjects={references.map((reference) => reference.studyName)} preferredSubjects={data.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
           {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={data.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={data} references={references} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}

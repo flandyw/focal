@@ -210,6 +210,7 @@ export type AppData = {
   mistakeInsights?: MistakeInsights
   alternativeMistakeDeck?: AlternativeMistakeDeck
   examDifficulty?: ExamDifficultySettings
+  mistakeReviewPreferences?: MistakeReviewPreferences
   atarEstimates: SavedAtarEstimate[]
   atarEstimatesUpdatedAt: string
   learning: LearningWorkspace
@@ -237,9 +238,83 @@ export const EMPTY_APP_DATA: AppData = {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const MINUTE_MS = 60 * 1000
 const DEFAULT_EASE_FACTOR = 2.5
 const MINIMUM_EASE_FACTOR = 1.3
+
+export type MistakeReviewPreferences = {
+  spacingMultiplier: number
+  retryHours: number
+  maximumIntervalDays: number
+  lighterUntil?: string
+  lighterDailyTarget: number
+  updatedAt: string
+}
+
+export function normalizeMistakeReviewPreferences(value?: Partial<MistakeReviewPreferences> | null): MistakeReviewPreferences {
+  const clamp = (n: unknown, fallback: number, min: number, max: number) =>
+    typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback
+  return {
+    spacingMultiplier: clamp(value?.spacingMultiplier, 1.5, 0.5, 3),
+    retryHours: clamp(value?.retryHours, 24, 1 / 6, 168),
+    maximumIntervalDays: Math.round(clamp(value?.maximumIntervalDays, 180, 7, 365)),
+    lighterUntil: typeof value?.lighterUntil === "string" && Number.isFinite(Date.parse(value.lighterUntil)) ? value.lighterUntil : undefined,
+    lighterDailyTarget: Math.round(clamp(value?.lighterDailyTarget, 5, 0, 100)),
+    updatedAt: typeof value?.updatedAt === "string" && Number.isFinite(Date.parse(value.updatedAt)) ? value.updatedAt : "1970-01-01T00:00:00.000Z",
+  }
+}
+
+export function mistakeReviewDayStart(now: number, days = 0): number {
+  const date = new Date(now)
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() + days)
+  return date.getTime()
+}
+
+function reviewDaySlot(due: number, now: number): number {
+  const ordinal = (time: number) => { const d = new Date(time); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / DAY_MS }
+  return Math.max(0, ordinal(due) - ordinal(now))
+}
+
+function pacedMistakeDueAt(id: string, due: number, settings: MistakeReviewPreferences, mistakes: Mistake[], now: number): string {
+  const until = settings.lighterUntil ? Date.parse(settings.lighterUntil) : 0
+  if (until <= now || due >= until) return new Date(due).toISOString()
+  const occupied = new Map<number, number>()
+  for (const m of mistakes.filter((m) => !m.suspended && m.id !== id)) {
+    const slot = reviewDaySlot(Date.parse(getMistakeSchedule(m).dueAt), now)
+    occupied.set(slot, (occupied.get(slot) ?? 0) + 1)
+  }
+  let slot = reviewDaySlot(due, now)
+  if (settings.lighterDailyTarget === 0) slot = Math.max(slot, reviewDaySlot(until, now))
+  const capacity = settings.lighterDailyTarget === 0 ? 10 : settings.lighterDailyTarget
+  while ((occupied.get(slot) ?? 0) >= capacity) slot++
+  return new Date(Math.max(due, mistakeReviewDayStart(now, slot))).toISOString()
+}
+
+/** Postpone only. Existing future bookings count towards overflow capacity. */
+export function reduceMistakeReviews(mistakes: Mistake[], days: number, dailyTarget: number, now = Date.now()): Map<string, string> {
+  if (!Number.isInteger(days) || days < 1 || days > 90 || !Number.isInteger(dailyTarget) || dailyTarget < 0 || dailyTarget > 100) throw new Error("Invalid review reduction")
+  const horizon = mistakeReviewDayStart(now, days)
+  const active = mistakes.filter((m) => !m.suspended)
+  const due = (m: Mistake) => Date.parse(getMistakeSchedule(m).dueAt)
+  const selected = active.filter((m) => due(m) < horizon).toSorted((a, b) => due(a) - due(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const occupied = new Map<number, number>()
+  for (const m of active.filter((m) => due(m) >= horizon)) {
+    const day = reviewDaySlot(due(m), now)
+    occupied.set(day, (occupied.get(day) ?? 0) + 1)
+  }
+  const changes = new Map<string, string>()
+  let slot = 0
+  for (const m of selected) {
+    slot = Math.max(slot, reviewDaySlot(due(m), now))
+    if (dailyTarget === 0) slot = Math.max(slot, days)
+    const capacity = dailyTarget === 0 ? 10 : dailyTarget
+    while ((occupied.get(slot) ?? 0) >= capacity) slot++
+    occupied.set(slot, (occupied.get(slot) ?? 0) + 1)
+    const next = slot === 0 ? due(m) : Math.max(due(m), mistakeReviewDayStart(now, slot))
+    if (next > due(m)) changes.set(m.id, new Date(next).toISOString())
+  }
+  return changes
+}
 
 export type MistakeSchedule = {
   state: MistakeReviewState
@@ -317,13 +392,15 @@ export function previewMistakeReview(
   mistake: Mistake,
   result: ReviewResult,
   completedAt = new Date().toISOString(),
+  preferences?: MistakeReviewPreferences,
+  mistakes: Mistake[] = [],
 ): MistakeReviewPreview {
   const rating = normalizeReviewRating(result)
   const current = getMistakeSchedule(mistake)
+  const settings = normalizeMistakeReviewPreferences(preferences)
   let state: MistakeReviewState
   let intervalDays: number
   let easeFactor = current.easeFactor
-  let dueDelay = 0
   let repetitions = current.repetitions
   let lapses = current.lapses
 
@@ -331,7 +408,6 @@ export function previewMistakeReview(
     state = current.state === "new" || current.state === "learning" ? "learning" : "relearning"
     intervalDays = current.state === "review" ? Math.max(1, Math.round(current.intervalDays * 0.5)) : current.intervalDays
     easeFactor = Math.max(MINIMUM_EASE_FACTOR, easeFactor - 0.2)
-    dueDelay = 10 * MINUTE_MS
     lapses += 1
   } else if (rating === "hard") {
     state = current.state === "new" || current.state === "learning"
@@ -341,7 +417,6 @@ export function previewMistakeReview(
         : "review"
     intervalDays = state === "learning" || state === "relearning" ? 1 : Math.max(1, Math.round(Math.max(1, current.intervalDays) * 1.2))
     easeFactor = Math.max(MINIMUM_EASE_FACTOR, easeFactor - 0.15)
-    dueDelay = intervalDays * DAY_MS
     repetitions += 1
   } else if (rating === "good") {
     state = "review"
@@ -350,7 +425,6 @@ export function previewMistakeReview(
       : current.state === "relearning"
         ? Math.max(2, current.intervalDays)
         : Math.max(current.intervalDays + 1, Math.round(Math.max(1, current.intervalDays) * easeFactor))
-    dueDelay = intervalDays * DAY_MS
     repetitions += 1
   } else {
     state = "review"
@@ -358,14 +432,18 @@ export function previewMistakeReview(
       ? 7
       : Math.max(7, Math.round(Math.max(1, current.intervalDays) * easeFactor * 1.3))
     easeFactor += 0.15
-    dueDelay = intervalDays * DAY_MS
     repetitions += 1
   }
+
+  const elapsed = mistake.lastReviewedAt ? Math.max(0, Date.parse(completedAt) - Date.parse(mistake.lastReviewedAt)) / DAY_MS : 0
+  if (rating === "good" || rating === "easy")
+    intervalDays = Math.round(intervalDays * settings.spacingMultiplier + Math.max(0, elapsed - current.intervalDays) * 0.25)
+  intervalDays = rating === "again" ? settings.retryHours / 24 : Math.min(settings.maximumIntervalDays, Math.max(1, intervalDays))
 
   return {
     rating,
     state,
-    dueAt: new Date(new Date(completedAt).getTime() + dueDelay).toISOString(),
+    dueAt: pacedMistakeDueAt(mistake.id, Date.parse(completedAt) + intervalDays * DAY_MS, settings, mistakes, Date.parse(completedAt)),
     intervalDays,
     easeFactor: Math.round(easeFactor * 100) / 100,
     repetitions,
@@ -378,8 +456,10 @@ export function recordMistakeReview(
   mistake: Mistake,
   result: ReviewResult,
   completedAt = new Date().toISOString(),
+  preferences?: MistakeReviewPreferences,
+  mistakes: Mistake[] = [],
 ): Mistake {
-  const next = previewMistakeReview(mistake, result, completedAt)
+  const next = previewMistakeReview(mistake, result, completedAt, preferences, mistakes)
   const history = [...(mistake.reviewHistory ?? []), {
     id: crypto.randomUUID(),
     completedAt,
@@ -1052,6 +1132,7 @@ export function migrateAppData(value: unknown): AppData | null {
     sacRecordsUpdatedAt: typeof data.sacRecordsUpdatedAt === "string" ? data.sacRecordsUpdatedAt : "1970-01-01T00:00:00.000Z",
     atarEstimates: Array.isArray(data.atarEstimates) ? data.atarEstimates : [],
     atarEstimatesUpdatedAt: typeof data.atarEstimatesUpdatedAt === "string" ? data.atarEstimatesUpdatedAt : "1970-01-01T00:00:00.000Z",
+    mistakeReviewPreferences: data.mistakeReviewPreferences && typeof data.mistakeReviewPreferences === "object" ? normalizeMistakeReviewPreferences(data.mistakeReviewPreferences as Partial<MistakeReviewPreferences>) : undefined,
     learning: migrateLearningWorkspace(data.learning),
     events: migrateCalendarEvents(data.events),
     classTimetable: isTimetableConfig(data.classTimetable) ? data.classTimetable : undefined,

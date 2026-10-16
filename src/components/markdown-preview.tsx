@@ -18,6 +18,11 @@ const components: Components = {
   },
 }
 
+// Raw HTML is not rendered, so fence any bare <svg> (e.g. pasted outside a ```svg block) to draw it as a diagram.
+function fenceBareSvg(source: string) {
+  return source.split(/(```[\s\S]*?```)/).map((part, i) => i % 2 ? part : part.replace(/<svg[\s>][\s\S]*?<\/svg>/gi, "\n\n```svg\n$&\n```\n\n")).join("")
+}
+
 // Inline previews must contain phrasing content, including lists and fenced maths.
 function inlineContent() {
   return (tree: Root) => {
@@ -53,7 +58,7 @@ export const MarkdownPreview = memo(function MarkdownPreview({ children, inline 
   return (
     <Wrapper className={cn("typeset", inline ? "typeset-inline" : "typeset-mistake", !inline && !unframed && "rounded-lg border p-3", className)}>
       <ReactMarkdown components={components} remarkPlugins={remarkPlugins} rehypePlugins={inline ? [inlineContent, [rehypeKatex, katexOptions]] : [[rehypeKatex, katexOptions]]}>
-        {children || (inline ? "" : "Preview appears here.")}
+        {fenceBareSvg(children) || (inline ? "" : "Preview appears here.")}
       </ReactMarkdown>
     </Wrapper>
   )

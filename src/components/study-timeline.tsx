@@ -546,7 +546,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   const picked = blocks.find((block) => block.key === selected)
-  const mergeSessions = selectedSessions.flatMap((id) => sessions.find((session) => session.id === id) ?? [])
+  // The earliest session is kept, whatever order they were picked in, matching Folio.
+  const startOf = (session: CanonicalStudySession) => Math.min(...sessionBlocks(session, nowMs).map((block) => Date.parse(block.start)))
+  const mergeSessions = selectedSessions.flatMap((id) => sessions.find((session) => session.id === id) ?? []).toSorted((a, b) => startOf(a) - startOf(b))
   const mergeError = mergeSessions.length !== selectedSessions.length || mergeSessions.some((session) => session.cancelled_at !== null || timing(session) || session.kind !== "focus")
     ? "A selected session changed. Select your sessions again."
     : mergeSessions.some((session) => session.subject_id !== mergeSessions[0].subject_id || session.completed !== mergeSessions[0].completed)
@@ -824,7 +826,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
           <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected sessions">
             <div className="min-w-0 flex-1" aria-live="polite">
               <p className="text-sm font-medium">{selectedSessions.length} sessions selected</p>
-              <p className={cn("text-xs", mergeError ? "text-destructive" : "text-muted-foreground")}>{mergeError ?? "Merge whole sessions, keeping the first title, breaks, and notes. Overlapping time counts once."}</p>
+              <p className={cn("text-xs", mergeError ? "text-destructive" : "text-muted-foreground")}>{mergeError ?? "Merge whole sessions, keeping the earliest session's title and every break and note. Overlapping time counts once."}</p>
             </div>
             <Button disabled={busy || adjust !== null || selectedSessions.length < 2 || Boolean(mergeError)} onClick={merge} size="sm"><Merge />{busy ? "Merging…" : "Merge"}</Button>
             <Button disabled={busy} onClick={() => selectionMode(false)} size="sm" variant="outline">Cancel</Button>

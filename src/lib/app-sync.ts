@@ -1,11 +1,11 @@
 import type { AppData } from "./exam-data"
-import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
+import { EMPTY_APP_DATA, normalizeMistakeReviewPreferences, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
 import { isExamDifficultySettings } from "./exam-difficulty"
 import { isExamProgression } from "./exam-progression"
 import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
 import { migrateSacRecords } from "./sac"
 import { announce, classifyFailure, requestResult, transactionDone, withFlushLock } from "./outbox"
-import { supabase } from "./supabase"
+import { supabase, withSupabaseSession } from "./supabase"
 
 const DB_NAME = "examtrack-app-sync"
 const DB_VERSION = 1
@@ -38,7 +38,7 @@ type PendingRow = AppRow & {
 }
 type AccountMeta = { key: string; accountId: string; cursor: number; head: number; lamport: number; bootstrapped: boolean; feedVersion?: number }
 // Bump when APP_ENTITIES grows: rows of a newly understood entity were skipped by earlier cursors.
-const FEED_VERSION = 2
+const FEED_VERSION = 3
 type OwnerMeta = { key: string; accountId: string }
 type VersionedChange = {
   seq: number; change_id: string; client_id: string; entity: string; row_id: string
@@ -113,6 +113,7 @@ function rowsFromAppData(data: AppData): AppRow[] {
     ["sacRecords", data.sacRecords, data.sacRecordsUpdatedAt],
     ["mistakeInsights", data.mistakeInsights, data.mistakeInsights?.questionsGeneratedAt ?? data.mistakeInsights?.generatedAt ?? EPOCH],
     ["alternativeMistakeDeck", data.alternativeMistakeDeck, data.alternativeMistakeDeck?.updatedAt ?? EPOCH],
+    ["mistakeReviewPreferences", data.mistakeReviewPreferences, data.mistakeReviewPreferences?.updatedAt ?? EPOCH],
     ["examDifficulty", data.examDifficulty, data.examDifficulty?.updatedAt ?? EPOCH],
     ["atarEstimates", data.atarEstimates, data.atarEstimatesUpdatedAt],
     ["learning", data.learning, data.learning.updatedAt],
@@ -233,9 +234,9 @@ async function pull(userId: string): Promise<void> {
   }
   let cursor = meta.cursor
   for (let pageNumber = 0; pageNumber < 100; pageNumber++) {
-    const { data, error } = await supabase.rpc("sync_read_changes", {
+    const { data, error } = await withSupabaseSession(userId, () => supabase!.rpc("sync_read_changes", {
       p_after: cursor, p_limit: 500, p_expected_user_id: userId,
-    })
+    }))
     if (error) throw error
     if (!isRecord(data) || !Array.isArray(data.rows) || typeof data.head !== "number" || (data.mode !== "changes" && data.mode !== "snapshot"))
       throw new Error("Malformed sync_read_changes response")
@@ -395,13 +396,13 @@ async function flush(changes: PendingRow[], accountId: string, deviceId: string)
   const store = transaction.objectStore(OUTBOX)
   for (const change of changes) if (!change.attempted) store.put({ ...change, attempted: true })
   await transactionDone(transaction)
-  const { data, error, status } = await supabase.rpc("sync_apply_changes", {
+  const { data, error, status } = await withSupabaseSession(accountId, () => supabase!.rpc("sync_apply_changes", {
     p_expected_user_id: accountId,
     p_changes: changes.map((change) => ({
       change_id: change.changeId, client_id: deviceId, entity: change.entity, row_id: change.rowId,
       operation: change.operation, payload: change.payload, expected_seq: change.expectedSeq,
     })),
-  })
+  }))
   if (error) {
     // Network, server or auth trouble: nothing is wrong with the changes, so all of them wait.
     if (classifyFailure(status, error) !== "reject") throw error
@@ -648,6 +649,7 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
     sacRecords, sacRecordsUpdatedAt: stamp("sacRecords"),
     mistakeInsights: remoteInsights,
     alternativeMistakeDeck: remoteDeck,
+    mistakeReviewPreferences: isRecord(value("mistakeReviewPreferences")) ? normalizeMistakeReviewPreferences(value("mistakeReviewPreferences") as Partial<NonNullable<AppData["mistakeReviewPreferences"]>>) : undefined,
     examDifficulty: isExamDifficultySettings(remoteDifficulty) ? remoteDifficulty : undefined,
     atarEstimates: remoteAtarEstimates, atarEstimatesUpdatedAt: stamp("atarEstimates"),
     learning: migrateLearningWorkspace(value("learning")),

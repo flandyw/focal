@@ -27,7 +27,7 @@ export function transactionDone(transaction: IDBTransaction): Promise<void> {
 export type Failure = "retry" | "hold" | "reject"
 
 export function classifyFailure(status: number | undefined, error: { code?: string }): Failure {
-  if (status === 401 || error.code === "28000" || error.code === "42501" || error.code === "PGRST301") return "hold"
+  if (status === 401 || error.code === "28000" || error.code === "42501" || error.code === "PGRST301" || error.code === "PGRST303") return "hold"
   return status === 400 || status === 409 || status === 413 || status === 422 ? "reject" : "retry"
 }
 

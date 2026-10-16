@@ -11,7 +11,7 @@ function ownerBackupKey(owner: string) {
   return `examtrack:sync:owner-backup:v1:${owner}`
 }
 
-export type SyncStatus = "unconfigured" | "signed-out" | "syncing" | "synced" | "pending" | "error"
+export type SyncStatus = "unconfigured" | "restoring" | "reconnecting" | "sign-in-required" | "signed-out" | "syncing" | "synced" | "pending" | "error"
 
 /** Folio reviews change scheduling payloads without changing collection IDs or counts. */
 function equalAppData(first: AppData, second: AppData) {
@@ -25,7 +25,8 @@ function isSupersededSync(startedFrom: AppData, queuedLatest: AppData): boolean 
 
 export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<AppData>>) {
   const [user, setUser] = useState<User | null>(null)
-  const [status, setStatus] = useState<SyncStatus>(supabase ? "signed-out" : "unconfigured")
+  const [status, setStatus] = useState<SyncStatus>(supabase ? "restoring" : "unconfigured")
+  const [accountStatus, setAccountStatus] = useState<"restoring" | "connected" | "reconnecting" | "sign-in-required" | "signed-out">("restoring")
   const [pendingCount, setPendingCount] = useState(0)
   const previous = useRef(data)
   // previous only advances once the change is durably queued, which is async. A
@@ -38,11 +39,16 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   const queueFailed = useRef(false)
   const syncTask = useRef<Promise<unknown>>(Promise.resolve())
   const [refresh, setRefresh] = useState(0)
+  const recoverAuth = useRef<() => Promise<void>>(async () => {})
+  const signingOut = useRef(false)
 
   useEffect(() => {
-    if (!user) return
+    if (!supabase) return
     const refreshSync = () => {
-      if (document.visibilityState !== "hidden") setRefresh((value) => value + 1)
+      if (document.visibilityState !== "hidden") {
+        void recoverAuth.current()
+        setRefresh((value) => value + 1)
+      }
     }
     window.addEventListener("online", refreshSync)
     window.addEventListener("focus", refreshSync)
@@ -86,16 +92,16 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   }, [data, refresh, user])
 
   useEffect(() => {
-    if (!supabase || !user) return
+    if (!supabase || !user || accountStatus !== "connected") return
     let cancelled = false
     const task = syncTask.current.catch(() => {}).then(async () => {
       await queueTask.current
       if (queueFailed.current) throw new Error("Local sync changes could not be saved")
-      if (cancelled) return null
+      if (cancelled || activeAccount.current !== user.id) return null
       setStatus("syncing")
       const merged = await syncAppData(data, user.id)
       const health = await appSyncHealth(user.id)
-      if (cancelled) return null
+      if (cancelled || activeAccount.current !== user.id) return null
       setPendingCount(health.pending)
       setStatus(health.pending || health.cursor < health.head ? "pending" : "synced")
       if (isSupersededSync(data, latest.current)) return null
@@ -111,15 +117,18 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       void appSyncHealth(user.id).then((health) => setPendingCount(health.pending)).catch(() => {})
     })
     return () => { cancelled = true }
-  }, [data, refresh, setData, user])
+  }, [accountStatus, data, refresh, setData, user])
 
   useEffect(() => {
     if (!supabase) return
+    const client = supabase
     let accountEpoch = 0
+    let connected = false
+    let disposed = false
     const acceptUser = (current: User | null) => {
       const epoch = ++accountEpoch
       activeAccount.current = current?.id ?? null
-      if (!current) { setUser(null); return }
+      if (!current) { setUser(null); setPendingCount(0); setAccountStatus("signed-out"); return }
       void (async () => {
         const localOwner = localStorage.getItem(OWNER_KEY)
         const priorOwner = await associateAppSyncAccount(current.id, localOwner)
@@ -137,6 +146,10 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
         localStorage.setItem(OWNER_KEY, current.id)
         void appSyncHealth(current.id).then((health) => setPendingCount(health.pending)).catch(() => {})
         setUser(current)
+        connected = true
+        setAccountStatus("connected")
+        setStatus("syncing")
+        setRefresh((value) => value + 1)
       })().catch((error: unknown) => {
         if (epoch === accountEpoch) {
           console.error("Could not associate Focal sync data with this account:", error)
@@ -144,22 +157,54 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
         }
       })
     }
-    supabase.auth.getUser()
-      .then(({ data: { user: current } }) => acceptUser(current))
-      .catch(() => setStatus("error"))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      acceptUser(session?.user ?? null)
-      setStatus(session ? "syncing" : "signed-out")
+    const restore = async () => {
+      if (connected || signingOut.current || disposed) return
+      const epoch = accountEpoch
+      try {
+        const { data: { session }, error } = await client.auth.getSession()
+        if (disposed || epoch !== accountEpoch) return
+        if (error) { setAccountStatus([400, 401, 422].includes(error.status ?? 0) ? "sign-in-required" : "reconnecting"); return }
+        if (session) acceptUser(session.user)
+        else setAccountStatus(activeAccount.current ? "sign-in-required" : "signed-out")
+      } catch {
+        if (!disposed && epoch === accountEpoch) setAccountStatus("reconnecting")
+      }
+    }
+    recoverAuth.current = restore
+    const reconnecting = () => { connected = false; setAccountStatus("reconnecting") }
+    const required = () => { connected = false; setAccountStatus("sign-in-required") }
+    window.addEventListener("focal:auth-reconnecting", reconnecting)
+    window.addEventListener("focal:auth-required", required)
+    const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+      // No network-based getUser race: INITIAL_SESSION and token events own restoration.
+      // Keep callbacks synchronous; recovery runs after the SDK's notification finishes.
+      if (disposed) return
+      if (session) { acceptUser(session.user); return }
+      if (event === "INITIAL_SESSION") { void Promise.resolve().then(restore); return }
+      if (event === "SIGNED_OUT") {
+        ++accountEpoch
+        connected = false
+        if (signingOut.current || !activeAccount.current) acceptUser(null)
+        else setAccountStatus("sign-in-required") // Keep outgoing work scoped to its original owner.
+      }
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      disposed = true
+      ++accountEpoch
+      recoverAuth.current = async () => {}
+      subscription.unsubscribe()
+      window.removeEventListener("focal:auth-reconnecting", reconnecting)
+      window.removeEventListener("focal:auth-required", required)
+    }
   }, [setData])
 
   return {
     configured: Boolean(supabase),
     user,
-    status,
+    status: supabase && accountStatus !== "connected" ? accountStatus : status,
     pendingCount,
     retry: () => {
+      void recoverAuth.current()
       if (!user) return
       setStatus("syncing")
       setRefresh((value) => value + 1)
@@ -177,8 +222,12 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
     },
     signOut: async () => {
       if (!supabase) return
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      signingOut.current = true
+      try {
+        // Supabase defaults to global sign-out, which also revokes Folio and other devices.
+        const { error } = await supabase.auth.signOut({ scope: "local" })
+        if (error) throw error
+      } finally { signingOut.current = false }
     },
   }
 }

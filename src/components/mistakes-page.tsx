@@ -28,6 +28,9 @@ import {
   getMistakeSchedule,
   localDayDifference,
   previewMistakeReview,
+  normalizeMistakeReviewPreferences,
+  reduceMistakeReviews,
+  type MistakeReviewPreferences,
   type AppData,
   type ExamAttempt,
   type Mistake,
@@ -58,6 +61,8 @@ import { useTickingNow } from "../hooks/use-ticking-now"
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
 
 type MistakesPageProps = {
+  onSaveReviewPreferences: (preferences: MistakeReviewPreferences) => void
+  onReduceReviews: (days: number, target: number) => void
   data: AppData
   studies: VcaaStudyResources[]
   onLog: () => void
@@ -124,7 +129,7 @@ function canUseReviewShortcut(target: EventTarget | null) {
   return !(target instanceof HTMLElement) || !target.closest("input, textarea, select, a, [contenteditable]:not([contenteditable='false']), [role='textbox']")
 }
 
-function ExamContext({ mistake, attempt, studies }: { mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[] }) {
+function ExamContext({ mistake, attempt, studies }: { preferences?: MistakeReviewPreferences; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[] }) {
   const exam = attempt ? findCachedVcaaExamForAttempt(attempt, studies) : undefined
   return (
     <CardDescription>
@@ -144,7 +149,7 @@ function AnswerPanel({ label, value, tone }: { label: string; value?: string; to
   )
 }
 
-function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend }: { onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating) => void; onBrowse: () => void }) {
+function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend }: { allMistakes: Mistake[]; preferences?: MistakeReviewPreferences; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating) => void; onBrowse: () => void }) {
   const now = useTickingNow(30_000)
   const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[] } | null>(null)
   const due = getDueMistakes(mistakes, now)
@@ -197,18 +202,18 @@ function StudyQueue({ mistakes, attempts, studies, onReview, onBrowse, onEdit, o
         </div>
         <Progress value={completed / (completed + remaining.length) * 100} aria-label="Session progress" />
       </header>
-      <ReviewCard key={current.id + current.updatedAt} mistake={current} attempt={attempts.find((attempt) => attempt.id === current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onReimport={onReimport} onToggleSuspend={onToggleSuspend} />
+      <ReviewCard mistakes={allMistakes} preferences={preferences} key={current.id + current.updatedAt} mistake={current} attempt={attempts.find((attempt) => attempt.id === current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onReimport={onReimport} onToggleSuspend={onToggleSuspend} />
     </div>
   )
 }
 
-function ReviewCard({ mistake, attempt, studies, onRate, onEdit, onReimport, onToggleSuspend }: { mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
+function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, onEdit, onReimport, onToggleSuspend }: { preferences?: MistakeReviewPreferences; mistakes: Mistake[]; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
   const [revealed, setRevealed] = useState(false)
   const [draft, setDraft] = useState("")
   const submitting = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const [reviewTime] = useState(() => new Date())
-  const previews = RATING_OPTIONS.map((option) => ({ ...option, dueAt: previewMistakeReview(mistake, option.rating, reviewTime.toISOString()).dueAt }))
+  const previews = RATING_OPTIONS.map((option) => ({ ...option, dueAt: previewMistakeReview(mistake, option.rating, reviewTime.toISOString(), preferences, mistakes).dueAt }))
   useEffect(() => { heading.current?.focus() }, [])
 
   function rate(rating: ReviewRating) {
@@ -413,7 +418,7 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
   const [subject, setSubject] = useState("all")
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
@@ -575,8 +580,9 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
           <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4"><StudyQueue allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
+          <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (
             <div className="grid min-w-0 gap-6">
               <div className="grid gap-1">
@@ -700,4 +706,33 @@ export function MistakesPage({ data, studies, onLog, onEdit, onReview, onToggleS
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>
   )
+}
+
+function ReviewPacing({ data, onSave, onReduce }: { data: AppData; onSave: (preferences: MistakeReviewPreferences) => void; onReduce: (days: number, target: number) => void }) {
+  const preferences = normalizeMistakeReviewPreferences(data.mistakeReviewPreferences)
+  const [spacing, setSpacing] = useState(preferences.spacingMultiplier)
+  const [retry, setRetry] = useState(preferences.retryHours)
+  const [maximum, setMaximum] = useState(preferences.maximumIntervalDays)
+  const [days, setDays] = useState(7)
+  const [target, setTarget] = useState(5)
+  const now = useTickingNow(30_000).getTime()
+  const changes = reduceMistakeReviews(data.mistakes, days, target, now)
+  return <Card className="mb-6">
+    <CardHeader><CardTitle>Review pacing</CardTitle><CardDescription>Due dates are suggestions. Practise any saved question whenever you need to. These controls sync with Folio.</CardDescription></CardHeader>
+    <CardContent className="grid gap-5">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <label className="grid gap-2 text-sm">Successful review spacing · {spacing.toFixed(1)}×<input type="range" min="0.5" max="3" step="0.1" value={spacing} onChange={(e) => setSpacing(Number(e.target.value))} /></label>
+        <label className="grid gap-2 text-sm">Retry after a miss · {retry < 1 ? `${Math.round(retry * 60)} minutes` : `${Math.round(retry)} hours`}<input type="range" min={1 / 6} max="168" step="any" value={retry} onChange={(e) => setRetry(Number(e.target.value))} /></label>
+        <label className="grid gap-2 text-sm">Longest interval · {maximum} days<input type="range" min="7" max="365" step="1" value={maximum} onChange={(e) => setMaximum(Number(e.target.value))} /></label>
+      </div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setSpacing(1); setRetry(1 / 6); setMaximum(365) }}>Frequent reviews</Button><Button variant="outline" onClick={() => { setSpacing(1.5); setRetry(24); setMaximum(180) }}>Relaxed defaults</Button><Button onClick={() => onSave({ ...preferences, spacingMultiplier: spacing, retryHours: retry, maximumIntervalDays: maximum, updatedAt: new Date().toISOString() })}>Save pacing</Button></div>
+      <div className="grid gap-4 border-t pt-4">
+        {preferences.lighterUntil && Date.parse(preferences.lighterUntil) > now ? <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Lighter schedule until {new Date(preferences.lighterUntil).toLocaleDateString()}</p><Button variant="outline" onClick={() => onSave({ ...preferences, lighterUntil: undefined })}>End lighter period</Button></div> : null}
+        <h3 className="font-medium">Reduce upcoming reviews</h3>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Next {days} days<input type="range" min="1" max="90" step="1" value={days} onChange={(e) => setDays(Number(e.target.value))} /></label><label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${target} scheduled questions per day`}<input type="range" min="0" max="50" step="1" value={target} onChange={(e) => setTarget(Number(e.target.value))} /></label></div>
+        <p className="text-sm text-muted-foreground">{changes.size} questions will move to later dates. Overflow is spread beyond this period around existing reviews. A break resumes at up to 10 questions a day. Review history stays intact; you can still practise early. New reviews also respect this target during the period.</p>
+        <Button className="w-fit" variant="outline" onClick={() => onReduce(days, target)}>Start lighter period · move {changes.size} dates</Button>
+      </div>
+    </CardContent>
+  </Card>
 }

@@ -21,6 +21,8 @@ import type { VcaaStudyResources } from "../../src/lib/vcaa-resources"
 const DEVICE_ID = crypto.randomUUID()
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const MAX_PASSES = 5
+const SNAPSHOT_TTL_MS = 5000
+const snapshots = new Map<string, { at: number; rows: Promise<Map<string, Row>> }>()
 
 type Connection = { sb: SupabaseClient; userId: string }
 const requestUser = new AsyncLocalStorage<string>()
@@ -101,7 +103,19 @@ type Row = { entity: string; rowId: string; operation: "put" | "delete"; payload
 const rowKey = (entity: string, rowId: string) => `${entity}\u0000${rowId}`
 
 /** The current state of every row, from one snapshot read (a negative cursor means "state, not changes"). */
-async function snapshot(): Promise<Map<string, Row>> {
+async function snapshot(fresh = false): Promise<Map<string, Row>> {
+  // The query is heavy and clients call tools in parallel: share one read per user for a few seconds.
+  // Writes drop it, and a stale-write retry (`fresh`) always re-reads.
+  const userId = requestUser.getStore() ?? stdioUser ?? ""
+  const cached = snapshots.get(userId)
+  if (!fresh && cached && Date.now() - cached.at < SNAPSHOT_TTL_MS) return cached.rows
+  const rows = readSnapshot()
+  snapshots.set(userId, { at: Date.now(), rows })
+  rows.catch(() => { if (snapshots.get(userId)?.rows === rows) snapshots.delete(userId) })
+  return rows
+}
+
+async function readSnapshot(): Promise<Map<string, Row>> {
   const data = await rpc("sync_read_changes", (userId) => ({ p_after: -1, p_limit: 1000, p_expected_user_id: userId }))
   if (!isRecord(data) || data.mode !== "snapshot" || !Array.isArray(data.rows)) throw new Error("Malformed sync_read_changes response")
   const rows = new Map<string, Row>()
@@ -175,7 +189,7 @@ export async function readAll(): Promise<{ data: AppData; sessions: CanonicalStu
 export async function updateApp(edit: (data: AppData) => AppData): Promise<AppData> {
   let only: Set<string> | null = null
   for (let pass = 0; pass < MAX_PASSES; pass++) {
-    const rows = await snapshot()
+    const rows = await snapshot(pass > 0)
     const before = project(rows)
     const after = edit(before)
     // The apps run this same check on every synced row; an invalid one would break them all.
@@ -190,6 +204,7 @@ export async function updateApp(edit: (data: AppData) => AppData): Promise<AppDa
         operation: change.operation, payload: change.payload, expected_seq: rows.get(rowKey(change.entity, change.rowId))?.seq ?? 0,
       })),
     }))
+    snapshots.delete(requestUser.getStore() ?? stdioUser ?? "")
     if (!isRecord(result) || !Array.isArray(result.stale)) throw new Error("Malformed sync_apply_changes response")
     const stale = new Set(result.stale.flatMap((item) => isRecord(item) && typeof item.change_id === "string" ? [item.change_id] : []))
     if (!stale.size) return after
@@ -203,6 +218,7 @@ export async function sessionCommand(command: Omit<StudySessionCommand, "mutatio
   const data = await rpc("study_session_mutate", (userId) => ({
     p_command: { ...command, mutation_id: crypto.randomUUID(), device_id: DEVICE_ID, app: "examtrack", expected_user_id: userId },
   }))
+  snapshots.delete(requestUser.getStore() ?? stdioUser ?? "")
   const result = parseStudySessionMutationResult(data)
   if (!result) throw new Error("Malformed study_session_mutate response")
   if (!result.applied) throw new Error(`The server did not apply that session change (${result.reason ?? "unknown reason"}).`)

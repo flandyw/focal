@@ -345,7 +345,7 @@ export type MistakeReviewPreview = MistakeSchedule & {
   rating: ReviewRating
 }
 
-function normalizeReviewRating(result: ReviewResult): ReviewRating {
+export function normalizeReviewRating(result: ReviewResult): ReviewRating {
   if (result === "incorrect") return "again"
   if (result === "assisted") return "hard"
   if (result === "correct") return "good"

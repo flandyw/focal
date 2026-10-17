@@ -18,7 +18,7 @@ import type { AppData } from "../lib/exam-data"
 import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from "../lib/learning-workspace"
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import {
-  RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, evidenceDisagrees, isRecheckDue, itemGroup,
+  RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
   mergeStoplightItems, planRevision, setRating, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { cn } from "../lib/utils"
@@ -45,7 +45,7 @@ function CountBar({ items }: { items: CurriculumArea[] }) {
 
 function evidenceText(evidence: ItemEvidence) {
   return [
-    evidence.mistakes ? `${evidence.mistakes} mistake${evidence.mistakes === 1 ? "" : "s"}${evidence.open ? ` · ${evidence.open} open` : ""}${evidence.due ? ` · ${evidence.due} due` : ""}` : "",
+    evidence.mistakes ? `${evidence.passed}/${evidence.mistakes} linked mistake${evidence.mistakes === 1 ? "" : "s"} passed${evidence.due ? ` · ${evidence.due} due` : ""}` : "",
     evidence.available ? `${evidence.awarded}/${evidence.available} marks` : "",
   ].filter(Boolean).join(" · ")
 }
@@ -114,7 +114,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
 
   return (
     <WorkspacePage>
-      <PageHeader title="Stoplight" description="Rate every key knowledge and skill red, amber or green. Mistakes and marked questions are linked to items, so weak spots surface by themselves.">
+      <PageHeader title="Stoplight" description="Rate every key knowledge and skill red, amber or green. Linked mistake reviews update your ratings as you practise.">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />Link mistakes{unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
@@ -134,7 +134,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Green means you can pass the item's check cold and timed.</p>
+            <p className="text-sm text-muted-foreground">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
             <Select value={filter} onValueChange={(value) => setFilter((value ?? "all") as Filter)}>
               <SelectTrigger className="w-40" aria-label="Filter items"><SelectValue>{FILTERS[filter]}</SelectValue></SelectTrigger>
               <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectContent>
@@ -160,7 +160,6 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                           <span className="font-medium">{item.name}</span>
                           {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
                           {isRecheckDue(item, now) ? <Badge variant="secondary">Re-check</Badge> : null}
-                          {evidenceDisagrees(item, entry) ? <Badge variant="destructive">Results disagree</Badge> : null}
                         </div>
                         {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
                         {text ? <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:underline" onClick={() => setViewing(item)}>{text}</button> : null}

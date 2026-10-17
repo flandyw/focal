@@ -1,6 +1,6 @@
 // Pure (no React/Tauri): the stoplight checklist, its chatbot import contract, and evidence from mistakes.
 import { parseJsonPayload } from "./calendarImport"
-import { getMistakeSchedule, type AppData, type Mistake } from "./exam-data"
+import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data"
 import {
   localDate, materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
 } from "./learning-workspace"
@@ -35,12 +35,12 @@ export function isRecheckDue(item: CurriculumArea, now = new Date()) {
 
 // --- Evidence from mistakes and marked questions ---
 
-export type ItemEvidence = { mistakes: number; open: number; due: number; awarded: number; available: number; lastAt?: string }
+export type ItemEvidence = { mistakes: number; passed: number; open: number; due: number; awarded: number; available: number; lastAt?: string }
 
 export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, now = new Date()) {
   const evidence = new Map<string, ItemEvidence>()
   const at = (id: string) => {
-    const current = evidence.get(id) ?? { mistakes: 0, open: 0, due: 0, awarded: 0, available: 0 }
+    const current = evidence.get(id) ?? { mistakes: 0, passed: 0, open: 0, due: 0, awarded: 0, available: 0 }
     evidence.set(id, current)
     return current
   }
@@ -51,6 +51,7 @@ export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, 
     for (const id of mistake.itemIds ?? []) {
       const entry = at(id)
       entry.mistakes += 1
+      if (mistakeProgress(mistake).passed) entry.passed += 1
       if (open) { entry.open += 1; if (new Date(schedule.dueAt) <= now) entry.due += 1 }
       seen(entry, mistake.createdAt.slice(0, 10))
     }
@@ -68,12 +69,6 @@ export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, 
   return evidence
 }
 
-/** Self-rated green, but unresolved mistakes or poor marks say otherwise. */
-export function evidenceDisagrees(item: CurriculumArea, evidence?: ItemEvidence) {
-  if (item.rating !== "green" || !evidence) return false
-  return evidence.open > 0 || evidence.available > 0 && evidence.awarded / evidence.available < 0.6
-}
-
 // --- Rating ---
 
 export function setRating(learning: LearningWorkspace, id: string, rating: StoplightRating, now = new Date()): LearningWorkspace {
@@ -85,9 +80,45 @@ export function setRating(learning: LearningWorkspace, id: string, rating: Stopl
   }
 }
 
-/** A new open mistake on a green item drops it to amber; promotion stays manual. */
+/** Latest answers measure current ability; the review scheduler separately measures retention. */
+function mistakeProgress(mistake: Mistake) {
+  const review = mistake.reviewHistory?.at(-1)
+  const rating = review ? normalizeReviewRating(review.result) : undefined
+  return {
+    passed: rating ? rating === "good" || rating === "easy" : mistake.resolved,
+    reviewed: Boolean(review) || mistake.resolved,
+    at: review?.completedAt ?? (mistake.resolved ? mistake.lastReviewedAt ?? mistake.updatedAt : mistake.createdAt),
+  }
+}
+
+/** Apply newer practice evidence, preserving any later manual or chatbot rating. */
+export function progressStoplight(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()): LearningWorkspace {
+  const linked = new Map<string, ReturnType<typeof mistakeProgress>[]>()
+  for (const mistake of mistakes) {
+    const progress = mistakeProgress(mistake)
+    // ponytail: suspended cards still count; hiding an unpassed card must not earn green.
+    for (const id of new Set(mistake.itemIds ?? [])) {
+      const entries = linked.get(id) ?? []
+      entries.push(progress)
+      linked.set(id, entries)
+    }
+  }
+  const timestamp = now.toISOString()
+  const curriculumAreas = learning.curriculumAreas.map((item) => {
+    const entries = linked.get(item.id)
+    if (item.archivedAt || !entries?.length) return item
+    const latest = entries.reduce((a, b) => Date.parse(a.at) > Date.parse(b.at) ? a : b)
+    if (Date.parse(latest.at) <= Date.parse(item.ratedAt ?? "1970-01-01T00:00:00.000Z")) return item
+    const rating: StoplightRating | undefined = entries.every((entry) => entry.passed) ? "green" : latest.reviewed || item.rating === "green" ? "amber" : item.rating
+    if (!rating) return item
+    return { ...item, rating, ratedAt: latest.at, updatedAt: timestamp }
+  })
+  return curriculumAreas.every((item, index) => item === learning.curriculumAreas[index]) ? learning : { ...learning, curriculumAreas, updatedAt: timestamp }
+}
+
+/** A new unpassed mistake on a green item drops it to amber. */
 export function demoteGreens(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()) {
-  const hit = new Set(mistakes.filter((mistake) => !mistake.resolved && (mistake.marksLost ?? 1) > 0).flatMap((mistake) => mistake.itemIds ?? []))
+  const hit = new Set(mistakes.filter((mistake) => !mistakeProgress(mistake).passed && (mistake.marksLost ?? 1) > 0).flatMap((mistake) => mistake.itemIds ?? []))
   const previous = learning.curriculumAreas.filter((item) => item.rating === "green" && !item.archivedAt && hit.has(item.id))
   if (!previous.length) return { learning, previous }
   const demoted = new Set(previous.map((item) => item.id))
@@ -107,7 +138,7 @@ export function restoreItems(learning: LearningWorkspace, previous: CurriculumAr
   const byId = new Map(previous.map((item) => [item.id, item]))
   return {
     ...learning,
-    curriculumAreas: learning.curriculumAreas.map((item) => byId.has(item.id) ? { ...byId.get(item.id)!, updatedAt: timestamp } : item),
+    curriculumAreas: learning.curriculumAreas.map((item) => byId.has(item.id) ? { ...byId.get(item.id)!, ratedAt: timestamp, updatedAt: timestamp } : item),
     updatedAt: timestamp,
   }
 }

@@ -47,7 +47,7 @@ import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
 import { AI_ENABLED } from "./lib/host"
-import { applyItemLinks, collectLinkRecords, demoteGreens, restoreItems, type ItemLink } from "./lib/stoplight"
+import { applyItemLinks, collectLinkRecords, demoteGreens, progressStoplight, restoreItems, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
@@ -163,6 +163,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     }
     return [...ids]
   }, [data.attempts, data.trackedExamIds, timetable])
+
+  // Reconcile saved, imported and synced reviews too; timestamps keep manual ratings authoritative until new practice.
+  useEffect(() => {
+    setData((current) => {
+      const learning = progressStoplight(current.learning, current.mistakes)
+      return learning === current.learning ? current : { ...current, learning }
+    })
+  }, [data.mistakes, data.learning])
 
   useEffect(() => {
     // Serialize the full store off the critical path: a keystroke currently

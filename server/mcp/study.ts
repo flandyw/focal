@@ -3,7 +3,7 @@ import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/clas
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan"
 import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace"
 import {
-  applyItemLinks, buildItemEvidence, evidenceDisagrees, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRating,
+  applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRating,
 } from "../../src/lib/stoplight"
 import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, type CanonicalStudySession } from "../../src/lib/sync/sessionContract"
 import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store"
@@ -128,15 +128,15 @@ export function studyTools(define: Define) {
 
   /* ------------------------------------------------------------ stoplight */
 
-  define("list_stoplight", "The stoplight checklist: every skill rated red/amber/green, with the evidence from your mistakes and marked questions, whether a re-check is due, and whether the evidence contradicts a green.",
+  define("list_stoplight", "The stoplight checklist: every skill rated red/amber/green, with the evidence from your mistakes and marked questions, practice progression and whether a re-check is due.",
     { subject: z.string().optional(), includeArchived: z.boolean().default(false) }, "read", async ({ subject, includeArchived }) => {
       const { data } = await readAll()
       const evidence = buildItemEvidence(data)
-      const items = data.learning.curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
+      const items = progressStoplight(data.learning, data.mistakes).curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
       return items.map((item) => ({
         id: item.id, subject: item.subject, group: itemGroup(item), name: item.name, rating: item.rating ?? "unrated", ratedAt: item.ratedAt,
         check: item.check, type: item.type, archived: Boolean(item.archivedAt), recheckDue: isRecheckDue(item),
-        evidence: evidence.get(item.id), evidenceDisagrees: evidenceDisagrees(item, evidence.get(item.id)),
+        evidence: evidence.get(item.id),
       }))
     })
 

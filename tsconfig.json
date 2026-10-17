@@ -27,6 +27,6 @@
       "react/*": ["./node_modules/@types/react/*"]
     }
   },
-  "include": ["src", "scripts"],
+  "include": ["src", "scripts", "server/mcp"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

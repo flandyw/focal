@@ -1,0 +1,203 @@
+import { z } from "zod"
+import { ATAR_AGGREGATE_REFERENCES } from "../../src/lib/atar-data"
+import { estimateAtar, type AtarStudyResult } from "../../src/lib/atar"
+import { buildDayPlan } from "../../src/lib/day-plan"
+import {
+  buildAttemptBenchmarks, buildCoverage, buildSubjectBenchmarks, computeDistributionStats, normaliseComparisonName, type SavedAtarEstimate,
+} from "../../src/lib/exam-data"
+import { buildExamSuggestions } from "../../src/lib/exam-suggestions"
+import { getGoalProgress, localDate } from "../../src/lib/learning-workspace"
+import { getMistakeProgress, getMistakeQueueCounts, buildRevisionPriorities } from "../../src/lib/mistake-review"
+import { buildFocusPriorities, buildLostMarksAttribution, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks } from "../../src/lib/performance-insights"
+import { getAnalyticsData } from "../../src/lib/progress-analytics"
+import { getUpcomingSacs } from "../../src/lib/sac"
+import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling"
+import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score"
+import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable"
+import { isDeleted, isPaused, isRunning } from "../../src/lib/sync/sessionContract"
+import type { StudySession } from "../../src/lib/types"
+import { getCachedVcaaExams, getVcaaExamCompanions, isVcaaExamLogged } from "../../src/lib/vcaa-resources"
+import { examResources, gradeReferences, readAll, scalingReferences, updateApp, vceTimetable } from "./store"
+import type { Define } from "./tools"
+import { day, limit, nowIso, round } from "./util"
+
+const same = (a: string, b: string) => normaliseComparisonName(a) === normaliseComparisonName(b)
+const contains = (haystack: string, needle: string) => normaliseComparisonName(haystack).includes(normaliseComparisonName(needle))
+
+/** The same canonical-session to analytics-session mapping the Progress page uses. */
+function analyticsSessions(sessions: Parameters<typeof isDeleted>[0][]): StudySession[] {
+  return sessions.filter((session) => !isDeleted(session)).map((session): StudySession => {
+    const blocks = session.segments.filter((segment) => segment.ended_at).map((segment) => ({ start: segment.started_at, end: segment.ended_at! }))
+    const start = session.started_at ?? session.created_at
+    const metadata = (session.metadata.legacy_metadata && typeof session.metadata.legacy_metadata === "object" ? session.metadata.legacy_metadata : session.metadata) as Record<string, unknown>
+    const reflection = metadata.reflection as StudySession["reflection"]
+    return {
+      schemaVersion: 2, createdVia: "examtrack", created_at: session.created_at, id: session.id, title: session.title,
+      reflection: reflection && typeof reflection.confidence === "number" && Number.isInteger(reflection.confidence) && reflection.confidence >= 1 && reflection.confidence <= 5 ? { confidence: reflection.confidence } : undefined,
+      subjectIds: session.subject_id ? [session.subject_id] : [],
+      schedule: { blocks: blocks.length ? blocks : [{ start, end: session.completed_at ?? start }] },
+      execution: session.completed
+        ? { state: "completed", completedAt: session.completed_at!, intervals: blocks.map((block) => ({ ...block, source: "manual" as const })) }
+        : { state: "planned", intervals: [] },
+    }
+  })
+}
+
+export function insightTools(define: Define) {
+  define("get_overview", "Start here. A snapshot of the whole account: queue and counts, today's plan, running timer, upcoming SACs, events and tracked VCE exams, goal progress and predicted study scores.", {}, "read", async () => {
+    const [{ data, sessions }, references, timetable] = await Promise.all([readAll(), gradeReferences(), vceTimetable()])
+    const now = new Date()
+    const today = localDate(now)
+    const plan = buildDayPlan(today, { ...data, sessions }, timetable)
+    const running = sessions.find((s) => isRunning(s) || isPaused(s))
+    const tracked = new Set(data.trackedExamIds)
+    return {
+      today, counts: { exams: data.attempts.length, mistakes: data.mistakes.length, sacs: data.sacRecords.length, subjects: data.subjects },
+      mistakeQueue: getMistakeQueueCounts(data.mistakes), mistakeProgress: getMistakeProgress(data.mistakes),
+      timer: running && { id: running.id, title: running.title, state: isRunning(running) ? "running" : "paused" },
+      todayPlan: { plannedMinutes: plan.plannedMinutes, completedMinutes: plan.completedMinutes, dueMistakes: plan.dueMistakes, items: plan.items.map((i) => ({ kind: i.kind, title: i.title, minutes: i.minutes })) },
+      upcomingSacs: getUpcomingSacs(data.sacRecords).slice(0, 5).map((r) => ({ id: r.id, title: r.title, subject: r.subject, scheduledAt: r.scheduledAt })),
+      upcomingEvents: data.events.filter((e) => !e.isFinished && e.startTime >= now.toISOString()).toSorted((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 5)
+        .map((e) => ({ id: e.id, title: e.title, type: e.eventType, startTime: e.startTime })),
+      trackedVceExams: (timetable?.exams ?? []).filter((e) => tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
+      goals: data.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),
+      studyScores: [...new Set(data.attempts.map((a) => a.subject))].flatMap((subject) => {
+        const p = predictStudyScore({ subject, attempts: data.attempts, references })
+        return p ? [{ subject, studyScore: p.studyScore, low: p.low, high: p.high, confidence: p.confidence }] : []
+      }),
+    }
+  })
+
+  define("get_progress", "Study-time analytics from your study sessions: time trends, subject breakdown, consistency/streaks, time of day, subject completion and efficiency. range is days back (7, 30, 90, 365) or 0 for all time.",
+    { range: z.union([z.literal(7), z.literal(30), z.literal(90), z.literal(365), z.literal(0)]).default(30) }, "read", async ({ range }) => {
+      const { sessions } = await readAll()
+      return getAnalyticsData(analyticsSessions(sessions), [], range)
+    })
+
+  define("get_exam_analytics", "Exam and mistake analytics: per-subject outlook (projected next mark), benchmarks against VCAA distributions, area-of-study coverage, focus priorities, the 14-day review forecast and mistake categories. With `subject` it adds the paper-by-paper weakness matrix and where marks were lost.",
+    { subject: z.string().optional() }, "read", async ({ subject }) => {
+      const [{ data }, references] = await Promise.all([readAll(), gradeReferences()])
+      const attempts = subject ? data.attempts.filter((a) => same(a.subject, subject)) : data.attempts
+      const attemptIds = new Set(attempts.map((a) => a.id))
+      const mistakes = subject ? data.mistakes.filter((m) => attemptIds.has(m.attemptId)) : data.mistakes
+      return {
+        outlooks: buildSubjectOutlooks(attempts, data.examDifficulty),
+        benchmarks: buildSubjectBenchmarks(attempts, references),
+        papers: buildAttemptBenchmarks(attempts, references).map((b) => ({
+          id: b.attempt.id, title: b.attempt.title, completedAt: b.attempt.completedAt, percentage: round(b.percentage), grade: b.grade,
+          percentile: b.percentile === null ? null : round(b.percentile), vcaaMeanPercentage: round(b.vcaaMeanPercentage), gapToAPlus: b.gapToAPlus === null ? null : round(b.gapToAPlus),
+        })),
+        coverage: buildCoverage(attempts), focusPriorities: buildFocusPriorities(attempts, mistakes).slice(0, 10),
+        reviewForecast: buildReviewForecast(mistakes), mistakeCategories: buildRevisionPriorities(mistakes),
+        ...(subject && { paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, subject), lostMarks: buildLostMarksAttribution(attempts, mistakes, subject) }),
+      }
+    })
+
+  define("suggest_exams", "Suggest which official/company practice papers to do next, based on what is logged and your subjects.",
+    { limit: z.number().int().min(1).max(20).default(4) }, "read", async ({ limit }) => {
+      const [{ data }, references, studies] = await Promise.all([readAll(), gradeReferences(), examResources()])
+      return buildExamSuggestions(data.attempts, references, data.subjects, limit, studies)
+    })
+
+  /* ----------------------------------------------------------- predictions */
+
+  define("predict_study_score", "Predict a subject's raw study score (with a low-high range and confidence) from your logged exams weighted against VCAA distributions, plus its scaled score and how the prediction moved after each exam.", {
+    subject: z.string().min(1), sacPercentile: z.number().min(0.1).max(99.9).optional().describe("Your SAC result as a percentile, if known"),
+    examWeightPercent: z.number().min(0).max(100).optional().describe("Exam share of the study score; defaults per subject"),
+  }, "read", async ({ subject, sacPercentile, examWeightPercent }) => {
+    const [{ data }, references, scaling] = await Promise.all([readAll(), gradeReferences(), scalingReferences()])
+    const options = { subject, attempts: data.attempts, references, sacPercentile, examWeightPercent }
+    const prediction = predictStudyScore(options)
+    if (!prediction) return { prediction: null, reason: "No logged exam for this subject matches a VCAA grade distribution yet." }
+    return {
+      studyScore: prediction.studyScore, low: prediction.low, high: prediction.high, confidence: prediction.confidence,
+      examWeightPercent: prediction.examWeightPercent, components: prediction.components, excludedAttempts: prediction.excludedAttemptCount,
+      scaled: predictScaledStudyScore(prediction.studyScore, subject, scaling),
+      evidence: prediction.evidence.map((e) => ({ exam: e.attempt.title, completedAt: e.attempt.completedAt, percentile: round(e.percentile), weight: round(e.weight, 2) })),
+      trend: buildStudyScoreTrend(options).map((p) => ({ date: p.attempt.completedAt, studyScore: p.studyScore, low: p.low, high: p.high })),
+    }
+  })
+
+  define("scale_study_score", "Convert a raw study score (20-50) to a scaled score using VTAC scaling reports, averaged across report years unless you pick one.",
+    { subject: z.string().min(1), rawScore: z.number().min(20).max(50), year: z.number().int().optional() }, "read", async ({ subject, rawScore, year }) => {
+      return predictScaledStudyScore(rawScore, subject, await scalingReferences(), year) ?? { scaled: null, reason: "No VTAC scaling data for that subject, score or year." }
+    })
+
+  define("estimate_atar", "Estimate an ATAR from at least four Unit 3/4 studies including an English-group study. Give each study's raw score, or omit it to use the Focal prediction. Set save to keep the estimate in the account.", {
+    year: z.number().int().optional().describe("VTAC report year; defaults to the latest"),
+    studies: z.array(z.object({ study: z.string().min(1).describe("Study name or VTAC study code"), rawScore: z.number().min(0).max(50).optional() })).min(4).max(12),
+    save: z.boolean().default(false),
+  }, "write", async ({ year, studies, save }) => {
+    const [{ data }, references, scaling] = await Promise.all([readAll(), gradeReferences(), scalingReferences()])
+    const years = ATAR_AGGREGATE_REFERENCES.map((r) => r.year).filter((y) => scaling.some((s) => s.year === y)).toSorted((a, b) => b - a)
+    const reportYear = year ?? years[0]
+    const rows = studies.map((entry, index) => {
+      const reference = scaling.find((s) => s.year === reportYear && (s.code === entry.study || normaliseScalingStudyName(s.studyName) === normaliseScalingStudyName(entry.study)))
+      if (!reference) throw new Error(`No ${reportYear} VTAC scaling data for "${entry.study}". Use the exact study name or code.`)
+      const predicted = entry.rawScore === undefined ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
+      const rawScore = entry.rawScore ?? predicted
+      if (rawScore === undefined) throw new Error(`Give a rawScore for "${entry.study}"; it has no Focal prediction.`)
+      return { reference, rawScore, usePrediction: entry.rawScore === undefined, id: String(index) }
+    })
+    const results = rows.flatMap((row): AtarStudyResult[] => {
+      const scaledScore = interpolateScaledScore(row.rawScore, row.reference.points)
+      return scaledScore === null ? [] : [{ id: row.id, code: row.reference.code, studyName: row.reference.studyName, rawScore: row.rawScore, scaledScore }]
+    })
+    const estimate = estimateAtar(results, reportYear)
+    if (!estimate) throw new Error("Could not estimate: need four studies with scores from 20-50 and one English-group study.")
+    if (save) {
+      const saved: SavedAtarEstimate = {
+        id: crypto.randomUUID(), year: reportYear, atarLabel: estimate.atarLabel, aggregate: estimate.aggregate, savedAt: nowIso(),
+        rows: rows.map((row) => ({ id: crypto.randomUUID(), code: row.reference.code, raw: String(row.rawScore), usePrediction: row.usePrediction })),
+      }
+      await updateApp((current) => ({ ...current, atarEstimates: [saved, ...current.atarEstimates], atarEstimatesUpdatedAt: saved.savedAt }))
+    }
+    const brief = (r: { studyName: string; rawScore: number; scaledScore: number; contribution: number }) => ({ study: r.studyName, rawScore: r.rawScore, scaledScore: round(r.scaledScore), contribution: round(r.contribution) })
+    return {
+      year: reportYear, atar: estimate.atarLabel, aggregate: estimate.aggregate, primaryFour: estimate.primaryFour.map(brief),
+      increments: estimate.increments.map(brief), excluded: estimate.excluded.map((r) => r.studyName), saved: save,
+    }
+  })
+
+  define("list_atar_estimates", "Saved ATAR estimates, newest first.", {}, "read", async () => {
+    const { data } = await readAll()
+    return data.atarEstimates.toSorted((a, b) => b.savedAt.localeCompare(a.savedAt))
+  })
+
+  define("delete_atar_estimate", "Delete a saved ATAR estimate.", { id: z.string() }, "delete", async ({ id }) => {
+    const stamp = nowIso()
+    await updateApp((data) => ({ ...data, atarEstimates: data.atarEstimates.filter((e) => e.id !== id), atarEstimatesUpdatedAt: stamp }))
+  })
+
+  /* ---------------------------------------------------------- VCAA library */
+
+  define("vcaa_grade_distribution", "Official VCAA grade distributions for a study: mark ranges per grade, share of students, and the mean. Use it to see what a mark means statewide.",
+    { study: z.string().min(1), year: z.number().int().optional(), limit: z.number().int().min(1).max(30).default(10) }, "read", async ({ study, year, limit }) => {
+      const references = (await gradeReferences()).filter((r) => contains(r.studyName, study) && (year === undefined || r.year === year))
+        .toSorted((a, b) => b.year - a.year || a.name.localeCompare(b.name))
+      return { total: references.length, distributions: references.slice(0, limit).map((r) => ({ id: r.id, study: r.studyName, year: r.year, assessment: r.name, maxScore: r.maxScore, sourceUrl: r.sourceUrl, stats: computeDistributionStats(r), gradeBands: r.gradeBands })) }
+    })
+
+  define("vcaa_exam_resources", "Official VCAA past exams for a study with their reports, and whether each is logged or marked completed in your account.",
+    { study: z.string().min(1), year: z.number().int().optional(), limit }, "read", async ({ study, year, limit }) => {
+      const [{ data }, studies] = await Promise.all([readAll(), examResources()])
+      const matched = studies.filter((s) => contains(s.studyName, study))
+      const exams = getCachedVcaaExams(matched).filter((e) => year === undefined || e.year === year).toSorted((a, b) => (b.year ?? 0) - (a.year ?? 0))
+      return exams.slice(0, limit).map((exam) => ({
+        study: exam.studyName, label: exam.label, year: exam.year, url: exam.url, logged: isVcaaExamLogged(exam, data.attempts), completed: data.completedExamIds.includes(exam.url),
+        reports: getVcaaExamCompanions(exam, matched.find((s) => s.studyName === exam.studyName)).reports.map((r) => ({ label: r.label, url: r.url })),
+      }))
+    })
+
+  define("vce_exam_timetable", "The official VCE exam timetable (dates, times, reading time) with which exams you track. Track one with set_exam_flag.",
+    { subject: z.string().optional(), upcomingOnly: z.boolean().default(true), from: day.optional() }, "read", async ({ subject, upcomingOnly, from }) => {
+      const [{ data }, timetable] = await Promise.all([readAll(), vceTimetable()])
+      if (!timetable) return { year: null, exams: [] }
+      const now = new Date()
+      return {
+        year: timetable.year, source: timetable.sourceUrl,
+        exams: timetable.exams.filter((e) => (!subject || contains(e.subject, subject)) && (!upcomingOnly || isUpcoming(e, now)) && (!from || e.date >= from))
+          .map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, dateEnd: e.dateEnd, time: formatExamTime(e), readingMinutes: e.readingMinutes, component: e.component, daysUntil: daysUntil(e, now), tracked: data.trackedExamIds.includes(e.id) })),
+      }
+    })
+}

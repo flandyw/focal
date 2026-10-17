@@ -17,7 +17,8 @@ bun run typecheck            # tsc for tsconfig.json and tsconfig.node.json
 bun run lint[:fix]           # oxlint src scripts
 bun run build                # typecheck + browser build
 bun run build:desktop        # typecheck + `vite build --mode desktop` into dist/
-bun run start                # production server.ts (serves build + /api/mistakes-pdf)
+bun run start                # production server.ts (serves build + /api/mistakes-pdf + /api/mcp)
+bun run mcp[:http]           # MCP server over stdio / HTTP (docs/mcp.md)
 ```
 
 There is no test suite. Verify with `check`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually. Some Makefile `dev` help text still mentions port 1420, but `make dev` runs the browser build (`bun run dev`).
@@ -29,6 +30,8 @@ There is no test suite. Verify with `check`, both builds, or running the app. `m
 **Layout of `src/`.** `App.tsx` owns app state and lazy-loads the page components in `components/`; domain logic lives in `lib/`. Shared contracts that desktop, web, and Folio must agree on are `lib/types.ts` and `lib/sync/sessionContract.ts` (study-session DTO/validator). `lib/storage/*` is SQLite via `@tauri-apps/plugin-sql` (desktop only). `lib/class-timetable-core.ts` (school timetable cycles) and `lib/timetable.ts` (exam scheduling) are unrelated.
 
 **Local AI sidecar.** Desktop AI uses Sign in with ChatGPT: `vendor/siwc` (vendored upstream, don't edit casually) + `server/` (`local.ts` is a Bun HTTP server on `127.0.0.1:41731`, plus `chatgpt.ts`, `keystore.ts`). `scripts/build-chatgpt-sidecar.ts` compiles it with `bun build --compile` into `src-tauri/binaries/focal-chatgpt-<triple>`, and Tauri launches it as an `externalBin` (`src-tauri/src/commands/chatgpt.rs`). The `tauri dev/build` hooks run that build automatically. `/api/mistakes-pdf` is implemented once in `server/mistakes-pdf.ts` and exposed by the sidecar, a Vite dev plugin, `server.ts`, and `api/` (Vercel). The browser build has no AI.
+
+**MCP server.** `server/mcp/` exposes the whole account to MCP clients. It signs in as one user from env, reuses `src/lib` logic, and writes through the same sync RPCs, validating with the app's own `migrateAppData`. The synced row layout (`rowsFromAppData`/`diffAppData`) lives in `src/lib/app-rows.ts` so the web client and MCP write identical rows. It must run under Bun on a VPS, not as a Vercel function; see `docs/mcp.md`.
 
 **Sync.** Desktop, web, and the sibling app Folio share one Supabase project (`supabase/migrations`, apply from the repo root with `supabase db push`). Two protocols:
 - Generic cursor change feed (`sync_read_changes`) for ordinary records (attempts, mistakes, user_state, events…); realtime is only a wakeup.

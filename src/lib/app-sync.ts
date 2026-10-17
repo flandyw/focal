@@ -1,8 +1,9 @@
 import type { AppData } from "./exam-data"
+import { EPOCH, TIMETABLE_ROW, rowsFromAppData, type AppRow, type Entity } from "./app-rows"
 import { EMPTY_APP_DATA, normalizeMistakeReviewPreferences, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
 import { isExamDifficultySettings } from "./exam-difficulty"
 import { isExamProgression } from "./exam-progression"
-import { EMPTY_LEARNING_WORKSPACE, mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
+import { mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
 import { migrateSacRecords } from "./sac"
 import { announce, classifyFailure, requestResult, transactionDone, withFlushLock } from "./outbox"
 import { supabase, withSupabaseSession } from "./supabase"
@@ -13,17 +14,13 @@ const OUTBOX = "outbox"
 const ROWS = "rows"
 const META = "meta"
 const APP_ENTITIES = new Set(["attempts", "mistakes", "user_state", "events", "timetable_config"])
-const TIMETABLE_ROW = "timetable_config"
-const EPOCH = "1970-01-01T00:00:00.000Z"
 const OWNER_META_KEY = "owner"
 const TOMBSTONE_KEY = "examtrack:sync:tombstones:v1"
 // A change the server refuses for good is almost always a deployment gap (a migration not
 // applied yet), so it is parked and retried rather than dropped.
 const PARK_MS = 5 * 60_000
 
-type Entity = "attempts" | "mistakes" | "user_state" | "events" | "timetable_config"
 type Operation = "put" | "delete"
-type AppRow = { entity: Entity; rowId: string; operation: Operation; payload: unknown }
 type AppliedRow = AppRow & { key: string; accountId: string; seq: number; lamport: number; clientId: string; updatedAt: string }
 type PendingRow = AppRow & {
   changeId: string
@@ -44,6 +41,9 @@ type VersionedChange = {
   seq: number; change_id: string; client_id: string; entity: string; row_id: string
   operation: Operation; payload: unknown; lamport: number; updated_at: string
 }
+
+export { diffAppData, sameValue } from "./app-rows"
+import { sameValue } from "./app-rows"
 
 let database: Promise<IDBDatabase> | null = null
 
@@ -96,62 +96,6 @@ const logicalKey = (entity: string, rowId: string) => `${entity}:${rowId}`
 
 function defaultMeta(accountId: string): AccountMeta {
   return { key: accountMetaKey(accountId), accountId, cursor: 0, head: 0, lamport: 0, bootstrapped: false, feedVersion: FEED_VERSION }
-}
-
-function rowsFromAppData(data: AppData): AppRow[] {
-  const rows: AppRow[] = [
-    ...data.attempts.map((item) => ({ entity: "attempts" as const, rowId: item.id, operation: "put" as const, payload: item })),
-    ...data.mistakes.map((item) => ({ entity: "mistakes" as const, rowId: item.id, operation: "put" as const, payload: item })),
-    ...data.events.map((item) => ({ entity: "events" as const, rowId: item.id, operation: "put" as const, payload: item })),
-  ]
-  if (data.classTimetable) rows.push({ entity: "timetable_config", rowId: TIMETABLE_ROW, operation: "put", payload: data.classTimetable })
-  const state: Array<[string, unknown, string]> = [
-    ["examProgression", data.examProgression, data.examProgression?.updatedAt ?? EPOCH],
-    ["trackedExamIds", data.trackedExamIds, data.trackedExamIdsUpdatedAt],
-    ["completedExamIds", data.completedExamIds, data.completedExamIdsUpdatedAt],
-    ["subjects", data.subjects, data.subjectsUpdatedAt],
-    ["sacRecords", data.sacRecords, data.sacRecordsUpdatedAt],
-    ["mistakeInsights", data.mistakeInsights, data.mistakeInsights?.questionsGeneratedAt ?? data.mistakeInsights?.generatedAt ?? EPOCH],
-    ["alternativeMistakeDeck", data.alternativeMistakeDeck, data.alternativeMistakeDeck?.updatedAt ?? EPOCH],
-    ["mistakeReviewPreferences", data.mistakeReviewPreferences, data.mistakeReviewPreferences?.updatedAt ?? EPOCH],
-    ["examDifficulty", data.examDifficulty, data.examDifficulty?.updatedAt ?? EPOCH],
-    ["atarEstimates", data.atarEstimates, data.atarEstimatesUpdatedAt],
-    ["learning", data.learning, data.learning.updatedAt],
-  ]
-  for (const [rowId, value, updatedAt] of state) {
-    if (value === undefined || value === null || (updatedAt === EPOCH && isDefaultValue(value))) continue
-    rows.push({ entity: "user_state", rowId, operation: "put", payload: { value, updated_at: updatedAt } })
-  }
-  return rows
-}
-
-function isDefaultValue(value: unknown): boolean {
-  if (Array.isArray(value)) return value.length === 0
-  return sameValue(value, EMPTY_LEARNING_WORKSPACE)
-}
-
-export function sameValue(first: unknown, second: unknown): boolean {
-  if (Object.is(first, second)) return true
-  if (Array.isArray(first) || Array.isArray(second)) {
-    return Array.isArray(first) && Array.isArray(second) && first.length === second.length && first.every((value, index) => sameValue(value, second[index]))
-  }
-  if (!isRecord(first) || !isRecord(second)) return false
-  const firstKeys = Object.keys(first).toSorted()
-  const secondKeys = Object.keys(second).toSorted()
-  return firstKeys.length === secondKeys.length && firstKeys.every((key, index) => key === secondKeys[index] && sameValue(first[key], second[key]))
-}
-
-export function diffAppData(previous: AppData, next: AppData): AppRow[] {
-  const before = new Map(rowsFromAppData(previous).map((row) => [logicalKey(row.entity, row.rowId), row]))
-  const after = new Map(rowsFromAppData(next).map((row) => [logicalKey(row.entity, row.rowId), row]))
-  const changes: AppRow[] = []
-  for (const [key, oldRow] of before) {
-    const newRow = after.get(key)
-    if (!newRow) changes.push({ ...oldRow, operation: "delete", payload: null })
-    else if (!sameValue(oldRow.payload, newRow.payload)) changes.push(newRow)
-  }
-  for (const [key, row] of after) if (!before.has(key)) changes.push(row)
-  return changes
 }
 
 async function queueAppChanges(accountId: string, changes: readonly AppRow[]): Promise<void> {

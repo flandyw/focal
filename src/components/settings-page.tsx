@@ -417,6 +417,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           ) : null}
         </div>
       </div>
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-xs text-muted-foreground">
+        <span>Focal v{import.meta.env.VITE_APP_VERSION} · <span className="font-mono">{import.meta.env.VITE_COMMIT_HASH}</span></span>
+        <a href="https://github.com/flandyw/focal" target="_blank" rel="noopener noreferrer" className="rounded-xs underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">GitHub</a>
+      </footer>
     </div>
   )
 }

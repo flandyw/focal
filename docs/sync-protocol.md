@@ -91,6 +91,19 @@ safety poll.
 
 ## Local durability
 
+Account restoration uses Auth session events; a separate network-only user lookup
+must not overwrite a restored session when offline. The account UI distinguishes
+restoring, reconnecting and sign-in-required from delivery status. A rejected
+login retains the current account's local owner and queued work until explicit
+sign-out or a new sign-in. Ordinary sign-out is scoped to the current session;
+it must not revoke Folio or other devices.
+
+App and session RPCs check the current session against the outbox owner before
+sending. A 401 attempts one SDK-coordinated refresh and retries the same request
+once. Auth failures hold the queued change without counting a delivery attempt;
+network/foreground/token events and safety polls resume it. The server's expected
+user ID remains the final guard against an account change during submission.
+
 Desktop and web share one IndexedDB implementation (`src/lib/outbox.ts` plus the two lanes below).
 Both lanes are write-ahead: a change is committed to IndexedDB before the network is touched, and
 leaves only when the server has answered it. One flusher per account runs across tabs (Web Locks);

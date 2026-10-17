@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+import { AsyncLocalStorage } from "node:async_hooks"
 import { readFile } from "node:fs/promises"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { diffAppData, TIMETABLE_ROW } from "../../src/lib/app-rows"
@@ -14,31 +16,65 @@ import {
 import { isTimetable, type Timetable } from "../../src/lib/timetable"
 import type { VcaaStudyResources } from "../../src/lib/vcaa-resources"
 
-// ponytail: single-user. The server signs in as one Focal account from env and acts as that user
-// through the same RPCs the apps use, so RLS and the sync protocol stay the only authority.
-// Ceiling: multi-user needs OAuth in front of this instead of FOCAL_EMAIL/FOCAL_PASSWORD.
+// Each request runs as the user its access token belongs to (see index.ts), through the same RPCs the
+// apps use, so RLS and the sync protocol stay the only authority.
 const DEVICE_ID = crypto.randomUUID()
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const MAX_PASSES = 5
 
 type Connection = { sb: SupabaseClient; userId: string }
-let connection: Promise<Connection> | null = null
+const requestUser = new AsyncLocalStorage<string>()
+const connections = new Map<string, Promise<Connection>>()
 
+/** stdio has one user for the whole process: the owner of FOCAL_MCP_TOKEN. */
+let stdioUser: string | undefined
+export async function useStdioToken(token: string | undefined) {
+  stdioUser = (token && await resolveToken(token)) || undefined
+  if (!stdioUser) throw new Error("Set FOCAL_MCP_TOKEN to a valid access token (Settings > MCP access).")
+}
+
+/** Run `work` as `userId`; every store call inside it acts as that user. */
+export const asUser = <T>(userId: string, work: () => Promise<T>) => requestUser.run(userId, work)
+
+const adminClient = () => {
+  const url = process.env.VITE_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error("Set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+/** The owner of an access token, or null. Needs the service role: tokens are not readable by clients. */
+export async function resolveToken(token: string): Promise<string | null> {
+  const hash = createHash("sha256").update(token).digest("hex")
+  const admin = adminClient()
+  const { data, error } = await admin.from("mcp_tokens").select("id, user_id").eq("token_hash", hash).is("revoked_at", null).maybeSingle()
+  if (error) throw new Error(`Token lookup failed: ${error.message}`)
+  if (!data) return null
+  void admin.from("mcp_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", data.id).then(() => {})
+  return data.user_id
+}
+
+/**
+ * A user-scoped session without the user's password: the service role mints a magic-link token (no email
+ * is sent) and the client redeems it, so every RPC runs with that user's own JWT.
+ */
 function connect(): Promise<Connection> {
-  connection ??= (async () => {
-    const url = process.env.VITE_SUPABASE_URL
-    const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY
-    const email = process.env.FOCAL_EMAIL
-    const password = process.env.FOCAL_PASSWORD
-    if (!url || !key || !email || !password) {
-      throw new Error("Set VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY, FOCAL_EMAIL and FOCAL_PASSWORD.")
-    }
-    const sb = createClient(url, key, { auth: { persistSession: false } })
-    const { data, error } = await sb.auth.signInWithPassword({ email, password })
-    if (error) throw new Error(`Focal sign-in failed: ${error.message}`)
-    return { sb, userId: data.user.id }
-  })().catch((error) => { connection = null; throw error })
-  return connection
+  const userId = requestUser.getStore() ?? stdioUser
+  if (!userId) throw new Error("No authenticated user for this request.")
+  if (!connections.has(userId)) {
+    connections.set(userId, (async () => {
+      const admin = adminClient()
+      const { data: found, error: lookup } = await admin.auth.admin.getUserById(userId)
+      if (lookup || !found.user.email) throw new Error("Focal account not found.")
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email: found.user.email })
+      if (linkError) throw new Error(`Focal sign-in failed: ${linkError.message}`)
+      const sb = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_PUBLISHABLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } })
+      const { error } = await sb.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: "magiclink" })
+      if (error) throw new Error(`Focal sign-in failed: ${error.message}`)
+      return { sb, userId }
+    })().catch((error) => { connections.delete(userId); throw error }))
+  }
+  return connections.get(userId)!
 }
 
 /** One RPC as the signed-in user. An expired login is re-established once. */
@@ -49,7 +85,7 @@ async function rpc(fn: string, args: (userId: string) => object): Promise<unknow
     if (!error) return data
     const expired = status === 401 || ["PGRST301", "PGRST303"].includes(error.code)
     if (!expired || attempt > 0) throw new Error(`${fn}: ${error.message}`)
-    connection = null
+    connections.delete(userId)
   }
 }
 

@@ -1,8 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import { TIMETABLE_SCREENSHOT_PROMPT } from "../../src/lib/class-timetable"
 import { buildProgressionPrompt } from "../../src/lib/exam-progression"
+import { asUser, resolveToken } from "./store"
 import { registerTools } from "./tools"
 
 const INSTRUCTIONS = `Focal is a VCE (Victoria, Australia) study app: practice exams, mistakes with spaced repetition, SACs, calendar, study timer, stoplight skill checklists, goals and predictions.
@@ -19,18 +19,20 @@ export function createMcpServer() {
   return server
 }
 
-const digest = (value: string) => createHash("sha256").update(value).digest()
-
 /**
  * Stateless Streamable HTTP: a fresh server per request, nothing held between calls, so it runs anywhere
- * `fetch` does. The endpoint is closed unless FOCAL_MCP_TOKEN is set, and then needs it as a bearer token.
+ * `fetch` does. The bearer token is a personal access token created in Focal's settings; the request runs as its owner.
  */
 export async function handleMcp(request: Request): Promise<Response> {
-  const token = process.env.FOCAL_MCP_TOKEN
-  if (!token) return new Response("MCP is disabled: set FOCAL_MCP_TOKEN.", { status: 503 })
-  const given = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? ""
-  if (!timingSafeEqual(digest(given), digest(token))) return new Response("Unauthorized", { status: 401, headers: { "www-authenticate": "Bearer" } })
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
-  await createMcpServer().connect(transport)
-  return transport.handleRequest(request)
+  const token = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? ""
+  const unauthorized = () => new Response("Unauthorized", { status: 401, headers: { "www-authenticate": "Bearer" } })
+  if (!token.startsWith("focal_")) return unauthorized()
+  let userId: string | null
+  try { userId = await resolveToken(token) } catch (error) { return new Response(error instanceof Error ? error.message : "Token lookup failed", { status: 503 }) }
+  if (!userId) return unauthorized()
+  return asUser(userId, async () => {
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
+    await createMcpServer().connect(transport)
+    return transport.handleRequest(request)
+  })
 }

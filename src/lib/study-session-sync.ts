@@ -306,6 +306,7 @@ async function queueAccountId(): Promise<string> {
 
 /** What the mounted hook does with the outbox's news. */
 interface QueueSink {
+  accountId: string
   /** Rows the server returned for answered commands (applied or refused). */
   delivered(rows: CanonicalStudySession[]): Promise<void>
   rejected(message: string): void
@@ -375,14 +376,15 @@ async function queueCommand(accountId: string, command: StudySessionCommand): Pr
   await enqueueCommand(accountId, command)
   await commitCommandTiming(accountId, command.session_id, command.action)
   announce()
-  await queueSink?.delivered([])
+  if (queueSink?.accountId === accountId) await queueSink.delivered([])
   requestFlush()
 }
 
 const flushSessionQueue = coalesced(async () => {
   const accountId = signedInAccount
   if (!accountId || !supabase) return
-  scheduleWake(await withFlushLock(`focal-session-outbox:${accountId}`, () => drainSessionQueue(accountId)))
+  const wake = await withFlushLock(`focal-session-outbox:${accountId}`, () => drainSessionQueue(accountId))
+  if (signedInAccount === accountId) scheduleWake(wake)
 })
 
 let wakeTimer: ReturnType<typeof setTimeout> | undefined
@@ -447,8 +449,10 @@ async function deliver(accountId: string, scanned: Queued, soonest: (at: number)
     // The server read the command and refused it for good (invalid blocks, bad timing...). Retrying cannot change that.
     console.error("The server refused a study-session command:", command, error)
     await deleteEntry(entry.seq!)
-    queueSink?.rejected(`A change to "${command.title || "a study session"}" was refused: ${error!.message}`)
-    await queueSink?.delivered([])
+    if (queueSink?.accountId === accountId) {
+      queueSink.rejected(`A change to "${command.title || "a study session"}" was refused: ${error!.message}`)
+      await queueSink.delivered([])
+    }
     announce()
     return true
   }
@@ -468,9 +472,9 @@ async function deliver(accountId: string, scanned: Queued, soonest: (at: number)
         occurred_at: undefined, elapsed_since_previous_ms: undefined } })
   } else {
     await deleteEntry(entry.seq!)
-    queueSink?.rejected(refusalMessage(result.reason, command, session))
+    if (queueSink?.accountId === accountId) queueSink.rejected(refusalMessage(result.reason, command, session))
   }
-  await queueSink?.delivered(session ? [session] : [])
+  if (queueSink?.accountId === accountId) await queueSink.delivered(session ? [session] : [])
   announce()
   return true
 }
@@ -741,7 +745,9 @@ export function useStudySessionSync(
   }, [userId, render])
 
   const refreshQueue = useCallback(async () => {
-    queue.current = userId ? await readQueue(userId) : []
+    const incoming = userId ? await readQueue(userId) : []
+    if ((signedInAccount ?? undefined) !== userId) return
+    queue.current = incoming
     render()
   }, [userId, render])
 
@@ -763,11 +769,14 @@ export function useStudySessionSync(
     let pulling = false
     /** Server rows whose session has no unanswered local command become the local timer. */
     const adopt = async (rows: readonly CanonicalStudySession[]) => {
+      if (cancelled) return
       const owned = new Set(queue.current.map((entry) => entry.sessionId))
       const settled = rows.filter((row) => !owned.has(row.id))
       if (settled.length === 0) return
       await rememberCanonicalTiming(userId, settled)
+      if (cancelled) return
       const projected = await applyCanonicalSessions(settled, estimateNow(), dataRef.current)
+      if (cancelled) return
       if (projected !== dataRef.current) {
         dataRef.current = projected
         saveAppData(projected)
@@ -775,10 +784,12 @@ export function useStudySessionSync(
       }
     }
     queueSink = {
+      accountId: userId,
       delivered: async (rows) => {
         if (cancelled) return
         acceptSessions(rows)
         await cacheSessions(userId, [...canonicalSessions.current.values()])
+        if (cancelled) return
         await refreshQueue()
         // The newest row the feed or an answer has brought, not the one this answer carried: the feed
         // may have delivered a later revision while the session was held back.
@@ -788,6 +799,7 @@ export function useStudySessionSync(
     }
     /** A timer that predates the outbox (or was started signed out) is not on the server: queue its start once. */
     const publishLocalTimer = async () => {
+      if (cancelled) return
       const known = new Set([...canonicalSessions.current.keys(), ...queue.current.map((entry) => entry.sessionId)])
       const exam = dataRef.current.activeExamTimer
       const sac = dataRef.current.activeSacTimer
@@ -823,10 +835,12 @@ export function useStudySessionSync(
           acceptSessions(sessions, raw.mode === "snapshot")
           await refreshQueue()
           await adopt(sessions)
+          if (cancelled) return
           const page = raw.mode === "changes" && Array.isArray(raw.rows) ? raw.rows : []
           cursor = raw.mode === "snapshot" ? raw.head : page.reduce((highest, item) =>
             isRecord(item) && typeof item.seq === "number" ? Math.max(highest, item.seq) : highest, cursor)
           const meta = await readSyncMeta(userId)
+          if (cancelled) return
           await writeSyncMeta({ ...meta, cursor, sessions: [...canonicalSessions.current.values()] })
           if (raw.mode === "snapshot" || cursor >= raw.head || page.length < 1000) break
         }
@@ -1016,12 +1030,14 @@ export function useStudySessionSync(
     if ((await readQueue(userId)).some((entry) => ids.has(entry.sessionId))) {
       throw new Error("Wait for the selected sessions to sync before merging.")
     }
-    const { data: result, error } = await withSupabaseSession(userId, () => supabase!.rpc("study_session_merge", {
+    const params = {
       p_command: { mutation_id: crypto.randomUUID(), session_id: first.id, expected_revision: first.revision,
         expected_user_id: userId, action: "save_progress", app: "examtrack", device_id: deviceId(), ...patch },
       p_sources: chosen.map((session) => ({ id: session.id, revision: session.revision })),
-    }))
+    }
+    const { data: result, error } = await withSupabaseSession(userId, () => supabase!.rpc("study_session_merge", params))
     if (error) throw new Error(error.message)
+    if (signedInAccount !== userId) return
     if (!isRecord(result) || !Array.isArray(result.sessions) || typeof result.server_now !== "string") throw new Error("Could not confirm the merge. Refresh before trying again.")
     const merged = result.sessions.map(parseCanonicalStudySession)
     if (merged.length !== chosen.length || merged.some((session) => !session)) throw new Error("Could not confirm the merge. Refresh before trying again.")

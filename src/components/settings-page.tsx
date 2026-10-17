@@ -4,6 +4,7 @@ import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { McpTokens } from "./mcp-tokens"
 import { ModeToggle } from "./mode-toggle"
 import { AccentPicker } from "./accent-picker"
 import { PageHeader } from "./page-header"
@@ -247,7 +248,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               description="Sign in to sync exams, SACs, and mistakes across devices."
               action={sync.user ? <Badge variant="secondary"><Cloud />{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
                 : sync.status === "sign-in-required" ? "Sign in again" : sync.status === "reconnecting" || sync.status === "restoring" ? "Reconnecting"
-                : sync.status === "pending" ? `${sync.pendingCount} queued` : "Sync failed"}</Badge> : null}
+                : sync.status === "pending" ? sync.pendingCount ? `${sync.pendingCount} queued` : "Sync pending" : "Sync failed"}</Badge> : null}
             >
               {!sync.configured ? (
                 <p className="py-4 text-sm text-muted-foreground">Add the Supabase URL and publishable key to enable account sync.</p>
@@ -293,6 +294,14 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               )}
               {accountMessage ? <p role="status" className="pb-4 text-sm text-muted-foreground">{accountMessage}</p> : null}
             </Section>
+          ) : null}
+
+          {active === "account" && sync.user && sync.status !== "sign-in-required" ? (
+            <div className="mt-8">
+              <Section title="MCP access" description="Let an AI client such as Claude Code read and change your Focal data. Anyone with a token has full access to your account; revoke it here at any time.">
+                <McpTokens />
+              </Section>
+            </div>
           ) : null}
 
           {active === "appearance" ? (

@@ -12,13 +12,17 @@ a row changed in an app mid-write is re-read and the edit re-applied, never over
 
 ## Configuration
 
-Single-user: the server signs in as one account (`server/mcp/store.ts`).
+Multi-user. Each user creates personal access tokens in Settings > MCP access (`mcp_tokens`, migration 0026;
+only SHA-256 hashes are stored). A request's bearer token resolves to its owner, and the server acts as that
+user: with the service role it mints a magic-link token (no email is sent) and redeems it, so every RPC runs
+with the user's own JWT and RLS stays the authority (`server/mcp/store.ts`). Revoking a token stops new requests
+at once.
 
 | Variable | |
 | --- | --- |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | same as the app |
-| `FOCAL_EMAIL`, `FOCAL_PASSWORD` | the account to act as |
-| `FOCAL_MCP_TOKEN` | HTTP only: bearer token clients must send. The endpoint is closed while unset. |
+| `SUPABASE_SERVICE_ROLE_KEY` | server only: token lookup and minting user sessions. Keep it out of the frontend. |
+| `FOCAL_MCP_TOKEN` | stdio only: an access token; the process acts as its owner |
 | `TZ` | set to `Australia/Melbourne`: day plans, timetable cycles and "today" use the server's local time |
 
 ## Run
@@ -42,20 +46,19 @@ ExecStart=/root/.bun/bin/bun server/mcp/http.ts
 Restart=always
 ```
 
-Put TLS in front, e.g. Caddy: `mcp.example.com { reverse_proxy 127.0.0.1:4174 }`. Use a long random
-`FOCAL_MCP_TOKEN` (`openssl rand -hex 32`); anyone holding it has full access to the account.
+Put TLS in front, e.g. Caddy: `mcp.example.com { reverse_proxy 127.0.0.1:4174 }`. Anyone holding a token has full access to its account.
 
 ## Connect
 
 ```sh
-claude mcp add --transport http focal https://mcp.example.com/mcp --header "Authorization: Bearer $FOCAL_MCP_TOKEN"
+claude mcp add --transport http focal https://mcp.example.com/mcp --header "Authorization: Bearer <token>"
 ```
 
 Claude Desktop (stdio):
 
 ```json
 { "mcpServers": { "focal": { "command": "bun", "args": ["server/mcp/stdio.ts"], "cwd": "/path/to/focal",
-  "env": { "VITE_SUPABASE_URL": "...", "VITE_SUPABASE_PUBLISHABLE_KEY": "...", "FOCAL_EMAIL": "...", "FOCAL_PASSWORD": "...", "TZ": "Australia/Melbourne" } } } }
+  "env": { "VITE_SUPABASE_URL": "...", "VITE_SUPABASE_PUBLISHABLE_KEY": "...", "SUPABASE_SERVICE_ROLE_KEY": "...", "FOCAL_MCP_TOKEN": "...", "TZ": "Australia/Melbourne" } } } }
 ```
 
 The claude.ai web "custom connector" needs OAuth, which this does not implement (a static bearer token is not enough there).

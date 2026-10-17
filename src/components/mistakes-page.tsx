@@ -15,6 +15,7 @@ import { PageHeader } from "./page-header"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger, ComboboxValue } from "./ui/combobox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
@@ -89,6 +90,7 @@ const RATING_OPTIONS: { rating: ReviewRating; label: string; shortcut: string; v
 // Two columns start at the same 1024px the workspace grid does, so the reading
 // pane and the list never disagree about which layout is on screen.
 const WORKSPACE_MIN_WIDTH = 1024
+const REVIEW_FILTER_LABELS: Record<BrowserFilter, string> = { all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Reviews paused" }
 
 type ReviewRecord = NonNullable<Mistake["reviewHistory"]>[number]
 
@@ -487,7 +489,23 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
   const visibleAttemptIds = new Set(visibleMistakes.map((mistake) => mistake.attemptId))
   const exams = data.attempts.filter((attempt) => visibleAttemptIds.has(attempt.id))
   const providers = [...new Set(exams.map((attempt) => attempt.provider))].filter(Boolean).sort()
-  const activeFilterCount = [activeSubject !== "all", activeMathsExamFilter !== "all", Boolean(search), browserFilter !== "all", category !== "all", topic !== "all", examId !== "all", provider !== "all", resolution !== "all"].filter(Boolean).length
+  const examOptions = [
+    { value: "all", label: "All exams", detail: "Any linked exam or no linked exam" },
+    ...(provider === "all" ? [{ value: "unlinked", label: "No linked exam", detail: "Mistakes saved without an exam" }] : []),
+    ...exams.filter((exam) => provider === "all" || exam.provider === provider).map((exam) => ({ value: exam.id, label: `${exam.title} · ${exam.paper}`, detail: [exam.subject, exam.provider, exam.examYear, new Date(`${exam.completedAt}T00:00:00`).toLocaleDateString("en-AU")].filter(Boolean).join(" · ") })),
+  ]
+  const topicOptions = [{ value: "all", label: "All topics" }, ...topics.map((item) => ({ value: item, label: item }))]
+  const activeFilters = [
+    ...(activeSubject !== "all" ? [{ key: "subject", label: `Subject: ${activeSubject === "unlinked" ? "No linked exam" : activeSubject}`, clear: () => { setSubject("all"); setMathsExamFilter("all") } }] : []),
+    ...(activeMathsExamFilter !== "all" ? [{ key: "paper", label: activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active", clear: () => setMathsExamFilter("all") }] : []),
+    ...(search.trim() ? [{ key: "search", label: `Search: ${search.trim()}`, clear: () => setSearch("") }] : []),
+    ...(examId !== "all" ? [{ key: "exam", label: `Exam: ${examOptions.find((item) => item.value === examId)?.label ?? "Deleted exam"}`, clear: () => setExamId("all") }] : []),
+    ...(provider !== "all" ? [{ key: "provider", label: `Provider: ${provider}`, clear: () => setProvider("all") }] : []),
+    ...(category !== "all" ? [{ key: "category", label: `Category: ${category}`, clear: () => setCategory("all") }] : []),
+    ...(topic !== "all" ? [{ key: "topic", label: `Topic: ${topic}`, clear: () => setTopic("all") }] : []),
+    ...(browserFilter !== "all" ? [{ key: "schedule", label: `Review: ${REVIEW_FILTER_LABELS[browserFilter]}`, clear: () => setBrowserFilter("all") }] : []),
+    ...(resolution !== "all" ? [{ key: "resolution", label: `Progress: ${resolution === "resolved" ? "Resolved" : "Unresolved"}`, clear: () => setResolution("all") }] : []),
+  ]
   function clearSelection() { setSelected(new Set()); setActiveId(null); setPage(0) }
   function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setExamId("all"); setProvider("all"); setResolution("all"); clearSelection() }
   function clearAllFilters() { setSubject("all"); setMathsExamFilter("all"); resetFilters() }
@@ -639,25 +657,74 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
               <div className="flex gap-2 sm:shrink-0">
-              <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); clearSelection() }}>
-                <SelectTrigger aria-label="Filter mistake cards by schedule"><SelectValue>{({ all: "All cards", due: "Due now", new: "New", learning: "Learning", review: "Review", mature: "Mature", suspended: "Reviews paused" } as Record<BrowserFilter, string>)[browserFilter]}</SelectValue></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All cards</SelectItem><SelectItem value="due">Due now</SelectItem><SelectItem value="new">New</SelectItem><SelectItem value="learning">Learning</SelectItem><SelectItem value="review">Review</SelectItem><SelectItem value="mature">Mature</SelectItem><SelectItem value="suspended">Reviews paused</SelectItem>
-                </SelectContent>
+              <Select items={{ due: "Due date", newest: "Newest first", oldest: "Oldest first", marks: "Most marks lost", question: "Question order" }} value={sort} onValueChange={(value) => { setSort((value ?? "due") as LibrarySort); setPage(0) }}>
+                <SelectTrigger className="min-w-0 flex-1 sm:flex-none" aria-label="Sort mistakes"><span className="text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="due">Due date</SelectItem><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="marks">Most marks lost</SelectItem><SelectItem value="question">Question order</SelectItem></SelectContent>
               </Select>
-              <Button variant="ghost" className="flex-1 sm:flex-none" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters}><SlidersHorizontal />Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}</Button>
+              <Button variant="outline" onClick={() => setShowFilters((open) => !open)} aria-expanded={showFilters} aria-controls="mistake-library-filters"><SlidersHorizontal />Filters{activeFilters.length ? <Badge variant="secondary" className="px-1.5 tabular-nums">{activeFilters.length}</Badge> : null}</Button>
               </div>
             </div>
-            {showFilters ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/20 p-3">
-              <Select items={[{ value: "all", label: "All exams" }, { value: "unlinked", label: "No linked exam" }, ...exams.map((exam) => ({ value: exam.id, label: `${exam.title} · ${exam.provider} · ${new Date(`${exam.completedAt}T00:00:00`).toLocaleDateString("en-AU")}` }))]} value={examId} onValueChange={(value) => { setExamId(value ?? "all"); clearSelection() }}><SelectTrigger className="w-full sm:w-auto sm:max-w-72" aria-label="Filter by linked exam"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="unlinked">No linked exam</SelectItem>{exams.map((exam) => <SelectItem key={exam.id} value={exam.id}>{exam.title} · {exam.provider} · {new Date(`${exam.completedAt}T00:00:00`).toLocaleDateString("en-AU")}</SelectItem>)}</SelectContent></Select>
-              <Select value={provider} onValueChange={(value) => { setProvider(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by exam provider"><SelectValue>{provider === "all" ? "All providers" : provider}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All providers</SelectItem>{providers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select items={{ all: "All progress", unresolved: "Unresolved", resolved: "Resolved" }} value={resolution} onValueChange={(value) => { setResolution((value ?? "all") as typeof resolution); clearSelection() }}><SelectTrigger aria-label="Filter by resolution"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All progress</SelectItem><SelectItem value="unresolved">Unresolved</SelectItem><SelectItem value="resolved">Resolved</SelectItem></SelectContent></Select>
-              <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by mistake category"><SelectValue>{category === "all" ? "All categories" : category}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select value={topic} onValueChange={(value) => { setTopic(value ?? "all"); clearSelection() }}><SelectTrigger aria-label="Filter by topic"><SelectValue>{topic === "all" ? "All topics" : topic}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All topics</SelectItem>{topics.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
-              <Select items={{ due: "Due date", newest: "Newest first", oldest: "Oldest first", marks: "Most marks lost", question: "Question order" }} value={sort} onValueChange={(value) => { setSort((value ?? "due") as LibrarySort); setPage(0) }}><SelectTrigger aria-label="Sort mistakes"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="due">Due date</SelectItem><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="marks">Most marks lost</SelectItem><SelectItem value="question">Question order</SelectItem></SelectContent></Select>
-              {activeFilterCount ? <Button size="sm" variant="ghost" onClick={clearAllFilters}><X />Clear filters</Button> : null}
+            {showFilters ? <section id="mistake-library-filters" aria-labelledby="mistake-filters-heading" className="grid min-w-0 gap-4 rounded-xl border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div><h2 id="mistake-filters-heading" className="text-sm font-medium">Filter mistakes</h2><p className="mt-1 text-xs text-muted-foreground">Combine filters to narrow your library. Results update as you choose.</p></div>
+                <span className="text-xs text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} matching {browsedMistakes.length === 1 ? "mistake" : "mistakes"}</span>
+              </div>
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <Field className="min-w-0">
+                  <FieldLabel htmlFor="mistake-filter-provider">Exam provider</FieldLabel>
+                  <Select value={provider} onValueChange={(value) => { const next = value ?? "all"; setProvider(next); if (next !== "all" && attemptMap.get(examId)?.provider !== next) setExamId("all"); clearSelection() }}>
+                    <SelectTrigger id="mistake-filter-provider" className="w-full"><SelectValue>{provider === "all" ? "All providers" : provider}</SelectValue></SelectTrigger>
+                    <SelectContent><SelectItem value="all">All providers</SelectItem>{providers.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+                <Field className="min-w-0 xl:col-span-2">
+                  <FieldLabel htmlFor="mistake-filter-exam">Linked exam</FieldLabel>
+                  <Combobox items={examOptions} value={examOptions.find((item) => item.value === examId) ?? examOptions[0]} itemToStringLabel={(item) => item.label} filter={(item, query) => `${item.label} ${item.detail}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())} onValueChange={(value) => { setExamId(value?.value ?? "all"); clearSelection() }} autoHighlight>
+                    <ComboboxTrigger id="mistake-filter-exam" render={<Button variant="outline" className="w-full min-w-0 justify-between bg-card font-normal" />}><span className="truncate text-left"><ComboboxValue /></span></ComboboxTrigger>
+                    <ComboboxContent className="min-w-0">
+                      <div className="border-b p-2"><ComboboxInput className="w-full" showTrigger={false} placeholder="Search exam name, paper or year…" aria-label="Search linked exams" /></div>
+                      <ComboboxEmpty>No exams match your search.</ComboboxEmpty>
+                      <ComboboxList>{(item) => <ComboboxItem key={item.value} value={item} className="items-start py-2"><span className="grid min-w-0 gap-0.5"><span className="text-wrap break-words">{item.label}</span><span className="text-xs text-wrap text-muted-foreground">{item.detail}</span></span></ComboboxItem>}</ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                </Field>
+                <Field className="min-w-0">
+                  <FieldLabel htmlFor="mistake-filter-category">Mistake category</FieldLabel>
+                  <Select value={category} onValueChange={(value) => { setCategory(value ?? "all"); clearSelection() }}>
+                    <SelectTrigger id="mistake-filter-category" className="w-full min-w-0 [&>span]:truncate"><SelectValue>{category === "all" ? "All categories" : category}</SelectValue></SelectTrigger>
+                    <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+                <Field className="min-w-0">
+                  <FieldLabel htmlFor="mistake-filter-topic">Topic</FieldLabel>
+                  <Combobox items={topicOptions} value={topicOptions.find((item) => item.value === topic) ?? topicOptions[0]} onValueChange={(value) => { setTopic(value?.value ?? "all"); clearSelection() }} autoHighlight>
+                    <ComboboxTrigger id="mistake-filter-topic" render={<Button variant="outline" className="w-full min-w-0 justify-between bg-card font-normal" />}><span className="truncate text-left"><ComboboxValue /></span></ComboboxTrigger>
+                    <ComboboxContent className="min-w-0"><div className="border-b p-2"><ComboboxInput className="w-full" showTrigger={false} placeholder="Search topics…" aria-label="Search topics" /></div><ComboboxEmpty>No topics match your search.</ComboboxEmpty><ComboboxList>{(item) => <ComboboxItem key={item.value} value={item}><span className="text-wrap break-words">{item.label}</span></ComboboxItem>}</ComboboxList></ComboboxContent>
+                  </Combobox>
+                </Field>
+                <Field className="min-w-0">
+                  <FieldLabel htmlFor="mistake-filter-review">Review status</FieldLabel>
+                  <Select value={browserFilter} onValueChange={(value) => { setBrowserFilter((value ?? "all") as BrowserFilter); clearSelection() }}>
+                    <SelectTrigger id="mistake-filter-review" className="w-full"><SelectValue>{REVIEW_FILTER_LABELS[browserFilter]}</SelectValue></SelectTrigger>
+                    <SelectContent>{Object.entries(REVIEW_FILTER_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <fieldset className="grid gap-2 border-t pt-3">
+                <legend className="sr-only">Progress</legend>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="text-sm font-medium">Progress</span>
+                  <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by progress">
+                    {([['all', 'Any progress'], ['unresolved', 'Unresolved'], ['resolved', 'Resolved']] as const).map(([value, label]) => <Button key={value} size="sm" variant={resolution === value ? "secondary" : "ghost"} aria-pressed={resolution === value} onClick={() => { setResolution(value); clearSelection() }}>{label}</Button>)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Focus on mistakes that still need practice, or revisit resolved ones.</p>
+                </div>
+              </fieldset>
+            </section> : null}
+            {activeFilters.length ? <div className="flex min-w-0 flex-wrap items-center gap-2" aria-label="Active filters">
+              {activeFilters.map((filter) => <Button key={filter.key} size="sm" variant="secondary" className="h-auto min-h-7 max-w-full py-1" onClick={() => { filter.clear(); clearSelection() }} aria-label={`Remove filter: ${filter.label}`}><span className="truncate">{filter.label}</span><X className="size-3" /></Button>)}
+              <Button size="sm" variant="ghost" onClick={clearAllFilters}>Clear all</Button>
             </div> : null}
-            {activeFilterCount && !showFilters ? <div><Button size="sm" variant="ghost" onClick={clearAllFilters}><X />Clear {activeFilterCount} active filters</Button></div> : null}
             {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · ${currentPage * pageSize + 1}–${currentPage * pageSize + shownMistakes.length}` : ""}</span>

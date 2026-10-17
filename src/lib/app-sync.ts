@@ -464,12 +464,18 @@ function mergeConcurrentValue(entity: Entity, rowId: string, base: unknown, loca
   }
   if (entity === "mistakes" && isRecord(base) && isRecord(local) && isRecord(remote)) {
     const merged = mergeObject(base, local, remote)
-    if (Array.isArray(base.reviewHistory) && Array.isArray(local.reviewHistory) && Array.isArray(remote.reviewHistory)) {
-      const reviews = new Map<string, unknown>()
+    if (Array.isArray(local.reviewHistory) && Array.isArray(remote.reviewHistory)) {
+      const reviews = new Map<string, Record<string, unknown>>()
       for (const entry of [...remote.reviewHistory, ...local.reviewHistory]) {
         if (isRecord(entry) && typeof entry.id === "string") reviews.set(entry.id, entry)
       }
-      merged.reviewHistory = [...reviews.values()]
+      merged.reviewHistory = [...reviews.values()].sort((a, b) => Date.parse(String(a.completedAt)) - Date.parse(String(b.completedAt)) || String(a.id).localeCompare(String(b.id)))
+      // ponytail: keep the newest rating's schedule; replay would require versioned scheduling rules.
+      const schedule = (Date.parse(String(local.lastReviewedAt)) || 0) >= (Date.parse(String(remote.lastReviewedAt)) || 0) ? local : remote
+      for (const key of ["reviewState", "intervalDays", "easeFactor", "repetitions", "lapses", "lastReviewedAt", "resolved", "dueAt"]) {
+        if (key in schedule) merged[key] = schedule[key]
+      }
+      merged.updatedAt = (Date.parse(String(local.updatedAt)) || 0) >= (Date.parse(String(remote.updatedAt)) || 0) ? local.updatedAt : remote.updatedAt
     }
     return merged
   }

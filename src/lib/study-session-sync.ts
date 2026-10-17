@@ -757,6 +757,8 @@ export function useStudySessionSync(
       canonicalSessions.current = new Map()
       queue.current = []
       try { acceptSessions(guestPastStudy(), true) }
+      // A failed external-storage read must clear the previous account's sessions.
+      // oxlint-disable-next-line react/set-state-in-effect
       catch (error) { console.error("Could not load past study:", error); setSessions([]) }
       return
     }

@@ -255,6 +255,8 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
     if (questionResults.length && Math.abs(questionMaximum - rawMax) < 0.01 && Math.abs(questionScore - rawScore) >= 0.01) {
       return setMarkingError(`The question results total ${questionScore}/${questionMaximum}, but the overall mark is ${rawScore}/${rawMax}. Make the totals match.`)
     }
+    // This timestamp is captured by the submit handler, outside render.
+    // oxlint-disable-next-line react/purity
     const timestamp = new Date().toISOString()
     onSave({
       id: crypto.randomUUID(),

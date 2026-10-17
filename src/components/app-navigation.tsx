@@ -25,8 +25,8 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
   SidebarTrigger,
-  useSidebar,
 } from "./ui/sidebar"
+import { useSidebar } from "../hooks/use-sidebar"
 import type { AppView } from "../lib/app-view"
 import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "../lib/navigation"
 import type { useStudySessionSync } from "../lib/study-session-sync"

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { useChatGPT } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
@@ -158,12 +158,6 @@ export function MistakeSheet({
   const [totalMarks, setTotalMarks] = useState(initialMistake?.totalMarks ?? 0)
   const [marksLost, setMarksLost] = useState(initialMistake?.marksLost ?? 0)
   const [questionImages, setQuestionImages] = useState<File[]>([])
-  const [questionImageUrls, setQuestionImageUrls] = useState<string[]>([])
-  useEffect(() => {
-    const urls = questionImages.map((file) => URL.createObjectURL(file))
-    setQuestionImageUrls(urls)
-    return () => urls.forEach((url) => URL.revokeObjectURL(url))
-  }, [questionImages])
   const [images, setImages] = useState<File[]>([])
   const [savedAttachments, setSavedAttachments] = useState(initialMistake?.attachments ?? [])
   const [saveImages, setSaveImages] = useState(Boolean(storageUserId))
@@ -553,7 +547,12 @@ export function MistakeSheet({
                 {importMode === "batch" ? <FieldDescription>Switch to One mistake to attach multiple images to the same question.</FieldDescription> : null}
                 {questionImages.map((file, index) => <div key={index} className="grid gap-2 rounded-xl border p-3">
                   <div className="flex items-center justify-between gap-2"><span className="truncate text-sm">{index + 1}. {file.name}</span><Button type="button" size="icon-xs" variant="ghost" disabled={saving || analysing} aria-label={"Remove question image " + (index + 1) + ": " + file.name} onClick={() => setQuestionImages((files) => files.filter((_, i) => i !== index))}><X /></Button></div>
-                  {questionImageUrls[index] ? <img src={questionImageUrls[index]} alt={"Question image " + (index + 1) + ": " + file.name} className="max-h-96 w-full rounded-lg object-contain" /> : null}
+                  <img ref={(node) => {
+                    if (!node) return
+                    const url = URL.createObjectURL(file)
+                    node.src = url
+                    return () => URL.revokeObjectURL(url)
+                  }} alt={"Question image " + (index + 1) + ": " + file.name} className="max-h-96 w-full rounded-lg object-contain" />
                 </div>)}
                   {initialMistake?.attachments?.length ? (
                     <div className="grid gap-2">

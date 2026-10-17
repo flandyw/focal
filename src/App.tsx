@@ -23,6 +23,7 @@ import {
   mistakeReviewDayStart,
   normalizeMistakeReviewPreferences,
   type ReviewRating,
+  type PracticeContext,
   removeAttempt,
   type AppData,
   type ExamAttempt,
@@ -505,12 +506,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     })
   }
 
-  function reviewMistake(mistake: Mistake, rating: ReviewRating) {
+  function reviewMistake(mistake: Mistake, rating: ReviewRating, context: PracticeContext = {}) {
+    const completedAt = new Date().toISOString()
     setData((current) => ({
       ...current,
-      mistakes: current.mistakes.map((item) => item.id === mistake.id ? recordMistakeReview(item, rating, new Date().toISOString(), current.mistakeReviewPreferences, current.mistakes) : item),
+      mistakes: current.mistakes.map((item) => item.id === mistake.id ? recordMistakeReview(item, rating, completedAt, current.mistakeReviewPreferences, current.mistakes, context) : item),
     }))
-    toast.success(`${rating[0].toUpperCase()}${rating.slice(1)} recorded`)
   }
 
   function toggleMistakeSuspension(mistake: Mistake) {

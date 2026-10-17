@@ -20,6 +20,8 @@ export function McpTokens() {
     if (error) setMessage("Could not load tokens.")
     else setTokens(data as Token[])
   }, [])
+  // load updates state only after the token-list RPC resolves.
+  // oxlint-disable-next-line react/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   async function create() {

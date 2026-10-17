@@ -6,6 +6,8 @@ import { useMinWidth } from "../hooks/use-mobile"
 import { AI_ENABLED } from "../lib/host"
 import { filterMistakeLibrary, type BrowserFilter, type LibrarySort } from "../lib/mistake-library"
 import { MistakePractice } from "./mistake-practice"
+import { MistakePracticeHub, PracticeCelebration } from "./mistake-practice-hub"
+import { getPracticeProgress, isRematch, playPracticeSound, practiceFeedback, recallStrength } from "../lib/mistake-practice"
 import { MarkdownPreview } from "./markdown-preview"
 import { MistakeAttachments } from "./mistake-attachments"
 import { MistakeAlternativeDeck } from "./mistake-alternative-deck"
@@ -37,6 +39,8 @@ import {
   type Mistake,
   type MistakeReviewState,
   type ReviewRating,
+  type PracticeContext,
+  type QuestionConfidence,
 } from "../lib/exam-data"
 import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
@@ -68,7 +72,7 @@ type MistakesPageProps = {
   studies: VcaaStudyResources[]
   onLog: () => void
   onEdit: (mistake: Mistake) => void
-  onReview: (mistake: Mistake, rating: ReviewRating) => void
+  onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void
   onToggleSuspend: (mistake: Mistake) => void
   onSetSuspended: (ids: string[], suspended: boolean) => void
   onDelete: (mistake: Mistake) => void
@@ -151,23 +155,36 @@ function AnswerPanel({ label, value, tone }: { label: string; value?: string; to
   )
 }
 
-function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend }: { allMistakes: Mistake[]; preferences?: MistakeReviewPreferences; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating) => void; onBrowse: () => void }) {
-  const now = useTickingNow(30_000)
-  const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[] } | null>(null)
+function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
+  const tick = useTickingNow(30_000)
+  const [latestReviewAt, setLatestReviewAt] = useState(0)
+  const now = new Date(Math.max(tick.getTime(), latestReviewAt))
+  const settings = normalizeMistakeReviewPreferences(preferences)
+  const progress = getPracticeProgress(allMistakes, now)
+  const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[]; weekly: boolean; week: string; size: number; initialXP: number } | null>(null)
+  const [feedback, setFeedback] = useState("")
+  const [celebration, setCelebration] = useState(0)
   const due = getDueMistakes(mistakes, now)
-  const mistakeMap = new Map(mistakes.map((mistake) => [mistake.id, mistake]))
-  const dueIds = new Set(due.map((mistake) => mistake.id))
-  const remaining = session?.ids.filter((id) => dueIds.has(id)) ?? []
+  const mistakeMap = new Map(allMistakes.map((mistake) => [mistake.id, mistake]))
+  const remaining = session?.ids.filter((id) => mistakeMap.has(id) && !mistakeMap.get(id)!.suspended) ?? []
   const current = remaining.length ? mistakeMap.get(remaining[0]) : undefined
-  const counts = getMistakeQueueCounts(mistakes, now)
   const completed = session?.ratings.length ?? 0
   const nextDue = mistakes.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
 
-  function start() { setSession({ ids: due.map((mistake) => mistake.id), ratings: [] }) }
-  function rate(rating: ReviewRating) {
-    if (!current) return
-    onReview(current, rating)
-    setSession((previous) => previous && ({ ids: previous.ids.filter((id) => id !== current.id), ratings: [...previous.ratings, rating] }))
+  function start(cards = due.slice(0, settings.practiceTarget), weekly = false) {
+    if (!cards.length) return
+    setSession({ ids: cards.map((mistake) => mistake.id), ratings: [], weekly, week: progress.week, size: weekly ? progress.weeklyTarget : cards.length, initialXP: progress.xp })
+    setFeedback("")
+  }
+  function rate(rating: ReviewRating, context: PracticeContext = {}) {
+    if (!current || !session) return
+    const reviewContext = { ...context, ...(session.weekly ? { challengeWeek: session.week, challengeSize: session.size } : {}) }
+    onReview(current, rating, reviewContext)
+    setLatestReviewAt(Date.now())
+    setFeedback(practiceFeedback(current, rating, context))
+    if (settings.practiceSound) playPracticeSound()
+    if (remaining.length === 1 || isRematch(current) && ["good", "easy"].includes(rating)) setCelebration((value) => value + 1)
+    setSession((previous) => previous && ({ ...previous, ids: previous.ids.filter((id) => id !== current.id), ratings: [...previous.ratings, rating] }))
   }
   function shuffle() {
     const ids = [...remaining]
@@ -178,40 +195,29 @@ function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onR
     setSession((previous) => previous && ({ ...previous, ids }))
   }
 
-  if (!session || !current) return (
-    <section className="mx-auto grid w-full max-w-3xl gap-6 rounded-xl border bg-card p-6 sm:p-10">
-      <div className="grid gap-3">
-        <BookOpenCheck className="size-8 text-primary" />
-        <h2 className="text-2xl font-semibold">{session ? "Session complete" : "Make the next attempt count"}</h2>
-        <p className="text-muted-foreground">{session ? `You reviewed ${completed} ${completed === 1 ? "mistake" : "mistakes"}.` : "Recall your approach, compare it with the correction, then choose how well you remembered."}</p>
-      </div>
-      {session ? <dl className="grid grid-cols-4 gap-3 border-y py-5">{RATING_OPTIONS.map(({ rating, label }) => <div key={rating}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-semibold">{session.ratings.filter((value) => value === rating).length}</dd></div>)}</dl> : <dl className="grid grid-cols-3 gap-3 border-y py-5">{[["New", counts.new], ["Learning", counts.learning + counts.relearning], ["Review", counts.review]].map(([label, count]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-2xl font-semibold">{count}</dd></div>)}</dl>}
-      <p className="text-sm text-muted-foreground" role="status">{due.length ? `${due.length} ${due.length === 1 ? "card is" : "cards are"} due now. Each session covers the cards due when you start.` : nextDue ? `You're up to date. Next review in ${formatReviewInterval(nextDue, now)}.` : "Add a mistake or resume paused cards to start reviewing."}</p>
-      <div className="flex flex-wrap gap-2"><Button onClick={start} disabled={!due.length}><Play />{session ? "Review due cards" : `Start review (${due.length})`}</Button><Button variant="outline" onClick={onBrowse}>Back to library</Button></div>
+  if (!session || !current) return <div className="relative mx-auto grid w-full max-w-3xl gap-5">
+    <PracticeCelebration event={celebration} enabled={settings.practiceEffects!} finish={settings.practiceFinish} />
+    <section className="grid gap-5 rounded-xl border bg-card p-6 sm:p-8">
+      <div className="grid gap-2"><BookOpenCheck className="size-7 text-primary" /><h2 className="text-2xl font-semibold">{session ? "Session complete" : "Make the next attempt count"}</h2><p className="text-muted-foreground">{session ? `${completed} ${completed === 1 ? "mistake" : "mistakes"} reviewed · +${Math.max(0, progress.xp - session.initialXP)} XP` : "Recall your approach, compare it with the correction, then rate your recall."}</p></div>
+      {feedback && <p role="status" className="text-sm text-primary">{feedback}</p>}
+      {session && <dl className="grid grid-cols-4 gap-3 border-y py-4">{RATING_OPTIONS.map(({ rating, label }) => <div key={rating}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-xl font-semibold">{session.ratings.filter((value) => value === rating).length}</dd></div>)}</dl>}
+      <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!due.length}><Play />{session ? "Another round" : `Start ${Math.min(due.length, settings.practiceTarget!)} cards`}</Button>{!session && <Button variant="outline" disabled={!due.length} onClick={() => start(due.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
+      {!session && <p className="text-xs text-muted-foreground">{due.length ? `${due.length} due in your library. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : "Add a mistake to start practising."}</p>}
     </section>
-  )
+    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
+  </div>
 
-  return (
-    <div className="mx-auto grid w-full max-w-4xl gap-5">
-      <header className="grid gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm tabular-nums" role="status">{completed} reviewed · {remaining.length} remaining</p>
-          <div className="flex gap-1">
-            <Button size="sm" variant="ghost" onClick={shuffle} disabled={remaining.length < 2}><Shuffle />Shuffle</Button>
-            <Button size="sm" variant="ghost" disabled={remaining.length < 2} onClick={() => setSession({ ...session, ids: [...remaining.slice(1), remaining[0]] })}><SkipForward />Skip</Button>
-            <Button size="sm" variant="outline" onClick={() => setSession({ ...session, ids: [] })}>End session</Button>
-          </div>
-        </div>
-        <Progress value={completed / (completed + remaining.length) * 100} aria-label="Session progress" />
-      </header>
-      <ReviewCard mistakes={allMistakes} preferences={preferences} key={current.id + current.updatedAt} mistake={current} attempt={attempts.find((attempt) => attempt.id === current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onReimport={onReimport} onToggleSuspend={onToggleSuspend} />
-    </div>
-  )
+  return <div className="relative mx-auto grid w-full max-w-4xl gap-5">
+    <PracticeCelebration event={celebration} enabled={settings.practiceEffects!} finish={settings.practiceFinish} />
+    <header className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm tabular-nums" role="status">{session.weekly ? "Weekly challenge · " : ""}{completed} reviewed · {remaining.length} remaining</p><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={shuffle} disabled={remaining.length < 2}><Shuffle />Shuffle</Button><Button size="sm" variant="ghost" disabled={remaining.length < 2} onClick={() => setSession({ ...session, ids: [...remaining.slice(1), remaining[0]] })}><SkipForward />Skip</Button><Button size="sm" variant="outline" onClick={() => setSession({ ...session, ids: [] })}>End session</Button></div></div><Progress value={completed / (completed + remaining.length) * 100} aria-label="Session progress" />{feedback && <p key={completed} role="status" className={settings.practiceEffects ? "practice-feedback text-sm text-primary" : "text-sm text-primary"}>{feedback} <span className="text-muted-foreground">+{Math.max(0, progress.xp - session.initialXP)} XP this session</span></p>}</header>
+    <ReviewCard mistakes={allMistakes} preferences={preferences} key={current.id + current.updatedAt} mistake={current} attempt={attempts.find((attempt) => attempt.id === current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onReimport={onReimport} onToggleSuspend={onToggleSuspend} />
+  </div>
 }
 
-function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, onEdit, onReimport, onToggleSuspend }: { preferences?: MistakeReviewPreferences; mistakes: Mistake[]; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
+function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, onEdit, onReimport, onToggleSuspend }: { preferences?: MistakeReviewPreferences; mistakes: Mistake[]; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating, context?: PracticeContext) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
   const [revealed, setRevealed] = useState(false)
   const [draft, setDraft] = useState("")
+  const [confidence, setConfidence] = useState<QuestionConfidence>()
   const submitting = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const [reviewTime] = useState(() => new Date())
@@ -221,7 +227,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
   function rate(rating: ReviewRating) {
     if (!revealed || submitting.current) return
     submitting.current = true
-    try { onRate(rating) } catch (error) {
+    try { onRate(rating, { confidence }) } catch (error) {
       submitting.current = false
       toast.error(error instanceof Error ? error.message : "Could not save your review. Try again.")
     }
@@ -248,10 +254,11 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
           <div className="grid gap-2"><h2 ref={heading} tabIndex={-1} className="text-xl font-semibold outline-none"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></h2><ExamContext mistake={mistake} attempt={attempt} studies={studies} /></div>
           {mistake.questionText?.trim() ? <MarkdownPreview unframed>{mistake.questionText}</MarkdownPreview> : null}
           <MistakeAttachments attachments={mistake.attachments} />
+          <div className="grid gap-2"><p className="text-xs text-muted-foreground">Recall strength · {recallStrength(mistake)}/3 spaced recalls{isRematch(mistake) ? " · Rematch" : ""}</p><Progress value={recallStrength(mistake) / 3 * 100} aria-label="Recall strength across different days" /><fieldset disabled={revealed}><legend className="mb-2 text-sm font-medium">Before you reveal: how confident are you?</legend><div className="flex flex-wrap gap-2">{([['low', 'Guessing'], ['medium', 'Unsure'], ['high', 'Confident']] as const).map(([value, label]) => <Button key={value} size="sm" variant={confidence === value ? "secondary" : "outline"} aria-pressed={confidence === value} onClick={() => setConfidence(value)}>{label}</Button>)}</div></fieldset><p className="text-xs text-muted-foreground">Optional. Your prediction stays locked after revealing; every honest attempt earns the same XP.</p></div>
           <div className="grid gap-2"><label htmlFor="review-recall" className="text-sm font-medium">Your approach <span className="font-normal text-muted-foreground">(optional)</span></label><textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="w-full resize-y rounded-lg border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
         </div>
       </div>
-      {revealed ? <div id="review-answer" className="grid gap-4"><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div> : null}
+      {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div> : null}
       <footer className="sticky bottom-0 z-10 grid gap-2 rounded-xl border bg-background/95 p-3 backdrop-blur">
         {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70">Space</kbd></Button>}
       </footer>
@@ -582,7 +589,7 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
       </PageHeader>
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? `${summaryCounts.due} ${summaryCounts.due === 1 ? "mistake" : "mistakes"} ready to review` : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{data.mistakes.length} saved · {summaryProgress.matureCards} mastered</p></div></div>
+        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryProgress.matureCards} mature</p></div></div>
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section>
       <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span><Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject === "unlinked" ? "No linked exam" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}<SelectItem value="unlinked">No linked exam</SelectItem></SelectContent></Select>{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div>
@@ -598,7 +605,7 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
           <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
           <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (

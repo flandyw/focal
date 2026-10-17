@@ -100,8 +100,9 @@ export type ReviewRating = "again" | "hard" | "good" | "easy"
 type LegacyReviewResult = "incorrect" | "assisted" | "correct"
 export type ReviewResult = ReviewRating | LegacyReviewResult
 export type MistakeReviewState = "new" | "learning" | "review" | "relearning"
+export type PracticeContext = { confidence?: QuestionConfidence; challengeWeek?: string; challengeSize?: number }
 
-type MistakeReview = {
+type MistakeReview = PracticeContext & {
   id: string
   completedAt: string
   result: ReviewResult
@@ -248,6 +249,13 @@ export type MistakeReviewPreferences = {
   lighterUntil?: string
   lighterDailyTarget: number
   updatedAt: string
+  practiceDays?: number[]
+  practiceTime?: string
+  practiceTarget?: number
+  practiceSnoozedUntil?: string
+  practiceEffects?: boolean
+  practiceSound?: boolean
+  practiceFinish?: string
 }
 
 export function normalizeMistakeReviewPreferences(value?: Partial<MistakeReviewPreferences> | null): MistakeReviewPreferences {
@@ -259,6 +267,13 @@ export function normalizeMistakeReviewPreferences(value?: Partial<MistakeReviewP
     maximumIntervalDays: Math.round(clamp(value?.maximumIntervalDays, 180, 7, 365)),
     lighterUntil: typeof value?.lighterUntil === "string" && Number.isFinite(Date.parse(value.lighterUntil)) ? value.lighterUntil : undefined,
     lighterDailyTarget: Math.round(clamp(value?.lighterDailyTarget, 5, 0, 100)),
+    practiceDays: Array.isArray(value?.practiceDays) ? [...new Set(value.practiceDays.filter((day) => Number.isInteger(day) && day >= 1 && day <= 7))].sort() : [1, 2, 3, 4, 5],
+    practiceTime: typeof value?.practiceTime === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.practiceTime) ? value.practiceTime : "17:00",
+    practiceTarget: Math.round(clamp(value?.practiceTarget, 5, 1, 20)),
+    practiceSnoozedUntil: typeof value?.practiceSnoozedUntil === "string" && Number.isFinite(Date.parse(value.practiceSnoozedUntil)) ? value.practiceSnoozedUntil : undefined,
+    practiceEffects: value?.practiceEffects !== false,
+    practiceSound: value?.practiceSound === true,
+    practiceFinish: ["graphite", "moss", "cobalt", "amber"].includes(value?.practiceFinish ?? "") ? value!.practiceFinish : "graphite",
     updatedAt: typeof value?.updatedAt === "string" && Number.isFinite(Date.parse(value.updatedAt)) ? value.updatedAt : "1970-01-01T00:00:00.000Z",
   }
 }
@@ -458,6 +473,7 @@ export function recordMistakeReview(
   completedAt = new Date().toISOString(),
   preferences?: MistakeReviewPreferences,
   mistakes: Mistake[] = [],
+  context: PracticeContext = {},
 ): Mistake {
   const next = previewMistakeReview(mistake, result, completedAt, preferences, mistakes)
   const history = [...(mistake.reviewHistory ?? []), {
@@ -466,6 +482,7 @@ export function recordMistakeReview(
     result: next.rating,
     intervalDays: next.intervalDays,
     easeFactor: next.easeFactor,
+    ...context,
   }]
   return {
     ...mistake,
@@ -1081,6 +1098,9 @@ function isExamTiming(value: unknown): value is ExamTiming {
 function isMistakeReview(value: unknown): value is MistakeReview {
   if (!isRecord(value)) return false
   return typeof value.id === "string" && typeof value.completedAt === "string" &&
+    (value.confidence === undefined || ["low", "medium", "high"].includes(String(value.confidence))) &&
+    (value.challengeWeek === undefined || typeof value.challengeWeek === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.challengeWeek)) &&
+    (value.challengeSize === undefined || typeof value.challengeSize === "number" && Number.isInteger(value.challengeSize) && value.challengeSize >= 1 && value.challengeSize <= 5) &&
     ["incorrect", "assisted", "correct", "again", "hard", "good", "easy"].includes(String(value.result)) &&
     (value.intervalDays === undefined || typeof value.intervalDays === "number" && Number.isFinite(value.intervalDays) && value.intervalDays >= 0) &&
     (value.easeFactor === undefined || typeof value.easeFactor === "number" && Number.isFinite(value.easeFactor) && value.easeFactor >= MINIMUM_EASE_FACTOR)

@@ -91,6 +91,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   }
 
   useEffect(() => {
+    // Loading state accompanies an external model-catalog request.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (auth.isAuthenticated) void refreshModels()
   }, [auth.isAuthenticated])
 

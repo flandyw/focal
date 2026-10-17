@@ -24,12 +24,13 @@ export function createMcpServer() {
  * `fetch` does. The bearer token is a personal access token created in Focal's settings; the request runs as its owner.
  */
 export async function handleMcp(request: Request): Promise<Response> {
-  const token = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? ""
-  const unauthorized = () => new Response("Unauthorized", { status: 401, headers: { "www-authenticate": "Bearer" } })
-  if (!token.startsWith("focal_")) return unauthorized()
+  // The token is a bearer header, or the last URL segment (/mcp/<token>) for connectors that cannot send headers.
+  const token = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1] ?? new URL(request.url).pathname.split("/")[2] ?? ""
+  const unauthorized = (why: string) => { console.warn(`mcp 401: ${why}`); return new Response("Unauthorized", { status: 401, headers: { "www-authenticate": "Bearer" } }) }
+  if (!token.startsWith("focal_")) return unauthorized(token ? "bearer token without focal_ prefix" : "no Bearer authorization header")
   let userId: string | null
   try { userId = await resolveToken(token) } catch (error) { return new Response(error instanceof Error ? error.message : "Token lookup failed", { status: 503 }) }
-  if (!userId) return unauthorized()
+  if (!userId) return unauthorized("unknown or revoked token")
   return asUser(userId, async () => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     await createMcpServer().connect(transport)

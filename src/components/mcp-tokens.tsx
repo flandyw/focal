@@ -48,9 +48,12 @@ export function McpTokens() {
         <div className="grid gap-2 rounded-xs border p-3 text-sm">
           <p>Copy this now; it won't be shown again.</p>
           <code className="break-all text-xs">{command}</code>
+          <p className="text-muted-foreground">For connectors that can't send headers (claude.ai), use this URL with no sign-in:</p>
+          <code className="break-all text-xs">{`${MCP_URL}/${created}`}</code>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(created)}><Copy />Copy token</Button>
             <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(command)}><Copy />Copy command</Button>
+            <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(`${MCP_URL}/${created}`)}><Copy />Copy URL</Button>
             <Button variant="ghost" size="sm" onClick={() => setCreated(null)}>Done</Button>
           </div>
         </div>

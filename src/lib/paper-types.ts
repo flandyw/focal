@@ -52,3 +52,11 @@ export function trustedRawMax(attempt: Pick<ExamAttempt, "subject" | "paper" | "
   const type = paperTypeOf(attempt)
   return rawMaxWarning(attempt) ? expectedRawMax(attempt.subject, type!)![0] : attempt.rawMax
 }
+
+/** Everything worth telling the person who just saved this paper. Never blocks the save: providers differ. */
+export function examWarnings(attempt: Pick<ExamAttempt, "subject" | "paper" | "paperType" | "rawMax">): string[] {
+  const named = parsePaperType(attempt.paper)
+  const conflict = attempt.paperType && named && named !== attempt.paperType
+    ? `paper says "${attempt.paper}" but paperType is ${attempt.paperType}; paperType wins, so the paper text is probably wrong.` : null
+  return [conflict, rawMaxWarning(attempt)].filter((warning): warning is string => warning !== null)
+}

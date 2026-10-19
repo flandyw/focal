@@ -7,6 +7,7 @@ import {
 } from "../../src/lib/exam-data"
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty"
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression"
+import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types"
 import { demoteGreens } from "../../src/lib/stoplight"
 import { applyMistakeChanges, planTopicBackfill, validateTopic } from "../../src/lib/topics"
 import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac"
@@ -55,10 +56,11 @@ export function recordTools(define: Define) {
       return { attempt, mistakes: data.mistakes.filter((m) => m.attemptId === id).map((m) => ({ id: m.id, question: m.question, category: m.category, resolved: m.resolved })) }
     })
 
-  define("save_exam", "Log a new practice exam, or update one when `id` is given (fields you omit are kept). Question results are optional but power the area-of-study analytics.", {
+  define("save_exam", "Log a new practice exam, or update one when `id` is given. Question results are optional but power the topic analytics. For Methods and Specialist the total is checked against the paper (Exam 1 = 40, Exam 2 = 80, combined = 120 or 160): a mismatch still saves but comes back in `warnings`, so read them and correct the paper or rawMax with another save_exam call using the same id.", {
     id: z.string().optional(),
     subject: z.string().min(1), provider: z.string().min(1).describe("e.g. VCAA, Neap, Insight, or a school"),
     examYear: z.number().int().min(1990).max(2100), paper: z.string().min(1).describe("e.g. Exam 1"),
+    paperType: z.enum(PAPER_TYPES as [string, ...string[]]).optional().describe("exam1, exam2 or combined (one sitting marked out of 120/160). Optional: read from `paper` when omitted. Set combined for papers covering both exams."),
     completedAt: day, rawScore: z.number().min(0), rawMax: z.number().positive(), comment: z.string().optional(),
     questionResults: z.array(z.object({
       label: z.string().min(1), marksAwarded: z.number().min(0), maxMarks: z.number().positive(),
@@ -68,6 +70,7 @@ export function recordTools(define: Define) {
     const id = a.id ?? crypto.randomUUID()
     const fresh = (a.questionResults ?? []).map(() => crypto.randomUUID())
     const timestamp = nowIso()
+    const paperType = a.paperType as PaperType | undefined
     const error = validateAttempt(a) ?? validateQuestionResults((a.questionResults ?? []).map((r, i) => ({ ...r, id: fresh[i], confidence: r.confidence ?? "medium" })))
     if (error) throw new Error(error)
     const topics = (a.questionResults ?? []).map((r) => {
@@ -75,6 +78,7 @@ export function recordTools(define: Define) {
       if (checked && "error" in checked) throw new Error(`${r.label}: ${checked.error}`)
       return checked?.topic
     })
+    let warnings: string[] = []
     await updateApp((data) => {
       const old = data.attempts.find((item) => item.id === id)
       if (a.id && !old) throw new Error("No exam with that id.")
@@ -85,13 +89,14 @@ export function recordTools(define: Define) {
       })
       const next: ExamAttempt = {
         ...old, id, subject: a.subject.trim(), provider: a.provider.trim(), title: formatExamTitle(a.provider, a.examYear, a.subject),
-        examYear: a.examYear, paper: a.paper.trim(), completedAt: a.completedAt, rawScore: a.rawScore, rawMax: a.rawMax,
+        examYear: a.examYear, paper: a.paper.trim(), paperType: paperType ?? (a.paper.trim() === old?.paper ? old.paperType : undefined), completedAt: a.completedAt, rawScore: a.rawScore, rawMax: a.rawMax,
         comment: a.comment === undefined ? old?.comment : text(a.comment), questionResults: results ?? old?.questionResults,
         referenceId: old?.referenceId ?? null, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp,
       }
+      warnings = examWarnings(next)
       return { ...data, attempts: old ? data.attempts.map((item) => item.id === id ? next : item) : [...data.attempts, next] }
     })
-    return { id }
+    return { id, warnings }
   })
 
   define("delete_exam", "Delete an exam attempt AND every mistake logged against it.", { id: z.string() }, "delete", async ({ id }) => {

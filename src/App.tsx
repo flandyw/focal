@@ -156,7 +156,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
 
   const selectedSubject = chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
-  const subjectScoped = !["calendar", "timetable", "predictor", "settings", "focus"].includes(view) && selectedSubject !== "all"
+  const globalView = ["calendar", "timetable", "predictor", "settings", "focus"].includes(view)
+  const subjectScoped = !globalView && selectedSubject !== "all"
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
   const pageData = subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data
   const pageReferences = subjectScoped ? references.filter((reference) => sameStudySubject(reference.studyName, selectedSubject)) : references
@@ -669,15 +670,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" className="w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
-          <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
+          {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
               <label htmlFor="workspace-subject" className="mb-1.5 block text-xs font-medium text-muted-foreground">Subject</label>
               <SubjectCombobox id="workspace-subject" subjects={subjectOptions} preferredSubjects={data.subjects} includeAll value={subjectValue} onValueChange={chooseSubject} />
             </div>
-            <p className="pb-2 text-xs text-muted-foreground" role="status">{["calendar", "timetable", "predictor", "settings", "focus"].includes(view)
-              ? "This page covers all subjects. Your subject selection is kept for study pages."
-              : selectedSubject === "all" ? "Showing all subjects. Choose one to focus your workspace." : `Showing ${subjectValue} only.${view === "sacs" && data.activeSacTimer && !sameStudySubject(data.activeSacTimer.subject, selectedSubject) ? ` Active timer: ${data.activeSacTimer.subject}.` : ""}`}</p>
-          </div>
+            <p className="pb-2 text-xs text-muted-foreground" role="status">{selectedSubject === "all" ? "Showing all subjects. Choose one to focus your workspace." : `Showing ${subjectValue} only.${view === "sacs" && data.activeSacTimer && !sameStudySubject(data.activeSacTimer.subject, selectedSubject) ? ` Active timer: ${data.activeSacTimer.subject}.` : ""}`}</p>
+          </div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
             <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>

@@ -41,6 +41,7 @@ import { PerformanceContextInsights } from "./performance-context-insights"
 import { ExamTable } from "./exam-table"
 import { ExamActivityChart } from "./exam-activity-chart"
 import { getExamTarget } from "../lib/exam-target"
+import { getMathsExamPaper } from "../lib/mistake-filters"
 import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultySettings } from "../lib/exam-difficulty"
 import { openProgressReport } from "../lib/progress-report"
 import { localDate } from "../lib/learning-workspace"
@@ -242,13 +243,21 @@ function computeSubjectBreakdown(data: AppData, references: AssessmentReference[
     buckets.set(attempt.subject, bucket)
   }
   return [...buckets.entries()]
-    .map(([subject, bucket]) => ({
-      subject,
-      count: bucket.count,
-      average: weightedPerformanceAverage(bucket.attempts, data.examDifficulty),
-      lastDate: bucket.lastDate,
-      linkedCount: bucket.linkedCount,
-    }))
+    .map(([subject, bucket]) => {
+      const paperAverage = (paper: 1 | 2) => {
+        const attempts = bucket.attempts.filter((attempt) => getMathsExamPaper(attempt.paper) === paper)
+        return attempts.length ? weightedPerformanceAverage(attempts, data.examDifficulty) : null
+      }
+      return {
+        subject,
+        count: bucket.count,
+        average: weightedPerformanceAverage(bucket.attempts, data.examDifficulty),
+        exam1Average: paperAverage(1),
+        exam2Average: paperAverage(2),
+        lastDate: bucket.lastDate,
+        linkedCount: bucket.linkedCount,
+      }
+    })
     .toSorted((first, second) => second.average - first.average)
 }
 
@@ -461,6 +470,8 @@ function SubjectBreakdown({ data, references }: { data: AppData; references: Ass
                   {entry.count} attempt{entry.count === 1 ? "" : "s"}
                   {entry.lastDate ? ` · last ${formatDate(entry.lastDate)}` : ""}
                   {entry.linkedCount > 0 ? <> · {entry.linkedCount} linked</> : null}
+                  {entry.exam1Average !== null ? ` · Exam 1 ${entry.exam1Average.toFixed(1)}%` : ""}
+                  {entry.exam2Average !== null ? ` · Exam 2 ${entry.exam2Average.toFixed(1)}%` : ""}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1">

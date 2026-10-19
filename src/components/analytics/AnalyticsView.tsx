@@ -1,3 +1,4 @@
+import { sameStudySubject } from "../../lib/studySubjects"
 import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
@@ -34,6 +35,7 @@ import { TimeOfDayChart } from"./TimeOfDayChart"
 import { EmptyAnalytics } from"./EmptyAnalytics"
 
 interface AnalyticsViewProps {
+ subject?: string
  sessions: StudySession[]
  projects: Project[]
  onNewSession: () => void
@@ -153,6 +155,7 @@ function csvEscape(value: string) {
 }
 
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
+ subject,
  sessions,
  projects,
  onNewSession,
@@ -173,12 +176,14 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [data.subjectBreakdown],
  )
 
- const isFilterActive = selectedSubjects !== null
+ const isFilterActive = !!subject || selectedSubjects !== null
  const activeSet = useMemo(
- () => selectedSubjects == null
+ () => subject
+ ? new Set(allSubjectIds.filter((id) => sameStudySubject(id, subject)))
+ : selectedSubjects == null
  ? new Set(allSubjectIds)
  : new Set(allSubjectIds.filter((subjectId) => selectedSubjects.has(subjectId))),
- [selectedSubjects, allSubjectIds],
+ [subject, selectedSubjects, allSubjectIds],
  )
 
  const selectionState:"all" |"partial" = !isFilterActive || activeSet.size === allSubjectIds.length
@@ -341,7 +346,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </motion.div>
 
  {/* Subject filter chips */}
- {allSubjectIds.length > 0 && (
+ {!subject && allSubjectIds.length > 0 && (
  <motion.div variants={staggerItem}>
  <SubjectFilterChips
  subjectIds={allSubjectIds}

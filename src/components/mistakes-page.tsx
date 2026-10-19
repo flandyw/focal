@@ -1,3 +1,4 @@
+import { sameStudySubject } from "../lib/studySubjects"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ArrowRight, BookOpenCheck, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
@@ -66,6 +67,7 @@ import { useTickingNow } from "../hooks/use-ticking-now"
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
 
 type MistakesPageProps = {
+  workspaceSubject?: string
   onSaveReviewPreferences: (preferences: MistakeReviewPreferences) => void
   onReduceReviews: (days: number, target: number) => void
   data: AppData
@@ -427,9 +429,9 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
-  const [subject, setSubject] = useState("all")
+  const [subject, setSubject] = useState(workspaceSubject ?? "all")
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>("browse")
   const [search, setSearch] = useState("")
@@ -458,14 +460,14 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
   const [autofilling, setAutofilling] = useState(false)
   const [autofillProgress, setAutofillProgress] = useState<ChatGPTProgress | null>(null)
   const attemptMap = useMemo(() => new Map(data.attempts.map((attempt) => [attempt.id, attempt])), [data.attempts])
-  const subjects = useMemo(() => [...new Set(data.attempts.map((attempt) => attempt.subject))].toSorted(), [data.attempts])
+  const subjects = useMemo(() => [...new Set([...data.subjects, ...data.attempts.map((attempt) => attempt.subject), ...data.mistakes.flatMap((mistake) => mistake.subject ? [mistake.subject] : [])])].toSorted(), [data.attempts, data.mistakes, data.subjects])
   const activeSubject = subject === "all" || subject === "unlinked" || subjects.includes(subject) ? subject : "all"
   const mathsSubject = activeSubject !== "all" ? activeSubject : subjects.length === 1 ? subjects[0] : null
   const showMathsExamFilter = mathsSubject !== null && isTechSplitMathsSubject(mathsSubject)
   const activeMathsExamFilter = showMathsExamFilter ? mathsExamFilter : "all"
   const visibleMistakes = useMemo(() => data.mistakes.filter((mistake) => {
     const attempt = attemptMap.get(mistake.attemptId)
-    const matchesSubject = activeSubject === "all" || (activeSubject === "unlinked" ? !attempt : attempt?.subject === activeSubject)
+    const matchesSubject = activeSubject === "all" || (activeSubject === "unlinked" ? !attempt : sameStudySubject(attempt?.subject ?? mistake.subject, activeSubject))
     return matchesSubject && matchesMathsExamFilter(attempt, activeMathsExamFilter)
   }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter])
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
@@ -638,7 +640,7 @@ export function MistakesPage({ onSaveReviewPreferences, onReduceReviews, data, s
                                 {mistake.areaOfStudy ? <span className="break-words text-xs text-muted-foreground">{mistake.areaOfStudy}</span> : null}
                               </span>
                               <span className="grid min-w-0 gap-1">
-                                {attempt?.subject ? <span className="break-words text-sm">{attempt.subject}</span> : !mistake.attemptId ? <span className="break-words text-sm">Uncategorised</span> : null}
+                                {attempt?.subject || mistake.subject ? <span className="break-words text-sm">{attempt?.subject ?? mistake.subject}</span> : !mistake.attemptId ? <span className="break-words text-sm">Uncategorised</span> : null}
                                 {attempt?.title ? <span className="break-words text-xs text-muted-foreground">{attempt.title}</span> : null}
                               </span>
                               <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-between gap-3 xl:col-auto xl:row-auto xl:flex-row xl:items-center xl:justify-end">

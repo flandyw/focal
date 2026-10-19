@@ -96,7 +96,7 @@ function mistakeContext(mistakes: Mistake[], attempts: ExamAttempt[]) {
     const assessmentResult = matchingResults.length === 1 ? matchingResults[0] : undefined
     return {
       id: mistake.id,
-      subject: attempt?.subject,
+      subject: attempt?.subject ?? mistake.subject,
       exam: attempt?.title,
       paper: attempt?.paper,
       question: mistake.question,
@@ -238,7 +238,7 @@ export async function editMistakesWithInstruction(
       const attempt = attemptMap.get(mistake.attemptId)
       return {
         id: mistake.id,
-        subject: attempt?.subject,
+        subject: attempt?.subject ?? mistake.subject,
         exam: attempt?.title,
         question: mistake.question,
         questionText: mistake.questionText,

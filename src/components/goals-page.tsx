@@ -88,10 +88,11 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   )
 }
 
-export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: {
+export function GoalsPage({ data, references, subjects, subjectScoped = false, onChange, onPlanGoal }: {
   data: AppData
   references: AssessmentReference[]
   subjects: string[]
+  subjectScoped?: boolean
   onChange: (learning: LearningWorkspaceUpdate) => void
   onPlanGoal: (goal: StudyGoal) => void
 }) {
@@ -141,7 +142,7 @@ export function GoalsPage({ data, references, subjects, onChange, onPlanGoal }: 
       <Card className="gap-5">
         <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription>Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end">
-          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem><SelectItem value="atar">ATAR</SelectItem></SelectContent></Select></Field>
+          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!subjectScoped ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
           {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={setSubject} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}
           <Field className="xl:col-span-2" data-invalid={error ? true : undefined}><FieldLabel htmlFor="goal-target">Target</FieldLabel><Input id="goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={target} onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} /></Field>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></Field>

@@ -25,7 +25,7 @@ function toRows(mistakes: Mistake[], attempts: ExamAttempt[]) {
     const attempt = attemptMap.get(mistake.attemptId)
     return {
       id: mistake.id,
-      exam: attempt?.title ?? "", subject: attempt?.subject ?? "", paper: attempt?.paper ?? "",
+      exam: attempt?.title ?? "", subject: attempt?.subject ?? mistake.subject ?? "", paper: attempt?.paper ?? "",
       question: mistake.question, questionText: mistake.questionText ?? "", category: mistake.category,
       areaOfStudy: mistake.areaOfStudy ?? "",
       marksLost: mistake.marksLost ?? "", totalMarks: mistake.totalMarks ?? "",

@@ -26,7 +26,7 @@ const today = new Date().toISOString().slice(0, 10)
 
 export function ExamSheet({ references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
   const subjects = useMemo(
-    () => prioritiseSubjects(references.map((item) => item.studyName), preferredSubjects),
+    () => prioritiseSubjects([...preferredSubjects, ...references.map((item) => item.studyName)], preferredSubjects),
     [references, preferredSubjects],
   )
   const defaultSubject = firstPreferredSubject(subjects, preferredSubjects)

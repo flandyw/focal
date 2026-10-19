@@ -5,6 +5,7 @@ import { ChatGPTConnection } from "./chatgpt-connection"
 import { ArrowLeft, Images, Pencil, Sparkles, X } from "lucide-react"
 import { MistakeAttachments } from "./mistake-attachments"
 import type { CurriculumArea } from "../lib/learning-workspace"
+import { SubjectCombobox } from "./subject-combobox"
 import { StoplightItemPicker } from "./stoplight-item-picker"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -48,6 +49,7 @@ import {
   validateMistakeMarks,
 } from "../lib/exam-data"
 import { formatChatGPTProgress, validateMistakeBatchImages, validateMistakeImages, type ChatGPTProgress, type MistakeDraft } from "../lib/mistake-ai-core"
+import { sameStudySubject } from "../lib/studySubjects"
 import { removeMistakeAttachments, uploadMistakeAttachments, validateSavedMistakeImages } from "../lib/mistake-attachments"
 import type { VcaaStudyResources } from "../lib/vcaa-resources"
 
@@ -55,6 +57,7 @@ type MistakeSheetProps = {
   open: boolean
   attempts: ExamAttempt[]
   studies: VcaaStudyResources[]
+  initialSubject?: string
   initialAttemptId?: string | null
   initialMistake?: Mistake | null
   storageUserId?: string | null
@@ -110,6 +113,7 @@ function createMistake(draft: MistakeDraft, timestamp: string, initialMistake?: 
   return {
     id: initialMistake?.id ?? crypto.randomUUID(),
     attemptId: draft.attemptId,
+    subject: initialMistake?.subject,
     question: draft.question.trim(),
     questionText: draft.questionText.trim(),
     category: draft.category,
@@ -139,6 +143,7 @@ export function MistakeSheet({
   open,
   attempts,
   studies,
+  initialSubject,
   initialAttemptId,
   initialMistake,
   storageUserId,
@@ -147,6 +152,7 @@ export function MistakeSheet({
   onSave,
 }: MistakeSheetProps) {
   const auth = useChatGPT()
+  const [subject, setSubject] = useState(initialMistake?.subject ?? initialSubject ?? "")
   const [attemptId, setAttemptId] = useState(initialMistake?.attemptId ?? initialAttemptId ?? "")
   const [question, setQuestion] = useState(initialMistake?.question ?? "")
   const [questionText, setQuestionText] = useState(initialMistake?.questionText ?? "")
@@ -170,11 +176,11 @@ export function MistakeSheet({
   const [error, setError] = useState<string | null>(null)
   const [initialSnapshot] = useState(() => JSON.stringify({
     attemptId, question, questionText, category, explanation, correction,
-    areaOfStudy, itemIds, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
+    subject, areaOfStudy, itemIds, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
   }))
   const dirty = JSON.stringify({
     attemptId, question, questionText, category, explanation, correction,
-    areaOfStudy, itemIds, totalMarks, marksLost,
+    subject, areaOfStudy, itemIds, totalMarks, marksLost,
     imageCount: images.length, batchCount: batchDrafts.length, questionImageCount: questionImages.length, attachmentIds: savedAttachments.map(({ id }) => id),
   }) !== initialSnapshot
   const [confirmingClose, setConfirmingClose] = useState(false)
@@ -318,7 +324,7 @@ export function MistakeSheet({
         if (validationError) throw new Error(`Question ${index + 1}: ${validationError}`)
         const attachments = files.length && storageUserId ? await uploadMistakeAttachments(storageUserId, mistake.id, files) : []
         uploadedPaths.push(...attachments.map(({ storagePath }) => storagePath))
-        mistakes.push({ ...mistake, attachments })
+        mistakes.push({ ...mistake, subject: !mistake.attemptId ? subject.trim() || undefined : undefined, attachments })
       }
       onSave(mistakes)
       reset()
@@ -363,7 +369,7 @@ export function MistakeSheet({
     try {
       if (filesToSave.length && storageUserId) uploadedAttachments = await uploadMistakeAttachments(storageUserId, mistake.id, filesToSave)
       if (removedPaths.length) await removeMistakeAttachments(removedPaths)
-      onSave({ ...mistake, attachments: [...savedAttachments, ...(uploadedAttachments ?? [])] })
+      onSave({ ...mistake, subject: !mistake.attemptId ? subject.trim() || undefined : undefined, attachments: [...savedAttachments, ...(uploadedAttachments ?? [])] })
       reset()
       onOpenChange(false)
     } catch (error) {
@@ -503,7 +509,11 @@ export function MistakeSheet({
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="mistake-exam">Exam (optional)</FieldLabel>
-                  <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => setAttemptId(value?.value ?? "")} autoHighlight>
+                  <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => {
+                    const nextId = value?.value ?? ""
+                    if (!sameStudySubject(attempts.find((attempt) => attempt.id === attemptId)?.subject, attempts.find((attempt) => attempt.id === nextId)?.subject ?? "")) setItemIds([])
+                    setAttemptId(nextId)
+                  }} autoHighlight>
                     <ComboboxInput id="mistake-exam" className="w-full" placeholder="Search practice exams" />
                     <ComboboxContent>
                       <ComboboxEmpty>No matching practice exams.</ComboboxEmpty>
@@ -516,6 +526,11 @@ export function MistakeSheet({
                   <Input id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Section B, Question 4 or Essay 1" />
                 </Field>
               </div>
+
+              {!selectedAttempt ? <Field>
+                <FieldLabel htmlFor="mistake-subject">Subject</FieldLabel>
+                <SubjectCombobox id="mistake-subject" subjects={[...new Set([...(initialSubject ? [initialSubject] : []), ...studies.map((study) => study.studyName), ...attempts.map((attempt) => attempt.subject)])]} preferredSubjects={initialSubject ? [initialSubject] : []} value={subject} onValueChange={(next) => { if (!sameStudySubject(subject, next)) setItemIds([]); setSubject(next) }} allowCustom />
+              </Field> : null}
 
               <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <Field data-invalid={Boolean(marksError) || undefined}>
@@ -594,7 +609,7 @@ export function MistakeSheet({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="mistake-items">Stoplight items <span className="text-muted-foreground">(optional)</span></FieldLabel>
-                  <StoplightItemPicker id="mistake-items" items={items} subject={attempts.find((attempt) => attempt.id === selectedAttempt)?.subject} value={itemIds} onChange={setItemIds} />
+                  <StoplightItemPicker id="mistake-items" items={items} subject={attempts.find((attempt) => attempt.id === selectedAttempt)?.subject ?? subject} value={itemIds} onChange={setItemIds} />
                   <FieldDescription>Linked automatically with ChatGPT when left empty.</FieldDescription>
                 </Field>
               </div>

@@ -32,7 +32,7 @@ export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string
         if (browserFilter === "learning" && schedule.state !== "learning" && schedule.state !== "relearning") return false
         if ((browserFilter === "new" || browserFilter === "review") && schedule.state !== browserFilter) return false
       }
-      const text = [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.category, mistake.areaOfStudy, attempt?.title, attempt?.subject, attempt?.provider, attempt?.paper].filter(Boolean).join(" ").toLocaleLowerCase()
+      const text = [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.category, mistake.areaOfStudy, attempt?.title, attempt?.subject ?? mistake.subject, attempt?.provider, attempt?.paper].filter(Boolean).join(" ").toLocaleLowerCase()
       return terms.every((term) => text.includes(term))
     })
     .sort((first, second) => {

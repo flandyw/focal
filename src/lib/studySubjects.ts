@@ -8,6 +8,10 @@ function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJEC
     .some((alias) => alias.toLowerCase() === name))?.id ?? value
 }
 
+export function sameStudySubject(first: string | null | undefined, second: string) {
+  return !!first?.trim() && studySubjectId(first).trim().toLowerCase() === studySubjectId(second).trim().toLowerCase()
+}
+
 export function studySubjectOptions(names: string[], subjects: readonly Subject[] = VCE_SUBJECTS) {
   const options = new Map<string, { id: string; name: string }>()
   for (const name of names) {

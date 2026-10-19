@@ -1,5 +1,6 @@
 // Pure (no React/Tauri): the stoplight checklist, its chatbot import contract, and evidence from mistakes.
 import { parseJsonPayload } from "./calendarImport"
+import { sameStudySubject } from "./studySubjects"
 import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data"
 import {
   localDate, materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
@@ -330,7 +331,7 @@ export function collectLinkRecords(data: Pick<AppData, "attempts" | "mistakes" |
   const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
   const records: LinkRecord[] = []
   for (const mistake of data.mistakes) {
-    const subject = attempts.get(mistake.attemptId)?.subject
+    const subject = attempts.get(mistake.attemptId)?.subject ?? mistake.subject
     if (!subject || !subjects.has(subject.toLowerCase()) || mistake.itemIds?.length || only && !only.has(mistake.id)) continue
     records.push({ id: mistake.id, subject, areaOfStudy: mistake.areaOfStudy, text: [mistake.question, mistake.questionText, mistake.explanation].filter(Boolean).join(" | ").slice(0, 600) })
   }
@@ -353,7 +354,20 @@ export function candidateItems(items: CurriculumArea[], records: LinkRecord[]) {
 /** Writes AI links onto the latest data; manual (`user`) links are never overwritten. */
 export function applyItemLinks(data: AppData, links: ItemLink[], now = new Date()) {
   const timestamp = now.toISOString()
-  const byId = new Map(links.filter((link) => link.itemIds.length).map((link) => [link.id, link.itemIds.slice(0, 3)]))
+  const subjects = new Map(data.attempts.flatMap((attempt) => [
+    [attempt.id, attempt.subject] as const,
+    ...(attempt.questionResults ?? []).map((result) => [result.id, attempt.subject] as const),
+  ]))
+  for (const mistake of data.mistakes) {
+    const subject = subjects.get(mistake.attemptId) ?? mistake.subject
+    if (subject) subjects.set(mistake.id, subject)
+  }
+  const items = new Map(data.learning.curriculumAreas.filter((item) => !item.archivedAt).map((item) => [item.id, item]))
+  const byId = new Map(links.map((link) => [link.id, [...new Set(link.itemIds)].filter((id) => {
+    const item = items.get(id)
+    const subject = subjects.get(link.id)
+    return item && subject && sameStudySubject(item.subject, subject)
+  }).slice(0, 3)] as const).filter(([, ids]) => ids.length))
   const linked: Mistake[] = []
   const mistakes = data.mistakes.map((mistake) => {
     const itemIds = byId.get(mistake.id)

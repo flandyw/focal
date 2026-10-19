@@ -125,7 +125,8 @@ export type MistakeAttachment = {
 
 export type Mistake = {
   id: string
-  attemptId: string // Empty string means uncategorised (no exam).
+  attemptId: string // Empty string means no linked exam.
+  subject?: string // Used for mistakes saved without an exam.
   question: string
   questionText?: string
   category: MistakeCategory
@@ -163,6 +164,7 @@ type MistakeInsight = {
 }
 
 export type MistakeInsights = {
+  subject?: string
   summary: string
   biggestErrors: MistakeInsight[]
   otherInsights: string[]
@@ -976,6 +978,7 @@ function isAppData(value: unknown): value is AppData {
       return (
         typeof mistake.id === "string" &&
         typeof mistake.attemptId === "string" &&
+        (mistake.subject === undefined || typeof mistake.subject === "string" && mistake.subject.trim().length > 0) &&
         (mistake.attemptId === "" || attemptIds.has(mistake.attemptId)) &&
         typeof mistake.question === "string" &&
         (mistake.questionText === undefined || typeof mistake.questionText === "string") &&
@@ -1047,6 +1050,7 @@ function isAppData(value: unknown): value is AppData {
 function isMistakeInsights(value: unknown): value is MistakeInsights {
   if (!isRecord(value)) return false
   return typeof value.summary === "string" &&
+    (value.subject === undefined || typeof value.subject === "string") &&
     Array.isArray(value.biggestErrors) && value.biggestErrors.every((error) => isRecord(error) && typeof error.title === "string" && typeof error.evidence === "string" && typeof error.action === "string") &&
     Array.isArray(value.otherInsights) && value.otherInsights.every((insight) => typeof insight === "string") &&
     typeof value.nextStep === "string" &&

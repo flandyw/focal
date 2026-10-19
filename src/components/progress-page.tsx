@@ -7,7 +7,7 @@ import { AnalyticsView } from "./analytics/AnalyticsView"
 
 const NO_PROJECTS: import("../lib/types").Project[] = []
 
-export function ProgressPage({ sessions, onNewSession }: { sessions: CanonicalStudySession[]; onNewSession: () => void }) {
+export function ProgressPage({ sessions, subject, onNewSession }: { sessions: CanonicalStudySession[]; subject?: string; onNewSession: () => void }) {
   const [localSessions, setLocalSessions] = useState<StudySession[]>([])
   useEffect(() => {
     let active = true
@@ -40,5 +40,5 @@ export function ProgressPage({ sessions, onNewSession }: { sessions: CanonicalSt
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} projects={NO_PROJECTS} onNewSession={onNewSession} />
+  return <AnalyticsView sessions={[...history.values()]} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} />
 }

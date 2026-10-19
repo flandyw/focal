@@ -185,3 +185,18 @@ test("save_sac takes a plain date or a timestamp and stores the app's plain date
   await call("save_sac", { id: stamped.id, ...sac, title: "SAC 5", scheduledAt: "2026-04-02T23:59:00+11:00", score: 20, maxScore: 25 })
   expect(data.sacRecords.find((r) => r.id === stamped.id)).toMatchObject({ scheduledAt: "2026-04-02", completedAt: "2026-04-02" })
 })
+
+test("save_event takes a local date and clock time and stores the UTC timestamp the app's dialog would", async () => {
+  const exam = { title: "Methods Exam 2", eventType: "exam", date: "2026-10-06", startClock: "09:00", endClock: "11:15" }
+  const saved = await call("save_event", exam)
+  const expected = (time: string) => new Date(`2026-10-06T${time}:00`).toISOString()
+  expect(saved).toMatchObject({ startTime: expected("09:00"), endTime: expected("11:15") })
+  expect(data.events.find((e) => e.id === saved.id)).toMatchObject({ startTime: expected("09:00"), endTime: expected("11:15"), eventType: "exam" })
+  expect((await call("save_event", { title: "Overnight", date: "2026-10-06", startClock: "22:00", endDate: "2026-10-07", endClock: "06:00" })).endTime).toBe(new Date("2026-10-07T06:00:00").toISOString())
+  // Full timestamps still work, and the two forms cannot be mixed or half-given.
+  expect((await call("save_event", { title: "Old way", startTime: "2026-10-06T09:00:00+11:00" })).startTime).toBe("2026-10-06T09:00:00+11:00")
+  await expect(call("save_event", { ...exam, startTime: "2026-10-06T09:00:00+11:00" })).rejects.toThrow("not both")
+  await expect(call("save_event", { title: "No time" })).rejects.toThrow("startClock")
+  await expect(call("save_event", { ...exam, endClock: "08:00" })).rejects.toThrow("after the start")
+  await expect(call("save_event", { ...exam, startClock: "9am" })).rejects.toThrow()
+})

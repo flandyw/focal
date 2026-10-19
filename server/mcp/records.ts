@@ -14,7 +14,7 @@ import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../
 import type { CalendarEvent } from "../../src/lib/types"
 import { gradeReferences, readAll, updateApp } from "./store"
 import type { Define } from "./tools"
-import { day, instant, limit, logWrite, nowIso, required, round } from "./util"
+import { clock, day, instant, limit, localInstant, logWrite, nowIso, required, round } from "./util"
 
 const confidence = z.enum(["low", "medium", "high"])
 const category = z.enum(MISTAKE_CATEGORIES)
@@ -388,27 +388,34 @@ export function recordTools(define: Define) {
         .toSorted((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, limit)
     })
 
-  define("save_event", "Create a calendar event, or update one when `id` is given.", {
-    id: z.string().optional(), title: z.string().min(1), startTime: instant, endTime: instant.optional(),
+  define("save_event", "Create a calendar event, or update one when `id` is given. Give the time either as `date` + `startClock` (+ `endClock`, and `endDate` if it ends on another day), all in local time, e.g. an exam on 2026-10-06 from 09:00 to 11:15; or as full timestamps `startTime` / `endTime` with a UTC offset. The result returns the timestamps stored.", {
+    id: z.string().optional(), title: z.string().min(1),
+    date: day.optional().describe("Local start date; use with startClock"), startClock: clock.optional(), endClock: clock.optional(), endDate: day.optional().describe("Local end date if not the same as `date`"),
+    startTime: instant.optional(), endTime: instant.optional(),
     eventType: z.enum(["event", "sac", "practice-sac", "exam", "assignment", "homework", "other"]).default("event"),
     subject: z.string().optional(), description: z.string().optional(), location: z.string().optional(), isFinished: z.boolean().optional(),
   }, "write", async (a) => {
     const id = a.id ?? crypto.randomUUID()
     const timestamp = nowIso()
-    if (a.endTime && Date.parse(a.endTime) <= Date.parse(a.startTime)) throw new Error("The end must be after the start.")
+    if (a.startTime && (a.date || a.startClock) || a.endTime && (a.endClock || a.endDate)) throw new Error("Give the time as date + startClock/endClock, or as startTime/endTime, not both.")
+    const startTime = a.startTime ?? (a.date && a.startClock ? localInstant(a.date, a.startClock) : undefined)
+    if (!startTime) throw new Error("Give date and startClock, or startTime.")
+    if ((a.endClock || a.endDate) && !a.date) throw new Error("endClock and endDate need date.")
+    const endTime = a.endTime ?? (a.endClock ? localInstant(a.endDate ?? a.date!, a.endClock) : undefined)
+    if (endTime && Date.parse(endTime) <= Date.parse(startTime)) throw new Error("The end must be after the start.")
     await updateApp((data) => {
       const old = data.events.find((e) => e.id === id)
       if (a.id && !old) throw new Error("No event with that id.")
       const finished = a.isFinished ?? old?.isFinished ?? false
       const event: CalendarEvent = {
-        ...old, id, title: a.title.trim(), startTime: a.startTime, endTime: a.endTime ?? old?.endTime, eventType: a.eventType,
+        ...old, id, title: a.title.trim(), startTime, endTime: endTime ?? old?.endTime, eventType: a.eventType,
         description: a.description === undefined ? old?.description : text(a.description), location: a.location === undefined ? old?.location : text(a.location),
         subjectId: a.subject === undefined ? old?.subjectId : a.subject.trim() ? subjectIdFor(a.subject) : undefined,
         isFinished: finished, finishedAt: finished ? old?.finishedAt ?? timestamp : undefined, created_at: old?.created_at ?? timestamp, updated_at: timestamp,
       }
       return { ...data, events: old ? data.events.map((e) => e.id === id ? event : e) : [...data.events, event] }
     })
-    return { id }
+    return { id, startTime, endTime: endTime ?? null }
   })
 
   define("delete_event", "Delete a calendar event.", { id: z.string() }, "delete", async ({ id }) => {

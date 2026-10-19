@@ -1,4 +1,5 @@
 import { isPaused, isRunning } from "./lib/sync/sessionContract"
+import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -746,7 +747,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }
             const open = () => { setFocusPreset(undefined); setTimerMode("focus"); setView("focus") }
             if (isRunning(session)) open()
-            else void studySessionSync.control(session, isPaused(session) ? "resume" : "start").then(open)
+            else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
               .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
           }} /></Suspense> : null}
           {view === "progress" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} onNewSession={() => setView("focus")} /></Suspense> : null}

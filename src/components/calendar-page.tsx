@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
+import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -271,6 +271,7 @@ export function CalendarPage({
         session={sessions.find((item) => item.id === editingSession.id) ?? editingSession}
         subjects={subjects}
         onClose={() => setEditingSession(null)}
+        onContinue={(session) => { setEditingSession(null); onStartFocus(session.subject_id ?? undefined, session.title, session.id) }}
         onEdit={async (session, patch) => {
           await onEditSession(session, patch)
           if (patch.blocks?.length) selectDay(localDate(new Date(patch.blocks[0].start)))
@@ -675,6 +676,7 @@ function DayItemRow({
           )}
         <span className="flex shrink-0 items-center gap-0.5">
           {item.kind === "session" && (!done || item.live) ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" variant="outline"><Timer />{item.live ? "Open timer" : "Start"}</Button> : null}
+          {item.kind === "session" && done && !item.live && item.continuable ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
           {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}
           {isTask ? (
             item.status === "planned" ? (

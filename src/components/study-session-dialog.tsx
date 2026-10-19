@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { CalendarPlus, Copy, Plus, Trash2 } from "lucide-react"
+import { CalendarPlus, Copy, Play, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
@@ -7,7 +7,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Textarea } from "./ui/textarea"
-import { sessionBlocks } from "../lib/day-plan"
+import { continuableToday, sessionBlocks } from "../lib/day-plan"
 import { studySubjectOptions } from "../lib/studySubjects"
 import { isDeleted, isPaused, isRunning, type CanonicalStudySession, type StudySessionEdit } from "../lib/sync/sessionContract"
 import { EVENT_TYPES, type CalendarEvent, type EventType } from "../lib/types"
@@ -17,7 +17,7 @@ function localTime(iso: string) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, -1).replace(/:00\.000$/, "").replace(/\.000$/, "")
 }
 
-export function StudySessionDialog({ session, subjects, onClose, onEdit, onDuplicate, onRemove, onConvert, creating = false, onCreate, allowConvert = true }: {
+export function StudySessionDialog({ session, subjects, onClose, onEdit, onDuplicate, onRemove, onConvert, onContinue, creating = false, onCreate, allowConvert = true }: {
   session: CanonicalStudySession
   creating?: boolean
   allowConvert?: boolean
@@ -28,6 +28,8 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   onDuplicate: (patch: StudySessionEdit) => Promise<void>
   onRemove: (session: CanonicalStudySession) => Promise<void>
   onConvert: (session: CanonicalStudySession, events: CalendarEvent[]) => Promise<void>
+  /** Pick finished study back up in the timer, keeping its time. Offered for study finished today. */
+  onContinue?: (session: CanonicalStudySession) => void
 }) {
   const legacy = session.metadata.legacy_metadata
   const metadata = { ...(legacy && typeof legacy === "object" && !Array.isArray(legacy) ? legacy as Record<string, unknown> : {}), ...session.metadata }
@@ -186,6 +188,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
             {creating ? null : converting ? <Button disabled={busy} variant="outline" onClick={() => setConverting(false)}>Back to study</Button> : <>
               <Button disabled={busy} variant={confirmDelete ? "destructive" : "outline"} onClick={() => confirmDelete ? void submit("delete") : setConfirmDelete(true)}><Trash2 />{confirmDelete ? "Delete for good?" : "Delete"}</Button>
               <Button disabled={busy} variant="outline" onClick={() => submit("duplicate")}><Copy />Duplicate</Button>
+              {onContinue && continuableToday(session) ? <Button disabled={busy} variant="outline" onClick={() => onContinue(session)}><Play />Continue</Button> : null}
               {allowConvert && !session.completed && session.started_at === null ? <Button disabled={busy} variant="outline" onClick={() => { setConverting(true); setConfirmDelete(false) }}><CalendarPlus />Convert to event</Button> : null}
             </>}
           </div>

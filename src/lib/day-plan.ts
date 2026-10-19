@@ -2,7 +2,7 @@ import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 import { isCompletedSac, type SacRecord } from "./sac"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace"
-import { isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract"
+import { canContinue, isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract"
 import { subjectNameFor } from "./class-timetable"
 import { VCE_SUBJECTS, type CalendarEvent } from "./types"
 
@@ -28,7 +28,7 @@ export type DayItem =
   | { kind: "sac"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean }
   | { kind: "exam"; id: string; title: string; detail: string; minutes: number; startTime: string; multiDay?: boolean }
   | { kind: "event"; id: string; title: string; detail: string; minutes: number; startTime: string; completed: boolean; multiDay: boolean }
-  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; done: boolean; live: boolean; paused?: boolean }
+  | { kind: "session"; id: string; title: string; detail: string; minutes: number; startTime: string; done: boolean; live: boolean; paused?: boolean; continuable?: boolean }
   | { kind: "logged-exam"; id: string; title: string; detail: string; minutes: number; completed: true }
   | { kind: "mistakes"; id: string; title: string; detail: string; minutes: number; count: number }
 
@@ -261,8 +261,15 @@ export function sessionItem(session: CanonicalStudySession, date: string, now = 
       done: session.completed || session.started_at !== null,
       live: !session.completed && (isRunning(session) || isPaused(session)),
       paused: isPaused(session),
+      continuable: continuableToday(session, now),
     },
   }
+}
+
+/** Study finished today can be continued: the same session picks up again, its time kept.
+ *  Older study is left as it is, so a session never stretches across days. */
+export function continuableToday(session: CanonicalStudySession, now = Date.now()) {
+  return canContinue(session) && localDate(new Date(session.completed_at!)) === localDate(new Date(now))
 }
 
 /** What a day owes and what it banked, in study minutes. Exam entries and the review

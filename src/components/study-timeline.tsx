@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, Crosshair, Maximize2, Merge, MousePointer2, Minus, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, Crosshair, Maximize2, Merge, MousePointer2, Minus, Play, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
-import { sessionBlocks, sessionItem } from "../lib/day-plan"
+import { continuableToday, sessionBlocks, sessionItem } from "../lib/day-plan"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
 import { studySubjectOptions, subjectColor } from "../lib/studySubjects"
@@ -853,6 +853,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="outline"><Scissors />Split</Button> : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
               {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="outline"><CalendarPlus />Repeat tomorrow</Button> : null}
+              {picked.session && continuableToday(picked.session, nowMs) ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.id)} size="xs" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
               {picked.session ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.completed ? undefined : picked.session?.id)} size="xs" variant="outline"><Timer />{picked.session && isPaused(picked.session) ? "Resume" : picked.session && isRunning(picked.session) ? "Open timer" : picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
               {picked.session && picked.tone !== "live" ? (
                 confirmRemove

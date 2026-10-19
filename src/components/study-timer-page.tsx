@@ -33,9 +33,9 @@ import type { useStudySessionSync } from "../lib/study-session-sync"
 import { StudySessionDialog } from "./study-session-dialog"
 import type { StudySessionEdit } from "../lib/sync/sessionContract"
 import type { FocusSessionSink } from "../lib/focus-session"
-import { sessionItem } from "../lib/day-plan"
+import { continuableToday, sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { canContinue, isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { VCE_SUBJECTS } from "../lib/types"
 import { StudyPlanCard } from "./study-plan-card"
@@ -278,9 +278,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const todaysRecord = todaysSittings.length > 0 ? todaysSittings : null
   // Finished study from today can be picked up again: the same session, its time kept.
   const continuable = useMemo(() => {
-    const today = localDate(now)
-    return new Map((sessions ?? []).filter((session) => canContinue(session) && localDate(new Date(session.completed_at!)) === today)
-      .map((session) => [session.id, session]))
+    return new Map((sessions ?? []).filter((session) => continuableToday(session, now.getTime())).map((session) => [session.id, session]))
   }, [now, sessions])
   const lastFinished = [...continuable.values()].toSorted((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0]
   const timerIdle = !sharedSession && !state.running && !state.studyOvertime && state.overtimeSeconds === 0 && (isFreeStudy || state.secondsLeft === state.totalSeconds)

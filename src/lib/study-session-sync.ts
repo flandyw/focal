@@ -9,6 +9,7 @@ import type { PastStudyLog } from "./pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
 import { sessionBlocks } from "./day-plan"
 import {
+  canContinue,
   estimateServerNow,
   isDeleted,
   isPaused,
@@ -80,7 +81,7 @@ function guestApply(session: CanonicalStudySession, patch: StudySessionEdit): Ca
 function controlProjection(session: CanonicalStudySession, action: StudySessionAction, at: number): CanonicalStudySession {
   if (isDeleted(session)) throw new Error("This session was deleted.")
   if (action === "start" && !isPlanned(session)) throw new Error("This session has already started.")
-  if (action === "resume" && !isPaused(session)) throw new Error("This session is not paused.")
+  if (action === "resume" && !isPaused(session) && !canContinue(session)) throw new Error("This session is not paused.")
   if (action === "pause" && !isRunning(session)) throw new Error("This session is not running.")
   if (action === "complete" && !isRunning(session) && !isPaused(session)) throw new Error("Start the session before finishing it.")
   const stamp = new Date(at).toISOString()
@@ -97,8 +98,9 @@ function controlProjection(session: CanonicalStudySession, action: StudySessionA
     started_at: action === "start" ? stamp : session.started_at,
     segment_started_at: action === "start" || action === "resume" ? stamp : null,
     paused_at: action === "pause" ? stamp : null,
-    completed: action === "complete" || session.completed,
-    completed_at: action === "complete" ? stamp : session.completed_at,
+    // Resuming finished study continues it: the session is open again, its earlier time kept.
+    completed: action === "complete" || (session.completed && action !== "resume"),
+    completed_at: action === "complete" ? stamp : action === "resume" ? null : session.completed_at,
     cancelled_at: action === "cancel" ? stamp : null,
     accumulated_active_ms: accumulated, timing_at: stamp }
 }

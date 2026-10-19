@@ -1,0 +1,50 @@
+-- Continue finished study: `resume` on a completed focus session reopens it and starts a new
+-- interval in the same session, so its earlier time is kept. `save_progress` with
+-- `completed: false` cannot do this: it turns the session back into a plan, and `start` then
+-- replaces a plan's segments with the new run.
+begin;
+
+create or replace function public.study_session_mutate(p_command jsonb)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_result jsonb;
+  v_replayed boolean;
+  v_reopen public.study_sessions%rowtype;
+begin
+  if v_uid is null then raise exception 'Not authenticated' using errcode = '28000'; end if;
+  perform public.sync_next_lamport(v_uid);
+  select exists(select 1 from public.study_session_mutation_receipts
+    where user_id = v_uid and mutation_id = (p_command ->> 'mutation_id')::uuid) into v_replayed;
+  -- Reopen as paused at the moment it finished; the ordinary resume below then applies the
+  -- revision check, interval, receipt and feed event. Nothing commits unless the resume does.
+  if not v_replayed and p_command ->> 'action' = 'resume' and jsonb_typeof(p_command -> 'expected_revision') = 'number' then
+    select * into v_reopen from public.study_sessions
+      where user_id = v_uid and id = p_command ->> 'session_id' for update;
+    if found and v_reopen.kind = 'focus' and v_reopen.completed and v_reopen.cancelled_at is null
+       and v_reopen.segment_started_at is null and v_reopen.started_at is not null and v_reopen.completed_at is not null
+       and v_reopen.revision = (p_command ->> 'expected_revision')::bigint then
+      update public.study_sessions set completed = false, completed_at = null, paused_at = v_reopen.completed_at
+        where user_id = v_uid and id = v_reopen.id;
+    else
+      v_reopen := null;
+    end if;
+  end if;
+  v_result := public.study_session_mutate_unmerged(p_command);
+  if v_reopen.id is not null and (v_result ->> 'applied')::boolean is distinct from true then
+    raise exception 'Could not continue this session: %', coalesce(v_result ->> 'reason', 'not applied');
+  end if;
+  if not v_replayed and (v_result ->> 'applied')::boolean and p_command ->> 'action' in ('complete', 'log', 'save_progress') then
+    perform public.merge_short_study_sessions(v_uid, p_command ->> 'session_id');
+    v_result := v_result || jsonb_build_object('session', public.study_session_payload(v_uid, p_command ->> 'session_id'),
+      'change_seq', (select max(seq) from public.sync_log where user_id = v_uid));
+    update public.study_session_mutation_receipts set result = v_result
+      where user_id = v_uid and mutation_id = (p_command ->> 'mutation_id')::uuid;
+  end if;
+  return v_result;
+end;
+$$;
+revoke all on function public.study_session_mutate(jsonb) from public, anon;
+grant execute on function public.study_session_mutate(jsonb) to authenticated;
+
+commit;

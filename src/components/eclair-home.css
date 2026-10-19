@@ -92,6 +92,9 @@
 .ecl-transport button:not(:disabled):active, .ecl-transport button:focus-visible { background: var(--ecl-orange); color: #000; outline: 0; }
 .ecl-transport button:disabled { opacity: .35; }
 .ecl-transport .ecl-solid { fill: currentColor; stroke-width: 1.5; }
+.ecl-continue { all: unset; display: flex; align-items: center; gap: 6px; max-width: 100%; box-sizing: border-box; padding: 3px 8px; cursor: pointer; border-radius: 5px; font-size: clamp(12px, 6cqh, 15px); color: #d8f5a2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ecl-continue svg { flex: none; width: 1.1em; height: 1.1em; }
+.ecl-continue:active, .ecl-continue:focus-visible { background: var(--ecl-orange); color: #000; outline: 0; }
 .ecl-plus5 { font-weight: 700; font-size: clamp(16px, 8cqh, 22px); text-shadow: 0 1px 1px #000; }
 
 /* 2.x progress bar: dark well, yellow-orange fill */

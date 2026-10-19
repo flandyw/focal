@@ -32,6 +32,9 @@ export interface EclairHomeProps {
   blocks: number
   plans: EclairPlan[]
   planBlocked: string
+  /** Pick up the study finished last today, when the timer is idle. */
+  onContinue?: () => void
+  continueLabel?: string
   actions: {
     toggle: () => void
     reset: () => void
@@ -84,7 +87,7 @@ function Defs() {
   )
 }
 
-type IconName = "start" | "pause" | "finish" | "reset" | "subject" | "pomodoro" | "free" | "paper" | "plus" | "coffee" | "calendar" | "settings" | "preset"
+type IconName = "start" | "continue" | "pause" | "finish" | "reset" | "subject" | "pomodoro" | "free" | "paper" | "plus" | "coffee" | "calendar" | "settings" | "preset"
 
 const GEAR = (() => {
   const points: string[] = []
@@ -109,6 +112,7 @@ function Glyph({ name, text }: { name: IconName; text?: string }) {
   )
   switch (name) {
     case "start": return stopwatch(<path d="M19 18.5 L33 27 L19 35.5 Z" fill="url(#e-green)" stroke="#245500" strokeLinejoin="round" strokeWidth="1" />)
+    case "continue": return stopwatch(<><rect fill="url(#e-green)" height="15" rx="1" stroke="#245500" strokeWidth="1" width="4" x="16" y="19.5" /><path d="M22.5 19.5 L33.5 27 L22.5 34.5 Z" fill="url(#e-green)" stroke="#245500" strokeLinejoin="round" strokeWidth="1" /></>)
     case "pause": return stopwatch(<><rect fill="url(#e-orange)" height="16" rx="1.5" stroke="#8a3a00" strokeWidth="1" width="5.5" x="17.5" y="19" /><rect fill="url(#e-orange)" height="16" rx="1.5" stroke="#8a3a00" strokeWidth="1" width="5.5" x="25" y="19" /></>)
     case "preset": return stopwatch(<text className="ecl-glyph-text" fill="#30363a" fontSize="12" textAnchor="middle" x="24" y="31.5">{text}</text>)
     case "finish": return (
@@ -371,7 +375,9 @@ export function EclairHome(props: EclairHomeProps) {
   const shortcuts = (
     <>
       <App disabled={busy} icon={props.running ? "pause" : "start"} label={toggleLabel} onClick={start} />
-      {props.free
+      {props.onContinue
+        ? <App icon="continue" label="Continue" onClick={props.onContinue} />
+        : props.free
         ? <App disabled={!canFinish} icon="finish" label="Finish" onClick={actions.finish} />
         : props.onBreak
           ? <App icon="coffee" label="Skip break" onClick={actions.skipBreak} />
@@ -408,6 +414,7 @@ export function EclairHome(props: EclairHomeProps) {
                   <p aria-label={`${props.mode}, ${props.display}`} className="ecl-readout" role="timer">{props.display}</p>
                   <p className="ecl-timer-subject">{props.subject ? [props.subject, props.intent].filter(Boolean).join(" — ") : "Choose a subject to begin"}</p>
                   {progress === null ? null : <Bar label="Block progress" value={progress} />}
+                  {props.onContinue && props.continueLabel ? <button className="ecl-continue" onClick={props.onContinue} type="button"><SkipForward />{props.continueLabel}</button> : null}
                   <div className="ecl-transport">
                     <button aria-label={toggleLabel} disabled={busy} onClick={start} type="button">{props.running ? <Pause className="ecl-solid" /> : <Play className="ecl-solid" />}</button>
                     {props.free

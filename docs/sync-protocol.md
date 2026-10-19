@@ -53,6 +53,10 @@ else about its life is stored:
 - **running**: derived, an open interval (`segment_started_at` is set). `start`, `pause`, `resume`,
   `phase_change` and `complete` drive the live timer.
 - **paused**: derived, `paused_at` is set on an unfinished session.
+- **continued**: `resume` also accepts a completed, timed focus session (migration `0027`). It
+  reopens the session as paused at its `completed_at` and resumes it in the same transaction, so
+  the new interval joins the earlier ones. (`save_progress` with `completed: false` is not a
+  continue: it turns the session back into scheduled study and drops its worked time.)
 - **scheduled**: derived, not completed and never timed. `create` makes one from `blocks`;
   `start` replaces its slot with the real run.
 - **deleted**: `cancelled_at` is set. `cancel` deletes any session, done or not; the row is kept

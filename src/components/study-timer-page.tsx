@@ -35,7 +35,7 @@ import type { StudySessionEdit } from "../lib/sync/sessionContract"
 import type { FocusSessionSink } from "../lib/focus-session"
 import { sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { canContinue, isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { VCE_SUBJECTS } from "../lib/types"
 import { StudyPlanCard } from "./study-plan-card"
@@ -142,6 +142,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const [planBusy, setPlanBusy] = useState<string | null>(null)
   const planBusyRef = useRef(false)
   const [planError, setPlanError] = useState("")
+  const [continueError, setContinueError] = useState("")
   const [editingPlan, setEditingPlan] = useState<CanonicalStudySession | null>(null)
   const [creatingPlan, setCreatingPlan] = useState(false)
   const [subject, setSubject] = useState(preset?.subject ?? "")
@@ -173,11 +174,15 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   })
   const blockedPlan = examActive ? "Stop the exam timer before starting a plan."
     : localSessionId || activeSession || local.state.running ? "Finish your current session before starting a plan." : ""
-  async function startPlan(session: CanonicalStudySession) {
+  async function startPlan(session: CanonicalStudySession, action: "start" | "resume" = "start") {
     if (!onControlSession || planBusyRef.current || blockedPlan) return
-    planBusyRef.current = true; setPlanBusy(session.id); setPlanError("")
-    try { await onControlSession(session, "start") }
-    catch (error) { setPlanError(error instanceof Error ? error.message : "Could not start the plan.") }
+    planBusyRef.current = true; setPlanBusy(session.id); setPlanError(""); setContinueError("")
+    try { await onControlSession(session, action) }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "Could not start the session."
+      if (action === "resume") setContinueError(message)
+      else setPlanError(message)
+    }
     finally { planBusyRef.current = false; setPlanBusy(null) }
   }
   async function copyPlan(patch: StudySessionEdit) {
@@ -271,6 +276,18 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     })
   }, [now, sessions])
   const todaysRecord = todaysSittings.length > 0 ? todaysSittings : null
+  // Finished study from today can be picked up again: the same session, its time kept.
+  const continuable = useMemo(() => {
+    const today = localDate(now)
+    return new Map((sessions ?? []).filter((session) => canContinue(session) && localDate(new Date(session.completed_at!)) === today)
+      .map((session) => [session.id, session]))
+  }, [now, sessions])
+  const lastFinished = [...continuable.values()].toSorted((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0]
+  const timerIdle = !sharedSession && !state.running && !state.studyOvertime && state.overtimeSeconds === 0 && (isFreeStudy || state.secondsLeft === state.totalSeconds)
+  const offerContinue = timerIdle && !blockedPlan && onControlSession && lastFinished ? lastFinished : undefined
+  const continueLabel = offerContinue
+    ? `Continue ${VCE_SUBJECTS.find((item) => item.id === offerContinue.subject_id)?.name ?? offerContinue.subject_id ?? offerContinue.title} · ${Math.round(offerContinue.accumulated_active_ms / 60_000)} min`
+    : ""
   const recordCount = todaysRecord?.length ?? blocksToday
   const recordSeconds = todaysRecord
     ? Math.round(todaysRecord.reduce((total, item) => total + item.minutes, 0)) * 60
@@ -362,6 +379,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
               {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
             </div>
+            {offerContinue ? (
+              <Button disabled={!!planBusy} onClick={() => void startPlan(offerContinue, "resume")} variant="ghost">
+                <Play />{planBusy === offerContinue.id ? "Continuing…" : continueLabel}
+              </Button>
+            ) : null}
+            {continueError ? <p className="text-sm text-destructive" role="alert">{continueError}</p> : null}
             {!state.studyOvertime && !isFreeStudy ? (
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={() => actions.addTime(5)} variant="ghost"><Plus />5 min</Button>
@@ -423,6 +446,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
         subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
         settings={settings} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
+        continueLabel={offerContinue ? continueLabel : undefined}
+        onContinue={offerContinue ? () => void startPlan(offerContinue, "resume") : undefined}
         plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
           detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }),
           start: () => void startPlan(session) }))}
@@ -456,7 +481,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                       {[item.detail || subject, `${Math.round(item.minutes)} min`].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                  <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+                  {continuable.has(item.id) && onControlSession ? (
+                    <Button aria-label={`Continue ${item.title || "focus block"}`} className="shrink-0 self-start sm:self-auto" disabled={!!blockedPlan || !!planBusy} onClick={() => void startPlan(continuable.get(item.id)!, "resume")} size="sm" variant="outline">
+                      <Play />Continue
+                    </Button>
+                  ) : <Check aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
                 </div>
               ))}
             </div>

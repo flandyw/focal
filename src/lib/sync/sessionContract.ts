@@ -150,6 +150,11 @@ export const isPlanned = (session: CanonicalStudySession) =>
   !session.completed && session.cancelled_at === null && session.started_at === null &&
   session.segment_started_at === null && session.paused_at === null
 
+/** Finished focus study that was actually timed can be continued: `resume` reopens it with its earlier time kept. */
+export const canContinue = (session: CanonicalStudySession) =>
+  session.kind === "focus" && session.completed && session.cancelled_at === null &&
+  session.segment_started_at === null && session.started_at !== null && session.completed_at !== null
+
 /** Deleted sessions are kept as tombstones so every device learns of the removal. */
 export const isDeleted = (session: CanonicalStudySession) => session.cancelled_at !== null
 

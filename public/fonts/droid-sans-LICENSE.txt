@@ -1,0 +1,3 @@
+Droid Sans and Droid Sans Bold, Copyright 2006 Google Inc.
+Licensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+Latin subsets from Google Fonts, used by the Eclair study launcher.

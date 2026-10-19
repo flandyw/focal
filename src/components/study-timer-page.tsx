@@ -421,7 +421,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       </section>
       {eclair ? <EclairHome
         display={readout} mode={displayMode} status={statusLabel} running={state.running}
-        progress={isFreeStudy || state.studyOvertime ? null : progress} elapsedSeconds={state.overtimeSeconds}
+        seconds={isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
+        totalSeconds={isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
         onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
         locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
         subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}

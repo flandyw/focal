@@ -32,11 +32,18 @@ function diagnosisLabel(diagnosis: PaperWeaknessDiagnosis) {
   if (diagnosis === "general weakness") return "Weak on both"
   if (diagnosis === "secure") return "Secure"
   if (diagnosis === "stable") return "Stable"
-  return "More evidence needed"
+  if (diagnosis === "exam-1-only gap") return "E1 gap"
+  if (diagnosis === "exam-2-only gap") return "E2 gap"
+  if (diagnosis === "shared weakness") return "Both papers"
+  if (diagnosis === "no evidence") return "No evidence"
+  return "Few mistakes logged"
 }
 
+const isWeakness = (diagnosis: PaperWeaknessDiagnosis) =>
+  ["tech-free fragile", "tech-active fragile", "general weakness", "exam-1-only gap", "exam-2-only gap", "shared weakness"].includes(diagnosis)
+
 function diagnosisVariant(diagnosis: PaperWeaknessDiagnosis): "destructive" | "secondary" | "outline" {
-  if (diagnosis === "tech-free fragile" || diagnosis === "tech-active fragile" || diagnosis === "general weakness") return "destructive"
+  if (isWeakness(diagnosis)) return "destructive"
   if (diagnosis === "secure") return "secondary"
   return "outline"
 }
@@ -123,8 +130,9 @@ export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas 
   const subject = subjects.includes(selectedSubject) ? selectedSubject : subjects[0]
   const matrix = useMemo(() => subject ? buildPaperWeaknessMatrix(attempts, mistakes, subject, curriculumAreas) : [], [attempts, mistakes, subject, curriculumAreas])
   const lostMarks = useMemo(() => subject ? buildLostMarksAttribution(attempts, mistakes, subject) : null, [attempts, mistakes, subject])
-  const technologySignals = matrix.filter((row) => row.diagnosis === "tech-free fragile" || row.diagnosis === "tech-active fragile" || row.diagnosis === "general weakness").slice(0, 3)
+  const technologySignals = matrix.filter((row) => isWeakness(row.diagnosis)).slice(0, 3)
   const fromMistakes = matrix[0]?.basis === "mistakes"
+  const byTopic = matrix[0]?.groupBy === "topic"
   const exam1Dominant = lostMarks ? dominantCategory(lostMarks.categories, 1) : undefined
   const exam2Dominant = lostMarks ? dominantCategory(lostMarks.categories, 2) : undefined
 
@@ -137,15 +145,17 @@ export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas 
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle id="paper-analysis-title">Exam 1 vs Exam 2 weakness matrix</CardTitle>
-              <CardDescription>{fromMistakes ? "Where each paper's lost marks come from, by Area of Study, built from your logged mistakes. Log question-by-question results to switch this to mastery." : "Paper-aware mastery, technology dependence, confidence, repeat mistakes, and the exact questions behind each result."}</CardDescription>
+              <CardDescription>{fromMistakes ? `Where each paper's lost marks come from, by ${byTopic ? "topic" : "Area of Study"}, built from your logged mistakes. Log question-by-question results to switch this to mastery.` : "Paper-aware mastery, technology dependence, confidence, repeat mistakes, and the exact questions behind each result."}</CardDescription>
             </div>
             {subjects.length > 1 ? <Select value={subject} onValueChange={(value) => setSelectedSubject(value ?? "")}><SelectTrigger aria-label="Choose mathematics subject"><SelectValue>{subject}</SelectValue></SelectTrigger><SelectContent>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : <Badge variant="outline">{subject}</Badge>}
           </div>
         </CardHeader>
         <CardContent className="grid gap-5">
           {technologySignals.length ? <div className="grid gap-3 md:grid-cols-3">{technologySignals.map((row) => {
-            const Icon = row.diagnosis === "tech-active fragile" ? Calculator : row.diagnosis === "tech-free fragile" ? AlertTriangle : Minus
-            const weakCells = row.diagnosis === "tech-free fragile" ? [row.exam1] : row.diagnosis === "tech-active fragile" ? [row.exam2] : [row.exam1, row.exam2]
+            const onExam2 = row.diagnosis === "tech-active fragile" || row.diagnosis === "exam-2-only gap"
+            const onExam1 = row.diagnosis === "tech-free fragile" || row.diagnosis === "exam-1-only gap"
+            const Icon = onExam2 ? Calculator : onExam1 ? AlertTriangle : Minus
+            const weakCells = onExam1 ? [row.exam1] : onExam2 ? [row.exam2] : [row.exam1, row.exam2]
             const mainErrors = mainErrorCategories(weakCells)
             return <div key={row.areaOfStudy} className="rounded-lg border bg-muted/30 p-4">
               <div className="flex items-center gap-2"><Icon className="size-4" /><p className="font-medium">{row.areaOfStudy}</p></div>
@@ -155,7 +165,7 @@ export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas 
             </div>
           })}</div> : null}
           {matrix.length ? <Table>
-            <TableHeader><TableRow><TableHead>Area of Study</TableHead><TableHead className="text-right">Exam 1</TableHead><TableHead className="text-right">Exam 2</TableHead><TableHead className="text-right">{fromMistakes ? "Gap (per 100)" : "Gap"}</TableHead><TableHead>Diagnosis</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>{byTopic ? "Topic" : "Area of Study"}</TableHead><TableHead className="text-right">Exam 1</TableHead><TableHead className="text-right">Exam 2</TableHead><TableHead className="text-right">{fromMistakes ? "Gap (per 100)" : "Gap"}</TableHead><TableHead>Diagnosis</TableHead></TableRow></TableHeader>
             <TableBody>{matrix.map((row) => <TableRow key={row.areaOfStudy}>
               <TableCell className="font-medium">{row.areaOfStudy}</TableCell>
               <TableCell className="text-right"><PaperCellButton cell={row.exam1} onClick={() => setSelectedCell({ area: row.areaOfStudy, cell: row.exam1 })} /></TableCell>

@@ -1,7 +1,8 @@
 import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data"
 import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty"
 import type { CurriculumArea } from "./learning-workspace"
-import { getMathsExamPaper, isTechSplitMathsSubject } from "./mistake-filters"
+import { getAttemptMathsPaper, isTechSplitMathsSubject } from "./mistake-filters"
+import { expectedRawMax, paperTypeOf, rawMaxWarning, trustedRawMax } from "./paper-types"
 import { inferTopic, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
@@ -244,6 +245,14 @@ export type PaperPerformanceCell = {
   evidenceConfidence: PaperEvidenceConfidence
   mistakeCount: number
   repeatMistakes: number
+  /** Sum of `marksLost` on the logged mistake cards for this topic and paper (suspended cards excluded). */
+  marksLost: number
+  /** Cards here with no `marksLost`, so their loss is invisible in `marksLost`. */
+  cardsWithoutMarks: number
+  /** The category that lost the most marks (most cards when no card has marks). */
+  dominantCategory: string | null
+  /** The split of this paper's mistake cards by category, biggest loss first. */
+  lostByCategory: Array<{ category: string; marks: number; cards: number }>
   /** Marks lost to this area per 100 marks of this paper sat (mistake-based rows only). */
   lostPer100: number | null
   trendPoints: number | null
@@ -251,10 +260,32 @@ export type PaperPerformanceCell = {
   questions: PaperQuestionEvidence[]
 }
 
-export type PaperWeaknessDiagnosis = "tech-free fragile" | "tech-active fragile" | "general weakness" | "secure" | "stable" | "insufficient evidence"
+/**
+ * Marked-question rows (basis "results") read: tech-free fragile, tech-active fragile, general weakness, secure, stable.
+ * Mistake rows (basis "mistakes") read: the "gap"/"weakness" states below, or "mistake-only evidence" while there is too little to call.
+ * "-only gap" means the loss is on that paper alone or at least `dominanceRatio` times heavier there (per 100 marks).
+ */
+export type PaperWeaknessDiagnosis =
+  | "tech-free fragile" | "tech-active fragile" | "general weakness" | "secure" | "stable"
+  | "mistake-only evidence" | "exam-1-only gap" | "exam-2-only gap" | "shared weakness" | "no evidence"
+
+export const WEAKNESS_THRESHOLDS = {
+  /** Cards on a topic, both papers together, before a gap is called; fewer is "mistake-only evidence". */
+  minCards: 3,
+  /** Marks lost on one paper before that paper counts as having a gap. */
+  minMarksLostPerPaper: 2,
+  /** When both papers have a gap, one this many times heavier (per 100 marks) is called the "-only gap". */
+  dominanceRatio: 3,
+  /** Marked-question mastery under this is weak. */
+  weakMasteryPercent: 85,
+  /** Mastery difference between papers, in points, before it is a technology gap. */
+  masteryGapPoints: 5,
+} as const
 
 export type PaperWeaknessRow = {
+  /** The row's label: a canonical topic when `groupBy` is "topic", else the free-text area of study. */
   areaOfStudy: string
+  groupBy: MatrixGrouping
   /** "results": mastery from marked questions. "mistakes": marks lost, from logged mistakes. */
   basis: "results" | "mistakes"
   exam1: PaperPerformanceCell
@@ -263,8 +294,9 @@ export type PaperWeaknessRow = {
   diagnosis: PaperWeaknessDiagnosis
 }
 
-type PaperCellBucket = Omit<PaperPerformanceCell, "mastery" | "confidenceRisk" | "evidenceConfidence" | "repeatMistakes" | "lostPer100" | "trendPoints" | "trend"> & {
+type PaperCellBucket = Omit<PaperPerformanceCell, "mastery" | "confidenceRisk" | "evidenceConfidence" | "repeatMistakes" | "lostPer100" | "trendPoints" | "trend" | "dominantCategory" | "lostByCategory"> & {
   mistakeSignatures: string[]
+  categoryTally: Map<string, { marks: number; cards: number }>
   performances: Map<string, { completedAt: string; earned: number; available: number }>
 }
 
@@ -279,10 +311,25 @@ function emptyPaperCell(paper: 1 | 2): PaperCellBucket {
     mediumConfidence: 0,
     highConfidence: 0,
     mistakeCount: 0,
+    marksLost: 0,
+    cardsWithoutMarks: 0,
     questions: [],
     mistakeSignatures: [],
+    categoryTally: new Map(),
     performances: new Map(),
   }
+}
+
+function tallyCard(bucket: PaperCellBucket, mistake: Mistake) {
+  const marks = mistake.marksLost ?? 0
+  bucket.mistakeCount += 1
+  bucket.marksLost += marks
+  if (mistake.marksLost === undefined) bucket.cardsWithoutMarks += 1
+  bucket.mistakeSignatures.push(mistake.category.toLowerCase())
+  const tally = bucket.categoryTally.get(mistake.category) ?? { marks: 0, cards: 0 }
+  tally.marks += marks
+  tally.cards += 1
+  bucket.categoryTally.set(mistake.category, tally)
 }
 
 function normaliseQuestionLabel(value: string) {
@@ -322,9 +369,15 @@ function finishPaperCell(bucket: PaperCellBucket): PaperPerformanceCell {
       : trendPoints <= -3
         ? "deteriorating"
         : "flat"
+  const lostByCategory = [...bucket.categoryTally].map(([category, tally]) => ({ category, ...tally }))
+    .toSorted((first, second) => second.marks - first.marks || second.cards - first.cards || first.category.localeCompare(second.category))
   return {
     paper: bucket.paper,
     mastery,
+    marksLost: bucket.marksLost,
+    cardsWithoutMarks: bucket.cardsWithoutMarks,
+    dominantCategory: lostByCategory[0]?.category ?? null,
+    lostByCategory,
     earnedMarks: bucket.earnedMarks,
     missedMarks: bucket.missedMarks,
     availableMarks: bucket.availableMarks,
@@ -344,12 +397,17 @@ function finishPaperCell(bucket: PaperCellBucket): PaperPerformanceCell {
 }
 
 function diagnosePaperGap(exam1: PaperPerformanceCell, exam2: PaperPerformanceCell): PaperWeaknessDiagnosis {
-  if (exam1.mastery === null || exam2.mastery === null) return "insufficient evidence"
-  if (exam1.mastery < 85 && exam2.mastery < 85) return "general weakness"
+  const { weakMasteryPercent, masteryGapPoints } = WEAKNESS_THRESHOLDS
+  if (exam1.mastery === null && exam2.mastery === null) return exam1.mistakeCount + exam2.mistakeCount ? "mistake-only evidence" : "no evidence"
+  if (exam1.mastery === null || exam2.mastery === null) {
+    if ((exam1.mastery ?? exam2.mastery!) >= weakMasteryPercent) return "stable"
+    return exam1.mastery === null ? "exam-2-only gap" : "exam-1-only gap"
+  }
+  if (exam1.mastery < weakMasteryPercent && exam2.mastery < weakMasteryPercent) return "general weakness"
   const gap = exam2.mastery - exam1.mastery
-  if (gap >= 5) return "tech-free fragile"
-  if (gap <= -5) return "tech-active fragile"
-  if (exam1.mastery >= 85 && exam2.mastery >= 85) return "secure"
+  if (gap >= masteryGapPoints) return "tech-free fragile"
+  if (gap <= -masteryGapPoints) return "tech-active fragile"
+  if (exam1.mastery >= weakMasteryPercent && exam2.mastery >= weakMasteryPercent) return "secure"
   return "stable"
 }
 
@@ -365,7 +423,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   addEmptyTopics(buckets, config)
 
   for (const attempt of subjectAttempts) {
-    const paper = getMathsExamPaper(attempt.paper)
+    const paper = getAttemptMathsPaper(attempt)
     if (!paper) continue
     for (const result of attempt.questionResults ?? []) {
       const areaOfStudy = config ? topicOfResult(config, result) : result.areaOfStudy?.trim()
@@ -405,14 +463,12 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
 
   for (const mistake of mistakes) {
     const attempt = attemptMap.get(mistake.attemptId)
-    const paper = attempt ? getMathsExamPaper(attempt.paper) : null
+    const paper = attempt ? getAttemptMathsPaper(attempt) : null
     const areaOfStudy = config ? topicOfMistake(config, mistake) : mistake.areaOfStudy?.trim()
     if (!attempt || !paper || !areaOfStudy || mistake.suspended) continue
     const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
     const bucket = paper === 1 ? row.exam1 : row.exam2
-    bucket.mistakeCount += 1
-    const signature = mistake.category.toLowerCase()
-    bucket.mistakeSignatures.push(signature)
+    tallyCard(bucket, mistake)
     const evidence = questionIndex.get(`${attempt.id}\u0000${normaliseQuestionLabel(mistake.question)}`)
     if (evidence && !evidence.mistakeCategories.includes(mistake.category)) evidence.mistakeCategories.push(mistake.category)
     buckets.set(areaOfStudy, row)
@@ -423,6 +479,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
     const exam2 = finishPaperCell(bucketsForArea.exam2)
     return {
       areaOfStudy,
+      groupBy: config ? "topic" as const : "areaOfStudy" as const,
       basis: "results" as const,
       exam1,
       exam2,
@@ -458,13 +515,20 @@ function areaOfStudyHeading(group: string) {
 }
 
 function diagnoseMistakeLoss(exam1: PaperPerformanceCell, exam2: PaperPerformanceCell): PaperWeaknessDiagnosis {
-  if (exam1.mistakeCount + exam2.mistakeCount < 3) return "insufficient evidence"
-  const rate1 = exam1.lostPer100 ?? 0
-  const rate2 = exam2.lostPer100 ?? 0
-  if (rate1 >= rate2 * 1.5 && exam1.missedMarks >= 2) return "tech-free fragile"
-  if (rate2 >= rate1 * 1.5 && exam2.missedMarks >= 2) return "tech-active fragile"
-  if (exam1.missedMarks >= 3 && exam2.missedMarks >= 3) return "general weakness"
-  return "stable"
+  const { minCards, minMarksLostPerPaper, dominanceRatio } = WEAKNESS_THRESHOLDS
+  const cards = exam1.mistakeCount + exam2.mistakeCount
+  if (cards === 0) return "no evidence"
+  const gap1 = exam1.marksLost >= minMarksLostPerPaper
+  const gap2 = exam2.marksLost >= minMarksLostPerPaper
+  if (cards < minCards || !gap1 && !gap2) return "mistake-only evidence"
+  if (gap1 && gap2) {
+    const rate1 = exam1.lostPer100 ?? 0
+    const rate2 = exam2.lostPer100 ?? 0
+    if (rate1 > 0 && rate1 >= rate2 * dominanceRatio) return "exam-1-only gap"
+    if (rate2 > 0 && rate2 >= rate1 * dominanceRatio) return "exam-2-only gap"
+    return "shared weakness"
+  }
+  return gap1 ? "exam-1-only gap" : "exam-2-only gap"
 }
 
 function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mistake[], curriculumAreas: CurriculumArea[], config?: SubjectTopics): PaperWeaknessRow[] {
@@ -472,14 +536,14 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
   const groupByItem = new Map(curriculumAreas.filter((item) => item.group).map((item) => [item.id, areaOfStudyHeading(item.group!)]))
   const paperMarks = { 1: 0, 2: 0 }
   for (const attempt of subjectAttempts) {
-    const paper = getMathsExamPaper(attempt.paper)
-    if (paper) paperMarks[paper] += attempt.rawMax
+    const paper = getAttemptMathsPaper(attempt)
+    if (paper) paperMarks[paper] += trustedRawMax(attempt)
   }
   const buckets: PaperBuckets = new Map()
   addEmptyTopics(buckets, config)
   for (const mistake of mistakes) {
     const attempt = attemptMap.get(mistake.attemptId)
-    const paper = attempt ? getMathsExamPaper(attempt.paper) : null
+    const paper = attempt ? getAttemptMathsPaper(attempt) : null
     if (!attempt || !paper || mistake.suspended) continue
     const areaOfStudy = config ? topicOfMistake(config, mistake) : mistake.itemIds?.map((id) => groupByItem.get(id)).find(Boolean) ?? mistake.areaOfStudy?.trim()
     if (!areaOfStudy) continue
@@ -487,9 +551,8 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
     const bucket = paper === 1 ? row.exam1 : row.exam2
     const lost = mistake.marksLost ?? 0
     bucket.missedMarks += lost
-    bucket.mistakeCount += 1
     bucket.questionCount += 1
-    bucket.mistakeSignatures.push(mistake.category.toLowerCase())
+    tallyCard(bucket, mistake)
     bucket.questions.push({
       attemptId: attempt.id,
       attemptTitle: attempt.title,
@@ -520,6 +583,7 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
     const exam2 = finish(row.exam2)
     return {
       areaOfStudy,
+      groupBy: config ? "topic" as const : "areaOfStudy" as const,
       basis: "mistakes" as const,
       exam1,
       exam2,
@@ -530,6 +594,76 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
     second.exam1.missedMarks + second.exam2.missedMarks - first.exam1.missedMarks - first.exam2.missedMarks ||
     first.areaOfStudy.localeCompare(second.areaOfStudy))
 }
+
+type PaperLostMarks = { papers: number; marksLost: number; attributed: number; unattributedMarks: number }
+
+export type PaperDataQuality = {
+  attempts: number
+  attemptsWithoutQuestionResults: number
+  papersWithRawMaxMismatch: Array<{ id: string; title: string; paper: string; rawMax: number; expected: number[] }>
+  /** Active cards on this subject's papers. */
+  cards: number
+  /** Cards with no stored topic (the matrix infers one for them). Null when the subject has no topic list. */
+  cardsWithoutTopic: number | null
+  cardsWithoutMarksLost: number
+  /** Cards on a paper that is neither Exam 1 nor Exam 2 (combined, unnamed), so outside the matrix columns. */
+  cardsOnOtherPapers: number
+  /**
+   * Per paper: marks lost on the score sheet (rawMax - rawScore) against marks the cards account for, per attempt.
+   * Papers with a wrong-looking rawMax are left out: their totals cannot be trusted.
+   */
+  lostMarks: { exam1: PaperLostMarks; exam2: PaperLostMarks; other: PaperLostMarks }
+  warnings: string[]
+}
+
+/** What the matrix is NOT seeing, so thin or odd data reads as a data problem and not as a student strength. */
+export function buildPaperDataQuality(attempts: ExamAttempt[], mistakes: Mistake[], subject: string): PaperDataQuality {
+  const subjectAttempts = attempts.filter((attempt) => attempt.subject === subject)
+  const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
+  const cards = mistakes.filter((mistake) => attemptMap.has(mistake.attemptId) && !mistake.suspended)
+  const config = topicConfigFor(subject)
+  const mismatched = subjectAttempts.filter((attempt) => rawMaxWarning(attempt))
+  const bad = new Set(mismatched.map((attempt) => attempt.id))
+  const lostMarks = { exam1: emptyLostMarks(), exam2: emptyLostMarks(), other: emptyLostMarks() }
+  for (const attempt of subjectAttempts) {
+    if (bad.has(attempt.id)) continue
+    const paper = getAttemptMathsPaper(attempt)
+    const row = lostMarks[paper === 1 ? "exam1" : paper === 2 ? "exam2" : "other"]
+    const lost = Math.max(0, attempt.rawMax - attempt.rawScore)
+    const attributed = cards.filter((card) => card.attemptId === attempt.id).reduce((total, card) => total + (card.marksLost ?? 0), 0)
+    row.papers += 1
+    row.marksLost += lost
+    row.attributed += attributed
+    row.unattributedMarks += Math.max(0, lost - attributed)
+  }
+  const quality: PaperDataQuality = {
+    attempts: subjectAttempts.length,
+    attemptsWithoutQuestionResults: subjectAttempts.filter((attempt) => !attempt.questionResults?.length).length,
+    papersWithRawMaxMismatch: mismatched.map((attempt) => ({
+      id: attempt.id, title: attempt.title, paper: attempt.paper, rawMax: attempt.rawMax, expected: [...expectedRawMax(attempt.subject, paperTypeOf(attempt)!)!],
+    })),
+    cards: cards.length,
+    cardsWithoutTopic: config ? cards.filter((card) => !card.topic?.trim()).length : null,
+    cardsWithoutMarksLost: cards.filter((card) => card.marksLost === undefined).length,
+    cardsOnOtherPapers: cards.filter((card) => !getAttemptMathsPaper(attemptMap.get(card.attemptId)!)).length,
+    lostMarks,
+    warnings: [],
+  }
+  const unattributed = lostMarks.exam1.unattributedMarks + lostMarks.exam2.unattributedMarks + lostMarks.other.unattributedMarks
+  const notes: Array<[boolean, string]> = [
+    [quality.attemptsWithoutQuestionResults > 0, `${quality.attemptsWithoutQuestionResults} of ${quality.attempts} papers have no question results, so mastery and trend are unavailable and the matrix is built from logged mistakes.`],
+    [mismatched.length > 0, `${mismatched.length} papers have a rawMax that does not fit their paper type; fix them with save_exam (id, rawScore, rawMax, or paperType "combined"). They are left out of lostMarks.`],
+    [!!quality.cardsWithoutTopic, `${quality.cardsWithoutTopic} cards have no stored topic; the matrix infers one. Run backfill_topics to store it.`],
+    [quality.cardsWithoutMarksLost > 0, `${quality.cardsWithoutMarksLost} cards have no marksLost, so their loss is not counted.`],
+    [quality.cardsOnOtherPapers > 0, `${quality.cardsOnOtherPapers} cards are on papers that are neither Exam 1 nor Exam 2 and sit outside the matrix columns.`],
+    [unattributed > 0, `${round1(unattributed)} marks lost on score sheets have no mistake card behind them (unattributedMarks).`],
+  ]
+  quality.warnings = notes.filter(([on]) => on).map(([, message]) => message)
+  return quality
+}
+
+const emptyLostMarks = (): PaperLostMarks => ({ papers: 0, marksLost: 0, attributed: 0, unattributedMarks: 0 })
+const round1 = (value: number) => Math.round(value * 10) / 10
 
 type LostMarksCategory = {
   category: string
@@ -577,7 +711,7 @@ export function buildLostMarksAttribution(attempts: ExamAttempt[], mistakes: Mis
       const marks = Math.max(0, mistake.marksLost ?? fallbackShare)
       if (!marks) continue
       const attempt = attemptMap.get(mistake.attemptId)!
-      const paper = getMathsExamPaper(attempt.paper)
+      const paper = getAttemptMathsPaper(attempt)
       const row = categories.get(mistake.category) ?? { category: mistake.category, marks: 0, exam1: 0, exam2: 0, other: 0 }
       row.marks += marks
       if (paper === 1) {
@@ -597,7 +731,7 @@ export function buildLostMarksAttribution(attempts: ExamAttempt[], mistakes: Mis
   const totalLost = recentAttempts.reduce((total, attempt) => total + Math.max(0, attempt.rawMax - attempt.rawScore), 0)
   const rawLossByPaper = recentAttempts.reduce((total, attempt) => {
     const lost = Math.max(0, attempt.rawMax - attempt.rawScore)
-    const paper = getMathsExamPaper(attempt.paper)
+    const paper = getAttemptMathsPaper(attempt)
     if (paper === 1) total.exam1 += lost
     else if (paper === 2) total.exam2 += lost
     else total.other += lost

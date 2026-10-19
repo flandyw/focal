@@ -4,6 +4,7 @@ import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-di
 import { isSacRecord, migrateSacRecords, type SacRecord } from "./sac"
 import { isPerformanceContext, type PerformanceContext } from "./performance-context"
 import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "./ongoing-timers"
+import { PAPER_TYPES, type PaperType } from "./paper-types"
 import { EMPTY_LEARNING_WORKSPACE, isLearningWorkspace, migrateLearningWorkspace, type LearningWorkspace } from "./learning-workspace"
 
 export const GENERAL_MISTAKE_CATEGORIES = [
@@ -62,6 +63,8 @@ export type ExamAttempt = {
   title: string
   examYear: number
   paper: string
+  /** Set when the `paper` text alone is ambiguous (e.g. a combined paper); otherwise it is read from `paper`. */
+  paperType?: PaperType
   completedAt: string
   rawScore: number
   rawMax: number
@@ -949,6 +952,7 @@ function isAppData(value: unknown): value is AppData {
           typeof attempt.title === "string" &&
           typeof attempt.examYear === "number" &&
           typeof attempt.paper === "string" &&
+          (attempt.paperType === undefined || PAPER_TYPES.includes(attempt.paperType)) &&
           typeof attempt.completedAt === "string" &&
           typeof attempt.rawScore === "number" &&
           typeof attempt.rawMax === "number" &&

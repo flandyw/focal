@@ -8,7 +8,7 @@ import {
 import { buildExamSuggestions } from "../../src/lib/exam-suggestions"
 import { getGoalProgress, localDate } from "../../src/lib/learning-workspace"
 import { getMistakeProgress, getMistakeQueueCounts, buildRevisionPriorities } from "../../src/lib/mistake-review"
-import { buildFocusPriorities, buildLostMarksAttribution, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks } from "../../src/lib/performance-insights"
+import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks } from "../../src/lib/performance-insights"
 import { getAnalyticsData } from "../../src/lib/progress-analytics"
 import { getUpcomingSacs } from "../../src/lib/sac"
 import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling"
@@ -74,7 +74,7 @@ export function insightTools(define: Define) {
       return getAnalyticsData(analyticsSessions(sessions), [], range)
     })
 
-  define("get_exam_analytics", "Exam and mistake analytics: per-subject outlook (projected next mark), benchmarks against VCAA distributions, area-of-study coverage, focus priorities, the 14-day review forecast and mistake categories. With `subject` it adds the paper-by-paper weakness matrix and where marks were lost.",
+  define("get_exam_analytics", "Exam and mistake analytics: per-subject outlook (projected next mark), benchmarks against VCAA distributions, area-of-study coverage, focus priorities, the 14-day review forecast and mistake categories. With `subject` it adds `paperWeakness` (the Exam 1 vs Exam 2 matrix, one row per canonical topic, each cell with mistakeCount, repeatMistakes, marksLost, dominantCategory and lostByCategory; built from marked questions when there are any, else from logged mistakes), `lostMarks` (last 10 papers, by category) and `dataQuality` (what is missing: papers with no question results, rawMax that does not fit the paper type, cards with no topic, unattributedMarks per paper). Read `dataQuality.warnings` before trusting a diagnosis. Diagnoses: tech-free/tech-active fragile, general weakness, secure, stable (marked questions); exam-1-only gap, exam-2-only gap, shared weakness, mistake-only evidence (too little to call), no evidence (mistake cards).",
     { subject: z.string().optional() }, "read", async ({ subject }) => {
       const [{ data }, references] = await Promise.all([readAll(), gradeReferences()])
       const attempts = subject ? data.attempts.filter((a) => same(a.subject, subject)) : data.attempts
@@ -89,7 +89,13 @@ export function insightTools(define: Define) {
         })),
         coverage: buildCoverage(attempts), focusPriorities: buildFocusPriorities(attempts, mistakes).slice(0, 10),
         reviewForecast: buildReviewForecast(mistakes), mistakeCategories: buildRevisionPriorities(mistakes),
-        ...(subject && { paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, subject, data.learning.curriculumAreas.filter((item) => !item.archivedAt)), lostMarks: buildLostMarksAttribution(attempts, mistakes, subject) }),
+        ...(subject && (() => {
+          const name = attempts[0]?.subject ?? subject
+          return {
+            paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, name, data.learning.curriculumAreas.filter((item) => !item.archivedAt)),
+            lostMarks: buildLostMarksAttribution(attempts, mistakes, name), dataQuality: buildPaperDataQuality(attempts, mistakes, name),
+          }
+        })()),
       }
     })
 

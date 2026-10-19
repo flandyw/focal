@@ -109,10 +109,14 @@ export function failingCase() {
     }
   })
   const mistakes: Mistake[] = Array.from({ length: CARDS }, (_, index) => {
-    const [label] = FAILING_CASE_LABELS[index % FAILING_CASE_LABELS.length]
+    const [label, topic] = FAILING_CASE_LABELS[index % FAILING_CASE_LABELS.length]
     const totalMarks = 2 + (index % 4)
+    // Even attempts are Exam 1. Differentiation and functions mostly cost marks on Exam 1; probability and distributions on Exam 2.
+    const lean = topic === "Differentiation & applications" || topic === "Functions/domains/transformations" ? 0
+      : topic === "Probability (discrete, conditional, binomial)" || topic === "Continuous distributions, normal, sampling & CIs" ? 1 : index % 2
+    const parity = index % 9 === 0 ? 1 - lean : lean
     return {
-      id: `card-${index}`, attemptId: `attempt-${(index * 7) % ATTEMPTS}`, question: `Q${1 + (index % 12)}`, questionText: "x".repeat(300),
+      id: `card-${index}`, attemptId: `attempt-${(index * 7) % 26 * 2 + parity}`, question: `Q${1 + (index % 12)}`, questionText: "x".repeat(300),
       category: MISTAKE_CATEGORIES[index % MISTAKE_CATEGORIES.length], explanation: "Slipped.", correction: "<svg>" + "m".repeat(400) + "</svg>",
       totalMarks, marksLost: 1 + (index % Math.min(3, totalMarks)), areaOfStudy: label, resolved: false,
       createdAt: "2026-02-01T00:00:00.000Z", updatedAt: "2026-02-01T00:00:00.000Z",

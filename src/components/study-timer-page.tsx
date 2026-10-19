@@ -121,12 +121,14 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, examActive = false }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, eclair, setEclair, examActive = false }: {
   subjects: string[]
   preferredSubjects: string[]
   plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
   examActive?: boolean
   onTimedPaper: () => void
+  eclair: boolean
+  setEclair: (on: boolean) => void
   onSessionChange?: FocusSessionSink
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
@@ -142,11 +144,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const [planError, setPlanError] = useState("")
   const [editingPlan, setEditingPlan] = useState<CanonicalStudySession | null>(null)
   const [creatingPlan, setCreatingPlan] = useState(false)
-  const [eclair, setEclairState] = useState(() => typeof localStorage !== "undefined" && localStorage.getItem(ECLAIR_KEY) === "1")
-  function setEclair(on: boolean) {
-    setEclairState(on)
-    try { localStorage.setItem(ECLAIR_KEY, on ? "1" : "0") } catch { /* the launcher still works without storage */ }
-  }
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
 
@@ -328,7 +325,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
-          <Button onClick={() => setEclair(true)} size="sm" variant="outline"><Smartphone />Launcher</Button>
           {sharedSession ? (
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</span>
@@ -670,6 +666,11 @@ export function StudyTimerPage({
   /** The desktop app owns the study timer, so only timed papers are offered. */
   embedded?: boolean
 }) {
+  const [eclair, setEclairState] = useState(() => typeof localStorage !== "undefined" && localStorage.getItem(ECLAIR_KEY) === "1")
+  function setEclair(on: boolean) {
+    setEclairState(on)
+    try { localStorage.setItem(ECLAIR_KEY, on ? "1" : "0") } catch { /* the launcher still works without storage */ }
+  }
   return (
     <WorkspacePage>
       <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
@@ -682,14 +683,18 @@ export function StudyTimerPage({
                 : "Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record."}
             </p>
           </div>
-          {!embedded && <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
-            <TabsTrigger value="focus">Study</TabsTrigger>
-            <TabsTrigger value="exam">Timed paper</TabsTrigger>
-          </TabsList>}
+          {!embedded && <div className="flex shrink-0 items-center gap-3">
+            <TabsList className="h-auto! w-fit border-b-0 pb-0">
+              <TabsTrigger value="focus">Study</TabsTrigger>
+              <TabsTrigger value="exam">Timed paper</TabsTrigger>
+            </TabsList>
+            <span aria-hidden className="h-5 w-px bg-border" />
+            <Button className="text-muted-foreground hover:text-foreground" onClick={() => { onModeChange("focus"); setEclair(true) }} title="Open the full-screen study launcher" variant="ghost"><Smartphone />Launcher</Button>
+          </div>}
         </div>
 
         {!embedded && <TabsContent className="mt-0" value="focus">
-          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} eclair={eclair} setEclair={setEclair} />
         </TabsContent>}
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

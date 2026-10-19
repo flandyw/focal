@@ -3,12 +3,13 @@ import { ATAR_AGGREGATE_REFERENCES } from "../../src/lib/atar-data"
 import { estimateAtar, type AtarStudyResult } from "../../src/lib/atar"
 import { buildDayPlan } from "../../src/lib/day-plan"
 import {
-  buildAttemptBenchmarks, buildCoverage, buildSubjectBenchmarks, computeDistributionStats, normaliseComparisonName, type SavedAtarEstimate,
+  buildAttemptBenchmarks, buildCoverage, buildSubjectBenchmarks, computeDistributionStats, normaliseComparisonName, type AppData, type AssessmentReference, type SavedAtarEstimate,
 } from "../../src/lib/exam-data"
+import { getAttemptMathsPaper } from "../../src/lib/mistake-filters"
 import { buildExamSuggestions } from "../../src/lib/exam-suggestions"
 import { getGoalProgress, localDate } from "../../src/lib/learning-workspace"
 import { getMistakeProgress, getMistakeQueueCounts, buildRevisionPriorities } from "../../src/lib/mistake-review"
-import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks } from "../../src/lib/performance-insights"
+import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks, type MatrixGrouping } from "../../src/lib/performance-insights"
 import { getAnalyticsData } from "../../src/lib/progress-analytics"
 import { getUpcomingSacs } from "../../src/lib/sac"
 import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling"
@@ -43,6 +44,30 @@ function analyticsSessions(sessions: Parameters<typeof isDeleted>[0][]): StudySe
   })
 }
 
+export function buildExamAnalytics(data: AppData, references: AssessmentReference[], { subject, groupBy = "topic", paper }: { subject?: string; groupBy?: MatrixGrouping; paper?: "Exam 1" | "Exam 2" }) {
+  const attempts = data.attempts.filter((a) => (!subject || same(a.subject, subject)) && (!paper || getAttemptMathsPaper(a) === (paper === "Exam 1" ? 1 : 2)))
+  const attemptIds = new Set(attempts.map((a) => a.id))
+  const mistakes = subject || paper ? data.mistakes.filter((m) => attemptIds.has(m.attemptId)) : data.mistakes
+  return {
+    outlooks: buildSubjectOutlooks(attempts, data.examDifficulty),
+    benchmarks: buildSubjectBenchmarks(attempts, references),
+    papers: buildAttemptBenchmarks(attempts, references).map((b) => ({
+      id: b.attempt.id, title: b.attempt.title, completedAt: b.attempt.completedAt, percentage: round(b.percentage), grade: b.grade,
+      percentile: b.percentile === null ? null : round(b.percentile), vcaaMeanPercentage: round(b.vcaaMeanPercentage), gapToAPlus: b.gapToAPlus === null ? null : round(b.gapToAPlus),
+    })),
+    coverage: buildCoverage(attempts), focusPriorities: buildFocusPriorities(attempts, mistakes).slice(0, 10),
+    reviewForecast: buildReviewForecast(mistakes), mistakeCategories: buildRevisionPriorities(mistakes),
+    // The matrix filters on the exact stored name, so use the account's spelling rather than whatever case the caller typed.
+    ...(subject && (() => {
+      const name = attempts[0]?.subject ?? subject
+      return {
+        paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, name, data.learning.curriculumAreas.filter((item) => !item.archivedAt), groupBy),
+        lostMarks: buildLostMarksAttribution(attempts, mistakes, name), dataQuality: buildPaperDataQuality(attempts, mistakes, name),
+      }
+    })()),
+  }
+}
+
 export function insightTools(define: Define) {
   define("get_overview", "Start here. A snapshot of the whole account: queue and counts, today's plan, running timer, upcoming SACs, events and tracked VCE exams, goal progress and predicted study scores.", {}, "read", async () => {
     const [{ data, sessions }, references, timetable] = await Promise.all([readAll(), gradeReferences(), vceTimetable()])
@@ -74,29 +99,10 @@ export function insightTools(define: Define) {
       return getAnalyticsData(analyticsSessions(sessions), [], range)
     })
 
-  define("get_exam_analytics", "Exam and mistake analytics: per-subject outlook (projected next mark), benchmarks against VCAA distributions, area-of-study coverage, focus priorities, the 14-day review forecast and mistake categories. With `subject` it adds `paperWeakness` (the Exam 1 vs Exam 2 matrix, one row per canonical topic, each cell with mistakeCount, repeatMistakes, marksLost, dominantCategory and lostByCategory; built from marked questions when there are any, else from logged mistakes), `lostMarks` (last 10 papers, by category) and `dataQuality` (what is missing: papers with no question results, rawMax that does not fit the paper type, cards with no topic, unattributedMarks per paper). Read `dataQuality.warnings` before trusting a diagnosis. Diagnoses: tech-free/tech-active fragile, general weakness, secure, stable (marked questions); exam-1-only gap, exam-2-only gap, shared weakness, mistake-only evidence (too little to call), no evidence (mistake cards).",
-    { subject: z.string().optional() }, "read", async ({ subject }) => {
+  define("get_exam_analytics", "Exam and mistake analytics: per-subject outlook (projected next mark), benchmarks against VCAA distributions, area-of-study coverage, focus priorities, the 14-day review forecast and mistake categories. With `subject` it adds `paperWeakness` (the Exam 1 vs Exam 2 matrix, one row per canonical topic, each cell with mistakeCount, repeatMistakes, marksLost, dominantCategory and lostByCategory; built from marked questions when there are any, else from logged mistakes), `lostMarks` (last 10 papers, by category) and `dataQuality` (what is missing: papers with no question results, rawMax that does not fit the paper type, cards with no topic, unattributedMarks per paper). Read `dataQuality.warnings` before trusting a diagnosis. Diagnoses: tech-free/tech-active fragile, general weakness, secure, stable (marked questions); exam-1-only gap, exam-2-only gap, shared weakness, mistake-only evidence (too little to call), no evidence (mistake cards). `groupBy` topic (default) groups matrix rows by canonical topic, areaOfStudy by the free-text label (the old behaviour; one row per label). `paper` limits everything to Exam 1 or Exam 2 papers of Methods/Specialist.",
+    { subject: z.string().optional(), groupBy: z.enum(["topic", "areaOfStudy"]).default("topic"), paper: z.enum(["Exam 1", "Exam 2"]).optional() }, "read", async (args) => {
       const [{ data }, references] = await Promise.all([readAll(), gradeReferences()])
-      const attempts = subject ? data.attempts.filter((a) => same(a.subject, subject)) : data.attempts
-      const attemptIds = new Set(attempts.map((a) => a.id))
-      const mistakes = subject ? data.mistakes.filter((m) => attemptIds.has(m.attemptId)) : data.mistakes
-      return {
-        outlooks: buildSubjectOutlooks(attempts, data.examDifficulty),
-        benchmarks: buildSubjectBenchmarks(attempts, references),
-        papers: buildAttemptBenchmarks(attempts, references).map((b) => ({
-          id: b.attempt.id, title: b.attempt.title, completedAt: b.attempt.completedAt, percentage: round(b.percentage), grade: b.grade,
-          percentile: b.percentile === null ? null : round(b.percentile), vcaaMeanPercentage: round(b.vcaaMeanPercentage), gapToAPlus: b.gapToAPlus === null ? null : round(b.gapToAPlus),
-        })),
-        coverage: buildCoverage(attempts), focusPriorities: buildFocusPriorities(attempts, mistakes).slice(0, 10),
-        reviewForecast: buildReviewForecast(mistakes), mistakeCategories: buildRevisionPriorities(mistakes),
-        ...(subject && (() => {
-          const name = attempts[0]?.subject ?? subject
-          return {
-            paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, name, data.learning.curriculumAreas.filter((item) => !item.archivedAt)),
-            lostMarks: buildLostMarksAttribution(attempts, mistakes, name), dataQuality: buildPaperDataQuality(attempts, mistakes, name),
-          }
-        })()),
-      }
+      return buildExamAnalytics(data, references, args)
     })
 
   define("suggest_exams", "Suggest which official/company practice papers to do next, based on what is logged and your subjects.",

@@ -2,7 +2,7 @@
 
 Lets an MCP client (Claude Code, Claude Desktop, ...) read and change a Focal account: exams,
 mistakes and reviews, SACs, calendar, study timer and sessions, stoplight, goals, tasks, timetable,
-settings, analytics, predictions, and the VCAA/VTAC reference data. 54 tools, grouped in
+settings, analytics, predictions, and the VCAA/VTAC reference data. 56 tools, grouped in
 `server/mcp/records.ts`, `study.ts` and `insights.ts`. Start a conversation with `get_overview`.
 
 It reuses the app's own logic from `src/lib` and writes through the same sync RPCs
@@ -62,6 +62,44 @@ Claude Desktop (stdio):
 ```
 
 The claude.ai web "custom connector" needs OAuth, which this does not implement (a static bearer token is not enough there).
+
+## Topics and the Exam 1 vs Exam 2 matrix
+
+`areaOfStudy` is free text (a student can have 80 different labels), so the matrix in `get_exam_analytics`
+(with `subject`) groups by a canonical `topic` instead. `mistake.topic` and `questionResult.topic` come from a
+per-subject list in `src/lib/topics.ts` (`TOPIC_CONFIGS`; Methods is defined, other subjects add an entry with
+their topics and keyword rules, and until then keep free-text topics and the old per-label grouping). Methods:
+Functions/domains/transformations; Inverse functions & intersections; Differentiation & applications;
+Integration & area; Probability (discrete, conditional, binomial); Continuous distributions, normal, sampling & CIs;
+Circular functions; Other. A card with no stored topic is filed by inference on the fly, so the matrix works
+before any backfill.
+
+- `get_exam_analytics { subject, groupBy?, paper? }`: `paperWeakness` rows have an Exam 1 and an Exam 2 cell with
+  `mistakeCount`, `repeatMistakes`, `marksLost`, `cardsWithoutMarks`, `dominantCategory` and `lostByCategory`.
+  Rows built from marked questions (`basis: "results"`) add mastery and trend; otherwise `basis: "mistakes"`.
+  Diagnoses and their thresholds (`WEAKNESS_THRESHOLDS` in `performance-insights.ts`): `no evidence`,
+  `mistake-only evidence` (under 3 cards, or under 2 marks lost on each paper), `exam-1-only gap`,
+  `exam-2-only gap` (a paper alone loses 2+ marks, or both do and one loses 3x the rate per 100 paper marks),
+  `shared weakness`; marked-question rows keep `tech-free fragile`, `tech-active fragile`, `general weakness`,
+  `secure`, `stable`. `dataQuality` says what is missing (read `dataQuality.warnings` first).
+  `groupBy: "areaOfStudy"` gives the old one-row-per-label matrix. `paper` limits to Exam 1 or Exam 2.
+- `save_exam` checks `rawMax` against the paper (`src/lib/paper-types.ts`: Methods and Specialist Exam 1 = 40,
+  Exam 2 = 80, combined = 120 or 160). A mismatch still saves and comes back in `warnings`. `paperType`
+  (`exam1`/`exam2`/`combined`) is optional and stored; a combined paper counts in neither matrix column. With an
+  `id`, every omitted field is kept, so `{ id, questionResults }` replaces just the question results.
+- `list_mistakes` is compact by default (no `questionText`/`correction`/SVG), takes `fields`, `topic`
+  (`"none"` = no stored topic) and a `cursor` (`nextCursor` from the previous page). Pass `compact: false` for full text.
+- `update_mistakes { updates: [{ id, topic?, areaOfStudy?, category? }], dryRun?, revert? }` edits many cards.
+  Always preview with `dryRun: true` first. Applying stores each card's previous values in `Mistake.previous`;
+  `revert: true` with the ids restores them (one level).
+- `backfill_topics { subject?, dryRun? }` is **dry-run by default**. It maps cards without a topic by keyword
+  (`areaOfStudy` first, then the start of the question text), lists the cards it could not place in `unmatched`
+  (they get `Other`), flags tied guesses as `ambiguous`, never overrides a topic already set, and is safe to
+  re-run (cards left in `Other` are retried, so improving the rules and re-running picks them up). It does not
+  touch `areaOfStudy`. Writes and reverts are logged as one JSON line each on stderr (journald under systemd).
+
+Tests: `bun test` (they use an in-memory account, never the live store). The synthetic account modelled on the
+failing case (53 papers, 102 cards, 83 labels, no question results) is `src/lib/fixtures/failing-case.ts`.
 
 ## Not covered
 

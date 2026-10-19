@@ -9,7 +9,7 @@ import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/l
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression"
 import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types"
 import { demoteGreens } from "../../src/lib/stoplight"
-import { applyMistakeChanges, planTopicBackfill, validateTopic } from "../../src/lib/topics"
+import { applyMistakeChanges, diffMistake, planTopicBackfill, revertMistakes, validateTopic, type MistakeChange } from "../../src/lib/topics"
 import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac"
 import type { CalendarEvent } from "../../src/lib/types"
 import { gradeReferences, readAll, updateApp } from "./store"
@@ -56,40 +56,46 @@ export function recordTools(define: Define) {
       return { attempt, mistakes: data.mistakes.filter((m) => m.attemptId === id).map((m) => ({ id: m.id, question: m.question, category: m.category, resolved: m.resolved })) }
     })
 
-  define("save_exam", "Log a new practice exam, or update one when `id` is given. Question results are optional but power the topic analytics. For Methods and Specialist the total is checked against the paper (Exam 1 = 40, Exam 2 = 80, combined = 120 or 160): a mismatch still saves but comes back in `warnings`, so read them and correct the paper or rawMax with another save_exam call using the same id.", {
+  define("save_exam", "Log a new practice exam, or update one when `id` is given. With an `id`, every field you omit is kept, so `{ id, questionResults }` alone attaches (replaces) the question results of an existing exam in one call; without an `id`, subject, provider, examYear, paper, completedAt, rawScore and rawMax are required. Question results are optional but power the topic analytics. For Methods and Specialist the total is checked against the paper (Exam 1 = 40, Exam 2 = 80, combined = 120 or 160): a mismatch still saves but comes back in `warnings`, so read them and correct the paper or rawMax with another save_exam call using the same id.", {
     id: z.string().optional(),
-    subject: z.string().min(1), provider: z.string().min(1).describe("e.g. VCAA, Neap, Insight, or a school"),
-    examYear: z.number().int().min(1990).max(2100), paper: z.string().min(1).describe("e.g. Exam 1"),
+    subject: z.string().min(1).optional(), provider: z.string().min(1).optional().describe("e.g. VCAA, Neap, Insight, or a school"),
+    examYear: z.number().int().min(1990).max(2100).optional(), paper: z.string().min(1).optional().describe("e.g. Exam 1"),
     paperType: z.enum(PAPER_TYPES as [string, ...string[]]).optional().describe("exam1, exam2 or combined (one sitting marked out of 120/160). Optional: read from `paper` when omitted. Set combined for papers covering both exams."),
-    completedAt: day, rawScore: z.number().min(0), rawMax: z.number().positive(), comment: z.string().optional(),
+    completedAt: day.optional(), rawScore: z.number().min(0).optional(), rawMax: z.number().positive().optional(), comment: z.string().optional(),
     questionResults: z.array(z.object({
       label: z.string().min(1), marksAwarded: z.number().min(0), maxMarks: z.number().positive(),
       areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), confidence: confidence.optional(), examinerNote: z.string().optional(),
-    })).max(200).optional(),
+    })).max(200).optional().describe("Replaces the exam's whole list (results with the same label keep their id); omit to leave them as they are"),
   }, "write", async (a) => {
     const id = a.id ?? crypto.randomUUID()
     const fresh = (a.questionResults ?? []).map(() => crypto.randomUUID())
     const timestamp = nowIso()
     const paperType = a.paperType as PaperType | undefined
-    const error = validateAttempt(a) ?? validateQuestionResults((a.questionResults ?? []).map((r, i) => ({ ...r, id: fresh[i], confidence: r.confidence ?? "medium" })))
-    if (error) throw new Error(error)
-    const topics = (a.questionResults ?? []).map((r) => {
-      const checked = r.topic === undefined ? undefined : validateTopic(a.subject, r.topic)
-      if (checked && "error" in checked) throw new Error(`${r.label}: ${checked.error}`)
-      return checked?.topic
-    })
     let warnings: string[] = []
     await updateApp((data) => {
       const old = data.attempts.find((item) => item.id === id)
       if (a.id && !old) throw new Error("No exam with that id.")
+      const fields = {
+        subject: a.subject ?? old?.subject, provider: a.provider ?? old?.provider, examYear: a.examYear ?? old?.examYear, paper: a.paper ?? old?.paper,
+        completedAt: a.completedAt ?? old?.completedAt, rawScore: a.rawScore ?? old?.rawScore, rawMax: a.rawMax ?? old?.rawMax,
+      }
+      const missing = Object.entries(fields).filter(([, value]) => value === undefined).map(([key]) => key)
+      if (missing.length) throw new Error(`Give ${missing.join(", ")}; they are only optional when updating an existing exam with \`id\`.`)
+      const m = fields as { subject: string; provider: string; examYear: number; paper: string; completedAt: string; rawScore: number; rawMax: number }
+      const error = validateAttempt(m) ?? validateQuestionResults((a.questionResults ?? []).map((r, i) => ({ ...r, id: fresh[i], confidence: r.confidence ?? "medium" })))
+      if (error) throw new Error(error)
       const results: QuestionResult[] | undefined = a.questionResults?.map((r, i) => {
+        const checked = r.topic === undefined ? undefined : validateTopic(m.subject, r.topic)
+        if (checked && "error" in checked) throw new Error(`${r.label}: ${checked.error}`)
         const match = old?.questionResults?.find((q) => q.label === r.label)
         return { ...match, id: match?.id ?? fresh[i], label: r.label.trim(), marksAwarded: r.marksAwarded, maxMarks: r.maxMarks,
-          areaOfStudy: text(r.areaOfStudy), topic: topics[i] ?? match?.topic, confidence: r.confidence ?? match?.confidence ?? "medium", examinerNote: text(r.examinerNote) }
+          areaOfStudy: text(r.areaOfStudy), topic: checked?.topic ?? match?.topic, confidence: r.confidence ?? match?.confidence ?? "medium", examinerNote: text(r.examinerNote) }
       })
+      const paper = m.paper.trim()
       const next: ExamAttempt = {
-        ...old, id, subject: a.subject.trim(), provider: a.provider.trim(), title: formatExamTitle(a.provider, a.examYear, a.subject),
-        examYear: a.examYear, paper: a.paper.trim(), paperType: paperType ?? (a.paper.trim() === old?.paper ? old.paperType : undefined), completedAt: a.completedAt, rawScore: a.rawScore, rawMax: a.rawMax,
+        ...old, id, subject: m.subject.trim(), provider: m.provider.trim(),
+        title: old && old.subject === m.subject.trim() && old.provider === m.provider.trim() && old.examYear === m.examYear ? old.title : formatExamTitle(m.provider, m.examYear, m.subject),
+        examYear: m.examYear, paper, paperType: paperType ?? (paper === old?.paper ? old.paperType : undefined), completedAt: m.completedAt, rawScore: m.rawScore, rawMax: m.rawMax,
         comment: a.comment === undefined ? old?.comment : text(a.comment), questionResults: results ?? old?.questionResults,
         referenceId: old?.referenceId ?? null, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp,
       }
@@ -126,10 +132,19 @@ export function recordTools(define: Define) {
     }
   }
 
-  define("list_mistakes", "List mistake cards (the spaced-repetition revision queue). status: due = due for review now, open = not yet mastered, resolved, suspended, all.", {
+  const stripSvg = (value: string) => value.replace(/<svg[\s\S]*?<\/svg>/gi, "[svg]")
+  const MISTAKE_FIELDS = [
+    "attemptId", "subject", "paper", "question", "questionText", "category", "explanation", "correction", "totalMarks", "marksLost", "areaOfStudy", "topic",
+    "itemIds", "state", "dueAt", "intervalDays", "lapses", "reviews", "resolved", "suspended", "attachments",
+  ] as const
+
+  define("list_mistakes", "List mistake cards (the spaced-repetition revision queue), 50 at a time. status: due = due for review now, open = not yet mastered, resolved, suspended, all. By default the list is COMPACT: no questionText or correction and no inline SVG, which keeps a whole subject small enough to read; pass compact false (with a small limit) when you need the full text, e.g. to quiz a card. `fields` picks columns (id is always included). If `nextCursor` is not null, pass it back as `cursor` for the next page. `topic` filters by canonical topic; \"none\" finds cards with no stored topic (see backfill_topics / update_mistakes).", {
     status: z.enum(["due", "open", "resolved", "suspended", "all"]).default("all"), subject: z.string().optional(), category: category.optional(),
-    attemptId: z.string().optional(), search: z.string().optional(), limit,
-  }, "read", async ({ status, subject, category, attemptId, search, limit }) => {
+    attemptId: z.string().optional(), topic: z.string().optional(), search: z.string().optional(), limit,
+    compact: z.boolean().default(true).describe("Omit questionText and correction and strip inline SVG (default). false returns everything."),
+    fields: z.array(z.enum(MISTAKE_FIELDS)).min(1).optional().describe("Only these columns, plus id"),
+    cursor: z.string().optional().describe("nextCursor from the previous page"),
+  }, "read", async ({ status, subject, category, attemptId, topic, search, limit, compact, fields, cursor }) => {
     const { data } = await readAll()
     const now = Date.now()
     const needle = search?.toLowerCase()
@@ -141,12 +156,27 @@ export function recordTools(define: Define) {
       if (status === "resolved" && !schedule.resolved) return false
       if (category && mistake.category !== category) return false
       if (attemptId !== undefined && mistake.attemptId !== attemptId) return false
+      if (topic && (topic.toLowerCase() === "none" ? mistake.topic : mistake.topic?.toLowerCase() !== topic.toLowerCase())) return false
       if (subject && data.attempts.find((a) => a.id === mistake.attemptId)?.subject.toLowerCase() !== subject.toLowerCase()) return false
-      return !needle || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy].some((field) => field?.toLowerCase().includes(needle))
+      return !needle || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, mistake.topic].some((field) => field?.toLowerCase().includes(needle))
     })
     const due = (m: Mistake) => getMistakeSchedule(m).dueAt
-    rows.sort(status === "due" || status === "open" ? (a, b) => due(a).localeCompare(due(b)) : (a, b) => b.createdAt.localeCompare(a.createdAt))
-    return { total: rows.length, mistakes: rows.slice(0, limit).map((m) => mistakeView(m, data.attempts)) }
+    // The id tie-break keeps pages stable when many cards share a due time or creation time.
+    rows.sort(status === "due" || status === "open" ? (a, b) => due(a).localeCompare(due(b)) || a.id.localeCompare(b.id) : (a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
+    // ponytail: the cursor is the last id returned, found again by scan; O(n) per page, fine for a few thousand cards.
+    const start = cursor === undefined ? 0 : rows.findIndex((m) => m.id === cursor) + 1
+    if (cursor !== undefined && start === 0) throw new Error("That cursor no longer matches a card in this list (it was deleted or no longer fits the filters). Start again without cursor.")
+    const page = rows.slice(start, start + limit)
+    const shape = (mistake: Mistake) => {
+      const view: Record<string, unknown> = { ...mistakeView(mistake, data.attempts) }
+      if (fields) for (const key of Object.keys(view)) if (key !== "id" && !(fields as readonly string[]).includes(key)) delete view[key]
+      if (compact) {
+        if (!fields) { delete view.questionText; delete view.correction }
+        for (const [key, value] of Object.entries(view)) if (typeof value === "string") view[key] = stripSvg(value)
+      }
+      return view
+    }
+    return { total: rows.length, count: page.length, nextCursor: start + limit < rows.length ? page.at(-1)!.id : null, compact, mistakes: page.map(shape) }
   })
 
   const newMistake = z.object({
@@ -219,6 +249,59 @@ export function recordTools(define: Define) {
         unmatched: plan.unmatched,
       }
     })
+
+  define("update_mistakes", "Edit topic, areaOfStudy and/or category on many mistake cards in one call (up to 200); other fields are untouched. Use it to classify cards: list_mistakes with topic \"none\", then send {id, topic} for each. Topics are checked against the card's subject (Methods list is in the `topic` description of add_mistakes). Run with dryRun true first for a preview of every before/after and any errors; nothing is written. Each applied card remembers its previous values, and `revert` true with just the ids restores them (one level: the last bulk edit of that card). The whole batch is rejected if any item is invalid.", {
+    updates: z.array(z.object({ id: z.string(), topic: z.string().optional().describe(topicHelp), areaOfStudy: z.string().optional(), category: category.optional() })).min(1).max(200),
+    dryRun: z.boolean().default(false).describe("Preview only: return the diff and errors, write nothing"),
+    revert: z.boolean().default(false).describe("Restore the values saved before each card's last bulk edit; only the ids are used"),
+  }, "write", async ({ updates, dryRun, revert }) => {
+    type Plan = { changes: MistakeChange[]; unchanged: number; errors: Array<{ id: string; error: string }>; mistakes: Mistake[] }
+    const at = nowIso()
+    const plan = (data: AppData): Plan => {
+      const errors: Plan["errors"] = []
+      const seen = new Set<string>()
+      if (revert) {
+        const ids = new Set(updates.map((update) => update.id))
+        const { mistakes, reverted } = revertMistakes(data.mistakes, ids, at)
+        const done = new Set(reverted)
+        for (const id of ids) if (!done.has(id)) errors.push({ id, error: data.mistakes.some((m) => m.id === id) ? "Nothing to revert for this card." : "No mistake with that id." })
+        const changes = data.mistakes.filter((m) => done.has(m.id)).map((m): MistakeChange => ({
+          id: m.id, question: m.question, before: { topic: m.topic ?? null, areaOfStudy: m.areaOfStudy ?? null, category: m.category },
+          after: { topic: m.previous!.topic, areaOfStudy: m.previous!.areaOfStudy, category: m.previous!.category },
+        }))
+        return { changes, unchanged: 0, errors, mistakes }
+      }
+      const changes: MistakeChange[] = []
+      let unchanged = 0
+      for (const update of updates) {
+        const old = data.mistakes.find((m) => m.id === update.id)
+        if (!old) { errors.push({ id: update.id, error: "No mistake with that id." }); continue }
+        if (seen.has(update.id)) { errors.push({ id: update.id, error: "Listed twice." }); continue }
+        seen.add(update.id)
+        try {
+          const change = diffMistake(old, { topic: checkedTopic(data, old.attemptId, update.topic), areaOfStudy: update.areaOfStudy, category: update.category })
+          if (change) changes.push(change)
+          else unchanged += 1
+        } catch (error) {
+          errors.push({ id: update.id, error: error instanceof Error ? error.message : String(error) })
+        }
+      }
+      return { changes, unchanged, errors, mistakes: applyMistakeChanges(data.mistakes, changes, at) }
+    }
+    let result: Plan
+    if (dryRun) {
+      result = plan((await readAll()).data)
+    } else {
+      result = { changes: [], unchanged: 0, errors: [], mistakes: [] }
+      await updateApp((data) => {
+        result = plan(data)
+        if (result.errors.length) throw new Error(`Nothing was changed. ${result.errors.map((e) => `${e.id}: ${e.error}`).join(" ")}`)
+        return { ...data, mistakes: result.mistakes }
+      })
+      logWrite(revert ? "update_mistakes:revert" : "update_mistakes", { changes: result.changes })
+    }
+    return { dryRun, applied: !dryRun && result.changes.length > 0, reverted: revert, changed: result.changes.length, unchanged: result.unchanged, errors: result.errors, changes: result.changes }
+  })
 
   define("delete_mistakes", "Delete mistake cards.", { ids: z.array(z.string()).min(1).max(100) }, "delete", async ({ ids }) => {
     const gone = new Set(ids)

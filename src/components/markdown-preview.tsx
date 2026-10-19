@@ -1,6 +1,7 @@
 import { memo } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import rehypeKatex from "rehype-katex"
+import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import type { Root, Element } from "hast"
 import { remarkLatex } from "../lib/remark-latex"
@@ -9,6 +10,11 @@ import { cn } from "../lib/utils"
 import "katex/dist/katex.min.css"
 
 const components: Components = {
+  table: ({ children, node: _node, ...props }) => (
+    <div className="typeset-table" role="region" aria-label="Table" tabIndex={0}>
+      <table {...props}>{children}</table>
+    </div>
+  ),
   pre: ({ node, children }) => {
     const code = node?.children[0]
     const source = code?.type === "element" && Array.isArray(code.properties.className) && code.properties.className.includes("language-svg")
@@ -29,7 +35,7 @@ function inlineContent() {
     function visit(node: Root | Element) {
       for (const child of node.children) {
         if (child.type !== "element") continue
-        if (["p", "div", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "hr"].includes(child.tagName)) {
+        if (["p", "div", "pre", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote", "hr", "table", "thead", "tbody", "tr", "th", "td"].includes(child.tagName)) {
           child.tagName = "span"
           child.children.push({ type: "text", value: " " })
         }
@@ -45,7 +51,7 @@ function inlineContent() {
   }
 }
 
-const remarkPlugins = [remarkMath, remarkLatex]
+const remarkPlugins = [remarkGfm, remarkMath, remarkLatex]
 const katexOptions = { trust: false, strict: "ignore", maxExpand: 1000, maxSize: 20 } as const
 
 export const MarkdownPreview = memo(function MarkdownPreview({ children, inline = false, unframed = false, className }: {

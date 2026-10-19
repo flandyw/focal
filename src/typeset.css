@@ -29,7 +29,7 @@
     line-height: 1.25;
   }
 
-  .typeset :where(p, ul, ol, blockquote, pre, table) { margin-block: var(--typeset-flow) 0; }
+  .typeset :where(p, ul, ol, blockquote, pre, .typeset-table) { margin-block: var(--typeset-flow) 0; }
   .typeset > :first-child { margin-block-start: 0; }
   .typeset :where(ul, ol) { padding-inline-start: 1.5em; }
   .typeset ul { list-style: disc; }
@@ -37,6 +37,12 @@
   .typeset :where(code) { font-family: var(--typeset-font-mono); font-size: 0.9em; }
   .typeset :where(a) { color: var(--foreground); text-decoration: underline; text-underline-offset: 0.2em; }
   .typeset :where(blockquote) { border-inline-start: 1px solid var(--border); padding-inline-start: 1em; color: var(--muted-foreground); }
+  .typeset-table { max-width: 100%; overflow-x: auto; }
+  .typeset-table:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  .typeset-table table { width: 100%; border-collapse: collapse; }
+  .typeset-table :where(th, td) { border: 1px solid var(--border); padding: 0.5em 0.75em; vertical-align: top; }
+  .typeset-table th { background: var(--muted); font-weight: 600; }
+  .typeset-table th:not([align]) { text-align: start; }
   /* Scroll wide equations locally; vertical padding leaves room for tall glyphs. */
   .typeset :where(.katex-display) { max-width: 100%; overflow-x: auto; padding: 0.5em 0.125em; }
   .typeset :where(pre) { max-width: 100%; overflow-x: auto; border-radius: 0.5rem; background: var(--muted); padding: 1rem; }

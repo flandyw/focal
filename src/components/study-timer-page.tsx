@@ -6,6 +6,7 @@ import {
   BellOff,
   Check,
   Coffee,
+  Smartphone,
   Pause,
   Play,
   Plus,
@@ -54,8 +55,11 @@ import {
   type FocusBlock,
 } from "../lib/study-timer"
 import type { ExamTimerModeProps } from "./exam-timer-mode"
+import { EclairHome } from "./eclair-home"
 
 export type StudyTimerMode = "focus" | "exam"
+
+const ECLAIR_KEY = "focal:eclair-launcher:v1"
 
 const ExamTimerMode = lazy(() =>
   import("./exam-timer-mode").then((module) => ({ default: module.ExamTimerMode })),
@@ -117,11 +121,12 @@ function blockSummary(block: FocusBlock) {
   return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
 }
 
-function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, examActive = false }: {
+function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, examActive = false }: {
   subjects: string[]
   preferredSubjects: string[]
   plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
   examActive?: boolean
+  onTimedPaper: () => void
   onSessionChange?: FocusSessionSink
   /** Subject and intent handed over from a day plan, if any. */
   preset?: { subject?: string; intent: string }
@@ -137,6 +142,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const [planError, setPlanError] = useState("")
   const [editingPlan, setEditingPlan] = useState<CanonicalStudySession | null>(null)
   const [creatingPlan, setCreatingPlan] = useState(false)
+  const [eclair, setEclairState] = useState(() => typeof localStorage !== "undefined" && localStorage.getItem(ECLAIR_KEY) === "1")
+  function setEclair(on: boolean) {
+    setEclairState(on)
+    try { localStorage.setItem(ECLAIR_KEY, on ? "1" : "0") } catch { /* the launcher still works without storage */ }
+  }
   const [subject, setSubject] = useState(preset?.subject ?? "")
   const [intent, setIntent] = useState(preset?.intent ?? "")
 
@@ -238,6 +248,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // Every block lands in the study record under a subject, so there is nothing
   // to start until one is chosen.
   const subjectChosen = !!sharedSession || subject.trim() !== ""
+  const statusLabel = isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {
@@ -317,6 +328,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
+          <Button onClick={() => setEclair(true)} size="sm" variant="outline"><Smartphone />Launcher</Button>
           {sharedSession ? (
             <p className="text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</span>
@@ -340,7 +352,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             onCaption={announcement}
             overtime={state.studyOvertime && !state.freeStudy}
             progress={progress}
-            status={isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"}
+            status={statusLabel}
           >
             <div className="flex flex-wrap items-center gap-2">
               {/* A lifecycle command is one transaction with the server: its button
@@ -407,6 +419,23 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         {!visiblePlans.length ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">{planned.length ? "No plans match these filters." : "Plan study here or on the calendar. Your plans also appear in Folio when you connect the same account."}</p> : null}
         {visiblePlans.length > planLimit ? <Button onClick={() => setPlanLimit((limit) => limit + 10)} variant="outline">Show more plans</Button> : null}
       </section>
+      {eclair ? <EclairHome
+        display={readout} mode={displayMode} status={statusLabel} running={state.running}
+        progress={isFreeStudy || state.studyOvertime ? null : progress} elapsedSeconds={state.overtimeSeconds}
+        onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
+        locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
+        subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
+        settings={settings} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
+        plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
+          detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }),
+          start: () => void startPlan(session) }))}
+        actions={{
+          toggle: actions.toggle, reset: actions.reset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
+          addTime: actions.addTime, selectMode: actions.selectMode, preset: applyPreset, setting: updateSettings,
+          notifications: () => void toggleNotifications(), subject: setSubject, intent: setIntent,
+          paper: () => { setEclair(false); onTimedPaper() }, exit: () => setEclair(false),
+        }}
+      /> : null}
       {editingPlan && plannedActions ? <StudySessionDialog key={editingPlan.id}
         session={(sessions ?? []).find((session) => session.id === editingPlan.id) ?? editingPlan}
         subjects={preferredSubjects} allowConvert={false} creating={creatingPlan} onCreate={copyPlan}
@@ -659,7 +688,7 @@ export function StudyTimerPage({
         </div>
 
         {!embedded && <TabsContent className="mt-0" value="focus">
-          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} />
+          <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} />
         </TabsContent>}
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

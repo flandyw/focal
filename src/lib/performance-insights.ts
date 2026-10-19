@@ -1,7 +1,8 @@
-import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "./exam-data"
+import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data"
 import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty"
 import type { CurriculumArea } from "./learning-workspace"
 import { getMathsExamPaper, isTechSplitMathsSubject } from "./mistake-filters"
+import { inferTopic, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
   return Math.min(maximum, Math.max(minimum, value))
@@ -352,17 +353,22 @@ function diagnosePaperGap(exam1: PaperPerformanceCell, exam2: PaperPerformanceCe
   return "stable"
 }
 
-export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mistake[], subject: string, curriculumAreas: CurriculumArea[] = []): PaperWeaknessRow[] {
+export type MatrixGrouping = "topic" | "areaOfStudy"
+
+/** Rows are canonical topics when the subject has a topic list (see `topics.ts`), else the free-text area of study. */
+export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mistake[], subject: string, curriculumAreas: CurriculumArea[] = [], groupBy: MatrixGrouping = "topic"): PaperWeaknessRow[] {
+  const config = groupBy === "topic" ? topicConfigFor(subject) : undefined
   const subjectAttempts = attempts.filter((attempt) => attempt.subject === subject && isTechSplitMathsSubject(attempt.subject))
   const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
-  const buckets = new Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>()
+  const buckets: PaperBuckets = new Map()
   const questionIndex = new Map<string, PaperQuestionEvidence>()
+  addEmptyTopics(buckets, config)
 
   for (const attempt of subjectAttempts) {
     const paper = getMathsExamPaper(attempt.paper)
     if (!paper) continue
     for (const result of attempt.questionResults ?? []) {
-      const areaOfStudy = result.areaOfStudy?.trim()
+      const areaOfStudy = config ? topicOfResult(config, result) : result.areaOfStudy?.trim()
       if (!areaOfStudy) continue
       const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
       const bucket = paper === 1 ? row.exam1 : row.exam2
@@ -400,7 +406,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   for (const mistake of mistakes) {
     const attempt = attemptMap.get(mistake.attemptId)
     const paper = attempt ? getMathsExamPaper(attempt.paper) : null
-    const areaOfStudy = mistake.areaOfStudy?.trim()
+    const areaOfStudy = config ? topicOfMistake(config, mistake) : mistake.areaOfStudy?.trim()
     if (!attempt || !paper || !areaOfStudy || mistake.suspended) continue
     const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
     const bucket = paper === 1 ? row.exam1 : row.exam2
@@ -431,7 +437,19 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   // Mastery needs marked questions on both papers. Without that, the logged mistakes
   // (which already name the paper, the marks lost and the skill) are the better evidence.
   const hasComparableResults = rows.some((row) => row.exam1.mastery !== null && row.exam2.mastery !== null)
-  return hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas)
+  return hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas, config)
+}
+
+type PaperBuckets = Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>
+
+/** Every topic gets a row, so a topic with nothing logged reads as "no evidence" instead of vanishing. */
+function addEmptyTopics(buckets: PaperBuckets, config: SubjectTopics | undefined) {
+  for (const topic of config?.topics ?? []) if (topic !== config!.fallback) buckets.set(topic, { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) })
+}
+
+function topicOfResult(config: SubjectTopics, result: QuestionResult) {
+  const stored = result.topic && config.topics.find((name) => name.toLowerCase() === result.topic!.trim().toLowerCase())
+  return stored || inferTopic(config, [result.areaOfStudy, result.label].filter(Boolean).join(" ")).topic
 }
 
 /** "Units 3 & 4 AOS 2 – Algebra (laws and solving equations)" -> "AOS 2 – Algebra". */
@@ -449,7 +467,7 @@ function diagnoseMistakeLoss(exam1: PaperPerformanceCell, exam2: PaperPerformanc
   return "stable"
 }
 
-function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mistake[], curriculumAreas: CurriculumArea[]): PaperWeaknessRow[] {
+function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mistake[], curriculumAreas: CurriculumArea[], config?: SubjectTopics): PaperWeaknessRow[] {
   const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
   const groupByItem = new Map(curriculumAreas.filter((item) => item.group).map((item) => [item.id, areaOfStudyHeading(item.group!)]))
   const paperMarks = { 1: 0, 2: 0 }
@@ -457,12 +475,13 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
     const paper = getMathsExamPaper(attempt.paper)
     if (paper) paperMarks[paper] += attempt.rawMax
   }
-  const buckets = new Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>()
+  const buckets: PaperBuckets = new Map()
+  addEmptyTopics(buckets, config)
   for (const mistake of mistakes) {
     const attempt = attemptMap.get(mistake.attemptId)
     const paper = attempt ? getMathsExamPaper(attempt.paper) : null
     if (!attempt || !paper || mistake.suspended) continue
-    const areaOfStudy = mistake.itemIds?.map((id) => groupByItem.get(id)).find(Boolean) ?? mistake.areaOfStudy?.trim()
+    const areaOfStudy = config ? topicOfMistake(config, mistake) : mistake.itemIds?.map((id) => groupByItem.get(id)).find(Boolean) ?? mistake.areaOfStudy?.trim()
     if (!areaOfStudy) continue
     const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
     const bucket = paper === 1 ? row.exam1 : row.exam2

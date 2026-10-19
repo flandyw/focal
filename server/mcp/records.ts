@@ -3,21 +3,32 @@ import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetab
 import {
   analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, normalizeMistakeReviewPreferences,
   recordMistakeReview, reduceMistakeReviews, removeAttempt, validateAttempt, validateMistakeMarks, validateQuestionResults,
-  type ExamAttempt, type Mistake, type QuestionResult,
+  type AppData, type ExamAttempt, type Mistake, type QuestionResult,
 } from "../../src/lib/exam-data"
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty"
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression"
 import { demoteGreens } from "../../src/lib/stoplight"
+import { applyMistakeChanges, planTopicBackfill, validateTopic } from "../../src/lib/topics"
 import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac"
 import type { CalendarEvent } from "../../src/lib/types"
 import { gradeReferences, readAll, updateApp } from "./store"
 import type { Define } from "./tools"
-import { day, instant, limit, nowIso, required, round } from "./util"
+import { day, instant, limit, logWrite, nowIso, required, round } from "./util"
 
 const confidence = z.enum(["low", "medium", "high"])
 const category = z.enum(MISTAKE_CATEGORIES)
 const rating = z.enum(["again", "hard", "good", "easy"])
 const text = (value: string | undefined) => value?.trim() || undefined
+const topicHelp = "Canonical topic for the exam's subject. Methods: Functions/domains/transformations; Inverse functions & intersections; Differentiation & applications; Integration & area; Probability (discrete, conditional, binomial); Continuous distributions, normal, sampling & CIs; Circular functions; Other. The matrix groups by this; areaOfStudy stays the free-text detail."
+
+/** The canonical spelling of `topic` for the subject of `attemptId`; subjects without a topic list (or no exam) keep it as written. */
+function checkedTopic(data: AppData, attemptId: string, topic: string | undefined) {
+  if (topic === undefined) return undefined
+  const subject = data.attempts.find((attempt) => attempt.id === attemptId)?.subject
+  const result = subject ? validateTopic(subject, topic) : { topic: topic.trim() }
+  if ("error" in result) throw new Error(result.error)
+  return result.topic
+}
 
 export function recordTools(define: Define) {
   /* ---------------------------------------------------------------- exams */
@@ -51,7 +62,7 @@ export function recordTools(define: Define) {
     completedAt: day, rawScore: z.number().min(0), rawMax: z.number().positive(), comment: z.string().optional(),
     questionResults: z.array(z.object({
       label: z.string().min(1), marksAwarded: z.number().min(0), maxMarks: z.number().positive(),
-      areaOfStudy: z.string().optional(), confidence: confidence.optional(), examinerNote: z.string().optional(),
+      areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), confidence: confidence.optional(), examinerNote: z.string().optional(),
     })).max(200).optional(),
   }, "write", async (a) => {
     const id = a.id ?? crypto.randomUUID()
@@ -59,13 +70,18 @@ export function recordTools(define: Define) {
     const timestamp = nowIso()
     const error = validateAttempt(a) ?? validateQuestionResults((a.questionResults ?? []).map((r, i) => ({ ...r, id: fresh[i], confidence: r.confidence ?? "medium" })))
     if (error) throw new Error(error)
+    const topics = (a.questionResults ?? []).map((r) => {
+      const checked = r.topic === undefined ? undefined : validateTopic(a.subject, r.topic)
+      if (checked && "error" in checked) throw new Error(`${r.label}: ${checked.error}`)
+      return checked?.topic
+    })
     await updateApp((data) => {
       const old = data.attempts.find((item) => item.id === id)
       if (a.id && !old) throw new Error("No exam with that id.")
       const results: QuestionResult[] | undefined = a.questionResults?.map((r, i) => {
         const match = old?.questionResults?.find((q) => q.label === r.label)
         return { ...match, id: match?.id ?? fresh[i], label: r.label.trim(), marksAwarded: r.marksAwarded, maxMarks: r.maxMarks,
-          areaOfStudy: text(r.areaOfStudy), confidence: r.confidence ?? match?.confidence ?? "medium", examinerNote: text(r.examinerNote) }
+          areaOfStudy: text(r.areaOfStudy), topic: topics[i] ?? match?.topic, confidence: r.confidence ?? match?.confidence ?? "medium", examinerNote: text(r.examinerNote) }
       })
       const next: ExamAttempt = {
         ...old, id, subject: a.subject.trim(), provider: a.provider.trim(), title: formatExamTitle(a.provider, a.examYear, a.subject),
@@ -99,7 +115,7 @@ export function recordTools(define: Define) {
     return {
       id: mistake.id, attemptId: mistake.attemptId || null, subject: attempt?.subject, paper: attempt?.paper, question: mistake.question,
       questionText: mistake.questionText, category: mistake.category, explanation: mistake.explanation, correction: mistake.correction,
-      totalMarks: mistake.totalMarks, marksLost: mistake.marksLost, areaOfStudy: mistake.areaOfStudy, itemIds: mistake.itemIds,
+      totalMarks: mistake.totalMarks, marksLost: mistake.marksLost, areaOfStudy: mistake.areaOfStudy, topic: mistake.topic, itemIds: mistake.itemIds,
       state: schedule.state, dueAt: schedule.dueAt, intervalDays: schedule.intervalDays, lapses: schedule.lapses,
       reviews: mistake.reviewHistory?.length ?? 0, resolved: schedule.resolved, suspended: mistake.suspended ?? false, attachments: mistake.attachments?.length ?? 0,
     }
@@ -133,7 +149,7 @@ export function recordTools(define: Define) {
     question: z.string().min(1).describe("Short label, e.g. 'Q4b'"), questionText: z.string().min(1).describe("The question itself"),
     category, explanation: z.string().min(1).describe("What went wrong"), correction: z.string().min(1).describe("The improved response"),
     totalMarks: z.number().positive().optional(), marksLost: z.number().min(0).optional(),
-    areaOfStudy: z.string().optional(), itemIds: z.array(z.string()).max(3).optional().describe("Stoplight item ids this mistake tests"),
+    areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), itemIds: z.array(z.string()).max(3).optional().describe("Stoplight item ids this mistake tests"),
   })
 
   define("add_mistakes", "Add one or more mistake cards. Each becomes due for review immediately. Marks must be given together or not at all. Linking a green stoplight item drops it to amber.",
@@ -149,7 +165,7 @@ export function recordTools(define: Define) {
         const added: Mistake[] = mistakes.map((m, i) => ({
           id: ids[i], attemptId: m.attemptId, question: m.question.trim(), questionText: m.questionText.trim(), category: m.category,
           explanation: m.explanation.trim(), correction: m.correction.trim(), totalMarks: m.totalMarks, marksLost: m.marksLost,
-          areaOfStudy: text(m.areaOfStudy), itemIds: m.itemIds?.length ? m.itemIds : undefined, itemsBy: m.itemIds?.length ? "user" : undefined,
+          areaOfStudy: text(m.areaOfStudy), topic: checkedTopic(data, m.attemptId, m.topic), itemIds: m.itemIds?.length ? m.itemIds : undefined, itemsBy: m.itemIds?.length ? "user" : undefined,
           dueAt: timestamp, resolved: false, createdAt: timestamp, updatedAt: timestamp,
         }))
         return { ...data, mistakes: [...data.mistakes, ...added], learning: demoteGreens(data.learning, added).learning }
@@ -160,7 +176,7 @@ export function recordTools(define: Define) {
   define("update_mistake", "Edit a mistake card; omitted fields are kept. Use `resolved` to mark it mastered or reopen it.", {
     id: z.string(), attemptId: z.string().optional(), question: z.string().min(1).optional(), questionText: z.string().optional(), category: category.optional(),
     explanation: z.string().min(1).optional(), correction: z.string().min(1).optional(), totalMarks: z.number().positive().optional(),
-    marksLost: z.number().min(0).optional(), areaOfStudy: z.string().optional(), itemIds: z.array(z.string()).max(3).optional(), resolved: z.boolean().optional(),
+    marksLost: z.number().min(0).optional(), areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), itemIds: z.array(z.string()).max(3).optional(), resolved: z.boolean().optional(),
   }, "write", async ({ id, ...patch }) => {
     const timestamp = nowIso()
     await updateApp((data) => {
@@ -168,12 +184,36 @@ export function recordTools(define: Define) {
       const next: Mistake = { ...old, updatedAt: timestamp }
       for (const [key, value] of Object.entries(patch)) if (value !== undefined) (next as Record<string, unknown>)[key] = typeof value === "string" ? value.trim() : value
       if (patch.itemIds) { next.itemIds = patch.itemIds.length ? patch.itemIds : undefined; next.itemsBy = patch.itemIds.length ? "user" : undefined }
+      if (patch.topic !== undefined) next.topic = checkedTopic(data, next.attemptId, patch.topic)
       const error = next.totalMarks === undefined && next.marksLost === undefined ? null : validateMistakeMarks(next.totalMarks ?? 0, next.marksLost ?? 0)
       if (error) throw new Error(error)
       const relinked = patch.itemIds && patch.itemIds.join() !== (old.itemIds ?? []).join() ? [next] : []
       return { ...data, mistakes: data.mistakes.map((m) => m.id === id ? next : m), learning: demoteGreens(data.learning, relinked).learning }
     })
   })
+
+  define("backfill_topics", "Give mistake cards that have no `topic` one, by keyword rules on their areaOfStudy (then their text). DRY RUN BY DEFAULT: it only reports what it would change, the cards it could not place (they go to \"Other\" and are listed in `unmatched`) and the ambiguous guesses. Read the preview, then call again with dryRun false to write. Safe to re-run; cards that already have a topic are never touched, and update_mistakes with revert undoes a run.",
+    { subject: z.string().optional().describe("Only cards of this subject; omit for every subject that has a topic list"), dryRun: z.boolean().default(true) }, "write", async ({ subject, dryRun }) => {
+      let plan = planTopicBackfill([], [], subject)
+      if (dryRun) {
+        const { data } = await readAll()
+        plan = planTopicBackfill(data.attempts, data.mistakes, subject)
+      } else {
+        const at = nowIso()
+        await updateApp((data) => {
+          plan = planTopicBackfill(data.attempts, data.mistakes, subject)
+          return { ...data, mistakes: applyMistakeChanges(data.mistakes, plan.changes, at) }
+        })
+        logWrite("backfill_topics", { subject, changes: plan.changes.map((c) => ({ id: c.id, topic: [c.before.topic, c.after.topic] })) })
+      }
+      const byTopic: Record<string, number> = {}
+      for (const change of plan.changes) byTopic[change.after.topic!] = (byTopic[change.after.topic!] ?? 0) + 1
+      return {
+        dryRun, applied: !dryRun, willChange: plan.changes.length, byTopic, alreadyTopical: plan.alreadyTopical, skipped: plan.skipped,
+        changes: plan.changes.map((c) => ({ id: c.id, question: c.question, areaOfStudy: c.before.areaOfStudy, from: c.before.topic, to: c.after.topic, basis: c.basis, ambiguous: c.ambiguous })),
+        unmatched: plan.unmatched,
+      }
+    })
 
   define("delete_mistakes", "Delete mistake cards.", { ids: z.array(z.string()).min(1).max(100) }, "delete", async ({ ids }) => {
     const gone = new Set(ids)

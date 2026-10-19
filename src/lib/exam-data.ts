@@ -82,6 +82,8 @@ export type QuestionResult = {
   marksAwarded: number
   maxMarks: number
   areaOfStudy?: string
+  /** Canonical topic from the subject's list in `topics.ts`; `areaOfStudy` stays the free-text detail. */
+  topic?: string
   itemIds?: string[]
   itemsBy?: "ai" | "user"
   confidence: QuestionConfidence
@@ -129,6 +131,10 @@ export type Mistake = {
   totalMarks?: number
   marksLost?: number
   areaOfStudy?: string
+  /** Canonical topic from the subject's list in `topics.ts`; `areaOfStudy` stays the free-text detail. */
+  topic?: string
+  /** One-level undo for bulk edits (update_mistakes, backfill_topics): the values before the last change; null = unset. */
+  previous?: { at: string; topic: string | null; areaOfStudy: string | null; category: MistakeCategory }
   /** Stoplight items this mistake tests (max 3); `itemsBy` records who linked them. */
   itemIds?: string[]
   itemsBy?: "ai" | "user"
@@ -976,6 +982,8 @@ function isAppData(value: unknown): value is AppData {
         (mistake.marksLost === undefined || typeof mistake.marksLost === "number") &&
         (mistake.totalMarks === undefined && mistake.marksLost === undefined || validateMistakeMarks(mistake.totalMarks!, mistake.marksLost!) === null) &&
         (mistake.areaOfStudy === undefined || typeof mistake.areaOfStudy === "string") &&
+        (mistake.topic === undefined || typeof mistake.topic === "string") &&
+        (mistake.previous === undefined || isRecord(mistake.previous) && typeof mistake.previous.at === "string") &&
         isItemLink(mistake) &&
         (mistake.attachments === undefined || Array.isArray(mistake.attachments) && mistake.attachments.every((attachment) =>
           isRecord(attachment) &&
@@ -1084,6 +1092,7 @@ function isQuestionResult(value: unknown): value is QuestionResult {
     typeof value.marksAwarded === "number" && typeof value.maxMarks === "number" &&
     ["low", "medium", "high"].includes(String(value.confidence)) &&
     (value.areaOfStudy === undefined || typeof value.areaOfStudy === "string") &&
+    (value.topic === undefined || typeof value.topic === "string") &&
     isItemLink(value) &&
     (value.examinerNote === undefined || typeof value.examinerNote === "string") &&
     validateAttempt({ rawScore: value.marksAwarded, rawMax: value.maxMarks }) === null

@@ -11,3 +11,6 @@ export function required<T>(value: T | undefined, what: string): T {
   if (value === undefined) throw new Error(`No ${what} with that id.`)
   return value
 }
+
+/** One JSON line on stderr (journald under systemd) for writes that touch many records; `previous` on each card undoes them. */
+export const logWrite = (tool: string, detail: unknown) => console.error(JSON.stringify({ at: nowIso(), tool, ...(detail as object) }))

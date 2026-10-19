@@ -15,6 +15,7 @@
     "build:chatgpt-sidecar": "bun scripts/build-chatgpt-sidecar.ts",
     "lint": "oxlint src scripts",
     "lint:fix": "oxlint src scripts --fix",
+    "test": "bun test",
     "check": "bun run typecheck && bun run lint",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
     "dev:desktop": "vite --mode desktop",

@@ -173,3 +173,15 @@ test("get_exam_analytics: groupBy and the paper filter", async () => {
   expect(exam1.paperWeakness.every((row: { exam2: { mistakeCount: number } }) => row.exam2.mistakeCount === 0)).toBe(true)
   expect(exam1.outlooks[0].attempts).toBe(27)
 })
+
+test("save_sac takes a plain date or a timestamp and stores the app's plain date either way", async () => {
+  const sac = { subject: "Physical Education", provider: "School", title: "SAC 6", unit: 3, durationMinutes: 60 }
+  const plain = await call("save_sac", { ...sac, scheduledAt: "2026-10-06" })
+  const stamped = await call("save_sac", { ...sac, title: "SAC 5", scheduledAt: "2026-04-02T23:59:00+11:00" })
+  expect(data.sacRecords.find((r) => r.id === plain.id)?.scheduledAt).toBe("2026-10-06")
+  expect(data.sacRecords.find((r) => r.id === stamped.id)?.scheduledAt).toBe("2026-04-02")
+  await expect(call("save_sac", { ...sac, scheduledAt: "next Tuesday" })).rejects.toThrow()
+  // Re-saving a record that holds a timestamp heals it, and a score keeps the date as the completion date.
+  await call("save_sac", { id: stamped.id, ...sac, title: "SAC 5", scheduledAt: "2026-04-02T23:59:00+11:00", score: 20, maxScore: 25 })
+  expect(data.sacRecords.find((r) => r.id === stamped.id)).toMatchObject({ scheduledAt: "2026-04-02", completedAt: "2026-04-02" })
+})

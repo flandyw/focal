@@ -352,21 +352,23 @@ export function recordTools(define: Define) {
 
   define("save_sac", "Plan a SAC, log its result, or update one when `id` is given. Give score and maxScore together once it is marked.", {
     id: z.string().optional(), subject: z.string().min(1), provider: z.string().min(1).describe("School or practice provider"), title: z.string().min(1),
-    sacNumber: z.string().optional(), unit: z.number().int().min(1).max(4), areaOfStudy: z.string().optional(), scheduledAt: instant,
+    sacNumber: z.string().optional(), unit: z.number().int().min(1).max(4), areaOfStudy: z.string().optional(),
+    scheduledAt: z.union([day, instant]).describe("The SAC date, YYYY-MM-DD (preferred: it is what the app stores). A timestamp with an offset is accepted too; only its date is kept."),
     durationMinutes: z.number().positive(), score: z.number().min(0).optional(), maxScore: z.number().positive().optional(),
     weighting: z.number().min(0).max(100).optional(), notes: z.string().optional(),
   }, "write", async (a) => {
     const id = a.id ?? crypto.randomUUID()
     const timestamp = nowIso()
+    const scheduledAt = a.scheduledAt.slice(0, 10) // the app stores plain dates; for a timestamp this is its date at the offset given
     const candidate = { subject: a.subject.trim(), provider: a.provider.trim(), title: a.title.trim(), unit: a.unit as 1 | 2 | 3 | 4,
-      scheduledAt: a.scheduledAt, durationMinutes: a.durationMinutes, score: a.score, maxScore: a.maxScore, weighting: a.weighting }
+      scheduledAt, durationMinutes: a.durationMinutes, score: a.score, maxScore: a.maxScore, weighting: a.weighting }
     const error = validateSac(candidate)
     if (error) throw new Error(error)
     await updateApp((data) => {
       const old = data.sacRecords.find((r) => r.id === id)
       if (a.id && !old) throw new Error("No SAC with that id.")
       const record = { ...old, id, ...candidate, sacNumber: text(a.sacNumber), areaOfStudy: text(a.areaOfStudy), notes: text(a.notes),
-        completedAt: a.score !== undefined ? old?.completedAt ?? a.scheduledAt : undefined, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp }
+        completedAt: a.score !== undefined ? old?.completedAt?.slice(0, 10) ?? scheduledAt : undefined, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp }
       return { ...data, sacRecords: old ? data.sacRecords.map((r) => r.id === id ? record : r) : [...data.sacRecords, record], sacRecordsUpdatedAt: timestamp }
     })
     return { id }

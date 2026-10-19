@@ -28,7 +28,7 @@ type SacPageProps = {
 const chartConfig = { percentage: { label: "SAC result", color: "var(--chart-2)" } }
 
 function formatDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+  return new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
 }
 
 function formatDuration(seconds: number) {
@@ -58,7 +58,7 @@ function SacStatsRow({ records }: { records: SacRecord[] }) {
 function SacTrend({ records }: { records: SacRecord[] }) {
   const points = useMemo(() => records.filter(isCompletedSac).toSorted((a, b) => (a.completedAt ?? a.scheduledAt).localeCompare(b.completedAt ?? b.scheduledAt)).map((record) => ({
     id: record.id,
-    timestamp: new Date(`${record.completedAt ?? record.scheduledAt}T00:00:00`).getTime(),
+    timestamp: new Date(`${(record.completedAt ?? record.scheduledAt).slice(0, 10)}T00:00:00`).getTime(),
     date: formatDate(record.completedAt ?? record.scheduledAt),
     percentage: sacPercentage(record)!,
     subject: record.subject,

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import type { ExamAttempt, Mistake } from "../lib/exam-data"
 import { getExamTarget } from "../lib/exam-target"
+import type { CurriculumArea } from "../lib/learning-workspace"
 import { isTechSplitMathsSubject } from "../lib/mistake-filters"
 import {
   buildLostMarksAttribution,
@@ -41,11 +42,14 @@ function diagnosisVariant(diagnosis: PaperWeaknessDiagnosis): "destructive" | "s
 }
 
 function PaperCellButton({ cell, onClick }: { cell: PaperPerformanceCell; onClick: () => void }) {
-  if (cell.mastery === null) return <span className="text-muted-foreground">—</span>
+  if (cell.lostPer100 !== null && cell.mistakeCount === 0) return <span className="text-muted-foreground">—</span>
+  if (cell.lostPer100 === null && cell.mastery === null) return <span className="text-muted-foreground">—</span>
   return (
     <Button variant="ghost" className="h-auto min-w-24 flex-col items-end gap-0.5 px-2 py-1 text-right" onClick={onClick}>
-      <span className="font-semibold tabular-nums">{formatMastery(cell.mastery)}</span>
-      <span className="text-[11px] font-normal text-muted-foreground tabular-nums">{formatNumber(cell.missedMarks)} lost · {cell.evidenceConfidence} evidence</span>
+      <span className="font-semibold tabular-nums">{cell.lostPer100 === null ? formatMastery(cell.mastery) : `${formatNumber(cell.missedMarks)} lost`}</span>
+      <span className="text-[11px] font-normal text-muted-foreground tabular-nums">
+        {cell.lostPer100 === null ? `${formatNumber(cell.missedMarks)} lost · ${cell.evidenceConfidence} evidence` : `${cell.lostPer100.toFixed(2)} per 100 marks · ${cell.mistakeCount} mistake${cell.mistakeCount === 1 ? "" : "s"}`}
+      </span>
     </Button>
   )
 }
@@ -56,25 +60,28 @@ function trendText(cell: PaperPerformanceCell) {
 }
 
 function CellDetails({ subject, area, cell }: { subject: string; area: string; cell: PaperPerformanceCell }) {
+  const fromMistakes = cell.lostPer100 !== null
   const responsible = cell.questions.filter((question) => question.missedMarks > 0 || question.mistakeCategories.length > 0)
   const blindSpots = responsible.filter((question) => question.confidence === "high" && question.missedMarks > 0).length
   return (
     <DialogContent className="max-h-[min(52rem,calc(100vh-2rem))] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>{area} · Exam {cell.paper}</DialogTitle>
-        <DialogDescription>{subject} · {formatMastery(cell.mastery)} mastery from {cell.questionCount} marked question{cell.questionCount === 1 ? "" : "s"}</DialogDescription>
+        <DialogDescription>{subject} · {fromMistakes ? `${formatNumber(cell.missedMarks)} marks lost across ${cell.mistakeCount} logged mistake${cell.mistakeCount === 1 ? "" : "s"}` : `${formatMastery(cell.mastery)} mastery from ${cell.questionCount} marked question${cell.questionCount === 1 ? "" : "s"}`}</DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{formatNumber(cell.missedMarks)}/{formatNumber(cell.availableMarks)}</p><p className="text-xs text-muted-foreground">marks lost / available</p></div>
-        <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{cell.confidenceRisk.toFixed(0)}%</p><p className="text-xs text-muted-foreground">confidence risk</p></div>
+        {fromMistakes
+          ? <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{formatNumber(cell.missedMarks)}</p><p className="text-xs text-muted-foreground">marks lost across {formatNumber(cell.availableMarks)} paper marks</p></div>
+          : <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{formatNumber(cell.missedMarks)}/{formatNumber(cell.availableMarks)}</p><p className="text-xs text-muted-foreground">marks lost / available</p></div>}
+        {fromMistakes ? null : <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{cell.confidenceRisk.toFixed(0)}%</p><p className="text-xs text-muted-foreground">confidence risk</p></div>}
         <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{cell.mistakeCount}</p><p className="text-xs text-muted-foreground">logged mistakes</p></div>
         <div className="rounded-lg border p-3"><p className="text-xl font-semibold tabular-nums">{cell.repeatMistakes}</p><p className="text-xs text-muted-foreground">repeat mistakes</p></div>
       </div>
-      <div className="grid gap-3 rounded-lg bg-muted/40 p-4 sm:grid-cols-3">
+      {fromMistakes ? null : <div className="grid gap-3 rounded-lg bg-muted/40 p-4 sm:grid-cols-3">
         <div><p className="text-xs text-muted-foreground">Recent trend</p><p className="mt-1 text-sm font-medium">{trendText(cell)}</p></div>
         <div><p className="text-xs text-muted-foreground">Evidence strength</p><p className="mt-1 text-sm font-medium capitalize">{cell.evidenceConfidence} · {formatNumber(cell.availableMarks)} marks</p></div>
         <div><p className="text-xs text-muted-foreground">Blind spots</p><p className="mt-1 text-sm font-medium">{blindSpots} high-confidence error{blindSpots === 1 ? "" : "s"}</p></div>
-      </div>
+      </div>}
       <div>
         <h3 className="text-sm font-medium">Questions responsible</h3>
         <p className="mt-1 text-xs text-muted-foreground">Questions with lost marks or a linked mistake, newest first.</p>
@@ -82,7 +89,7 @@ function CellDetails({ subject, area, cell }: { subject: string; area: string; c
           <div key={`${question.attemptId}-${question.question}`} className="flex flex-wrap items-center gap-3 p-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{question.provider} {question.examYear} · Question {question.question}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{question.attemptTitle} · {new Date(`${question.completedAt}T00:00:00`).toLocaleDateString("en-AU")} · {question.confidence} confidence{question.mistakeCategories.length ? ` · ${question.mistakeCategories.join(", ")}` : ""}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{question.attemptTitle} · {new Date(`${question.completedAt}T00:00:00`).toLocaleDateString("en-AU")} · {[question.confidence && `${question.confidence} confidence`, question.mistakeCategories.join(", ")].filter(Boolean).join(" · ")}</p>
             </div>
             <span className="text-sm font-medium tabular-nums">{formatNumber(question.earnedMarks)}/{formatNumber(question.availableMarks)}</span>
             <Button variant="ghost" size="sm" render={<a href={`#${getExamTarget(question.attemptId)}`} />}>Open <ArrowDownRight /></Button>
@@ -109,14 +116,15 @@ function mainErrorCategories(cells: PaperPerformanceCell[]) {
   return [...counts.entries()].toSorted((first, second) => second[1] - first[1] || first[0].localeCompare(second[0])).slice(0, 2).map(([category]) => category)
 }
 
-export function PaperPerformanceAnalytics({ attempts, mistakes }: { attempts: ExamAttempt[]; mistakes: Mistake[] }) {
+export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas }: { attempts: ExamAttempt[]; mistakes: Mistake[]; curriculumAreas: CurriculumArea[] }) {
   const subjects = useMemo(() => [...new Set(attempts.filter((attempt) => isTechSplitMathsSubject(attempt.subject)).map((attempt) => attempt.subject))].toSorted(), [attempts])
   const [selectedSubject, setSelectedSubject] = useState("")
   const [selectedCell, setSelectedCell] = useState<{ area: string; cell: PaperPerformanceCell } | null>(null)
   const subject = subjects.includes(selectedSubject) ? selectedSubject : subjects[0]
-  const matrix = useMemo(() => subject ? buildPaperWeaknessMatrix(attempts, mistakes, subject) : [], [attempts, mistakes, subject])
+  const matrix = useMemo(() => subject ? buildPaperWeaknessMatrix(attempts, mistakes, subject, curriculumAreas) : [], [attempts, mistakes, subject, curriculumAreas])
   const lostMarks = useMemo(() => subject ? buildLostMarksAttribution(attempts, mistakes, subject) : null, [attempts, mistakes, subject])
   const technologySignals = matrix.filter((row) => row.diagnosis === "tech-free fragile" || row.diagnosis === "tech-active fragile" || row.diagnosis === "general weakness").slice(0, 3)
+  const fromMistakes = matrix[0]?.basis === "mistakes"
   const exam1Dominant = lostMarks ? dominantCategory(lostMarks.categories, 1) : undefined
   const exam2Dominant = lostMarks ? dominantCategory(lostMarks.categories, 2) : undefined
 
@@ -129,7 +137,7 @@ export function PaperPerformanceAnalytics({ attempts, mistakes }: { attempts: Ex
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle id="paper-analysis-title">Exam 1 vs Exam 2 weakness matrix</CardTitle>
-              <CardDescription>Paper-aware mastery, technology dependence, confidence, repeat mistakes, and the exact questions behind each result.</CardDescription>
+              <CardDescription>{fromMistakes ? "Where each paper's lost marks come from, by Area of Study, built from your logged mistakes. Log question-by-question results to switch this to mastery." : "Paper-aware mastery, technology dependence, confidence, repeat mistakes, and the exact questions behind each result."}</CardDescription>
             </div>
             {subjects.length > 1 ? <Select value={subject} onValueChange={(value) => setSelectedSubject(value ?? "")}><SelectTrigger aria-label="Choose mathematics subject"><SelectValue>{subject}</SelectValue></SelectTrigger><SelectContent>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select> : <Badge variant="outline">{subject}</Badge>}
           </div>
@@ -141,22 +149,22 @@ export function PaperPerformanceAnalytics({ attempts, mistakes }: { attempts: Ex
             const mainErrors = mainErrorCategories(weakCells)
             return <div key={row.areaOfStudy} className="rounded-lg border bg-muted/30 p-4">
               <div className="flex items-center gap-2"><Icon className="size-4" /><p className="font-medium">{row.areaOfStudy}</p></div>
-              <p className="mt-2 text-sm text-muted-foreground">Exam 1 {formatMastery(row.exam1.mastery)} · Exam 2 {formatMastery(row.exam2.mastery)}</p>
-              <p className="mt-1 text-sm font-medium">{row.gap === null ? "More evidence needed" : `${row.gap >= 0 ? "+" : ""}${row.gap.toFixed(1)} pp technology gap`} · {diagnosisLabel(row.diagnosis)}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{fromMistakes ? `Exam 1 ${formatNumber(row.exam1.missedMarks)} lost · Exam 2 ${formatNumber(row.exam2.missedMarks)} lost` : `Exam 1 ${formatMastery(row.exam1.mastery)} · Exam 2 ${formatMastery(row.exam2.mastery)}`}</p>
+              <p className="mt-1 text-sm font-medium">{row.gap === null || fromMistakes ? diagnosisLabel(row.diagnosis) : `${row.gap >= 0 ? "+" : ""}${row.gap.toFixed(1)} pp technology gap · ${diagnosisLabel(row.diagnosis)}`}</p>
               {mainErrors.length ? <p className="mt-2 text-xs text-muted-foreground">Main errors: {mainErrors.join(", ")}</p> : null}
             </div>
           })}</div> : null}
           {matrix.length ? <Table>
-            <TableHeader><TableRow><TableHead>Area of Study</TableHead><TableHead className="text-right">Exam 1</TableHead><TableHead className="text-right">Exam 2</TableHead><TableHead className="text-right">Gap</TableHead><TableHead>Diagnosis</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Area of Study</TableHead><TableHead className="text-right">Exam 1</TableHead><TableHead className="text-right">Exam 2</TableHead><TableHead className="text-right">{fromMistakes ? "Gap (per 100)" : "Gap"}</TableHead><TableHead>Diagnosis</TableHead></TableRow></TableHeader>
             <TableBody>{matrix.map((row) => <TableRow key={row.areaOfStudy}>
               <TableCell className="font-medium">{row.areaOfStudy}</TableCell>
               <TableCell className="text-right"><PaperCellButton cell={row.exam1} onClick={() => setSelectedCell({ area: row.areaOfStudy, cell: row.exam1 })} /></TableCell>
               <TableCell className="text-right"><PaperCellButton cell={row.exam2} onClick={() => setSelectedCell({ area: row.areaOfStudy, cell: row.exam2 })} /></TableCell>
-              <TableCell className="text-right font-medium tabular-nums">{row.gap === null ? "—" : <span className="inline-flex items-center gap-1">{row.gap > 1 ? <ArrowUpRight className="size-3.5" /> : row.gap < -1 ? <ArrowDownRight className="size-3.5" /> : null}{row.gap >= 0 ? "+" : ""}{row.gap.toFixed(0)}</span>}</TableCell>
+              <TableCell className="text-right font-medium tabular-nums">{row.gap === null ? "—" : <span className="inline-flex items-center gap-1">{row.gap > 1 ? <ArrowUpRight className="size-3.5" /> : row.gap < -1 ? <ArrowDownRight className="size-3.5" /> : null}{row.gap >= 0 ? "+" : ""}{row.gap.toFixed(fromMistakes ? 2 : 0)}</span>}</TableCell>
               <TableCell><Badge variant={diagnosisVariant(row.diagnosis)}>{diagnosisLabel(row.diagnosis)}</Badge></TableCell>
             </TableRow>)}</TableBody>
-          </Table> : <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Add Area of Study labels to Exam 1 and Exam 2 question results to build this comparison.</div>}
-          <p className="text-xs text-muted-foreground">Gap = Exam 2 mastery minus Exam 1 mastery. A negative gap points to technology-active fragility; a positive gap points to tech-free fragility. Select any percentage for the supporting evidence.</p>
+          </Table> : <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Log mistakes against Exam 1 and Exam 2 papers, or add Area of Study labels to their question results, to build this comparison.</div>}
+          <p className="text-xs text-muted-foreground">{fromMistakes ? "Gap = Exam 2 minus Exam 1 marks lost per 100 paper marks, so the 40-mark and 80-mark papers compare fairly. A negative gap means Exam 1 (tech-free) loses more; a positive gap means Exam 2 (tech-active) does. Only marks from logged mistakes are counted. Select a cell for the supporting mistakes." : "Gap = Exam 2 mastery minus Exam 1 mastery. A negative gap points to technology-active fragility; a positive gap points to tech-free fragility. Select any percentage for the supporting evidence."}</p>
         </CardContent>
       </Card>
 

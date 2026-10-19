@@ -1,5 +1,6 @@
 import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "./exam-data"
 import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty"
+import type { CurriculumArea } from "./learning-workspace"
 import { getMathsExamPaper, isTechSplitMathsSubject } from "./mistake-filters"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
@@ -223,7 +224,8 @@ type PaperQuestionEvidence = {
   earnedMarks: number
   availableMarks: number
   missedMarks: number
-  confidence: "low" | "medium" | "high"
+  /** Null for evidence taken from a logged mistake, which does not record confidence. */
+  confidence: "low" | "medium" | "high" | null
   mistakeCategories: string[]
 }
 
@@ -241,6 +243,8 @@ export type PaperPerformanceCell = {
   evidenceConfidence: PaperEvidenceConfidence
   mistakeCount: number
   repeatMistakes: number
+  /** Marks lost to this area per 100 marks of this paper sat (mistake-based rows only). */
+  lostPer100: number | null
   trendPoints: number | null
   trend: PaperTrend
   questions: PaperQuestionEvidence[]
@@ -250,13 +254,15 @@ export type PaperWeaknessDiagnosis = "tech-free fragile" | "tech-active fragile"
 
 export type PaperWeaknessRow = {
   areaOfStudy: string
+  /** "results": mastery from marked questions. "mistakes": marks lost, from logged mistakes. */
+  basis: "results" | "mistakes"
   exam1: PaperPerformanceCell
   exam2: PaperPerformanceCell
   gap: number | null
   diagnosis: PaperWeaknessDiagnosis
 }
 
-type PaperCellBucket = Omit<PaperPerformanceCell, "mastery" | "confidenceRisk" | "evidenceConfidence" | "repeatMistakes" | "trendPoints" | "trend"> & {
+type PaperCellBucket = Omit<PaperPerformanceCell, "mastery" | "confidenceRisk" | "evidenceConfidence" | "repeatMistakes" | "lostPer100" | "trendPoints" | "trend"> & {
   mistakeSignatures: string[]
   performances: Map<string, { completedAt: string; earned: number; available: number }>
 }
@@ -329,6 +335,7 @@ function finishPaperCell(bucket: PaperCellBucket): PaperPerformanceCell {
     evidenceConfidence: evidenceConfidence(bucket.questionCount, bucket.availableMarks),
     mistakeCount: bucket.mistakeCount,
     repeatMistakes,
+    lostPer100: null,
     trendPoints,
     trend,
     questions: bucket.questions.toSorted((first, second) => second.completedAt.localeCompare(first.completedAt) || first.question.localeCompare(second.question)),
@@ -345,7 +352,7 @@ function diagnosePaperGap(exam1: PaperPerformanceCell, exam2: PaperPerformanceCe
   return "stable"
 }
 
-export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mistake[], subject: string): PaperWeaknessRow[] {
+export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mistake[], subject: string, curriculumAreas: CurriculumArea[] = []): PaperWeaknessRow[] {
   const subjectAttempts = attempts.filter((attempt) => attempt.subject === subject && isTechSplitMathsSubject(attempt.subject))
   const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
   const buckets = new Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>()
@@ -405,11 +412,12 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
     buckets.set(areaOfStudy, row)
   }
 
-  return [...buckets.entries()].map(([areaOfStudy, bucketsForArea]) => {
+  const rows = [...buckets.entries()].map(([areaOfStudy, bucketsForArea]) => {
     const exam1 = finishPaperCell(bucketsForArea.exam1)
     const exam2 = finishPaperCell(bucketsForArea.exam2)
     return {
       areaOfStudy,
+      basis: "results" as const,
       exam1,
       exam2,
       gap: exam1.mastery === null || exam2.mastery === null ? null : exam2.mastery - exam1.mastery,
@@ -420,6 +428,88 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
     const secondRisk = second.gap === null ? -1 : Math.abs(second.gap)
     return secondRisk - firstRisk || first.areaOfStudy.localeCompare(second.areaOfStudy)
   })
+  // Mastery needs marked questions on both papers. Without that, the logged mistakes
+  // (which already name the paper, the marks lost and the skill) are the better evidence.
+  const hasComparableResults = rows.some((row) => row.exam1.mastery !== null && row.exam2.mastery !== null)
+  return hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas)
+}
+
+/** "Units 3 & 4 AOS 2 – Algebra (laws and solving equations)" -> "AOS 2 – Algebra". */
+function areaOfStudyHeading(group: string) {
+  return group.replace(/\s*\([^)]*\)\s*$/, "").replace(/^Units?\s+[\d\s&]+(?=AOS)/i, "").trim()
+}
+
+function diagnoseMistakeLoss(exam1: PaperPerformanceCell, exam2: PaperPerformanceCell): PaperWeaknessDiagnosis {
+  if (exam1.mistakeCount + exam2.mistakeCount < 3) return "insufficient evidence"
+  const rate1 = exam1.lostPer100 ?? 0
+  const rate2 = exam2.lostPer100 ?? 0
+  if (rate1 >= rate2 * 1.5 && exam1.missedMarks >= 2) return "tech-free fragile"
+  if (rate2 >= rate1 * 1.5 && exam2.missedMarks >= 2) return "tech-active fragile"
+  if (exam1.missedMarks >= 3 && exam2.missedMarks >= 3) return "general weakness"
+  return "stable"
+}
+
+function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mistake[], curriculumAreas: CurriculumArea[]): PaperWeaknessRow[] {
+  const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
+  const groupByItem = new Map(curriculumAreas.filter((item) => item.group).map((item) => [item.id, areaOfStudyHeading(item.group!)]))
+  const paperMarks = { 1: 0, 2: 0 }
+  for (const attempt of subjectAttempts) {
+    const paper = getMathsExamPaper(attempt.paper)
+    if (paper) paperMarks[paper] += attempt.rawMax
+  }
+  const buckets = new Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>()
+  for (const mistake of mistakes) {
+    const attempt = attemptMap.get(mistake.attemptId)
+    const paper = attempt ? getMathsExamPaper(attempt.paper) : null
+    if (!attempt || !paper || mistake.suspended) continue
+    const areaOfStudy = mistake.itemIds?.map((id) => groupByItem.get(id)).find(Boolean) ?? mistake.areaOfStudy?.trim()
+    if (!areaOfStudy) continue
+    const row = buckets.get(areaOfStudy) ?? { exam1: emptyPaperCell(1), exam2: emptyPaperCell(2) }
+    const bucket = paper === 1 ? row.exam1 : row.exam2
+    const lost = mistake.marksLost ?? 0
+    bucket.missedMarks += lost
+    bucket.mistakeCount += 1
+    bucket.questionCount += 1
+    bucket.mistakeSignatures.push(mistake.category.toLowerCase())
+    bucket.questions.push({
+      attemptId: attempt.id,
+      attemptTitle: attempt.title,
+      provider: attempt.provider,
+      examYear: attempt.examYear,
+      completedAt: attempt.completedAt,
+      question: mistake.question,
+      earnedMarks: Math.max(0, (mistake.totalMarks ?? lost) - lost),
+      availableMarks: mistake.totalMarks ?? lost,
+      missedMarks: lost,
+      confidence: null,
+      mistakeCategories: [mistake.category],
+    })
+    buckets.set(areaOfStudy, row)
+  }
+  const finish = (bucket: PaperCellBucket): PaperPerformanceCell => {
+    const base = finishPaperCell(bucket)
+    const marks = paperMarks[bucket.paper]
+    return {
+      ...base,
+      availableMarks: marks,
+      lostPer100: marks ? bucket.missedMarks / marks * 100 : null,
+      evidenceConfidence: bucket.mistakeCount >= 6 ? "high" : bucket.mistakeCount >= 3 ? "medium" : "low",
+    }
+  }
+  return [...buckets.entries()].map(([areaOfStudy, row]) => {
+    const exam1 = finish(row.exam1)
+    const exam2 = finish(row.exam2)
+    return {
+      areaOfStudy,
+      basis: "mistakes" as const,
+      exam1,
+      exam2,
+      gap: exam1.lostPer100 === null || exam2.lostPer100 === null ? null : exam2.lostPer100 - exam1.lostPer100,
+      diagnosis: diagnoseMistakeLoss(exam1, exam2),
+    }
+  }).toSorted((first, second) =>
+    second.exam1.missedMarks + second.exam2.missedMarks - first.exam1.missedMarks - first.exam2.missedMarks ||
+    first.areaOfStudy.localeCompare(second.areaOfStudy))
 }
 
 type LostMarksCategory = {

@@ -89,7 +89,7 @@ export function insightTools(define: Define) {
         })),
         coverage: buildCoverage(attempts), focusPriorities: buildFocusPriorities(attempts, mistakes).slice(0, 10),
         reviewForecast: buildReviewForecast(mistakes), mistakeCategories: buildRevisionPriorities(mistakes),
-        ...(subject && { paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, subject), lostMarks: buildLostMarksAttribution(attempts, mistakes, subject) }),
+        ...(subject && { paperWeakness: buildPaperWeaknessMatrix(attempts, mistakes, subject, data.learning.curriculumAreas.filter((item) => !item.archivedAt)), lostMarks: buildLostMarksAttribution(attempts, mistakes, subject) }),
       }
     })
 

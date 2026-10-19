@@ -190,9 +190,17 @@ function CoverageSummary({ data }: { data: AppData }) {
   )
 }
 
+function paperAverages(attempts: ExamAttempt[], settings?: ExamDifficultySettings) {
+  const average = (paper: 1 | 2) => {
+    const matching = attempts.filter((attempt) => getMathsExamPaper(attempt.paper) === paper)
+    return matching.length ? weightedPerformanceAverage(matching, settings) : null
+  }
+  return { exam1Average: average(1), exam2Average: average(2) }
+}
+
 function computeStats(attempts: ExamAttempt[], settings?: ExamDifficultySettings) {
   if (attempts.length === 0) {
-    return { count: 0, subjects: 0, average: 0, best: 0, trendDiff: 0, trend: "flat" as const, lastDate: null }
+    return { count: 0, subjects: 0, average: 0, exam1Average: null, exam2Average: null, best: 0, trendDiff: 0, trend: "flat" as const, lastDate: null }
   }
   const subjects = new Set(attempts.map((attempt) => attempt.subject))
   const sorted = [...attempts].toSorted((first, second) =>
@@ -215,6 +223,7 @@ function computeStats(attempts: ExamAttempt[], settings?: ExamDifficultySettings
     count: attempts.length,
     subjects: subjects.size,
     average,
+    ...paperAverages(attempts, settings),
     best,
     trendDiff,
     trend,
@@ -244,16 +253,11 @@ function computeSubjectBreakdown(data: AppData, references: AssessmentReference[
   }
   return [...buckets.entries()]
     .map(([subject, bucket]) => {
-      const paperAverage = (paper: 1 | 2) => {
-        const attempts = bucket.attempts.filter((attempt) => getMathsExamPaper(attempt.paper) === paper)
-        return attempts.length ? weightedPerformanceAverage(attempts, data.examDifficulty) : null
-      }
       return {
         subject,
         count: bucket.count,
         average: weightedPerformanceAverage(bucket.attempts, data.examDifficulty),
-        exam1Average: paperAverage(1),
-        exam2Average: paperAverage(2),
+        ...paperAverages(bucket.attempts, data.examDifficulty),
         lastDate: bucket.lastDate,
         linkedCount: bucket.linkedCount,
       }
@@ -364,6 +368,12 @@ function StatRow({ data }: { data: AppData }) {
             </span>
           ) : null}
         </div>
+        {stats.exam1Average !== null || stats.exam2Average !== null ? (
+          <p className="text-sm tabular-nums">
+            <span className="text-muted-foreground">Exam 1</span> <span className="font-semibold">{stats.exam1Average === null ? "—" : `${stats.exam1Average.toFixed(1)}%`}</span>
+            <span className="text-muted-foreground"> · Exam 2</span> <span className="font-semibold">{stats.exam2Average === null ? "—" : `${stats.exam2Average.toFixed(1)}%`}</span>
+          </p>
+        ) : null}
         <p className="text-xs text-muted-foreground">
           {stats.count < 2
             ? "Difficulty-adjusted planning estimate"
@@ -470,18 +480,25 @@ function SubjectBreakdown({ data, references }: { data: AppData; references: Ass
                   {entry.count} attempt{entry.count === 1 ? "" : "s"}
                   {entry.lastDate ? ` · last ${formatDate(entry.lastDate)}` : ""}
                   {entry.linkedCount > 0 ? <> · {entry.linkedCount} linked</> : null}
-                  {entry.exam1Average !== null ? ` · Exam 1 ${entry.exam1Average.toFixed(1)}%` : ""}
-                  {entry.exam2Average !== null ? ` · Exam 2 ${entry.exam2Average.toFixed(1)}%` : ""}
                 </p>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-sm font-semibold tabular-nums">{entry.average.toFixed(1)}%</span>
-                {entry.linkedCount > 0 ? (
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                    Est.
-                  </Badge>
-                ) : null}
-              </div>
+              <dl className="flex items-start gap-5 text-right">
+                {([["Exam 1", entry.exam1Average], ["Exam 2", entry.exam2Average]] as const).filter(() => entry.exam1Average !== null || entry.exam2Average !== null).map(([label, value]) => (
+                  <div key={label} className="min-w-14">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="text-sm font-semibold tabular-nums">{value === null ? "—" : `${value.toFixed(1)}%`}</dd>
+                  </div>
+                ))}
+                <div className={`min-w-14 ${entry.exam1Average !== null || entry.exam2Average !== null ? "border-l pl-5" : ""}`}>
+                  <dt className="text-xs text-muted-foreground">Overall</dt>
+                  <dd className="text-sm font-semibold tabular-nums">{entry.average.toFixed(1)}%</dd>
+                  {entry.linkedCount > 0 ? (
+                    <Badge variant="outline" className="mt-1 text-[10px] uppercase tracking-wide">
+                      Est.
+                    </Badge>
+                  ) : null}
+                </div>
+              </dl>
             </li>
           ))}
         </ul>
@@ -730,7 +747,7 @@ export function ExamsPage(props: ExamsPageProps) {
               <ImprovementSignals data={data} />
               <PerformanceContextInsights attempts={data.attempts} sacRecords={data.sacRecords} />
               <Suspense fallback={<Skeleton className="h-96 w-full" />}>
-                <PaperPerformanceAnalytics attempts={data.attempts} mistakes={data.mistakes} />
+                <PaperPerformanceAnalytics attempts={data.attempts} mistakes={data.mistakes} curriculumAreas={data.learning.curriculumAreas} />
               </Suspense>
               <Suspense fallback={<Skeleton className="h-96 w-full" />}>
                 <PerformanceTrendChart attempts={data.attempts} references={references} preferredSubjects={data.subjects} difficultySettings={data.examDifficulty} />

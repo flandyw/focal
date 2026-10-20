@@ -4,8 +4,8 @@
     "impeccable": {
       "source": "pbakaus/impeccable",
       "sourceType": "github",
-      "skillPath": "skill/SKILL.md",
-      "computedHash": "ada9c434d56c794352ccd5c7a6901e5ebb4b7f3b7fe42e8c17c2c4b96c3735c8"
+      "skillPath": ".agents/skills/impeccable/SKILL.md",
+      "computedHash": "84572f92d75b1cac952f347e97ff01a82f476f2dbf5e0ec46418de24e62a5071"
     },
     "login-with-chatgpt": {
       "source": "opencoredev/login-with-chatgpt",

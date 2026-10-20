@@ -83,20 +83,22 @@ export function ExamLibrary({
   const [query, setQuery] = useState("")
   const deferredQuery = useDeferredValue(query)
   const [completion, setCompletion] = useState<CompletionFilter>("all")
+  const [visibleCount, setVisibleCount] = useState(40)
   const resourcesByStudy = useMemo(() => new Map(studies.map((study) => [normaliseComparisonName(study.studyName), study])), [studies])
-  const isCompleted = (exam: VcaaExamResource) => isVcaaExamLogged(exam, attempts) || completedExamIds.includes(exam.url)
+  const completedUrls = useMemo(() => new Set([...completedExamIds, ...exams.filter((exam) => isVcaaExamLogged(exam, attempts)).map((exam) => exam.url)]), [completedExamIds, exams, attempts])
+  const isCompleted = (exam: VcaaExamResource) => completedUrls.has(exam.url)
   const filtered = useMemo(() => {
     const priorities = new Map(preferredSubjects.map((item, index) => [normaliseComparisonName(item), index]))
     const needle = deferredQuery.trim().toLowerCase()
     return exams.filter((exam) => {
-      const done = isVcaaExamLogged(exam, attempts) || completedExamIds.includes(exam.url)
+      const done = completedUrls.has(exam.url)
       return (subject === "all" || exam.studyName === subject) &&
         (completion === "all" || (completion === "completed" ? done : !done)) &&
         (!needle || `${exam.studyName} ${exam.year} ${exam.label}`.toLowerCase().includes(needle))
     }).toSorted((first, second) =>
       (priorities.get(normaliseComparisonName(first.studyName)) ?? Infinity) - (priorities.get(normaliseComparisonName(second.studyName)) ?? Infinity) ||
       (second.year ?? 0) - (first.year ?? 0) || paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
-  }, [attempts, completedExamIds, completion, exams, preferredSubjects, deferredQuery, subject])
+  }, [completedUrls, completion, exams, preferredSubjects, deferredQuery, subject])
 
   const focusSubject = subject === "all" ? firstPreferredSubject(subjects, preferredSubjects) || subjects[0] : subject
   const focusStudy = resourcesByStudy.get(normaliseComparisonName(focusSubject))
@@ -151,23 +153,23 @@ export function ExamLibrary({
               <p className="text-sm font-medium">Prepare with official materials</p>
               {latestSpecification ? <Button nativeButton={false} className="justify-start" variant="outline" render={<a href={latestSpecification.url} target="_blank" rel="noreferrer" />}><ExternalLink />Current specifications</Button> : null}
               {samples.map((sample) => <Button nativeButton={false} key={sample.url} className="justify-start" variant="outline" render={<a href={sample.url} target="_blank" rel="noreferrer" />}><ExternalLink /><span className="truncate">{sample.label}</span></Button>)}
-              <Button nativeButton={false} className="justify-start" variant="ghost" render={<a href={focusStudy.pageUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Open {focusSubject} on VCAA</Button>
+              <Button nativeButton={false} className="h-auto min-h-9 justify-start whitespace-normal text-left" variant="ghost" render={<a href={focusStudy.pageUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Open {focusSubject} on VCAA</Button>
             </div>
           </CardContent>
         </Card>
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} includeAll className="w-full sm:w-72" placeholder="Search subjects" />
-        <Input className="w-full sm:max-w-sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search subject, year or paper" aria-label="Search exam library" />
-        <Select value={completion} onValueChange={(value) => setCompletion(value as CompletionFilter)}>
+        <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setVisibleCount(40) }} includeAll className="w-full sm:w-72" placeholder="Search subjects" />
+        <Input type="search" className="w-full sm:max-w-sm" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(40) }} placeholder="Search subject, year or paper" aria-label="Search exam library" />
+        <Select value={completion} onValueChange={(value) => { setCompletion((value ?? "all") as CompletionFilter); setVisibleCount(40) }}>
           <SelectTrigger className="w-full sm:w-44" aria-label="Filter by completion"><SelectValue>{completion === "todo" ? "Not completed" : completion === "completed" ? "Completed" : "All papers"}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
         </Select>
-        <span className="self-center text-sm text-muted-foreground">{filtered.length} exams · {formatReferenceFreshness(generatedAt)}</span>
+        <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{filtered.length} exams · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        {filtered.slice(0, 40).map((exam) => {
+        {filtered.slice(0, visibleCount).map((exam) => {
           const study = studies.find((item) => item.pageUrl === exam.pageUrl) ?? resourcesByStudy.get(normaliseComparisonName(exam.studyName))
           const reference = findVcaaExamReference(exam, references)
           const companion = getVcaaExamCompanions(exam, study)
@@ -204,8 +206,8 @@ export function ExamLibrary({
           </Card>
         )})}
       </div>
-      {filtered.length > 40 ? <p className="text-center text-xs text-muted-foreground">Showing 40 of {filtered.length} exams — refine the subject or search to narrow the list.</p> : null}
-      {!filtered.length ? <p className="rounded-lg border p-8 text-center text-sm text-muted-foreground">No matching VCAA exams.</p> : null}
+      {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {filtered.length} exams</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
+      {!filtered.length ? <div className="grid justify-items-center gap-3 rounded-lg border p-8 text-center text-sm text-muted-foreground"><p>No matching VCAA exams.</p><Button variant="outline" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button></div> : null}
     </div>
   )
 }

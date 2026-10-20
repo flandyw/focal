@@ -43,7 +43,7 @@ export function StudyScoreTrendChart({ points }: { points: StudyScoreTrendPoint[
                 <XAxis
                   dataKey="timestamp"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={([min, max]: readonly [number, number]) => min === max ? [min - 43_200_000, max + 43_200_000] : [min, max]} ticks={points.length > 0 && points[0].timestamp === points.at(-1)?.timestamp ? [points[0].timestamp] : undefined}
                   scale="time"
                   tickLine={false}
                   axisLine={false}

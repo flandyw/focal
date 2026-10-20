@@ -664,7 +664,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
         <TabsContent value="browse" className="mt-4">
           <div className="grid gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
+              <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
               <div className="flex gap-2 sm:shrink-0">
               <Select items={{ due: "Due date", newest: "Newest first", oldest: "Oldest first", marks: "Most marks lost", question: "Question order" }} value={sort} onValueChange={(value) => { setSort((value ?? "due") as LibrarySort); setPage(0) }}>
                 <SelectTrigger className="min-w-0 flex-1 sm:flex-none" aria-label="Sort mistakes"><span className="text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>

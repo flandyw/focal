@@ -227,9 +227,11 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  html { @apply scroll-smooth font-sans; }
+  html { @apply font-sans; scroll-padding-top: 1rem; }
   body { @apply m-0 bg-background text-foreground; }
   body { -webkit-font-smoothing: antialiased; }
+  :where(input, textarea) { caret-color: var(--primary); scroll-margin-block: 5rem; }
+  :where(h1, h2, h3, p) { overflow-wrap: break-word; }
   h1, h2 { font-family: var(--font-heading); font-weight: 400; }
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
   :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
@@ -248,20 +250,25 @@
   .focal-navigation [data-sidebar="menu-badge"] { background: var(--sidebar-accent); border-radius: 2px; }
 }
 
-/* Motion: pages fade up on navigation, their top-level bands stagger in, and
-   cards/buttons respond to hover and press. Reduced motion is handled below. */
-:root { --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); }
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+/* One brief transition leaves every section ready to use immediately. */
+:root { --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes page-in { from { opacity: 0.7; } }
+.page-enter { animation: page-in 140ms ease-out; }
+button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: color, background-color, border-color, box-shadow; transition-duration: 120ms; }
+
+@media (pointer: coarse), (max-width: 767px) {
+  :where([data-slot="button"], [data-sidebar="menu-button"], [role="tab"], [role="menuitem"], [role="option"], [role="combobox"], input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, .group\/input-group) { min-height: 44px; }
+  :where([data-slot="button"][data-size^="icon"]) { min-width: 44px; }
+  .group\/input-group > [data-align="inline-end"], .group\/input-group > [data-align="inline-start"] { padding-block: 0; }
 }
-.page-enter > *, .page-enter > * > * { animation: rise-in 0.6s var(--ease-spring) backwards; }
-.page-enter > * > :nth-child(2) { animation-delay: 70ms; }
-.page-enter > * > :nth-child(3) { animation-delay: 140ms; }
-.page-enter > * > :nth-child(4) { animation-delay: 210ms; }
-.page-enter > * > :nth-child(n+5) { animation-delay: 280ms; }
-button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: color, background-color, border-color, box-shadow, transform, opacity; transition-duration: 0.15s; }
-button:not(:disabled):active, [role="tab"]:active { transform: scale(0.93); }
-button:not(:disabled):not(:active), [role="tab"]:not(:active) { transition-timing-function: var(--ease-spring); transition-duration: 0.35s; }
+
+@media (max-width: 767px) {
+  :where(input, select, textarea) { font-size: 1rem; }
+}
+
+@media (forced-colors: active) {
+  :where(button, [role="tab"])[aria-pressed="true"], [role="radio"][aria-checked="true"] { outline: 2px solid Highlight; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

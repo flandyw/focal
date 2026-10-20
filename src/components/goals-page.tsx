@@ -20,7 +20,7 @@ import { getGoalProgress, localDate, type LearningWorkspace, type LearningWorksp
 function defaultDeadline() {
   const date = new Date()
   date.setMonth(date.getMonth() + 3)
-  return date.toISOString().slice(0, 10)
+  return localDate(date)
 }
 
 function kindLabel(kind: StudyGoalKind) {
@@ -47,6 +47,7 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   const [target, setTarget] = useState(goal.target)
   const [deadline, setDeadline] = useState(goal.deadline)
   const [error, setError] = useState<string | null>(null)
+  const now = useTickingNow()
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -78,8 +79,8 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
             </Select>
           </Field>
           {kind !== "atar" ? <Field><FieldLabel htmlFor="edit-goal-subject">Subject</FieldLabel><SubjectCombobox id="edit-goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required /></Field> : null}
-          <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="edit-goal-target">Target</FieldLabel><Input id="edit-goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={target} onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} required /></Field>
-          <Field><FieldLabel htmlFor="edit-goal-deadline">By</FieldLabel><Input id="edit-goal-deadline" type="date" value={deadline} onChange={(event) => { setDeadline(event.target.value); setError(null) }} required /></Field>
+          <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="edit-goal-target">Target</FieldLabel><Input id="edit-goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={Number.isFinite(target) ? target : ""} onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} required /></Field>
+          <Field><FieldLabel htmlFor="edit-goal-deadline">By</FieldLabel><Input id="edit-goal-deadline" type="date" min={localDate(now)} value={deadline} onChange={(event) => { setDeadline(event.target.value); setError(null) }} required /></Field>
           <FieldError>{error}</FieldError>
         </form>
         <SheetFooter><Button type="submit" form="edit-goal-form"><Pencil />Save changes</Button></SheetFooter>
@@ -141,14 +142,14 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
       <PageHeader title="Score goals" description="Set an outcome, measure the gap from current evidence, and turn it into a revision pathway." />
       <Card className="gap-5">
         <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription>Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end">
+        <CardContent><form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!subjectScoped ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
           {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={setSubject} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}
-          <Field className="xl:col-span-2" data-invalid={error ? true : undefined}><FieldLabel htmlFor="goal-target">Target</FieldLabel><Input id="goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={target} onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} /></Field>
-          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></Field>
-          <Button className="w-full xl:col-span-2" onClick={addGoal}><Plus />Add goal</Button>
+          <Field className="xl:col-span-2" data-invalid={error ? true : undefined}><FieldLabel htmlFor="goal-target">Target</FieldLabel><Input id="goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={Number.isFinite(target) ? target : ""} required onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} /></Field>
+          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" min={localDate(now)} value={deadline} required onChange={(event) => { setDeadline(event.target.value); setError(null) }} /></Field>
+          <Button type="submit" className="w-full xl:col-span-2"><Plus />Add goal</Button>
           <FieldError className="sm:col-span-2 xl:col-span-full">{error}</FieldError>
-        </CardContent>
+        </form></CardContent>
       </Card>
 
       {progress.length ? <div className="grid gap-4 lg:grid-cols-2">{progress.map(({ goal, progress: item }) => {

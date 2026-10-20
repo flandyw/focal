@@ -55,6 +55,8 @@ import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, t
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
+const PAGE_LOADING = <div role="status" className="grid gap-6"><span className="sr-only">Loading page…</span><Skeleton className="h-12 w-56" /><Skeleton className="h-72 w-full" /></div>
+
 const ExamPicker = lazy(() => import("./components/exam-picker").then((module) => ({ default: module.ExamPicker })))
 
 const ExamSheet = lazy(() =>
@@ -160,18 +162,18 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const globalView = ["calendar", "timetable", "predictor", "settings", "focus"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
-  const pageData = subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data
-  const pageReferences = subjectScoped ? references.filter((reference) => sameStudySubject(reference.studyName, selectedSubject)) : references
-  const pageStudies = subjectScoped ? resourceStudies.filter((study) => sameStudySubject(study.studyName, selectedSubject)) : resourceStudies
-  const pageSubjects = subjectScoped ? [selectedSubject] : [...new Set(references.map((reference) => reference.studyName))]
-  const pageTimetable = subjectScoped && timetable ? { ...timetable, exams: timetable.exams.filter((exam) => sameStudySubject(exam.subject, selectedSubject)) } : timetable
-  const subjectOptions = studySubjectOptions([
+  const pageData = useMemo(() => subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data, [subjectScoped, workspace, data])
+  const pageReferences = useMemo(() => subjectScoped ? references.filter((reference) => sameStudySubject(reference.studyName, selectedSubject)) : references, [subjectScoped, references, selectedSubject])
+  const pageStudies = useMemo(() => subjectScoped ? resourceStudies.filter((study) => sameStudySubject(study.studyName, selectedSubject)) : resourceStudies, [subjectScoped, resourceStudies, selectedSubject])
+  const pageSubjects = useMemo(() => subjectScoped ? [selectedSubject] : [...new Set(references.map((reference) => reference.studyName))], [subjectScoped, selectedSubject, references])
+  const pageTimetable = useMemo(() => subjectScoped && timetable ? { ...timetable, exams: timetable.exams.filter((exam) => sameStudySubject(exam.subject, selectedSubject)) } : timetable, [subjectScoped, timetable, selectedSubject])
+  const subjectOptions = useMemo(() => studySubjectOptions([
     ...data.subjects, ...data.attempts.map((attempt) => attempt.subject),
     ...data.sacRecords.map((record) => record.subject), ...data.mistakes.flatMap((mistake) => mistake.subject ? [mistake.subject] : []), ...data.learning.curriculumAreas.map((item) => item.subject),
     ...data.learning.goals.flatMap((goal) => goal.subject ? [goal.subject] : []),
     ...studySessionSync.sessions.flatMap((session) => session.subject_id ? [session.subject_id] : []),
     ...references.map((reference) => reference.studyName), ...(selectedSubject === "all" ? [] : [selectedSubject]),
-  ]).map((subject) => subject.name)
+  ]).map((subject) => subject.name), [data.subjects, data.attempts, data.sacRecords, data.mistakes, data.learning.curriculumAreas, data.learning.goals, studySessionSync.sessions, references, selectedSubject])
   const subjectValue = subjectOptions.find((subject) => sameStudySubject(subject, selectedSubject)) ?? selectedSubject
   const dueMistakeCount = useMemo(() => getDueMistakes(workspace.mistakes).length, [workspace.mistakes])
   const dueStudyTaskCount = useMemo(() => data.learning.tasks.filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor <= localDate(new Date())).length, [data.learning.tasks])
@@ -260,10 +262,11 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- re-arms whenever the session changes, which refreshes the closure
   }, [data.activeExamTimer])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
+  useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
   useEffect(() => {
     if (embedded) return
     const openCommandMenu = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
+      if (!event.repeat && !event.isComposing && event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault()
         setCommandOpen((current) => !current)
       }
@@ -682,20 +685,23 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onControlSession={studySessionSync.control}
         onLogExam={openNewExam}
         onLogPastStudy={() => setPastStudyId(crypto.randomUUID())}
+        onStartExam={() => { setTimerMode("exam"); setView("focus") }}
         onLogMistake={() => openNewMistake()}
         onSearch={() => setCommandOpen(true)}
         commandOpen={commandOpen}
         onCommandOpenChange={setCommandOpen}
       />}
       <SidebarInset className="min-w-0">
-        {!embedded && <header className="flex h-14 items-center gap-3 border-b border-border px-4 md:hidden">
+        {!embedded && <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
           <SidebarTrigger />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
+          <Button variant="ghost" size="sm" onClick={() => setCommandOpen(true)}>Search</Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" className="w-full min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
+        <main id="main-content" tabIndex={-1} className="w-full min-w-0 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
               <label htmlFor="workspace-subject" className="mb-1.5 block text-xs font-medium text-muted-foreground">Subject</label>
@@ -737,7 +743,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           ) : null}
           <div key={`${view}:${subjectScoped ? selectedSubject : "all"}`} className="page-enter">
           {view === "exams" ? (
-            <Suspense fallback={<div className="h-96" />}>
+            <Suspense fallback={PAGE_LOADING}>
               <ExamsPage
                 data={pageData}
                 references={pageReferences}
@@ -756,8 +762,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               />
             </Suspense>
           ) : null}
-          {view === "timetable" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /></Suspense> : null}
-          {view === "calendar" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={studySessionSync.remove} onConvertSession={async (session, events) => {
+          {view === "timetable" ? <Suspense fallback={PAGE_LOADING}><ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /></Suspense> : null}
+          {view === "calendar" ? <Suspense fallback={PAGE_LOADING}><CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={studySessionSync.remove} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
             const current = latestData.current
             const next = { ...current, events: [...current.events.filter((item) => !events.some((event) => event.id === item.id)), ...events] }
@@ -775,11 +781,11 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
               .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
           }} /></Suspense> : null}
-          {view === "progress" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} onNewSession={() => setView("focus")} /></Suspense> : null}
-          {view === "focus" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
-          {view === "stoplight" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /></Suspense> : null}
-          {view === "goals" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /></Suspense> : null}
-          {view === "mistakes" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
+          {view === "progress" ? <Suspense fallback={PAGE_LOADING}><ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} onNewSession={() => setView("focus")} /></Suspense> : null}
+          {view === "focus" ? <Suspense fallback={PAGE_LOADING}><StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
+          {view === "stoplight" ? <Suspense fallback={PAGE_LOADING}><StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /></Suspense> : null}
+          {view === "goals" ? <Suspense fallback={PAGE_LOADING}><GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /></Suspense> : null}
+          {view === "mistakes" ? <Suspense fallback={PAGE_LOADING}><MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
             setData((current) => {
               const now = Date.now()
               const changes = reduceMistakeReviews(subjectScoped ? subjectWorkspace(current, selectedSubject).mistakes : current.mistakes, days, target, now)
@@ -790,11 +796,11 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             const scopedIds = new Set(pageData.mistakes.map((mistake) => mistake.id))
             return { ...current, alternativeMistakeDeck: { ...deck, cards: [...(subjectScoped ? current.alternativeMistakeDeck?.cards ?? [] : []).filter((card) => !scopedIds.has(card.sourceMistakeId)), ...deck.cards] } }
           })} /></Suspense> : null}
-          {view === "sacs" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SacPage records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
-          {view === "library" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><ExamLibrary references={pageReferences} studies={pageStudies} attempts={pageData.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
-          {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
-          {view === "vcaa" ? <>{referencesLoading ? <Skeleton className="h-96 w-full" /> : <Suspense fallback={<Skeleton className="h-96 w-full" />}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
-          {view === "settings" ? <Suspense fallback={<Skeleton className="h-96 w-full" />}><SettingsPage sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
+          {view === "sacs" ? <Suspense fallback={PAGE_LOADING}><SacPage records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
+          {view === "library" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><ExamLibrary references={pageReferences} studies={pageStudies} attempts={pageData.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
+          {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
+          {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
+          {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
           </div>
         </main>
       </SidebarInset>

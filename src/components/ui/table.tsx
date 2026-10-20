@@ -5,10 +5,10 @@ import { cn } from "../../lib/utils"
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
-      className="relative w-full overflow-x-auto"
+      className="relative w-full min-w-0 overflow-x-auto overscroll-x-contain"
     >
       <table
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full caption-bottom text-sm tabular-nums", className)}
         {...props}
       />
     </div>
@@ -49,7 +49,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors hover:bg-muted/50 focus-within:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className
       )}
       {...props}
@@ -60,6 +60,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
+      scope="col"
       className={cn(
         "h-11 bg-muted/40 px-3 text-left align-middle text-[10px] font-semibold tracking-wider uppercase whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className

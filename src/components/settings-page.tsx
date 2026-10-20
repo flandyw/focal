@@ -3,7 +3,7 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { ModeToggle } from "./mode-toggle"
 import { AccentPicker } from "./accent-picker"
@@ -55,8 +55,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const auth = useChatGPT()
   const [email, setEmail] = useState(sync.user?.email ?? "")
   const [password, setPassword] = useState("")
-  const [accountLoading, setAccountLoading] = useState(false)
+  const [accountLoading, setAccountLoading] = useState<"sign-in" | "create" | null>(null)
   const [accountMessage, setAccountMessage] = useState<string | null>(null)
+  const [accountError, setAccountError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings())
   const [models, setModels] = useState<ChatGPTModel[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
@@ -256,45 +258,51 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 <p className="py-4 text-sm text-muted-foreground">Add the Supabase URL and publishable key to enable account sync.</p>
               ) : sync.user && sync.status !== "sign-in-required" ? (
                 <Row title={sync.user.email ?? "Signed in"} description="Local changes continue saving if sync is temporarily unavailable.">
-                  <Button variant="outline" onClick={() => { void sync.signOut().catch(() => setAccountMessage("Could not sign out. Try again.")) }}><LogOut />Sign out</Button>
+                  <Button variant="outline" onClick={() => { void sync.signOut().catch(() => setAccountError("Could not sign out. Try again.")) }}><LogOut />Sign out</Button>
                 </Row>
               ) : (
-                <form className="grid max-w-md gap-3 py-4" onSubmit={async (event) => {
+                <form aria-busy={Boolean(accountLoading)} className="grid max-w-md gap-4 py-4" onSubmit={async (event) => {
                   event.preventDefault()
-                  setAccountLoading(true)
+                  if (accountLoading) return
+                  setAccountLoading("sign-in")
                   setAccountMessage(null)
+                  setAccountError(null)
                   try {
-                    await sync.signIn(email, password)
+                    await sync.signIn(email.trim(), password)
                     setPassword("")
                   } catch (error) {
-                    setAccountMessage(error instanceof Error ? error.message : "Could not sign in.")
+                    setAccountError(error instanceof Error ? error.message : "Could not sign in. Try again.")
                   } finally {
-                    setAccountLoading(false)
+                    setAccountLoading(null)
                   }
                 }}>
                   {sync.status === "sign-in-required" ? <p role="status" className="text-sm text-destructive">Your session ended. Sign in again to resume sync. Saved work and queued changes are kept on this device.</p>
                     : sync.status === "restoring" || sync.status === "reconnecting" ? <p role="status" className="text-sm text-muted-foreground">Reconnecting to your saved account. Changes stay on this device.</p> : null}
-                  <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" aria-label="Email address" required />
-                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" aria-label="Password" required />
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={accountLoading}><Cloud />Sign in</Button>
-                    <Button type="button" variant="outline" disabled={accountLoading} onClick={async (event) => {
+                  <Field><FieldLabel htmlFor="account-email">Email address</FieldLabel><Input id="account-email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></Field>
+                  <Field><FieldLabel htmlFor="account-password">Password</FieldLabel><div className="relative"><Input id="account-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" className="pr-12" value={password} onChange={(event) => setPassword(event.target.value)} required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff /> : <Eye />}</Button></div></Field>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" disabled={Boolean(accountLoading)}>{accountLoading === "sign-in" ? <LoaderCircle className="animate-spin" /> : <Cloud />}{accountLoading === "sign-in" ? "Signing in…" : "Sign in"}</Button>
+                    <Button type="button" variant="outline" disabled={Boolean(accountLoading)} onClick={async (event) => {
                       if (!event.currentTarget.form?.reportValidity()) return
-                      setAccountLoading(true)
+                      if (accountLoading) return
+                      setAccountLoading("create")
                       setAccountMessage(null)
+                      setAccountError(null)
                       try {
-                        const signedIn = await sync.signUp(email, password)
-                        if (!signedIn) setAccountMessage("Disable Confirm email in Supabase Auth settings to create accounts without callbacks.")
+                        const signedIn = await sync.signUp(email.trim(), password)
+                        if (!signedIn) setAccountMessage("Check your email to confirm your account, then sign in.")
+                        else setPassword("")
                       } catch (error) {
-                        setAccountMessage(error instanceof Error ? error.message : "Could not create the account.")
+                        setAccountError(error instanceof Error ? error.message : "Could not create the account. Try again.")
                       } finally {
-                        setAccountLoading(false)
+                        setAccountLoading(null)
                       }
-                    }}>Create account</Button>
+                    }}>{accountLoading === "create" ? <LoaderCircle className="animate-spin" /> : null}{accountLoading === "create" ? "Creating account…" : "Create account"}</Button>
                   </div>
                 </form>
               )}
               {accountMessage ? <p role="status" className="pb-4 text-sm text-muted-foreground">{accountMessage}</p> : null}
+              {accountError ? <p role="alert" className="pb-4 text-sm text-destructive">{accountError}</p> : null}
             </Section>
           ) : null}
 

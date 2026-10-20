@@ -18,7 +18,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
-      className={cn("flex flex-1 text-left", className)}
+      className={cn("min-w-0 flex-1 truncate text-left", className)}
       {...props}
     />
   )

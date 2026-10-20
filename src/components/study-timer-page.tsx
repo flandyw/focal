@@ -78,7 +78,7 @@ function ToggleRow({ label, description, pressed, onToggle, icon }: {
         <p className="text-sm font-medium">{label}</p>
         <p className="max-w-[68ch] text-xs text-pretty text-muted-foreground">{description}</p>
       </div>
-      <Button aria-pressed={pressed} className="shrink-0" onClick={onToggle} size="sm" variant={pressed ? "secondary" : "outline"}>
+      <Button aria-label={label} aria-pressed={pressed} className="shrink-0" onClick={onToggle} size="sm" variant={pressed ? "secondary" : "outline"}>
         {icon}
         {pressed ? "On" : "Off"}
       </Button>
@@ -414,7 +414,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           {plannedActions ? <Button onClick={newPlan} variant="outline"><CalendarPlus />Plan study</Button> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Input aria-label="Search planned study" className="sm:max-w-xs" placeholder="Search title, subject or topics" value={planSearch} onChange={(event) => { setPlanSearch(event.target.value); setPlanLimit(10) }} />
+          <Input type="search" aria-label="Search planned study" className="sm:max-w-xs" placeholder="Search title, subject or topics" value={planSearch} onChange={(event) => { setPlanSearch(event.target.value); setPlanLimit(10) }} />
           {[["all", "All"], ["today", "Today"], ["overdue", "Overdue"], ["upcoming", "Upcoming"]].map(([value, label]) =>
             <Button key={value} aria-pressed={planFilter === value} size="sm" variant={planFilter === value ? "secondary" : "outline"} onClick={() => { setPlanFilter(value); setPlanLimit(10) }}>{label}</Button>)}
         </div>

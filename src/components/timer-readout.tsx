@@ -46,7 +46,7 @@ export function TimerReadout({
 
       <p
         aria-label={`${mode}, ${display} ${countUp || overtime ? "elapsed" : "remaining"}`}
-        className="font-heading text-[clamp(4.5rem,16vw,11rem)] leading-none font-normal tracking-[-0.065em] text-primary tabular-nums"
+        className="max-w-full font-heading text-[clamp(3rem,13vw,9rem)] leading-none font-normal tracking-[-0.04em] text-primary tabular-nums"
         role="timer"
       >
         <span
@@ -63,7 +63,7 @@ export function TimerReadout({
       {!countUp && <Progress aria-label={`${mode} progress`} className="max-w-xl" value={progress} />}
 
       {marks ? (
-        <ol aria-label={marks.label} className="flex items-center gap-1.5">
+        <ol aria-label={marks.label} className="flex max-w-full flex-wrap justify-center gap-1.5">
           {Array.from({ length: marks.total }, (_, index) => (
             <li
               className={cn("h-1.5 w-8 rounded-full", index < marks.filled ? "bg-primary" : "bg-muted")}

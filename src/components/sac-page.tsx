@@ -77,7 +77,7 @@ function SacTrend({ records }: { records: SacRecord[] }) {
         {points.length ? <ChartContainer config={chartConfig} className="h-72 w-full aspect-auto" role="img" aria-label={summary}>
           <LineChart data={points} margin={{ left: 4, right: 8, top: 12, bottom: 4 }} accessibilityLayer>
             <CartesianGrid vertical={false} />
-            <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} scale="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={(value) => new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short" })} />
+            <XAxis dataKey="timestamp" type="number" domain={([min, max]: readonly [number, number]) => min === max ? [min - 43_200_000, max + 43_200_000] : [min, max]} ticks={points.length > 0 && points[0].timestamp === points.at(-1)?.timestamp ? [points[0].timestamp] : undefined} scale="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={(value) => new Date(value).toLocaleDateString("en-AU", { day: "numeric", month: "short" })} />
             <YAxis domain={[0, 100]} tickLine={false} axisLine={false} width={42} tickFormatter={(value) => `${value}%`} />
             {points.length >= 2 ? <ReferenceLine y={average} stroke="var(--color-percentage)" strokeDasharray="4 4" label={{ value: `Avg ${average.toFixed(0)}%`, position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }} /> : null}
             <ChartTooltip content={({ active, payload }) => {

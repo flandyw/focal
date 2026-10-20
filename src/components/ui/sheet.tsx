@@ -3,9 +3,12 @@ import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./resizable"
 import { useIsMobile } from "../../hooks/use-mobile"
 import { XIcon } from "lucide-react"
+
+const ResizablePanelGroup = React.lazy(() => import("./resizable").then((module) => ({ default: module.ResizablePanelGroup })))
+const ResizablePanel = React.lazy(() => import("./resizable").then((module) => ({ default: module.ResizablePanel })))
+const ResizableHandle = React.lazy(() => import("./resizable").then((module) => ({ default: module.ResizableHandle })))
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root {...props} />
@@ -58,12 +61,13 @@ function SheetContent({
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
           canResize && "pointer-events-none gap-0 border-0 bg-transparent shadow-none data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none",
-          resizable && !canResize && "overflow-y-auto",
+          !canResize && "overflow-y-auto overscroll-contain data-[side=right]:w-full",
           className
         )}
         {...props}
       >
         {canResize ? (
+          <React.Suspense fallback={<div role="status" className="pointer-events-auto ml-auto h-full w-full max-w-lg bg-popover p-6"><SheetPrimitive.Title>Loading editor…</SheetPrimitive.Title></div>}>
           <ResizablePanelGroup orientation="horizontal" className="h-full">
             <ResizablePanel id="sheet-space" className="pointer-events-none" />
             <ResizableHandle withHandle className="pointer-events-auto z-10" />
@@ -73,11 +77,12 @@ function SheetContent({
               minSize="24rem"
               maxSize="90vw"
               groupResizeBehavior="preserve-pixel-size"
-              className="pointer-events-auto flex h-full flex-col gap-4 overflow-y-auto border-l bg-popover text-popover-foreground shadow-lg"
+              className="pointer-events-auto flex h-full flex-col gap-4 overflow-y-auto overscroll-contain border-l bg-popover text-popover-foreground shadow-lg"
             >
               {children}
             </ResizablePanel>
           </ResizablePanelGroup>
+          </React.Suspense>
         ) : children}
         {showCloseButton && (
           <SheetPrimitive.Close
@@ -102,7 +107,7 @@ function SheetContent({
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex flex-col gap-2 border-b bg-muted/30 p-6 pr-12", className)}
+      className={cn("flex shrink-0 flex-col gap-2 border-b bg-muted/30 p-6 pr-12", className)}
       {...props}
     />
   )
@@ -111,7 +116,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("mt-auto flex flex-col gap-2 border-t bg-muted/30 p-6", className)}
+      className={cn("sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-2 border-t bg-popover p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]", className)}
       {...props}
     />
   )

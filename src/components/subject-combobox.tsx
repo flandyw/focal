@@ -49,7 +49,7 @@ export function SubjectCombobox({
       onValueChange={(next) => onValueChange(next === ALL_SUBJECTS ? "all" : (next ?? ""))}
       autoHighlight
     >
-      <ComboboxInput id={id} className={className} placeholder={placeholder} showClear={allowCustom} required={required} />
+      <ComboboxInput id={id} aria-label={id ? undefined : placeholder} className={className} placeholder={placeholder} showClear={allowCustom} required={required} />
       <ComboboxContent>
         <ComboboxEmpty>No matching subjects.</ComboboxEmpty>
         <ComboboxList>

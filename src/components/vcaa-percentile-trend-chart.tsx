@@ -70,7 +70,7 @@ export function VcaaPercentileTrendChart({
             <ChartContainer config={chartConfig} className="h-72 w-full min-w-0 aspect-auto" role="img" aria-label={summary}>
               <LineChart data={points} margin={{ left: 4, right: 12, top: 12, bottom: 4 }} accessibilityLayer>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="timestamp" type="number" domain={["dataMin", "dataMax"]} scale="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={formatTick} />
+                <XAxis dataKey="timestamp" type="number" domain={([min, max]: readonly [number, number]) => min === max ? [min - 43_200_000, max + 43_200_000] : [min, max]} ticks={points.length > 0 && points[0].timestamp === points.at(-1)?.timestamp ? [points[0].timestamp] : undefined} scale="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={formatTick} />
                 <YAxis domain={[0, 100]} width={42} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}th`} />
                 <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" label={{ value: "50th", position: "insideBottomRight", fontSize: 10, fill: "var(--muted-foreground)" }} />
                 <ReferenceLine y={90} stroke="var(--border)" strokeDasharray="4 4" label={{ value: "Top 10%", position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }} />

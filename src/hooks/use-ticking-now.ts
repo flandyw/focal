@@ -11,8 +11,13 @@ export function useTickingNow(intervalMs: number = 60_000): Date {
   const [now, setNow] = useState<Date>(canonicalNow)
   useEffect(() => {
     if (typeof window === "undefined") return
-    const id = window.setInterval(() => setNow(canonicalNow()), intervalMs)
-    return () => window.clearInterval(id)
+    const refresh = () => { if (!document.hidden) setNow(canonicalNow()) }
+    const id = window.setInterval(refresh, intervalMs)
+    document.addEventListener("visibilitychange", refresh)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener("visibilitychange", refresh)
+    }
   }, [intervalMs])
   return now
 }

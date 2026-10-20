@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, Clock3, Pencil, Plus, Settings2, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
@@ -44,7 +45,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
 }) {
   const [importOpen, setImportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [date] = useState(() => new Date())
+  const date = useTickingNow()
   const cycleLength = config?.cycleLength ?? 10
   const today = config ? getDayLabelForDate(date, config.day1Starts, config.holidays, cycleLength, config.weekendTimetables) : null
   const [selectedDay, setSelectedDay] = useState(today ?? 1)

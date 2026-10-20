@@ -184,7 +184,7 @@ export function PerformanceTrendChart({
             <XAxis
               dataKey="timestamp"
               type="number"
-              domain={["dataMin", "dataMax"]}
+              domain={([min, max]: readonly [number, number]) => min === max ? [min - 43_200_000, max + 43_200_000] : [min, max]} ticks={trend.length > 0 && trend[0].timestamp === trend.at(-1)?.timestamp ? [trend[0].timestamp] : undefined}
               scale="time"
               tickLine={false}
               axisLine={false}

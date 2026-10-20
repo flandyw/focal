@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { CalendarPlus, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
@@ -22,6 +22,8 @@ import {
   mergeStoplightItems, planRevision, setRating, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { cn } from "../lib/utils"
+import { useTickingNow } from "../hooks/use-ticking-now"
+import { Input } from "./ui/input"
 
 const FILTERS = { all: "All items", red: "Red", amber: "Amber", green: "Green", recheck: "Re-check due", unrated: "Unrated" } as const
 type Filter = keyof typeof FILTERS
@@ -61,17 +63,20 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
   const [chosen, setChosen] = useState("")
   const subject = itemSubjects.includes(chosen) ? chosen : itemSubjects[0] ?? ""
   const [filter, setFilter] = useState<Filter>("all")
+  const [query, setQuery] = useState("")
+  const needle = useDeferredValue(query.trim().toLowerCase())
   const [importOpen, setImportOpen] = useState(false)
   const [viewing, setViewing] = useState<CurriculumArea | null>(null)
   const [revising, setRevising] = useState(false)
   const [linking, setLinking] = useState(false)
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
-  const [now] = useState(() => new Date())
+  const now = useTickingNow()
   const evidence = useMemo(() => buildItemEvidence(data, now), [data, now])
   const unlinked = useMemo(() => collectLinkRecords(data), [data])
   const subjectItems = useMemo(() => items.filter((item) => item.subject === subject), [items, subject])
   const visible = subjectItems.filter((item) =>
-    filter === "all" || filter === "unrated" && !item.rating || filter === "recheck" && isRecheckDue(item, now) || item.rating === filter)
+    (filter === "all" || filter === "unrated" && !item.rating || filter === "recheck" && isRecheckDue(item, now) || item.rating === filter) &&
+    (!needle || `${item.name} ${item.group ?? ""} ${item.check ?? ""}`.toLowerCase().includes(needle)))
   const groups = groupBy(visible, itemGroup)
   const green = subjectItems.filter((item) => item.rating === "green").length
   const reds = subjectItems.filter((item) => item.rating === "red").length
@@ -133,8 +138,9 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
             <MetricCard label="Re-check due" value={rechecks}><span>Greens fade after 21 days, ambers after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
+            <Input type="search" className="w-full sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
             <Select value={filter} onValueChange={(value) => setFilter((value ?? "all") as Filter)}>
               <SelectTrigger className="w-40" aria-label="Filter items"><SelectValue>{FILTERS[filter]}</SelectValue></SelectTrigger>
               <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectContent>
@@ -164,9 +170,17 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                         {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
                         {text ? <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:underline" onClick={() => setViewing(item)}>{text}</button> : null}
                       </div>
-                      <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1">
+                      <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1" onKeyDown={(event) => {
+                        const offset = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 0
+                        if (!offset) return
+                        event.preventDefault()
+                        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+                        const next = buttons[(buttons.indexOf(document.activeElement as HTMLButtonElement) + offset + buttons.length) % buttons.length]
+                        next.focus()
+                        next.click()
+                      }}>
                         {RATINGS.map(({ id, label, meaning }) => (
-                          <Button key={id} role="radio" aria-checked={item.rating === id} title={meaning} size="sm" variant="outline"
+                          <Button key={id} role="radio" tabIndex={item.rating === id || !item.rating && id === "red" ? 0 : -1} aria-checked={item.rating === id} title={meaning} size="sm" variant="outline"
                             className={cn(item.rating === id && SELECTED[id])} onClick={() => onChange((current) => setRating(current, item.id, id))}>{label}</Button>
                         ))}
                       </div>
@@ -175,7 +189,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                 })}
               </ul>
             </details>
-          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match this filter</EmptyTitle></EmptyHeader></Empty>}
+          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setFilter("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
         <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Import it from your study design with any chatbot. Each key knowledge and skill becomes an item you can rate.</EmptyDescription></EmptyHeader><Button onClick={() => setImportOpen(true)}><Link2 />Import checklist</Button></Empty>

@@ -13,25 +13,38 @@ export function AppCommandMenu({
   onViewChange,
   onLogExam,
   onLogMistake,
+  onLogPastStudy,
+  onStartExam,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onViewChange: (view: AppView) => void
   onLogExam: () => void
   onLogMistake: () => void
+  onLogPastStudy: () => void
+  onStartExam: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState("")
   const [rect, setRect] = useState<DOMRect>()
 
   useEffect(() => {
+    let frame: number
     if (open) {
-      input.current?.focus()
-      setRect(input.current?.getBoundingClientRect())
+      const position = () => setRect(input.current?.getBoundingClientRect())
+      const frame = requestAnimationFrame(() => { input.current?.focus(); position() })
+      window.addEventListener("resize", position)
+      window.addEventListener("scroll", position, true)
+      return () => {
+        cancelAnimationFrame(frame)
+        window.removeEventListener("resize", position)
+        window.removeEventListener("scroll", position, true)
+      }
     } else {
-      setQuery("")
+      frame = requestAnimationFrame(() => setQuery(""))
       input.current?.blur()
     }
+    return () => cancelAnimationFrame(frame)
   }, [open])
 
   function run(action: () => void) {
@@ -54,16 +67,16 @@ export function AppCommandMenu({
           onKeyDown={(event) => { if (event.key === "Escape") onOpenChange(false) }}
           className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none placeholder:text-sidebar-foreground/70"
         />
-        <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>⌘K</kbd>
+        <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
       </label>
       {open && rect && (
         <div
           onMouseDown={(event) => event.preventDefault()}
-          style={{ top: rect.bottom + 6, left: rect.left, width: Math.max(rect.width, 272) }}
+          style={{ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 288), width: Math.min(Math.max(rect.width, 272), window.innerWidth - 32) }}
           className="fixed z-50 rounded-sm border border-sidebar-border bg-popover p-1.5 shadow-lg"
         >
-          <Command.List className="no-scrollbar max-h-[min(24rem,60vh)] overflow-y-auto outline-none">
-            <Command.Empty className="px-3 py-3 text-[13px] text-muted-foreground">No matches.</Command.Empty>
+          <Command.List className="max-h-[min(24rem,60dvh)] overflow-y-auto overscroll-contain outline-none" style={{ maxHeight: Math.max(44, window.innerHeight - rect.bottom - 24) }}>
+            <Command.Empty className="px-3 py-3 text-[13px] text-muted-foreground">No matching actions. Try a page name or “log”.</Command.Empty>
             <Command.Group heading={<div className={headingClass}>Quick actions</div>} className="p-0">
               <Command.Item value="log practice exam add result" onSelect={() => run(onLogExam)} className={itemClass}>
                 Log practice exam
@@ -71,7 +84,10 @@ export function AppCommandMenu({
               <Command.Item value="log mistake add revision card" onSelect={() => run(onLogMistake)} className={itemClass}>
                 Log mistake
               </Command.Item>
-              <Command.Item value="start exam timer timed practice" onSelect={() => run(() => onViewChange("focus"))} className={itemClass}>
+              <Command.Item value="log past study record session" onSelect={() => run(onLogPastStudy)} className={itemClass}>
+                Log past study
+              </Command.Item>
+              <Command.Item value="Start timed paper" keywords={["exam", "timer", "practice"]} onSelect={() => run(onStartExam)} className={itemClass}>
                 Start timed paper
               </Command.Item>
             </Command.Group>

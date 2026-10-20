@@ -533,7 +533,7 @@ function RecentExams({
             <CardTitle>Recent exams</CardTitle>
             <CardDescription>Your latest five recorded attempts.</CardDescription>
           </div>
-          <Button variant="outline" size="sm" render={<a href="#all-exams" />}>
+          <Button nativeButton={false} variant="outline" size="sm" render={<a href="#all-exams" />}>
             View all
           </Button>
         </div>
@@ -563,7 +563,7 @@ function RecentExams({
                         </span>
                       </div>
                     ) : null}
-                    <Button variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
+                    <Button nativeButton={false} variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
                       Go to exam
                       <ArrowDownRight aria-hidden />
                     </Button>

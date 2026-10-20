@@ -22,7 +22,12 @@ const label = (value: string | undefined) => (value ?? "").toLowerCase().replace
 
 export function groupBy<T>(list: T[], keyOf: (item: T) => string) {
   const groups = new Map<string, T[]>()
-  for (const item of list) groups.set(keyOf(item), [...groups.get(keyOf(item)) ?? [], item])
+  for (const item of list) {
+    const key = keyOf(item)
+    const group = groups.get(key)
+    if (group) group.push(item)
+    else groups.set(key, [item])
+  }
   return groups
 }
 

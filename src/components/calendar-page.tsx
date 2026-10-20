@@ -275,7 +275,7 @@ export function CalendarPage({
       <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">Calendar</p>
-          <div className="mt-1 flex items-center gap-3">
+          <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title">{monthLabel}</h1>
             <div className="flex items-center gap-0.5">
               <Button aria-label="Previous month" onClick={() => setMonth((current) => shiftMonth(current, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
@@ -341,7 +341,7 @@ export function CalendarPage({
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
             <div className="hidden px-2 py-2 text-right sm:block">Week</div>
           </div>
-          <div className="animate-in fade-in-0 duration-500 ease-[var(--ease-spring)]" key={monthLabel}>
+          <div key={monthLabel}>
           {weeks.map((week) => (
             <div className={cn(WEEK_GRID, "border-b border-border")} key={week.days[0].date}>
               {week.days.map((day, index) => (
@@ -392,7 +392,7 @@ export function CalendarPage({
                 </button>
               ) : null}
             </CardHeader>
-            <CardContent className="grid shrink-0 animate-in gap-3 duration-500 ease-[var(--ease-spring)] fade-in-0 slide-in-from-bottom-3" key={selected}>
+            <CardContent className="grid shrink-0 gap-3" key={selected}>
               {classes.length ? (
                 <DaySection title="Classes" count={classes.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -502,6 +502,15 @@ function DayCell({ day, active, weekend, onSelect }: {
       aria-current={day.isToday ? "date" : undefined}
       aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
       aria-pressed={active}
+      data-calendar-date={day.date}
+      onKeyDown={(event) => {
+        const offset = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[event.key]
+        if (!offset) return
+        event.preventDefault()
+        const next = shiftDay(day.date, offset)
+        onSelect(next)
+        requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-calendar-date="${next}"]`)?.focus())
+      }}
       className={cn(
         "relative flex min-h-18 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-32 sm:p-1",
         weekend && "bg-muted/25",

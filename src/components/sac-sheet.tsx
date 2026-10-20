@@ -11,6 +11,7 @@ import { PerformanceContextFields } from "./performance-context-fields"
 import { prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { SAC_UNITS, validateSac, type SacRecord, type SacUnit } from "../lib/sac"
+import { localDate } from "../lib/learning-workspace"
 
 type SacSheetProps = {
   open: boolean
@@ -21,7 +22,7 @@ type SacSheetProps = {
   onSave: (record: SacRecord) => void
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => localDate(new Date())
 
 export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onOpenChange, onSave }: SacSheetProps) {
   const options = useMemo(() => prioritiseSubjects(subjects, preferredSubjects), [preferredSubjects, subjects])

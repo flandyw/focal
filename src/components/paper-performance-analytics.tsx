@@ -99,7 +99,7 @@ function CellDetails({ subject, area, cell }: { subject: string; area: string; c
               <p className="mt-0.5 text-xs text-muted-foreground">{question.attemptTitle} · {new Date(`${question.completedAt}T00:00:00`).toLocaleDateString("en-AU")} · {[question.confidence && `${question.confidence} confidence`, question.mistakeCategories.join(", ")].filter(Boolean).join(" · ")}</p>
             </div>
             <span className="text-sm font-medium tabular-nums">{formatNumber(question.earnedMarks)}/{formatNumber(question.availableMarks)}</span>
-            <Button variant="ghost" size="sm" render={<a href={`#${getExamTarget(question.attemptId)}`} />}>Open <ArrowDownRight /></Button>
+            <Button nativeButton={false} variant="ghost" size="sm" render={<a href={`#${getExamTarget(question.attemptId)}`} />}>Open <ArrowDownRight /></Button>
           </div>
         ))}</div> : <p className="mt-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No lost-mark questions are linked to this cell.</p>}
       </div>

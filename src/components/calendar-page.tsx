@@ -7,7 +7,6 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
-import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
@@ -16,7 +15,6 @@ import { EventDialog } from "./event-dialog"
 import { StudyTimeline } from "./study-timeline"
 import { WorkspacePage } from "./workspace-layout"
 import {
-  addTask,
   archiveTask,
   buildCalendarMonth,
   buildDayPlan,
@@ -136,10 +134,6 @@ export function CalendarPage({
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
-  const [title, setTitle] = useState("")
-  const [minutes, setMinutes] = useState(30)
-  const [subject, setSubject] = useState("")
-  const [error, setError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [eventDialog, setEventDialog] = useState<{ event: CalendarEvent | null; key: number } | null>(null)
   const [editingSession, setEditingSession] = useState<CanonicalStudySession | null>(null)
@@ -262,15 +256,6 @@ export function CalendarPage({
     })) })
   }
 
-  function add() {
-    if (!title.trim()) return setError("Enter a task name.")
-    if (!Number.isFinite(minutes) || minutes < 5 || minutes > 360) return setError("Duration must be between 5 and 360 minutes.")
-    commit((current) => addTask(current, { title, date: selected, minutes, subject }))
-    setTitle("")
-    setError(null)
-    toast("Task added to the day")
-  }
-
   const rowActions = {
     onArchive: (id: string) => commit((current) => archiveTask(current, id)),
     onEditEvent: (id: string) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() }),
@@ -283,11 +268,11 @@ export function CalendarPage({
   }
 
   return (
-    <WorkspacePage>
+    <WorkspacePage className="gap-5 lg:gap-6">
       {/* The month is the page title: one header carries where you are, how to move, and what
           you can add, so the grid starts above the fold instead of under a slogan and a strip
           of figures that repeated the day panel. */}
-      <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">Calendar</p>
           <div className="mt-1 flex items-center gap-3">
@@ -350,7 +335,7 @@ export function CalendarPage({
         }}
       /> : null}
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
         <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
@@ -382,9 +367,9 @@ export function CalendarPage({
           <KindLegend />
         </section>
 
-        <aside className="grid content-start gap-4 xl:sticky xl:top-6">
-          <Card size="sm">
-            <CardHeader className="gap-2 pb-2">
+        <aside className="min-w-0 xl:relative xl:self-stretch">
+          <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] xl:absolute xl:inset-0 xl:overflow-y-auto">
+            <CardHeader className="shrink-0 gap-2 pb-1">
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="text-xl">{formatDayTitle(selected)}</CardTitle>
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -405,7 +390,7 @@ export function CalendarPage({
                 </button>
               ) : null}
             </CardHeader>
-            <CardContent className="grid gap-4">
+            <CardContent className="grid shrink-0 gap-3">
               {classes.length ? (
                 <DaySection title="Classes" count={classes.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -436,7 +421,7 @@ export function CalendarPage({
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
                     <EmptyTitle>{banked.length ? "All done" : "Nothing planned"}</EmptyTitle>
-                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add a task below to plan this day."}</EmptyDescription>
+                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add an event or plan study in the timeline below."}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
@@ -463,28 +448,6 @@ export function CalendarPage({
                   </ul>
                 </DaySection>
               ) : null}
-
-              <form className="grid gap-2 border-border border-t pt-4" onSubmit={(event) => { event.preventDefault(); add() }}>
-                <Field data-invalid={error ? true : undefined}>
-                  <FieldLabel className="text-xs font-semibold" htmlFor="calendar-task">Add a task</FieldLabel>
-                  <Input id="calendar-task" onChange={(event) => { setTitle(event.target.value); setError(null) }} placeholder={`Task for ${formatDayTitle(selected).split(" · ").at(-1)}`} value={title} />
-                </Field>
-                <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_auto] gap-2">
-                  <Field>
-                    <FieldLabel className="sr-only" htmlFor="calendar-subject">Subject</FieldLabel>
-                    <Input id="calendar-subject" list="calendar-subjects" onChange={(event) => setSubject(event.target.value)} placeholder="Subject" value={subject} />
-                    <datalist id="calendar-subjects">
-                      {[...new Set([...subjects, ...data.learning.tasks.map((task) => task.subject).filter((value): value is string => Boolean(value))])].map((value) => <option key={value} value={value} />)}
-                    </datalist>
-                  </Field>
-                  <Field>
-                    <FieldLabel className="sr-only" htmlFor="calendar-minutes">Minutes</FieldLabel>
-                    <Input id="calendar-minutes" min={5} max={360} onChange={(event) => setMinutes(event.target.valueAsNumber)} placeholder="Min" type="number" value={minutes} />
-                  </Field>
-                  <Button aria-label="Add task" size="icon" type="submit"><Plus /></Button>
-                </div>
-                <FieldError>{error}</FieldError>
-              </form>
             </CardContent>
           </Card>
         </aside>
@@ -538,7 +501,7 @@ function DayCell({ day, active, weekend, onSelect }: {
       aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
       aria-pressed={active}
       className={cn(
-        "relative flex min-h-16 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-colors first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-30 sm:p-1.5",
+        "relative flex min-h-18 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-colors first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-32 sm:p-1",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
         active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
@@ -594,7 +557,7 @@ function DayCell({ day, active, weekend, onSelect }: {
 /** The grid's marks are its only colour, so they are named once, in the grid's own footer. */
 function KindLegend() {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground" role="list">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground" role="list">
       {(Object.keys(KIND_MARK) as DayItem["kind"][]).map((kind) => (
         <li className="flex items-center gap-1.5" key={kind}>
           <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK[kind])} />

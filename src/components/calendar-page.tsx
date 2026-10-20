@@ -13,7 +13,6 @@ import { Progress } from "./ui/progress"
 import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
 import { StudySessionDialog } from "./study-session-dialog"
 import { EventDialog } from "./event-dialog"
-import { PageHeader } from "./page-header"
 import { StudyTimeline } from "./study-timeline"
 import { WorkspacePage } from "./workspace-layout"
 import {
@@ -27,8 +26,8 @@ import {
   setTaskStatus,
   shiftMonth,
   weekdayLabels,
+  type CalendarDay,
   type DayItem,
-  type DayPlan,
   type DayPlanSource,
 } from "../lib/day-plan"
 import { classPeriodsOn, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
@@ -86,8 +85,16 @@ const KIND_LABEL: Record<DayItem["kind"], string> = {
   mistakes: "Review",
 }
 
-/** The three lines a day cell can afford before it starts lying about what is there. */
+/** The three open lines a day cell can afford before it starts lying about what is there. */
 const CELL_LINES = 3
+
+/** Seven days plus the week's total; a phone drops the total and keeps the days. */
+const WEEK_GRID = "grid grid-cols-7 sm:grid-cols-[repeat(7,minmax(0,1fr))_4.5rem]"
+
+function shiftDay(date: string, amount: number) {
+  const [year, month, day] = date.split("-").map(Number)
+  return localDate(new Date(year, month - 1, day + amount))
+}
 
 export function CalendarPage({
   data,
@@ -147,6 +154,19 @@ export function CalendarPage({
   const completion = plan.totalCount ? plan.completedCount / plan.totalCount * 100 : 0
   const open = plan.items.filter((item) => !isDayItemDone(item))
   const banked = plan.items.filter(isDayItemDone)
+  // A trailing week wholly in the next month is padding, not part of this month.
+  const weeks = useMemo(() => Array.from({ length: 6 }, (_, index) => days.slice(index * 7, index * 7 + 7))
+    .filter((week) => week.some((day) => day.inMonth))
+    .map((week) => ({ days: week, minutes: week.reduce((total, day) => total + day.minutes, 0) })), [days])
+  const weekPeak = Math.max(1, ...weeks.map((week) => week.minutes))
+  const summary = useMemo(() => {
+    const inMonth = days.filter((day) => day.inMonth)
+    return {
+      minutes: inMonth.reduce((total, day) => total + day.minutes, 0),
+      studyDays: inMonth.filter((day) => day.minutes > 0).length,
+      assessments: inMonth.flatMap((day) => day.items).filter((item) => item.kind === "sac" || item.kind === "exam").length,
+    }
+  }, [days])
 
   function commit(update: (current: LearningWorkspace) => LearningWorkspace) {
     onChange((current) => ({ ...update(current), updatedAt: new Date().toISOString() }))
@@ -240,17 +260,44 @@ export function CalendarPage({
     toast("Task added to the day")
   }
 
+  const rowActions = {
+    onArchive: (id: string) => commit((current) => archiveTask(current, id)),
+    onEditEvent: (id: string) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() }),
+    onMove: move,
+    onNavigate,
+    onStartFocus,
+    onEditSession: editSession,
+    onSessionDone: setSessionDone,
+    onStatus: changeStatus,
+  }
+
   return (
     <WorkspacePage>
-      <PageHeader
-        title="Make time for what matters."
-        description="Your calendar and day plan. Bring study, classes, assessments, and revision into a little more focus."
-      >
-        <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
-        <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import from chatbot</Button>
-        <Button onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
+      {/* The month is the page title: one header carries where you are, how to move, and what
+          you can add, so the grid starts above the fold instead of under a slogan and a strip
+          of figures that repeated the day panel. */}
+      <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">Calendar</p>
+          <div className="mt-1 flex items-center gap-3">
+            <h1 className="focal-page-title">{monthLabel}</h1>
+            <div className="flex items-center gap-0.5">
+              <Button aria-label="Previous month" onClick={() => setMonth((current) => shiftMonth(current, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+              <Button aria-label="Next month" onClick={() => setMonth((current) => shiftMonth(current, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground tabular-nums">
+            {summary.minutes ? `${formatMinutes(summary.minutes)} of study across ${summary.studyDays} day${summary.studyDays === 1 ? "" : "s"}` : "No study planned this month"}
+            {summary.assessments ? ` · ${summary.assessments} assessment${summary.assessments === 1 ? "" : "s"}` : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
+          <Button onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
+          <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
+          <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
+        </div>
         <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />
-      </PageHeader>
+      </header>
 
       {eventDialog ? (
         <EventDialog
@@ -292,118 +339,62 @@ export function CalendarPage({
         }}
       /> : null}
 
-      <DayStats dueMistakes={plan.dueMistakes} plan={plan} progress={completion} />
-
-      <StudyTimeline
-        key={selected}
-        classes={classes}
-        date={selected}
-        nowMs={now.getTime()}
-        events={data.events ?? []}
-        onDateChange={selectDay}
-        onLog={onLogStudy}
-        onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
-        onRemove={onRemoveSession}
-        onEdit={onEditSession}
-        onMerge={onMergeSessions}
-        onOpenSession={(session) => editSession(session.id)}
-        onStartFocus={onStartFocus}
-        sessions={sessions}
-        subjects={subjects}
-      />
-
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(19rem,23rem)] xl:gap-8">
-        {/* The month and the load bars that summarise it are one thing, read together. */}
-        <div className="grid min-w-0 content-start gap-4">
-        <Card>
-          <CardHeader className="gap-1 pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle>{monthLabel}</CardTitle>
-              <div className="flex items-center gap-1">
-                <Button aria-label="Previous month" onClick={() => setMonth((current) => shiftMonth(current, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-                <Button aria-label="Next month" onClick={() => setMonth((current) => shiftMonth(current, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+        <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+          <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
+            {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
+            <div className="hidden px-2 py-2 text-right sm:block">Week</div>
+          </div>
+          {weeks.map((week) => (
+            <div className={cn(WEEK_GRID, "border-b border-border last:border-b-0")} key={week.days[0].date}>
+              {week.days.map((day, index) => (
+                <DayCell
+                  active={day.date === selected}
+                  day={day}
+                  key={day.date}
+                  onSelect={selectDay}
+                  weekend={index >= 5}
+                />
+              ))}
+              {/* The week's total sits where the eye lands at the end of the row, which is what
+                  the separate six-bar chart under the grid used to make you scroll for. */}
+              <div className="hidden flex-col items-end gap-1.5 border-l border-border px-2 py-2.5 sm:flex">
+                <span className={cn("text-xs tabular-nums", week.minutes ? "font-medium" : "text-muted-foreground")}>{week.minutes ? formatMinutes(week.minutes) : "–"}</span>
+                {week.minutes ? (
+                  <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                    <span className="block h-full rounded-full bg-primary/60" style={{ width: `${week.minutes / weekPeak * 100}%` }} />
+                  </span>
+                ) : null}
               </div>
             </div>
-            <CardDescription>Select a day to plan it. Each line is one piece of work; the bar is that day's load.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-0.5">
-            {/* minmax(0,1fr), not 1fr: a plain 1fr track floors at its content's min-width,
-                so one long title or a "6h 20m" stamp pushed the seventh column off a phone. */}
-            <div className="grid grid-cols-[repeat(7,minmax(0,1fr))] text-[0.6875rem] font-medium text-muted-foreground">
-              {weekdayLabels().map((label) => <div className="truncate px-1.5 py-1" key={label}>{label}</div>)}
-            </div>
-            <div className="grid grid-cols-[repeat(7,minmax(0,1fr))] gap-0.5">
-              {days.map((day) => {
-                const active = day.date === selected
-                const visible = day.items.slice(0, CELL_LINES)
-                const overflow = day.load - visible.length
-                return (
-                  <button
-                    aria-current={day.isToday ? "date" : undefined}
-                    aria-label={`${day.date}, ${day.load} item${day.load === 1 ? "" : "s"}, ${formatMinutes(day.minutes)} of study`}
-                    aria-pressed={active}
-                    className={cn(
-                      "focal-calendar-day flex aspect-square min-h-0 min-w-0 flex-col gap-1 overflow-hidden rounded-xs border border-transparent border-t-border p-1.5 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring sm:p-2",
-                      !day.inMonth && "opacity-40",
-                      active && "border-primary bg-primary text-primary-foreground hover:bg-primary/90 [&_.text-muted-foreground]:text-primary-foreground/80 [&_.text-primary]:text-primary-foreground",
-                      day.isToday && !active && "border-primary/40",
-                    )}
-                    key={day.date}
-                    onClick={() => setSelected(day.date)}
-                    type="button"
-                  >
-                    <span className="flex shrink-0 items-baseline justify-between gap-1">
-                      <span className={cn("text-xs leading-none font-medium tabular-nums", day.isToday && "text-primary")}>{day.day}</span>
-                      {day.minutes > 0 ? <span className="truncate text-[0.625rem] leading-none text-muted-foreground tabular-nums">{formatMinutes(day.minutes)}</span> : null}
-                    </span>
-                    {/* Below `sm` a cell is 54px wide, where a word like "Methods" is a smudge.
-                        A phone gets the date, the minutes and the load bar; the detail is one
-                        tap away in the day panel. */}
-                    {visible.length ? (
-                      <span className="hidden min-h-0 min-w-0 gap-px overflow-hidden sm:grid">
-                        {visible.map((item) => (
-                          <span className="flex min-w-0 items-center gap-1 text-[0.625rem] leading-[0.875rem]" key={`${item.kind}-${item.id}`}>
-                            <span aria-hidden className={cn("size-1 shrink-0 rounded-full", KIND_MARK[item.kind])} />
-                            <span className={cn("min-w-0 truncate", isDayItemDone(item) && "text-muted-foreground line-through")}>{item.title}</span>
-                          </span>
-                        ))}
-                        {overflow > 0 ? <span className="text-[0.625rem] leading-[0.875rem] text-muted-foreground tabular-nums">+{overflow} more</span> : null}
-                      </span>
-                    ) : null}
-                    {/* An empty cell still says something: how heavy that day is against the
-                        month. No track at all on a day with no study -- a grey rule on 35
-                        blank cells reads as 35 pieces of content, not as 35 empty days. */}
-                    {day.minutes > 0 ? (
-                      <span aria-hidden className="mt-auto h-0.5 shrink-0 overflow-hidden rounded-full bg-muted">
-                        <span className={cn("block h-full rounded-full", active ? "bg-primary" : "bg-chart-2/70")} style={{ width: `${day.loadBar}%` }} />
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-          {/* Part of the calendar, not a page section of its own, so it does not borrow the
-              page's heading scale to describe six bars. */}
-          <div aria-labelledby="calendar-month-title" className="grid gap-2 px-0.5">
-            <p className="text-sm font-semibold" id="calendar-month-title">Study load in {monthLabel}</p>
-            <MonthLoad days={days} />
-          </div>
-
+          ))}
           <KindLegend />
-        </div>
+        </section>
 
-        <aside className="grid content-start gap-4">
+        <aside className="grid content-start gap-4 xl:sticky xl:top-6">
           <Card size="sm">
-            <CardHeader className="gap-1 pb-2">
-              <CardTitle>{formatDayTitle(selected)}</CardTitle>
-              <CardDescription>
-                {plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing planned"} · {formatMinutes(plan.plannedMinutes + plan.completedMinutes)} of study
+            <CardHeader className="gap-2 pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitle className="text-xl">{formatDayTitle(selected)}</CardTitle>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Button aria-label="Previous day" onClick={() => selectDay(shiftDay(selected, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+                  <Button aria-label="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+                </div>
+              </div>
+              <CardDescription className="tabular-nums">
+                {plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing planned"}
+                {plan.plannedMinutes ? ` · ${formatMinutes(plan.plannedMinutes)} to go` : ""}
+                {plan.completedMinutes ? ` · ${formatMinutes(plan.completedMinutes)} banked` : ""}
               </CardDescription>
+              {plan.totalCount ? <Progress aria-label="Day completed" className="h-1" value={completion} /> : null}
+              {plan.dueMistakes ? (
+                <button className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground" onClick={() => onNavigate("mistakes")} type="button">
+                  <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK.mistakes)} />
+                  {plan.dueMistakes} mistake{plan.dueMistakes === 1 ? "" : "s"} due for review
+                </button>
+              ) : null}
             </CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid gap-4">
               {classes.length ? (
                 <DaySection title="Classes" count={classes.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -423,173 +414,172 @@ export function CalendarPage({
                   <button className="underline underline-offset-2" onClick={onOpenTimetable} type="button">Set up your class timetable</button> to see classes here and align events to class times.
                 </p>
               )}
-              <DaySection title="Planned" count={open.length}>
-                {open.length ? (
+              {open.length ? (
+                <DaySection title="To do" count={open.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
-                    {open.map((item) => (
-                      <DayItemRow
-                        item={item}
-                        key={`${item.kind}-${item.id}`}
-                        onArchive={(id) => commit((current) => archiveTask(current, id))}
-                        onEditEvent={(id) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() })}
-                        onMove={move}
-                        onNavigate={onNavigate}
-                        onStartFocus={onStartFocus}
-                        onEditSession={editSession}
-                        onSessionDone={setSessionDone}
-                        onStatus={changeStatus}
-                      />
-                    ))}
+                    {open.map((item) => <DayItemRow item={item} key={`${item.kind}-${item.id}`} {...rowActions} />)}
                   </ul>
-                ) : (
-                  <Empty className="min-h-32 border">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
-                      <EmptyTitle>Nothing planned</EmptyTitle>
-                      <EmptyDescription>Add a task below to plan this day.</EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                )}
-              </DaySection>
-              {banked.length ? (
-                <DaySection muted title="Completed" count={banked.length}>
+                </DaySection>
+              ) : (
+                <Empty className="min-h-28 border">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
+                    <EmptyTitle>{banked.length ? "All done" : "Nothing planned"}</EmptyTitle>
+                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add a task below to plan this day."}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
+              {overdue.length ? (
+                <DaySection title="Carried over" count={overdue.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
-                    {banked.map((item) => (
-                      <DayItemRow
-                        item={item}
-                        key={`${item.kind}-${item.id}`}
-                        onArchive={(id) => commit((current) => archiveTask(current, id))}
-                        onEditEvent={(id) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() })}
-                        onMove={move}
-                        onNavigate={onNavigate}
-                        onStartFocus={onStartFocus}
-                        onEditSession={editSession}
-                        onSessionDone={setSessionDone}
-                        onStatus={changeStatus}
-                      />
+                    {overdue.map((task) => (
+                      <li className="flex items-center gap-2 px-2 py-1.5" key={task.id}>
+                        <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK.task)} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{task.title}</p>
+                          <p className="text-xs text-muted-foreground tabular-nums">{task.plannedFor} · {task.durationMinutes} min</p>
+                        </div>
+                        <Button onClick={() => move(task.id, selected)} size="sm" variant="outline">Move here</Button>
+                      </li>
                     ))}
                   </ul>
                 </DaySection>
               ) : null}
+              {banked.length ? (
+                <DaySection muted title="Done" count={banked.length}>
+                  <ul className="min-w-0 divide-y rounded-md border">
+                    {banked.map((item) => <DayItemRow item={item} key={`${item.kind}-${item.id}`} {...rowActions} />)}
+                  </ul>
+                </DaySection>
+              ) : null}
 
-              {/* The form writes into the list directly above it, so it lives in the same card
-                  rather than in a card of its own two scrolls away. */}
-              <div className="grid gap-2 border-border border-t pt-3">
-                <p className="text-xs font-semibold">Add a task</p>
+              <form className="grid gap-2 border-border border-t pt-4" onSubmit={(event) => { event.preventDefault(); add() }}>
                 <Field data-invalid={error ? true : undefined}>
-                  <FieldLabel className="sr-only" htmlFor="calendar-task">Task</FieldLabel>
-                  <Input id="calendar-task" onChange={(event) => { setTitle(event.target.value); setError(null) }} placeholder={`Add a task to ${formatDayTitle(selected).split(" · ").at(-1)}`} value={title} />
+                  <FieldLabel className="text-xs font-semibold" htmlFor="calendar-task">Add a task</FieldLabel>
+                  <Input id="calendar-task" onChange={(event) => { setTitle(event.target.value); setError(null) }} placeholder={`Task for ${formatDayTitle(selected).split(" · ").at(-1)}`} value={title} />
                 </Field>
-                <div className="grid grid-cols-[minmax(0,1fr)_5rem] gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_auto] gap-2">
                   <Field>
                     <FieldLabel className="sr-only" htmlFor="calendar-subject">Subject</FieldLabel>
                     <Input id="calendar-subject" list="calendar-subjects" onChange={(event) => setSubject(event.target.value)} placeholder="Subject" value={subject} />
                     <datalist id="calendar-subjects">
-                      {data.learning.tasks.map((task) => task.subject).filter((value): value is string => Boolean(value)).map((value) => <option key={value} value={value} />)}
+                      {[...new Set([...subjects, ...data.learning.tasks.map((task) => task.subject).filter((value): value is string => Boolean(value))])].map((value) => <option key={value} value={value} />)}
                     </datalist>
                   </Field>
                   <Field>
                     <FieldLabel className="sr-only" htmlFor="calendar-minutes">Minutes</FieldLabel>
                     <Input id="calendar-minutes" min={5} max={360} onChange={(event) => setMinutes(event.target.valueAsNumber)} placeholder="Min" type="number" value={minutes} />
                   </Field>
+                  <Button aria-label="Add task" size="icon" type="submit"><Plus /></Button>
                 </div>
                 <FieldError>{error}</FieldError>
-                <Button className="w-full" onClick={add}><Plus />Add task</Button>
-              </div>
+              </form>
             </CardContent>
           </Card>
-
-          {overdue.length ? (
-            <Card size="sm">
-              <CardHeader className="gap-1 pb-2">
-                <CardTitle>Carried over</CardTitle>
-                <CardDescription>Planned for an earlier day and still open.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="min-w-0 divide-y rounded-md border">
-                  {overdue.map((task) => (
-                    <li className="flex items-center gap-2 px-2 py-1.5" key={task.id}>
-                      <span aria-hidden className={cn("size-1 shrink-0 rounded-full", KIND_MARK.task)} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{task.title}</p>
-                        <p className="text-xs text-muted-foreground tabular-nums">{task.plannedFor} · {task.durationMinutes} min</p>
-                      </div>
-                      <Button onClick={() => move(task.id, selected)} size="sm" variant="outline">Move here</Button>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ) : null}
         </aside>
       </div>
+
+      <StudyTimeline
+        key={selected}
+        classes={classes}
+        date={selected}
+        nowMs={now.getTime()}
+        events={data.events ?? []}
+        onDateChange={selectDay}
+        onLog={onLogStudy}
+        onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
+        onRemove={onRemoveSession}
+        onEdit={onEditSession}
+        onMerge={onMergeSessions}
+        onOpenSession={(session) => editSession(session.id)}
+        onStartFocus={onStartFocus}
+        sessions={sessions}
+        subjects={subjects}
+      />
     </WorkspacePage>
   )
 }
 
+/** Assessments lead a cell: they are the fixed points the rest of the week is planned around. */
+const CELL_ORDER: Record<DayItem["kind"], number> = { exam: 0, sac: 0, event: 1, session: 2, task: 2, mistakes: 3, "logged-exam": 4 }
+
 /**
- * Four figures in one rule-bounded strip rather than four tall cards: the day panel is the
- * thing you read, and these are the numbers you check it against. Hairlines do the dividing
- * so the strip costs one row instead of a card row.
+ * A cell lists what is still open and folds what is finished into one count. A past week
+ * used to be a column of struck-through titles: every line spent saying "this is over".
  */
-function DayStats({ plan, progress, dueMistakes }: {
-  plan: DayPlan
-  progress: number
-  dueMistakes: number
+function DayCell({ day, active, weekend, onSelect }: {
+  day: CalendarDay
+  active: boolean
+  weekend: boolean
+  onSelect: (date: string) => void
 }) {
-  const cells = [
-    {
-      label: "Planned",
-      value: formatMinutes(plan.plannedMinutes),
-      note: `${plan.plannedCount} item${plan.plannedCount === 1 ? "" : "s"} left`,
-    },
-    {
-      label: "Completed",
-      value: formatMinutes(plan.completedMinutes),
-      note: plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing logged yet",
-      bar: <Progress className="mt-1 h-1" value={progress} />,
-    },
-    {
-      label: "Study logged",
-      value: formatMinutes(plan.completedMinutes),
-      note: `${plan.completedCount} item${plan.completedCount === 1 ? "" : "s"} logged on the day`,
-    },
-    {
-      label: "Due for review",
-      value: dueMistakes,
-      note: dueMistakes ? "Mistakes ready" : "Queue is clear",
-    },
-  ]
+  const open = day.items.filter((item) => !isDayItemDone(item)).sort((a, b) => CELL_ORDER[a.kind] - CELL_ORDER[b.kind])
+  const done = day.items.length - open.length
+  const visible = open.slice(0, CELL_LINES)
+  const overflow = open.length - visible.length
   return (
-    <dl className="grid grid-cols-2 border-b border-border sm:grid-cols-4">
-      {cells.map((cell, index) => (
-        // The shared lower rule and internal hairlines keep these figures in one strip.
-        <div
-          className={cn(
-            "min-w-0 px-3 py-4 first:pl-0 sm:px-5",
-            index % 2 === 1 && "border-border border-l",
-            index >= 2 && "border-border border-t sm:border-t-0",
-            index === 2 && "sm:border-border sm:border-l",
-          )}
-          key={cell.label}
-        >
-          <dt className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">{cell.label}</dt>
-          <dd className="mt-2 flex flex-col gap-1 tabular-nums">
-            <span className="focal-stat-value">{cell.value}</span>
-            {cell.bar}
-            <span className="mt-1 text-xs font-normal text-muted-foreground">{cell.note}</span>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <button
+      aria-current={day.isToday ? "date" : undefined}
+      aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
+      aria-pressed={active}
+      className={cn(
+        "relative flex min-h-16 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-colors first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-30 sm:p-1.5",
+        weekend && "bg-muted/25",
+        !day.inMonth && "bg-muted/50 text-muted-foreground",
+        active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
+      )}
+      onClick={() => onSelect(day.date)}
+      type="button"
+    >
+      <span className="flex shrink-0 items-center justify-between gap-1 pl-0.5">
+        <span className={cn(
+          "grid size-6 place-items-center rounded-full text-xs font-medium tabular-nums",
+          day.isToday && "bg-primary text-primary-foreground",
+          !day.inMonth && !day.isToday && "opacity-60",
+        )}>{day.day}</span>
+        {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums sm:inline">{formatMinutes(day.minutes)}</span> : null}
+      </span>
+
+      {/* A phone cell is ~50px wide: titles there are smudges, so it gets one dot per piece of
+          open work and the day panel carries the words. */}
+      {open.length ? (
+        <span aria-hidden className="flex flex-wrap gap-0.5 px-1 sm:hidden">
+          {open.slice(0, 4).map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
+        </span>
+      ) : null}
+
+      <span className="hidden min-w-0 flex-col gap-0.5 sm:flex">
+        {visible.map((item) => {
+          const fixed = item.kind === "exam" || item.kind === "sac"
+          return (
+            <span
+              className={cn(
+                "flex min-w-0 items-center gap-1.5 rounded-xs px-1 py-0.5 text-[0.6875rem] leading-tight",
+                fixed ? "bg-destructive/10 font-medium" : item.kind === "event" ? "bg-chart-5/10" : "",
+                !day.inMonth && "opacity-70",
+              )}
+              key={`${item.kind}-${item.id}`}
+            >
+              <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
+              <span className="min-w-0 truncate">{item.title}</span>
+            </span>
+          )
+        })}
+        {overflow > 0 || done > 0 ? (
+          <span className="flex items-center gap-2 px-1 pt-0.5 text-[0.6875rem] leading-tight text-muted-foreground tabular-nums">
+            {overflow > 0 ? <span>+{overflow} more</span> : null}
+            {done > 0 ? <span className="flex items-center gap-0.5"><Check aria-hidden className="size-3" />{done} done</span> : null}
+          </span>
+        ) : null}
+      </span>
+    </button>
   )
 }
 
-/** The grid's marks are its only colour, so they are named once, in one place, rather than
- *  left for the reader to infer from a row of dots. */
+/** The grid's marks are its only colour, so they are named once, in the grid's own footer. */
 function KindLegend() {
   return (
-    <ul className="flex flex-wrap gap-x-3 gap-y-1 px-0.5 text-xs text-muted-foreground" role="list">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground" role="list">
       {(Object.keys(KIND_MARK) as DayItem["kind"][]).map((kind) => (
         <li className="flex items-center gap-1.5" key={kind}>
           <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK[kind])} />
@@ -657,7 +647,7 @@ function DayItemRow({
       <div className="flex items-center gap-2">
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground line-through")}>{item.title}</p>
+          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
           {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (
@@ -725,34 +715,5 @@ function DayItemRow({
         </div>
       ) : null}
     </li>
-  )
-}
-
-function MonthLoad({ days }: { days: ReturnType<typeof buildCalendarMonth> }) {
-  const week = useMemo(() => {
-    const rows: { label: string; minutes: number; width: number }[] = []
-    for (let index = 0; index < 6; index++) {
-      const row = days.slice(index * 7, index * 7 + 7)
-      const minutes = row.reduce((total, day) => total + day.minutes, 0)
-      rows.push({ label: `Week ${index + 1}`, minutes, width: 0 })
-    }
-    const peak = Math.max(1, ...rows.map((row) => row.minutes))
-    return rows.map((row) => ({ ...row, width: row.minutes / peak * 100 }))
-  }, [days])
-
-  // Two weeks per column: six bars stacked full width is six rows of scrolling to read a
-  // shape that is already obvious. Two columns put the whole month above the fold.
-  return (
-    <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-3">
-      {week.map((row) => (
-        <div className="flex items-center gap-2" key={row.label}>
-          <span className="w-12 shrink-0 text-xs text-muted-foreground">Week {row.label.at(-1)}</span>
-          <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-chart-2/70" style={{ width: `${row.width}%` }} />
-          </div>
-          <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{formatMinutes(row.minutes)}</span>
-        </div>
-      ))}
-    </div>
   )
 }

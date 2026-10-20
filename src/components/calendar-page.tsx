@@ -341,7 +341,7 @@ export function CalendarPage({
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
             <div className="hidden px-2 py-2 text-right sm:block">Week</div>
           </div>
-          <div className="animate-in fade-in-0 duration-200 ease-out" key={monthLabel}>
+          <div className="animate-in fade-in-0 duration-500 ease-[var(--ease-spring)]" key={monthLabel}>
           {weeks.map((week) => (
             <div className={cn(WEEK_GRID, "border-b border-border")} key={week.days[0].date}>
               {week.days.map((day, index) => (
@@ -359,7 +359,7 @@ export function CalendarPage({
                 <span className={cn("text-xs tabular-nums", week.minutes ? "font-medium" : "text-muted-foreground")}>{week.minutes ? formatMinutes(week.minutes) : "–"}</span>
                 {week.minutes ? (
                   <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                    <span className="block h-full origin-left rounded-full bg-primary/60 transition-transform duration-300 ease-out" style={{ transform: `scaleX(${week.minutes / weekPeak})` }} />
+                    <span className="block h-full origin-left rounded-full bg-primary/60 transition-transform duration-300 ease-[var(--ease-spring)]" style={{ transform: `scaleX(${week.minutes / weekPeak})` }} />
                   </span>
                 ) : null}
               </div>
@@ -392,7 +392,7 @@ export function CalendarPage({
                 </button>
               ) : null}
             </CardHeader>
-            <CardContent className="grid shrink-0 animate-in gap-3 duration-200 ease-out fade-in-0 slide-in-from-bottom-1" key={selected}>
+            <CardContent className="grid shrink-0 animate-in gap-3 duration-500 ease-[var(--ease-spring)] fade-in-0 slide-in-from-bottom-3" key={selected}>
               {classes.length ? (
                 <DaySection title="Classes" count={classes.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -503,7 +503,7 @@ function DayCell({ day, active, weekend, onSelect }: {
       aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
       aria-pressed={active}
       className={cn(
-        "relative flex min-h-18 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-[background-color,box-shadow] duration-150 first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-32 sm:p-1",
+        "relative flex min-h-18 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-32 sm:p-1",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
         active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
@@ -623,7 +623,7 @@ function DayItemRow({
   ].filter(Boolean).join(" · ")
 
   return (
-    <li className="animate-in px-2 py-1.5 duration-150 fade-in-0">
+    <li className="animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
       <div className="flex items-center gap-2">
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
@@ -682,7 +682,7 @@ function DayItemRow({
         </span>
       </div>
       {more ? (
-        <div className="mt-1 flex animate-in flex-wrap items-center gap-1.5 pl-3.5 duration-150 ease-out fade-in-0 slide-in-from-top-1">
+        <div className="mt-1 flex animate-in flex-wrap items-center gap-1.5 pl-3.5 duration-400 ease-[var(--ease-spring)] fade-in-0 slide-in-from-top-2">
           {isTask && item.status === "planned" ? (
             <Button aria-label={`Skip ${item.title}`} onClick={() => onStatus(item.id, "skipped")} size="sm" variant="outline"><SkipForward />Skip</Button>
           ) : null}          <Input

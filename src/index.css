@@ -117,24 +117,24 @@
 
 .dark {
   color-scheme: dark;
-  --background: #1c221e;
-  --foreground: #e8e8dc;
-  --card: #232b25;
+  --background: #191e1b;
+  --foreground: #e4e7df;
+  --card: #222925;
   --card-foreground: var(--foreground);
-  --popover: #283129;
+  --popover: #2b332e;
   --popover-foreground: var(--foreground);
-  --primary: #b5cba8;
-  --primary-foreground: #1e3225;
-  --secondary: #313e31;
-  --secondary-foreground: #d1dfc7;
-  --muted: #2c352d;
-  --muted-foreground: #a4b09f;
-  --accent: #354533;
-  --accent-foreground: #d1e0c5;
+  --primary: #afc7a6;
+  --primary-foreground: #1c2b20;
+  --secondary: #2e3930;
+  --secondary-foreground: #d1dfca;
+  --muted: #2a312c;
+  --muted-foreground: #a6b0a6;
+  --accent: #354332;
+  --accent-foreground: #d8e6d0;
   --destructive: #ed9c8b;
-  --border: #3b463b;
-  --input: #72836c;
-  --ring: #9eb791;
+  --border: #3e4840;
+  --input: #788779;
+  --ring: #a2bd97;
   --chart-1: #d79470;
   --chart-2: #9fbd8f;
   --chart-3: #8db5c9;
@@ -143,18 +143,18 @@
   --stoplight-red: #e88f86;
   --stoplight-amber: #e2b45a;
   --stoplight-green: #8ec3a5;
-  --sidebar: #20291f;
-  --sidebar-foreground: #b8c4ae;
+  --sidebar: #161c18;
+  --sidebar-foreground: #b8c2b6;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #34442e;
-  --sidebar-accent-foreground: #d4e4c7;
-  --sidebar-border: #3b4636;
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: #343e36;
   --sidebar-ring: var(--ring);
 }
 
-/* Accent palettes override only the interactive colours. Sage is the :root default.
-   Dark selectors are doubled so they outrank the light accent selectors. */
+/* Sage is the default. Dark palettes also tint surfaces and borders so each
+   accent stays coherent; their higher specificity overrides the light palettes. */
 [data-accent="blue"] {
   --primary: #2f5d8c;
   --primary-foreground: #fbfcfe;
@@ -180,27 +180,49 @@
 }
 
 .dark[data-accent="blue"] {
-  --primary: #a9c4e4;
-  --primary-foreground: #17293d;
-  --secondary: #2a3a4d;
-  --secondary-foreground: #cadcf0;
-  --accent: #303f52;
-  --accent-foreground: #d3e3f6;
-  --ring: #8fb0d6;
-  --sidebar-accent: #2e3f54;
-  --sidebar-accent-foreground: #cfe1f5;
+  --background: #191e24;
+  --foreground: #e2e7ef;
+  --card: #222a33;
+  --popover: #2b3541;
+  --primary: #aac7e8;
+  --primary-foreground: #182a3e;
+  --secondary: #2d3a4a;
+  --secondary-foreground: #ccddef;
+  --muted: #29323d;
+  --muted-foreground: #a6b2c2;
+  --accent: #33465b;
+  --accent-foreground: #d6e6f7;
+  --border: #3e4b5b;
+  --input: #7a8a9f;
+  --ring: #96bce3;
+  --sidebar: #161b21;
+  --sidebar-foreground: #b7c3d3;
+  --sidebar-border: #343f4d;
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
 }
 
 .dark[data-accent="clay"] {
+  --background: #221c1a;
+  --foreground: #ede3dc;
+  --card: #2d2522;
+  --popover: #392f2a;
   --primary: #e2b49c;
-  --primary-foreground: #3a2218;
-  --secondary: #42302a;
-  --secondary-foreground: #f0d5c6;
-  --accent: #4a3430;
-  --accent-foreground: #f3d9c9;
-  --ring: #d69a7c;
-  --sidebar-accent: #46312a;
-  --sidebar-accent-foreground: #f1d6c6;
+  --primary-foreground: #332118;
+  --secondary: #40312a;
+  --secondary-foreground: #ecd5c6;
+  --muted: #372d28;
+  --muted-foreground: #bdada3;
+  --accent: #4b382e;
+  --accent-foreground: #f2dccc;
+  --border: #514139;
+  --input: #9a8376;
+  --ring: #dda98b;
+  --sidebar: #1e1917;
+  --sidebar-foreground: #cebbb0;
+  --sidebar-border: #44362f;
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
 }
 
 @layer base {
@@ -228,15 +250,18 @@
 
 /* Motion: pages fade up on navigation, their top-level bands stagger in, and
    cards/buttons respond to hover and press. Reduced motion is handled below. */
+:root { --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes rise-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
 }
-.page-enter > * { animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
-.page-enter > :nth-child(2) { animation-delay: 60ms; }
-.page-enter > :nth-child(3) { animation-delay: 120ms; }
-.page-enter > :nth-child(4) { animation-delay: 180ms; }
-.page-enter > :nth-child(n+5) { animation-delay: 240ms; }
+.page-enter > *, .page-enter > * > * { animation: rise-in 0.6s var(--ease-spring) backwards; }
+.page-enter > * > :nth-child(2) { animation-delay: 70ms; }
+.page-enter > * > :nth-child(3) { animation-delay: 140ms; }
+.page-enter > * > :nth-child(4) { animation-delay: 210ms; }
+.page-enter > * > :nth-child(n+5) { animation-delay: 280ms; }
 button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: color, background-color, border-color, box-shadow, transform, opacity; transition-duration: 0.15s; }
+button:not(:disabled):active, [role="tab"]:active { transform: scale(0.93); }
+button:not(:disabled):not(:active), [role="tab"]:not(:active) { transition-timing-function: var(--ease-spring); transition-duration: 0.35s; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

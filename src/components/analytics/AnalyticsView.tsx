@@ -15,7 +15,7 @@ import {
 } from"../../lib/progress-analytics"
 import type { Project, StudySession } from"../../lib/types"
 import { cn, getSubjectById } from"../../lib/progress-utils"
-import { ChevronLeft, ChevronRight, Download } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { getSubjectColor } from"../../lib/progress-chart-theme"
 import {
  MOTION_DURATION,
@@ -77,13 +77,42 @@ function formatHour(hour: number) {
  })
 }
 
-function getPeriodEnd(range: AnalyticsRange, periodOffset: number) {
- const end = new Date()
- if (range !== 0 && periodOffset > 0) {
- end.setDate(end.getDate() - range * periodOffset)
+const DAY_MS = 86_400_000
+
+/** The period containing a day: Week is Mon–Sun, Month the calendar month, longer ranges end on the day. */
+function getPickedPeriod(range: AnalyticsRange, day: Date): { end: number; days: number } | null {
+ const start = new Date(day)
+ start.setHours(0, 0, 0, 0)
+ if (range === 7) start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
+ else if (range === 30) start.setDate(1)
+ else start.setDate(start.getDate() - (range - 1))
+ const end = new Date(start)
+ if (range === 30) end.setMonth(end.getMonth() + 1, 0)
+ else end.setDate(end.getDate() + range - 1)
  end.setHours(23, 59, 59, 999)
- }
- return end.getTime()
+ const now = Date.now()
+ if (end.getTime() < now) return { end: end.getTime(), days: Math.round((end.getTime() + 1 - start.getTime()) / DAY_MS) }
+ // The current week or month is cut off at today; anything later is just the live view.
+ if (range !== 7 && range !== 30 || start.getTime() > now) return null
+ const today = new Date(now)
+ today.setHours(0, 0, 0, 0)
+ return { end: now, days: Math.round((today.getTime() - start.getTime()) / DAY_MS) + 1 }
+}
+
+function stepPeriod(range: AnalyticsRange, end: number, direction: -1 | 1) {
+ const day = new Date(end)
+ if (range === 30) day.setDate(direction < 0 ? 0 : 32)
+ else day.setDate(day.getDate() + direction * range)
+ return getPickedPeriod(range, day)
+}
+
+function now() {
+ return Date.now()
+}
+
+function toDateInput(time: number) {
+ const d = new Date(time)
+ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 function formatPeriod(range: AnalyticsRange, periodEnd: number) {
@@ -162,13 +191,15 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
 }: AnalyticsViewProps) {
  const reduceMotion = useReducedMotion() === true
  const [range, setRange] = useState<AnalyticsRange>(30)
- const [periodOffset, setPeriodOffset] = useState(0)
- const periodEnd = useMemo(() => getPeriodEnd(range, periodOffset), [periodOffset, range])
+ const [picked, setPicked] = useState<{ end: number; days: number } | null>(null)
+ const periodEnd = useMemo(() => picked?.end ?? now(), [picked])
+ // A calendar month or partial week has its own length; the analytics helpers accept any day count.
+ const periodDays = (picked?.days ?? range) as AnalyticsRange
  const [selectedSubjects, setSelectedSubjects] = useState<Set<string> | null>(null)
 
  const data = useMemo(
- () => getAnalyticsData(sessions, projects, range, periodEnd),
- [sessions, projects, range, periodEnd],
+ () => getAnalyticsData(sessions, projects, periodDays, periodEnd),
+ [sessions, projects, periodDays, periodEnd],
  )
 
  const allSubjectIds = useMemo(
@@ -247,8 +278,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [filteredTotalMinutes, filteredConsistency.days.length],
  )
  const periodComparison = useMemo(
- () => getStudyPeriodComparison(sessions, projects, range, isFilterActive ? activeSet : undefined, periodEnd),
- [activeSet, isFilterActive, periodEnd, projects, range, sessions],
+ () => getStudyPeriodComparison(sessions, projects, periodDays, isFilterActive ? activeSet : undefined, periodEnd),
+ [activeSet, isFilterActive, periodEnd, projects, periodDays, sessions],
  )
  const highlights = useMemo(
  () => getHighlights(filteredBreakdown, filteredConsistency.days, filteredTimeOfDay),
@@ -321,13 +352,25 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </Button>
  {range !== 0 && (
 <div className="flex min-w-0 max-w-full items-center gap-1">
- <Button type="button" size="icon-sm" variant="outline" onClick={() => setPeriodOffset((value) => value + 1)} aria-label="Previous period"><ChevronLeft /></Button>
-<span className="min-w-0 px-1 text-center text-xs tabular-nums text-muted-foreground">{formatPeriod(range, periodEnd)}</span>
- {periodOffset > 0 && <Button type="button" size="xs" variant="ghost" onClick={() => setPeriodOffset(0)}>Today</Button>}
- <Button type="button" size="icon-sm" variant="outline" disabled={periodOffset === 0} onClick={() => setPeriodOffset((value) => Math.max(0, value - 1))} aria-label="Next period"><ChevronRight /></Button>
+ <Button type="button" size="icon-sm" variant="outline" onClick={() => setPicked(stepPeriod(range, periodEnd, -1))} aria-label="Previous period"><ChevronLeft /></Button>
+<span className="min-w-0 px-1 text-center text-xs tabular-nums text-muted-foreground">{formatPeriod(periodDays, periodEnd)}</span>
+ <label className="relative inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" title={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}>
+ <CalendarDays className="size-4" />
+ <input
+ type="date"
+ aria-label={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}
+ className="absolute inset-0 cursor-pointer opacity-0"
+ max={toDateInput(now())}
+ value={toDateInput(periodEnd)}
+ onClick={(event) => event.currentTarget.showPicker?.()}
+ onChange={(event) => { if (event.target.value) setPicked(getPickedPeriod(range, new Date(`${event.target.value}T00:00`))) }}
+ />
+ </label>
+ {picked && <Button type="button" size="xs" variant="ghost" onClick={() => setPicked(null)}>Today</Button>}
+ <Button type="button" size="icon-sm" variant="outline" disabled={!picked} onClick={() => setPicked(stepPeriod(range, periodEnd, 1))} aria-label="Next period"><ChevronRight /></Button>
  </div>
  )}
- <RangeToggle value={range} onChange={(next) => { setRange(next); setPeriodOffset(0) }} reduceMotion={reduceMotion} />
+ <RangeToggle value={range} onChange={(next) => { setRange(next); setPicked(null) }} reduceMotion={reduceMotion} />
  </div>
  </motion.div>
  <motion.div variants={staggerItem}>
@@ -339,7 +382,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  currentStreak={filteredConsistency.stats.currentStreak}
  longestStreak={filteredConsistency.stats.longestStreak}
  comparison={periodComparison}
- range={range}
+ range={periodDays}
  filterActive={isFilterActive}
  reduceMotion={reduceMotion}
  />
@@ -367,7 +410,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  <motion.div variants={staggerItem} className="relative">
  <AnimatePresence mode="wait">
  <motion.div
- key={`${range}-${periodOffset}`}
+ key={`${range}-${periodEnd}`}
  initial={reduceMotion ? false : { opacity: 0 }}
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}

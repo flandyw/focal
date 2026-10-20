@@ -215,6 +215,31 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const latestData = useRef(data)
   useEffect(() => { latestData.current = data }, [data])
   useEffect(() => () => saveAppData(latestData.current), [])
+  useEffect(() => {
+    const save = () => saveAppData(latestData.current)
+    const recover = (event: Event) => {
+      if (!import.meta.env.PROD || import.meta.env.VITE_DESKTOP || !navigator.onLine) return
+      try {
+        // ponytail: one automatic reload per built entry, per tab. Further failures
+        // use the error boundary; this avoids loops without a version polling service.
+        const key = "examtrack:deployment-reload:v1"
+        if (sessionStorage.getItem(key) === import.meta.url) return
+        save()
+        sessionStorage.setItem(key, import.meta.url)
+      } catch {
+        // Keep the backup/reload screen if saving or the reload guard is unavailable.
+        return
+      }
+      event.preventDefault()
+      window.location.reload()
+    }
+    window.addEventListener("pagehide", save)
+    window.addEventListener("vite:preloadError", recover)
+    return () => {
+      window.removeEventListener("pagehide", save)
+      window.removeEventListener("vite:preloadError", recover)
+    }
+  }, [])
   // Reading hands over to writing on its own, whichever page is open. One phase_change
   // per revision: the session prop stays stale while the save is in flight.
   const publishedPhase = useRef<string | null>(null)

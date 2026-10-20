@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react"
-import { CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, Crosshair, Maximize2, Merge, MousePointer2, Minus, Play, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
+import { CalendarPlus, Check, CheckCheck, ChevronLeft, ChevronRight, Crosshair, Merge, MousePointer2, Minus, Play, Plus, RotateCcw, Scissors, Timer, Trash2, X, ZoomIn } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { continuableToday, sessionBlocks, sessionItem } from "../lib/day-plan"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
@@ -599,93 +599,117 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long" })
   const relative = isToday ? "Today" : date === shiftDate(localDate(new Date(nowMs)), -1) ? "Yesterday" : date === shiftDate(localDate(new Date(nowMs)), 1) ? "Tomorrow" : null
 
+  const pastDay = date < localDate(new Date(nowMs))
+  const hint = selecting ? "Click study sessions to select them, then merge" : razor ? "Click a study block where you want to cut it" : `Drag across the track to ${isToday ? "log or plan study" : pastDay ? "log study" : "plan study"}`
+  const siblings = picked?.session ? blocks.filter((block) => block.session === picked.session) : []
+  const swatch = (block: Block, className?: string) => (
+    <span
+      aria-hidden
+      className={cn("size-2 shrink-0 rounded-full", block.tone === "todo" ? "border border-dashed border-primary" : block.tone === "class" ? "bg-muted-foreground/40" : block.tone === "event" ? "bg-chart-5" : "bg-primary", missed(block) && "border-destructive", className)}
+      style={block.tone === "todo" ? { borderColor: missed(block) ? undefined : block.color } : block.color ? { backgroundColor: block.color } : undefined}
+    />
+  )
+
   return (
-    <Card className="gap-4 [--card-spacing:--spacing(4)] sm:[--card-spacing:--spacing(5)]">
-      <CardHeader className="gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <Card className="gap-0 py-0">
+      {/* Header: the day and how to change it, then what you would do with it. */}
+      <div className="flex flex-wrap items-end justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+        <div className="flex min-w-0 items-end gap-2">
           <div className="min-w-0">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Study timeline</p>
-            <div className="flex min-w-0 items-center gap-2">
-              <CardTitle className="min-w-0 text-base font-semibold sm:text-lg" aria-live="polite">{relative ? `${relative} · ${dayLabel}` : dayLabel}</CardTitle>
-              <div className="flex shrink-0 items-center rounded-lg border" role="group" aria-label="Change day">
-                <Button aria-label="Previous day" onClick={() => onDateChange(shiftDate(date, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-                <Button aria-label="Next day" onClick={() => onDateChange(shiftDate(date, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
-              </div>
-              {!isToday ? <Button onClick={() => onDateChange(localDate(new Date()))} size="sm" variant="outline">Today</Button> : null}
-            </div>
+            <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">Timeline</p>
+            <CardTitle aria-live="polite" className="mt-0.5 truncate text-lg">{relative ? `${relative} · ${dayLabel}` : dayLabel}</CardTitle>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {isToday ? (
-              <>
-                <Button onClick={() => { const next = Math.ceil(now / 30) * 30; open({ start: next, end: next + 60 }) }} size="sm" variant="outline"><Plus />Plan study</Button>
-                <Button onClick={() => onStartFocus(undefined, "")} size="sm"><Timer />Start timer</Button>
-              </>
-            ) : (
-              <Button onClick={() => open({ start: 16 * 60, end: 17 * 60 })} size="sm" variant="outline">
-                <Plus />{date < localDate(new Date(nowMs)) ? "Log study" : "Add study"}
-              </Button>
-            )}
+          <div aria-label="Change day" className="flex shrink-0 items-center" role="group">
+            <Button aria-label="Previous day" onClick={() => onDateChange(shiftDate(date, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+            <Button aria-label="Next day" onClick={() => onDateChange(shiftDate(date, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+          </div>
+          {!isToday ? <Button onClick={() => onDateChange(localDate(new Date()))} size="xs" variant="outline">Today</Button> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isToday ? (
+            <>
+              <Button onClick={() => { const next = Math.ceil(now / 30) * 30; open({ start: next, end: next + 60 }) }} size="sm" variant="outline"><Plus />Plan study</Button>
+              <Button onClick={() => onStartFocus(undefined, "")} size="sm"><Timer />Start timer</Button>
+            </>
+          ) : (
+            <Button onClick={() => open({ start: 16 * 60, end: 17 * 60 })} size="sm" variant="outline"><Plus />{pastDay ? "Log study" : "Add study"}</Button>
+          )}
+        </div>
+      </div>
+
+      {/* Totals double as the legend: each figure wears the swatch of the blocks it counts. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-5">
+        <div aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-4 rounded-xs border border-primary/35 bg-primary/20" /><span className="font-medium text-foreground">{duration(studied)}</span>studied</span>
+          {planned ? <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-4 rounded-xs border border-dashed border-primary/50 bg-primary/5" /><span className="font-medium text-foreground">{duration(planned)}</span>planned</span> : null}
+          {notDone ? <span className="inline-flex items-center gap-1.5 text-destructive"><span aria-hidden className="h-2.5 w-4 rounded-xs border border-destructive/50 bg-destructive/10" /><span className="font-medium">{duration(notDone)}</span>missed</span> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div aria-label="Tool" className="flex items-center gap-0.5 rounded-md border p-0.5" role="group">
+            <Button aria-pressed={!razor && !selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(false)} size="icon-xs" title="Select (V)" variant={razor || selecting ? "ghost" : "secondary"}><MousePointer2 /><span className="sr-only">Select tool</span></Button>
+            <Button aria-pressed={razor} disabled={busy || adjust !== null} onClick={() => { selectionMode(false); setRazor(true) }} size="icon-xs" title="Razor: split a study block (C)" variant={razor ? "secondary" : "ghost"}><Scissors /><span className="sr-only">Razor tool</span></Button>
+            <Button aria-pressed={selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(!selecting)} size="xs" title="Select sessions to merge" variant={selecting ? "secondary" : "ghost"}><CheckCheck />Merge</Button>
+          </div>
+          <div aria-label="Zoom" className="flex items-center gap-0.5 rounded-md border p-0.5" role="group">
+            <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-xs" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
+            <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-xs" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
+            <span aria-hidden className="mx-0.5 h-3.5 w-px bg-border" />
+            <Button disabled={view === null} onClick={() => setView(null)} size="xs" title="Fit the day's study (0)" variant="ghost">Fit</Button>
+            <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="xs" title="Show all 24 hours" variant="ghost">24h</Button>
+            {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="xs" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums" aria-live="polite">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 font-medium text-primary"><Check className="size-3.5" />{duration(studied)} studied</span>
-            {planned ? <span className="rounded-md border border-dashed px-2.5 py-1.5 text-muted-foreground">{duration(planned)} planned</span> : null}
-            {notDone ? <span className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-destructive">{duration(notDone)} missed</span> : null}
+      </div>
+
+      {/* The track runs edge to edge: a ruler, the day's fixed points, then the study lane,
+          all on one set of hour lines so a class and the study beside it line up by eye. */}
+      <div className="border-y border-border">
+        <div className="relative select-none bg-muted/15">
+          <div aria-hidden className="relative h-7 border-b border-border text-[0.6875rem] text-muted-foreground tabular-nums">
+            {ticks.map((minute) => {
+              const at = (minute - from) / span * 100
+              // An hour label under the "now" pill or the drag readout would only be overprinted.
+              const covered = (bubble ? [bubble.at] : isToday && now >= from && now <= to ? [now] : []).some((mark) => Math.abs(mark - minute) / span * width < (bubble ? 70 : 40))
+              if (covered) return null
+              return <span className={cn("absolute top-1.5", at < 3 ? "pl-1.5" : at > 97 ? "-translate-x-full pr-1.5" : "-translate-x-1/2")} key={minute} style={{ left: `${at}%` }}>{clock(minute)}</span>
+            })}
+            {isToday && now >= from && now <= to && !bubble ? (
+              <span className="absolute top-1 z-10 -translate-x-1/2 rounded-full bg-destructive px-1.5 py-px font-medium text-white" style={{ left: `${Math.min(96, Math.max(4, (now - from) / span * 100))}%` }}>{clock(now)}</span>
+            ) : null}
+            {bubble ? (
+              <span className="absolute top-1 z-10 -translate-x-1/2 rounded-full bg-foreground px-2 py-px whitespace-nowrap text-background" style={{ left: `${Math.min(88, Math.max(12, (bubble.at - from) / span * 100))}%` }}>{bubble.text}</span>
+            ) : null}
           </div>
-          {isToday ? (
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Quick log study">
-              <span className="mr-2 text-xs text-muted-foreground">Just studied?</span>
-              {lastEnd > 0 && now - lastEnd >= 5 && now - lastEnd <= 6 * 60 ? (
-                <Button onClick={() => open({ start: lastEnd, end: Math.floor(now) })} size="sm" variant="outline">Since {clock(lastEnd)}</Button>
-              ) : null}
-              {QUICK_LOGS.map((minutes) => <Button className="tabular-nums" key={minutes} onClick={() => quick(minutes)} size="sm" variant="secondary">{duration(minutes)}</Button>)}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-7 bottom-0">
+            {ticks.map((minute) => <span className={cn("absolute inset-y-0 w-px", minute % 60 === 0 ? "bg-border/80" : "bg-border/40")} key={minute} style={{ left: left(minute) }} />)}
+            {isToday && now > from ? <span className="absolute inset-y-0 left-0 bg-muted-foreground/[0.06]" style={{ width: left(Math.min(now, to)) }} /> : null}
+          </div>
+
+          {/* Context lane: what the day already holds. */}
+          {context.some(shown) ? (
+            <div className="relative border-b border-dashed border-border" style={{ height: contextRows.rows * 24 + 8 }}>
+              {context.filter(shown).map((block) => (
+                <button
+                  aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
+                  aria-pressed={blockSelected(block)}
+                  className={cn("absolute h-5 min-w-0 truncate rounded-sm text-left text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-1.5" : "px-0", selected === block.key && "ring-2 ring-foreground/60")}
+                  key={block.key}
+                  onClick={() => select(block)}
+                  style={{ ...place(block.start, block.end), top: 4 + (contextRows.row.get(block.key) ?? 0) * 24 }}
+                  title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
+                  type="button"
+                >
+                  {pixels(block) >= 60 ? block.title : null}
+                </button>
+              ))}
             </div>
           ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardDescription className="text-xs">{selecting ? "Click study sessions to select them, then merge" : razor ? "Click a study block to split it where you click" : `Drag the track to ${isToday ? "log or plan study" : date < localDate(new Date(nowMs)) ? "log study" : "plan study"}`}</CardDescription>
-          <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Tool">
-            <Button aria-pressed={!razor && !selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(false)} size="icon-sm" title="Select (V)" variant={razor || selecting ? "ghost" : "secondary"}><MousePointer2 /><span className="sr-only">Select tool</span></Button>
-            <Button aria-pressed={razor} disabled={busy || adjust !== null} onClick={() => { selectionMode(false); setRazor(true) }} size="icon-sm" title="Razor: split a study block (C)" variant={razor ? "secondary" : "ghost"}><Scissors /><span className="sr-only">Razor tool</span></Button>
-            <Button aria-pressed={selecting} disabled={busy || adjust !== null} onClick={() => selectionMode(!selecting)} size="sm" title="Select sessions to merge" variant={selecting ? "secondary" : "ghost"}><CheckCheck />Select sessions</Button>
-          </div>
-          <div className="flex items-center gap-0.5 rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Zoom">
-            <Button aria-label="Zoom out" disabled={span >= DAY} onClick={() => zoomBy(2)} size="icon-sm" title="Zoom out (Ctrl + scroll)" variant="ghost"><Minus /></Button>
-            <Button aria-label="Zoom in" disabled={span <= MIN_SPAN} onClick={() => zoomBy(0.5)} size="icon-sm" title="Zoom in (Ctrl + scroll)" variant="ghost"><Plus /></Button>
-            <span aria-hidden className="mx-1 h-3.5 w-px bg-border" />
-            <Button disabled={view === null} onClick={() => setView(null)} size="sm" title="Fit the day's study" variant="ghost"><ZoomIn />Fit</Button>
-            <Button disabled={span >= DAY} onClick={() => setView({ start: 0, end: DAY })} size="sm" title="Show all 24 hours" variant="ghost"><Maximize2 />24h</Button>
-            {isToday ? <Button onClick={() => setView(clampWindow({ start: now - span / 2, end: now + span / 2 }))} size="sm" title="Centre on the current time" variant="ghost"><Crosshair />Now</Button> : null}
-          </div>
-          </div>
-        </div>
-        <div className="relative select-none">
-          {/* Context lane: what the day already holds. */}
-          {context.some(shown) ? <div className="relative mb-3" style={{ height: contextRows.rows * 26 - 4 }}>
-            {context.filter(shown).map((block) => (
-              <button
-                aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
-                aria-pressed={blockSelected(block)}
-                className={cn("absolute h-[22px] min-w-0 truncate rounded-md text-left text-[0.6875rem] leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-2" : "px-0", selected === block.key && "ring-2 ring-foreground/60")}
-                key={block.key}
-                onClick={() => select(block)}
-                style={{ ...place(block.start, block.end), top: (contextRows.row.get(block.key) ?? 0) * 26 }}
-                title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
-                type="button"
-              >
-                {pixels(block) >= 60 ? block.title : null}
-              </button>
-            ))}
-          </div> : null}
+
           {/* Study lane: the drag target. */}
           <div
             aria-keyshortcuts="+ - 0 C V PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
-            style={{ height: studyRows.rows * 56 + 20 }}
-            className="relative cursor-crosshair touch-none overflow-hidden rounded-xl border bg-muted/20 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            style={{ height: studyRows.rows * 56 + 16 }}
+            className="relative cursor-crosshair touch-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             tabIndex={0}
             onKeyDown={(event) => {
               if (busy || adjust) return
@@ -704,8 +728,6 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             ref={lane}
             role="group"
           >
-            {ticks.map((minute) => <span aria-hidden className={cn("absolute inset-y-0 w-px", minute % 60 === 0 ? "bg-border/70" : "bg-border/35")} key={minute} style={{ left: left(minute) }} />)}
-            {isToday && now > from ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 bg-background/25" style={{ width: left(Math.min(now, to)) }} /> : null}
             {study.filter(shown).map((live) => {
               const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
               const room = pixels(block)
@@ -715,21 +737,21 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={blockSelected(block)}
                   disabled={selecting && (block.session?.kind !== "focus" || timing(block.session))}
-                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-lg text-left text-xs leading-4 whitespace-nowrap transition-[filter,box-shadow] hover:brightness-110 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "ring-2 ring-ring ring-offset-2 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-md text-left text-xs leading-4 whitespace-nowrap shadow-xs transition-[filter,box-shadow] hover:brightness-105 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "ring-2 ring-ring ring-offset-1 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={(event) => razor ? split(block, event.detail ? minuteAt(event.clientX, false) : splitPoint(block)) : select(block)}
                   onDoubleClick={() => { if (!razor && !selecting) zoomTo(block) }}
                   onKeyDown={(event) => blockKey(event, block)}
-                  style={{ ...place(block.start, block.end), top: 10 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
+                  style={{ ...place(block.start, block.end), top: 8 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
                   {...(grab && !razor ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
-                  {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)}`}</span> : null}
+                  {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75 tabular-nums">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)}`}</span> : null}
                   {grab && !razor ? (["start", "end"] as const).map((kind) => (
                     <span aria-hidden className={cn("absolute inset-y-0 flex cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} style={{ width: "min(0.625rem, 34%)" }} {...adjustProps(block, kind)}>
-                      <span className="h-4 w-0.5 rounded-full bg-current opacity-50 group-hover/block:opacity-90" />
+                      <span className="h-4 w-0.5 rounded-full bg-current opacity-0 transition-opacity group-hover/block:opacity-70" />
                     </span>
                   )) : null}
                 </button>
@@ -737,7 +759,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             })}
             {selection ? (
               <span
-                className={cn("absolute inset-y-1 rounded-lg border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
+                className={cn("absolute inset-y-1 rounded-md border-2 border-primary bg-primary/15", mode === "plan" && !drag && "border-dashed", drag ? "pointer-events-none" : "cursor-grab active:cursor-grabbing")}
                 style={{ left: left(selection.start), width: `${(Math.min(to, selection.end) - Math.max(from, selection.start)) / span * 100}%`, ...(draft && draftColor ? { borderColor: draftColor, backgroundColor: `color-mix(in srgb, ${draftColor} 15%, transparent)` } : {}) }}
                 {...(drag ? {} : editProps("move"))}
               >
@@ -749,37 +771,47 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               </span>
             ) : null}
             {hover !== null && !drag && !editing ? <span aria-hidden className={cn("pointer-events-none absolute inset-y-0", razor ? "w-0.5 bg-foreground/70" : "w-px bg-foreground/30")} style={{ left: left(hover) }} /> : null}
-            {isToday && now >= from && now <= to ? (
-              <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 bg-destructive" style={{ left: left(now) }}><span className="absolute -top-0 left-1/2 size-2 -translate-x-1/2 rounded-full bg-destructive" /></span>
-            ) : null}
           </div>
-          <div aria-hidden className="relative mt-2 h-5 text-[0.6875rem] text-muted-foreground tabular-nums">
-            {ticks.map((minute) => {
-              const at = (minute - from) / span * 100
-              return <span className={cn("absolute", at < 3 ? "" : at > 97 ? "-translate-x-full" : "-translate-x-1/2")} key={minute} style={{ left: `${at}%` }}>{clock(minute)}</span>
-            })}
-            {bubble ? (
-              <span className="absolute z-10 -translate-x-1/2 rounded-md bg-foreground px-2 py-0.5 whitespace-nowrap text-background shadow-sm" style={{ left: `${Math.min(88, Math.max(12, (bubble.at - from) / span * 100))}%` }}>{bubble.text}</span>
-            ) : null}
+
+          {/* "Now" crosses every lane, drawn last so it sits over the blocks. */}
+          {isToday && now >= from && now <= to ? (
+            <span aria-hidden className="pointer-events-none absolute top-7 bottom-0 w-0.5 -translate-x-1/2 bg-destructive" style={{ left: left(now) }} />
+          ) : null}
+        </div>
+
+        {/* Where this window sits in the day: click or drag to pan. */}
+        {span < DAY ? (
+          <div
+            aria-label="Day overview. Drag to pan the timeline."
+            className="relative h-4 cursor-ew-resize touch-none overflow-hidden border-t border-border bg-muted/40"
+            onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); pan(event) }}
+            onPointerMove={(event) => { if (event.buttons) pan(event) }}
+            role="group"
+          >
+            {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-1 rounded-xs opacity-60", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
+            {isToday ? <span aria-hidden className="absolute inset-y-0 w-px bg-destructive" style={{ left: `${now / DAY * 100}%` }} /> : null}
+            <span aria-hidden className="absolute inset-y-0 border-x-2 border-primary/60 bg-primary/10" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
           </div>
-          {/* Where this window sits in the day: click or drag to pan. */}
-          {span < DAY ? (
-            <div
-              aria-label="Day overview. Drag to pan the timeline."
-              className="relative mt-2 h-5 cursor-ew-resize touch-none overflow-hidden rounded-md border bg-muted/50"
-              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); pan(event) }}
-              onPointerMove={(event) => { if (event.buttons) pan(event) }}
-              role="group"
-            >
-              {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-1.5 rounded-sm opacity-60", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}
-              {isToday ? <span aria-hidden className="absolute inset-y-0 w-px bg-destructive" style={{ left: `${now / DAY * 100}%` }} /> : null}
-              <span aria-hidden className="absolute inset-y-0 rounded border border-primary/50 bg-primary/5" style={{ left: `${from / DAY * 100}%`, width: `${span / DAY * 100}%` }} />
+        ) : null}
+      </div>
+
+      <div className="grid gap-3 px-4 py-3 sm:px-5 sm:pb-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">{hint}</p>
+          {isToday ? (
+            <div aria-label="Quick log study" className="flex flex-wrap items-center gap-1" role="group">
+              <span className="mr-1 text-xs text-muted-foreground">Just studied?</span>
+              {lastEnd > 0 && now - lastEnd >= 5 && now - lastEnd <= 6 * 60 ? (
+                <Button onClick={() => open({ start: lastEnd, end: Math.floor(now) })} size="xs" variant="outline">Since {clock(lastEnd)}</Button>
+              ) : null}
+              {QUICK_LOGS.map((minutes) => <Button className="tabular-nums" key={minutes} onClick={() => quick(minutes)} size="xs" variant="secondary">{duration(minutes)}</Button>)}
             </div>
           ) : null}
         </div>
 
+        {/* Blocks too narrow to label on the track, as one line of chips rather than a card each. */}
         {cramped.length ? (
-          <ul aria-label="Short blocks" className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <ul aria-label="Short blocks" className="flex flex-wrap gap-1.5">
             {crampedGroups.map((group) => {
               const block = group[0]
               const start = Math.min(...group.map((item) => item.start))
@@ -787,99 +819,89 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               const minutes = group.reduce((sum, item) => sum + item.end - item.start, 0)
               const active = group.some(blockSelected)
               return (
-              <li className="min-w-0" key={block.key}>
-                <button
-                  aria-pressed={active}
-                  disabled={selecting && (!block.session || block.session.kind !== "focus" || timing(block.session))}
-                  className={cn("flex w-full min-w-0 items-center gap-2.5 rounded-lg border bg-muted/15 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring", active && "border-primary/50 bg-primary/5")}
-                  onClick={() => select(block)}
-                  type="button"
-                >
-                  <span aria-hidden className={cn("size-2 shrink-0 rounded-full", block.tone === "todo" ? "border border-dashed border-primary" : "bg-muted-foreground/40")} style={{ backgroundColor: block.tone === "todo" ? undefined : block.color, borderColor: block.color }} />
-                  <span className="grid min-w-0 flex-1 gap-0.5">
-                    <span className="truncate text-xs font-medium">{block.title}</span>
-                    <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{clock(start)}–{clock(end)}{group.length > 1 ? ` · ${group.length} intervals` : ""}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Studying now" : ""}</span>
-                  </span>
-                  <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{duration(minutes)}</span>
-                </button>
-                {group.length > 1 ? (
-                  <details className="px-3 py-2 text-xs">
-                    <summary className="cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-ring">View intervals</summary>
-                    <ul className="mt-2 grid gap-1">
-                      {group.map((item, index) => (
-                        <li key={item.key}>
-                          <button aria-pressed={blockSelected(item)} disabled={selecting && (!item.session || item.session.kind !== "focus" || timing(item.session))} className="w-full rounded px-2 py-1 text-left tabular-nums hover:bg-muted focus-visible:outline-ring" onClick={() => select(item)} type="button">
-                            {index + 1}. {clock(item.start)}–{clock(item.end)} · {duration(item.end - item.start)}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </li>
+                <li className="min-w-0 max-w-full" key={block.key}>
+                  <button
+                    aria-pressed={active}
+                    disabled={selecting && (!block.session || block.session.kind !== "focus" || timing(block.session))}
+                    className={cn("flex max-w-full min-w-0 items-center gap-2 rounded-md border bg-card px-2 py-1 text-left text-xs outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", active && "border-primary/60 bg-primary/5")}
+                    onClick={() => select(block)}
+                    type="button"
+                  >
+                    {swatch(block)}
+                    <span className="max-w-48 truncate font-medium">{block.title}</span>
+                    <span className={cn("shrink-0 text-muted-foreground tabular-nums", missed(block) && "text-destructive")}>
+                      {clock(start)}–{clock(end)} · {duration(minutes)}{group.length > 1 ? ` · ${group.length} intervals` : ""}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Now" : ""}
+                    </span>
+                  </button>
+                </li>
               )
             })}
           </ul>
         ) : null}
 
         {selecting ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected sessions">
-            <div className="min-w-0 flex-1" aria-live="polite">
-              <p className="text-sm font-medium">{selectedSessions.length} sessions selected</p>
+          <div aria-label="Selected sessions" className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3" role="region">
+            <div aria-live="polite" className="min-w-0 flex-1">
+              <p className="text-sm font-medium tabular-nums">{selectedSessions.length} session{selectedSessions.length === 1 ? "" : "s"} selected</p>
               <p className={cn("text-xs", mergeError ? "text-destructive" : "text-muted-foreground")}>{mergeError ?? "Merge whole sessions, keeping the earliest session's title and every break and note. Overlapping time counts once."}</p>
             </div>
+            <Button disabled={busy} onClick={() => selectionMode(false)} size="sm" variant="ghost">Cancel</Button>
             <Button disabled={busy || adjust !== null || selectedSessions.length < 2 || Boolean(mergeError)} onClick={merge} size="sm"><Merge />{busy ? "Merging…" : "Merge"}</Button>
-            <Button disabled={busy} onClick={() => selectionMode(false)} size="sm" variant="outline">Cancel</Button>
           </div>
         ) : null}
 
         {picked && !selecting ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border bg-muted/20 p-3 sm:p-4" role="region" aria-label="Selected block">
-            <span aria-hidden style={{ backgroundColor: picked.tone === "todo" ? undefined : picked.color, borderColor: picked.color }} className={cn("size-2 shrink-0 rounded-full", picked.tone === "todo" ? "border border-dashed border-primary" : picked.tone === "class" ? "bg-muted-foreground/40" : picked.tone === "event" ? "bg-chart-5" : "bg-primary")} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{picked.title}</p>
-              <p className="truncate text-xs text-muted-foreground tabular-nums">
-                {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(picked.end - picked.start), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
-              </p>
+          <div aria-label="Selected block" className="grid gap-2.5 rounded-lg border bg-card p-3" role="region">
+            <div className="flex items-start gap-2.5">
+              {swatch(picked, "mt-1.5")}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{picked.title}</p>
+                <p className="truncate text-xs text-muted-foreground tabular-nums">
+                  {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(picked.end - picked.start), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              <Button aria-label="Close details" onClick={() => setSelected(null)} size="icon-xs" variant="ghost"><X /></Button>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
-              {picked.session && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
-              <Button onClick={() => zoomTo(picked)} size="xs" variant="outline"><ZoomIn />Zoom</Button>
+            {siblings.length > 1 ? (
+              <div aria-label="Intervals" className="flex flex-wrap items-center gap-1 pl-4.5" role="group">
+                {siblings.map((item, index) => (
+                  <Button aria-pressed={item.key === picked.key} className="tabular-nums" key={item.key} onClick={() => setSelected(item.key)} size="xs" variant={item.key === picked.key ? "secondary" : "ghost"}>
+                    {index + 1}. {clock(item.start)}–{clock(item.end)}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-1 pl-4.5">
+              {picked.session ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.completed ? undefined : picked.session?.id)} size="xs"><Timer />{isPaused(picked.session) ? "Resume" : isRunning(picked.session) ? "Open timer" : picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
+              {picked.session && continuableToday(picked.session, nowMs) ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.id)} size="xs" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
               {picked.session && !timing(picked.session) ? (
                 <Button disabled={!picked.session.completed && picked.end > now} onClick={() => toggleDone(picked.session!)} size="xs" title={!picked.session.completed && picked.end > now ? "It hasn't finished yet" : undefined} variant="outline">
                   {picked.session.completed ? <><RotateCcw />Not done</> : <><Check />Mark done</>}
                 </Button>
               ) : null}
-              {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="outline"><Scissors />Split</Button> : null}
+              {picked.session && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
-              {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="outline"><CalendarPlus />Repeat tomorrow</Button> : null}
-              {picked.session && continuableToday(picked.session, nowMs) ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.id)} size="xs" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
-              {picked.session ? <Button onClick={() => onStartFocus(picked.session?.subject_id ?? undefined, picked.title, picked.session?.completed ? undefined : picked.session?.id)} size="xs" variant="outline"><Timer />{picked.session && isPaused(picked.session) ? "Resume" : picked.session && isRunning(picked.session) ? "Open timer" : picked.tone === "todo" ? "Start" : "Study again"}</Button> : null}
+              {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="ghost"><Scissors />Split</Button> : null}
+              {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="ghost"><CalendarPlus />Repeat tomorrow</Button> : null}
+              <Button onClick={() => zoomTo(picked)} size="xs" variant="ghost"><ZoomIn />Zoom</Button>
               {picked.session && picked.tone !== "live" ? (
                 confirmRemove
-                  ? <Button onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>
-                  : <Button aria-label="Remove" onClick={() => setConfirmRemove(true)} size="xs" variant="outline"><Trash2 />Remove</Button>
+                  ? <Button className="ml-auto" onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>
+                  : <Button aria-label="Remove" className="ml-auto text-muted-foreground hover:text-destructive" onClick={() => setConfirmRemove(true)} size="xs" variant="ghost"><Trash2 />Remove</Button>
               ) : null}
-              <Button aria-label="Close details" onClick={() => setSelected(null)} size="icon-xs" variant="ghost"><X /></Button>
             </div>
           </div>
         ) : null}
 
         {draft ? (
-          <form className="grid gap-2 rounded-xl border bg-muted/20 p-3 sm:p-4" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium">{mode === "plan" ? "Schedule" : "Log"}</span>
+          <form className="grid gap-3 rounded-lg border bg-card p-3" onKeyDown={(event) => { if (event.key === "Escape") setDraft(null) }} onSubmit={submit}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">{mode === "plan" ? "Schedule study" : "Log study"}</span>
               <Input aria-label="Start time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, start: minute }) }} type="time" value={hhmm(draft.start)} />
               <span aria-hidden className="text-muted-foreground">–</span>
               <Input aria-label="End time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, end: minute }) }} type="time" value={hhmm(draft.end)} />
               <span className="text-xs text-muted-foreground tabular-nums">{draft.end > draft.start ? duration(draft.end - draft.start) : ""}</span>
               <Button aria-label="Cancel" className="ml-auto" onClick={() => setDraft(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
-            </div>
-            <div aria-label="Length" className="flex flex-wrap items-center gap-1" role="group">
-              {[15, 30, 45, 60, 90].map((minutes) => (
-                <Button key={minutes} onClick={() => setDraft({ ...draft, end: Math.min(LAST_MINUTE, draft.start + minutes) })} size="xs" type="button" variant={draft.end - draft.start === minutes ? "default" : "outline"}>{duration(minutes)}</Button>
-              ))}
-              {clash.length ? <span className="ml-1 text-xs text-muted-foreground">Overlaps {clash.slice(0, 2).map((block) => block.title).join(", ")}{clash.length > 2 ? ` +${clash.length - 2}` : ""}</span> : null}
             </div>
             {options.length > 12 ? (
               <select aria-label="Subject" className="h-7 w-fit rounded-md border bg-background px-1.5 text-xs" onChange={(event) => setSubjectId(event.target.value)} value={subjectId}>
@@ -887,15 +909,28 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               </select>
             ) : (
               <div aria-label="Subject" className="flex flex-wrap gap-1" role="radiogroup">
-                {options.map((option) => (
-                  <Button aria-checked={subjectId === option.id} key={option.id} onClick={() => setSubjectId(option.id)} role="radio" size="xs" type="button" variant={subjectId === option.id ? "default" : "outline"}>{option.name}</Button>
-                ))}
+                {options.map((option) => {
+                  const color = subjectColor(option.id)
+                  return (
+                    <Button aria-checked={subjectId === option.id} key={option.id} onClick={() => setSubjectId(option.id)} role="radio" size="xs" type="button" variant={subjectId === option.id ? "secondary" : "outline"} className={cn(subjectId === option.id && "ring-1 ring-foreground/20")}>
+                      <span aria-hidden className="size-1.5 rounded-full bg-primary" style={color ? { backgroundColor: color } : undefined} />{option.name}
+                    </Button>
+                  )
+                })}
               </div>
             )}
-            <label className={cn("flex w-fit items-center gap-2 text-xs", draft.end > now && "text-muted-foreground")}>
-              <input checked={done} className="size-3.5 accent-primary" disabled={draft.end > now} onChange={(event) => setDoneOverride(event.target.checked)} type="checkbox" />
-              Done{draft.end > now ? " (it hasn't finished yet)" : ""}
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div aria-label="Length" className="flex flex-wrap items-center gap-1" role="group">
+                {[15, 30, 45, 60, 90].map((minutes) => (
+                  <Button className="tabular-nums" key={minutes} onClick={() => setDraft({ ...draft, end: Math.min(LAST_MINUTE, draft.start + minutes) })} size="xs" type="button" variant={draft.end - draft.start === minutes ? "secondary" : "ghost"}>{duration(minutes)}</Button>
+                ))}
+                {clash.length ? <span className="ml-1 text-xs text-muted-foreground">Overlaps {clash.slice(0, 2).map((block) => block.title).join(", ")}{clash.length > 2 ? ` +${clash.length - 2}` : ""}</span> : null}
+              </div>
+              <label className={cn("flex w-fit items-center gap-2 text-xs", draft.end > now && "text-muted-foreground")}>
+                <input checked={done} className="size-3.5 accent-primary" disabled={draft.end > now} onChange={(event) => setDoneOverride(event.target.checked)} type="checkbox" />
+                Done{draft.end > now ? " (it hasn't finished yet)" : ""}
+              </label>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Input aria-label="Study title" className="h-8 min-w-0 flex-1 basis-40" onChange={(event) => setTitle(event.target.value)} placeholder={`${options.find((option) => option.id === subjectId)?.name ?? "Study"} study`} ref={titleInput} value={title} />
               <Button disabled={busy || !(draft.end > draft.start)} type="submit">{busy ? "Saving…" : `${mode === "plan" ? "Schedule" : "Log"}${draft.end > draft.start ? ` ${duration(draft.end - draft.start)}` : ""}`}</Button>
@@ -903,7 +938,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}
           </form>
         ) : null}
-      </CardContent>
+      </div>
     </Card>
   )
 

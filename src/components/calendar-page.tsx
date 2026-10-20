@@ -566,7 +566,7 @@ function DayCell({ day, active, weekend, onSelect }: {
           )
         })}
         {overflow > 0 || done > 0 ? (
-          <span className="flex items-center gap-2 px-1 pt-0.5 text-[0.6875rem] leading-tight text-muted-foreground tabular-nums">
+          <span className="flex flex-wrap items-center gap-x-2 px-1 pt-0.5 text-[0.6875rem] leading-tight whitespace-nowrap text-muted-foreground tabular-nums">
             {overflow > 0 ? <span>+{overflow} more</span> : null}
             {done > 0 ? <span className="flex items-center gap-0.5"><Check aria-hidden className="size-3" />{done} done</span> : null}
           </span>

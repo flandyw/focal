@@ -1,5 +1,6 @@
 import { VCE_SUBJECTS, type Project, type StudySession } from "./types"
 export { cn } from "./utils"
+import { studySubjectId } from "./studySubjects"
 
 export function getSubjectById(id?: string) {
   if (!id || id === "_unassigned") return undefined
@@ -8,8 +9,9 @@ export function getSubjectById(id?: string) {
 }
 
 export function getSessionSubjectIds(session: StudySession, project?: Project): string[] {
-  if (session.subjectIds.length > 0) return session.subjectIds
-  return project?.subjectId ? [project.subjectId] : []
+  const ids = session.subjectIds.length > 0 ? session.subjectIds : project?.subjectId ? [project.subjectId] : []
+  // Names, ids and short codes for one subject must group together.
+  return [...new Set(ids.map((id) => studySubjectId(id)))]
 }
 
 export function getSessionEffectiveMinutes(session: StudySession): number {

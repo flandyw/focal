@@ -30,11 +30,11 @@ import {
   type DayItem,
   type DayPlanSource,
 } from "../lib/day-plan"
-import { classPeriodsOn, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
+import { classPeriodsOn, getTimetablePeriodError, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
-import type { CalendarEvent, TimetableConfig } from "../lib/types"
+import type { CalendarEvent, TimetableConfig, TimetablePeriod } from "../lib/types"
 import type { TextEventDraft } from "../lib/calendarImport"
 import { isPaused, isRunning, type StudySessionEdit, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import type { PastStudyLog } from "../lib/pastStudy"
@@ -105,6 +105,7 @@ export function CalendarPage({
   timetable,
   subjects,
   classTimetable,
+  onClassTimetableChange,
   onEventsChange,
   onOpenTimetable,
   onPlanSessions,
@@ -123,6 +124,7 @@ export function CalendarPage({
   timetable: Timetable | null
   subjects: string[]
   classTimetable?: TimetableConfig
+  onClassTimetableChange: (config: TimetableConfig) => void
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
   onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: { start: string; end: string }[] }>) => Promise<number>
@@ -250,6 +252,15 @@ export function CalendarPage({
   }
 
   const classes = useMemo(() => classPeriodsOn(selected, classTimetable), [selected, classTimetable])
+
+  function editClass(period: TimetablePeriod, patch: { startTime: string; endTime: string }) {
+    if (!classTimetable) throw new Error("The class timetable is unavailable.")
+    const invalid = getTimetablePeriodError({ ...period, ...patch })
+    if (invalid) throw new Error(invalid)
+    onClassTimetableChange({ ...classTimetable, entries: classTimetable.entries.map((entry) => ({
+      ...entry, periods: entry.periods.map((item) => item === period ? { ...item, ...patch } : item),
+    })) })
+  }
 
   function add() {
     if (!title.trim()) return setError("Enter a task name.")
@@ -490,6 +501,10 @@ export function CalendarPage({
         onPlan={(entry) => onPlanSessions([entry]).then(() => undefined)}
         onRemove={onRemoveSession}
         onEdit={onEditSession}
+        onEditEvent={(event, patch) => onEventsChange((current) => current.map((item) => item.id === event.id ? { ...item, ...patch, updated_at: new Date().toISOString() } : item))}
+        onEditClass={editClass}
+        onOpenEvent={(event) => setEventDialog({ event, key: Date.now() })}
+        onOpenClass={onOpenTimetable}
         onMerge={onMergeSessions}
         onOpenSession={(session) => editSession(session.id)}
         onStartFocus={onStartFocus}

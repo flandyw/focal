@@ -741,7 +741,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             setData(next)
             try { await studySessionSync.remove(session) }
             catch (error) { throw new Error(`Events saved, but the study session could not be removed. Retry conversion to finish. ${error instanceof Error ? error.message : ""}`) }
-          }} classTimetable={data.classTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent, sessionId) => {
+          }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent, sessionId) => {
             if (!sessionId) { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus"); return }
             const session = studySessionSync.sessions.find((row) => row.id === sessionId)
             if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }

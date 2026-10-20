@@ -23,6 +23,9 @@ interface Block {
   key: string; start: number; end: number; tone: Tone
   title: string; subject?: string; short: string; color?: string
   session?: CanonicalStudySession
+  interval?: number
+  event?: CalendarEvent
+  period?: TimetablePeriod
 }
 type Range = { start: number; end: number }
 
@@ -120,7 +123,7 @@ function zoomWindow(window: Range, factor: number, center: number): Range {
  * (future) a block, then drag its edges or body to adjust it. Ctrl/pinch-scroll zooms, the
  * overview strip pans, and tiny blocks stay readable through chips and the detail row.
  */
-export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onMerge, onOpenSession, onStartFocus }: {
+export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, events, subjects, onLog, onPlan, onRemove, onEdit, onEditEvent, onEditClass, onOpenEvent, onOpenClass, onMerge, onOpenSession, onStartFocus }: {
   date: string
   nowMs: number
   onDateChange: (date: string) => void
@@ -134,6 +137,10 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   onRemove?: (session: CanonicalStudySession) => Promise<void>
   /** Moves or resizes a session's block, or marks it done or not done. */
   onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
+  onEditEvent: (event: CalendarEvent, patch: { startTime: string; endTime: string }) => void
+  onEditClass: (period: TimetablePeriod, patch: { startTime: string; endTime: string }) => void
+  onOpenEvent: (event: CalendarEvent) => void
+  onOpenClass: () => void
   onMerge: (sessions: CanonicalStudySession[]) => Promise<void>
   onOpenSession: (session: CanonicalStudySession) => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
@@ -148,17 +155,17 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
   const blocks = useMemo(() => {
     const out: Block[] = []
-    for (const period of classes) {
+    for (const [index, period] of classes.entries()) {
       const start = parseHhmm(period.startTime)
       const end = parseHhmm(period.endTime)
       const title = period.subject || period.period
-      if (end > start) out.push({ key: `class-${period.period}-${start}`, start, end, tone: "class", title: `${title} (class)`, short: title.slice(0, 3) })
+      if (end > start) out.push({ key: `class-${index}`, start, end, period, tone: "class", title: `${title} (class)`, short: title.slice(0, 3) })
     }
     for (const event of events) {
       if (event.deleted_at) continue
       const start = minuteOf(date, event.startTime)
       const end = event.endTime ? minuteOf(date, event.endTime) : start + 60
-      if (end > 0 && start < DAY) out.push({ key: `event-${event.id}`, start, end: Math.max(end, start + 15), tone: "event", title: event.title, short: event.title.slice(0, 3) })
+      if (end > 0 && start < DAY) out.push({ key: `event-${event.id}`, start, end: end > start ? end : start + 15, event, tone: "event", title: event.title, short: event.title.slice(0, 3) })
     }
     for (const session of sessions) {
       const subject = VCE_SUBJECTS.find((item) => item.id === session.subject_id)
@@ -167,7 +174,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
         const end = minuteOf(date, block.end)
         if (end <= 0 || start >= DAY) return
         out.push({
-          key: `session-${session.id}-${index}`, start, end, session,
+          key: `session-${session.id}-${index}`, start, end, session, interval: index,
           tone: block.live ? "live" : session.completed || session.started_at !== null ? "done" : "todo",
           title: session.title, subject: subject?.name ?? session.subject_id ?? undefined,
           short: subject?.shortCode ?? session.title.slice(0, 3), color: subjectColor(session.subject_id),
@@ -367,13 +374,14 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     onPointerCancel: () => setEditing(null),
   })
 
-  /** Any block of a session that is not being timed, with one block, fully inside the day, can be dragged or resized. */
-  const movable = (block: Block) => Boolean(block.session && block.tone !== "live" && !timing(block.session) && block.start > 0 && block.end < DAY && blocks.filter((other) => other.session === block.session).length === 1)
+  /** Timers own their intervals until stopped; all other blocks can be adjusted. */
+  const movable = (block: Block) => Boolean(block.event || block.period || (block.session && !timing(block.session)))
   const adjustProps = (block: Block, kind: "start" | "end" | "move") => ({
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-      if (event.button !== 0 || adjust?.saving) return
       event.stopPropagation()
-      event.currentTarget.setPointerCapture(event.pointerId)
+      if (event.button !== 0 || adjust || busy) return
+      // Keep capture on the block while its handles and labels re-render.
+      event.currentTarget.closest("button")!.setPointerCapture(event.pointerId)
       setAdjust({ key: block.key, kind, offset: minuteAt(event.clientX, kind !== "move") - block.start, range: { start: block.start, end: block.end }, moved: false, saving: false })
     },
     onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
@@ -385,14 +393,15 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
         : adjust.kind === "end" ? { start: range.start, end: Math.max(minute, range.start + SNAP) }
         : (() => {
           const length = range.end - range.start
-          const start = Math.max(SNAP, Math.min(snap(minute - adjust.offset), DAY - SNAP - length))
+          const start = Math.max(0, Math.min(snap(minute - adjust.offset), (block.period ? LAST_MINUTE : DAY) - length))
           return { start, end: start + length }
         })()
       if (next.start !== range.start || next.end !== range.end) setAdjust({ ...adjust, range: next, moved: true })
     },
     onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
+      event.stopPropagation()
       if (!adjust || adjust.key !== block.key || adjust.saving) return
-      if (!adjust.moved || !block.session) return setAdjust(null)
+      if (!adjust.moved) return setAdjust(null)
       // The drag ended on this element, so the click that follows must not also select it.
       event.preventDefault()
       suppressClick.current = true
@@ -402,13 +411,29 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     onPointerCancel: () => setAdjust(null),
   })
 
-  function persist(block: Block, range: Range, kind: "start" | "end" | "move" = "move") {
-    if (!block.session) return
+  async function persist(block: Block, range: Range, kind: "start" | "end" | "move" = "move") {
     setAdjust({ key: block.key, kind, offset: 0, range, moved: true, saving: true })
-    onEdit(block.session, { blocks: [{ start: isoAt(date, range.start), end: isoAt(date, range.end) }] })
-      .then(() => toast.success(`Moved to ${clock(range.start)}–${clock(range.end)}`))
-      .catch((failure) => toast.error(failure instanceof Error ? failure.message : "Could not move that block."))
-      .finally(() => setAdjust(null))
+    // Keep the portions outside this day, and every other interval, when editing a clipped block.
+    const shift = (start: string, end: string) => ({
+      start: kind === "end" ? start : kind === "start" ? isoAt(date, range.start) : new Date(Date.parse(start) + (range.start - block.start) * 60_000).toISOString(),
+      end: kind === "start" ? end : kind === "end" ? isoAt(date, range.end) : new Date(Date.parse(end) + (range.end - block.end) * 60_000).toISOString(),
+    })
+    try {
+      if (block.session) {
+        const intervals = sessionBlocks(block.session, nowMs).map(({ start, end }, index) => index === block.interval ? shift(start, end) : { start, end })
+        await onEdit(block.session, { blocks: intervals })
+      } else if (block.event) {
+        const { start, end } = shift(block.event.startTime, block.event.endTime ?? new Date(Date.parse(block.event.startTime) + 60 * 60_000).toISOString())
+        onEditEvent(block.event, { startTime: start, endTime: end })
+      } else if (block.period) {
+        onEditClass(block.period, { startTime: hhmm(range.start), endTime: hhmm(range.end) })
+      }
+      toast.success(`Updated to ${clock(range.start)}–${clock(range.end)}`)
+    } catch (failure) {
+      toast.error(failure instanceof Error ? failure.message : "Could not update that block.")
+    } finally {
+      setAdjust(null)
+    }
   }
 
   /** Arrow keys move a focused block by 5 minutes (15 with Shift); Alt resizes its end instead. */
@@ -418,8 +443,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     event.preventDefault()
     const delta = direction * (event.shiftKey ? 15 : SNAP)
     const range = event.altKey
-      ? { start: block.start, end: Math.max(block.start + SNAP, Math.min(DAY - SNAP, block.end + delta)) }
-      : { start: Math.max(SNAP, Math.min(block.start + delta, DAY - SNAP - (block.end - block.start))), end: 0 }
+      ? { start: block.start, end: Math.max(block.start + SNAP, Math.min(block.period ? LAST_MINUTE : DAY, block.end + delta)) }
+      : { start: Math.max(0, Math.min(block.start + delta, (block.period ? LAST_MINUTE : DAY) - (block.end - block.start))), end: 0 }
     if (!event.altKey) range.end = range.start + block.end - block.start
     if (range.start === block.start && range.end === block.end) return
     reveal(range)
@@ -457,7 +482,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   }
 
   /** A block the razor can cut: one that may be edited, whose session has a subject for the new half. */
-  const splittable = (block: Block) => movable(block) && Boolean(block.session?.subject_id)
+  const splittable = (block: Block) => movable(block) && Boolean(block.session?.subject_id) && sessionBlocks(block.session!, nowMs).length === 1 && block.start > 0 && block.end < DAY
   /** Where a click without a pointer cuts: the current time if it is inside the block, else the middle. */
   const splitPoint = (block: Block) => snap(isToday && now - block.start >= SNAP && block.end - now >= SNAP ? now : (block.start + block.end) / 2)
 
@@ -541,6 +566,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
       return
     }
     setSelected((current) => current === block.key ? null : block.key)
+    if (pixels(block) < 36) zoomTo(block)
     setConfirmRemove(false)
     setDraft(null)
   }
@@ -688,20 +714,32 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
           {/* Context lane: what the day already holds. */}
           {context.some(shown) ? (
             <div className="relative border-b border-dashed border-border" style={{ height: contextRows.rows * 24 + 8 }}>
-              {context.filter(shown).map((block) => (
-                <button
-                  aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
-                  aria-pressed={blockSelected(block)}
-                  className={cn("absolute h-5 min-w-0 truncate rounded-sm text-left text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-1.5" : "px-0", selected === block.key && "ring-2 ring-foreground/60")}
-                  key={block.key}
-                  onClick={() => select(block)}
-                  style={{ ...place(block.start, block.end), top: 4 + (contextRows.row.get(block.key) ?? 0) * 24 }}
-                  title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
-                  type="button"
-                >
-                  {pixels(block) >= 60 ? block.title : null}
-                </button>
-              ))}
+              {context.filter(shown).map((live) => {
+                const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
+                const grab = movable(block) && !selecting && !busy && !razor
+                return (
+                  <button
+                    aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
+                    aria-pressed={blockSelected(block)}
+                    className={cn("group/block absolute h-5 min-w-0 touch-none rounded-sm text-left text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-3" : "px-0", selected === block.key && "z-10 min-w-6 ring-2 ring-foreground/60", grab && "cursor-grab active:cursor-grabbing")}
+                    key={block.key}
+                    onClick={() => select(block)}
+                    onDoubleClick={() => zoomTo(block)}
+                    onKeyDown={(event) => blockKey(event, live)}
+                    style={{ ...place(block.start, block.end), top: 4 + (contextRows.row.get(live.key) ?? 0) * 24 }}
+                    {...(grab ? adjustProps(live, "move") : {})}
+                    title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
+                    type="button"
+                  >
+                    {pixels(block) >= 60 ? <span className="block truncate">{block.title}</span> : null}
+                    {grab ? (["start", "end"] as const).map((kind) => (
+                      <span aria-hidden className={cn("absolute inset-y-0 flex cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} style={{ width: "min(0.625rem, 34%)" }} {...adjustProps(live, kind)}>
+                        <span className="h-3 w-0.5 rounded-full bg-current opacity-50 transition-opacity group-hover/block:opacity-100 group-focus-visible/block:opacity-100" />
+                      </span>
+                    )) : null}
+                  </button>
+                )
+              })}
             </div>
           ) : null}
 
@@ -737,21 +775,21 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={blockSelected(block)}
                   disabled={selecting && (block.session?.kind !== "focus" || timing(block.session))}
-                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-md text-left text-xs leading-4 whitespace-nowrap shadow-xs transition-[filter,box-shadow] hover:brightness-105 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-2" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "ring-2 ring-ring ring-offset-1 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-md text-left text-xs leading-4 whitespace-nowrap shadow-xs transition-[filter,box-shadow] hover:brightness-105 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-3" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "z-10 min-w-6 ring-2 ring-ring ring-offset-1 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={(event) => razor ? split(block, event.detail ? minuteAt(event.clientX, false) : splitPoint(block)) : select(block)}
                   onDoubleClick={() => { if (!razor && !selecting) zoomTo(block) }}
-                  onKeyDown={(event) => blockKey(event, block)}
+                  onKeyDown={(event) => blockKey(event, live)}
                   style={{ ...place(block.start, block.end), top: 8 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
-                  {...(grab && !razor ? adjustProps(block, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
+                  {...(grab && !razor ? adjustProps(live, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
                   type="button"
                 >
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
                   {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75 tabular-nums">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)}`}</span> : null}
                   {grab && !razor ? (["start", "end"] as const).map((kind) => (
-                    <span aria-hidden className={cn("absolute inset-y-0 flex cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} style={{ width: "min(0.625rem, 34%)" }} {...adjustProps(block, kind)}>
-                      <span className="h-4 w-0.5 rounded-full bg-current opacity-0 transition-opacity group-hover/block:opacity-70" />
+                    <span aria-hidden className={cn("absolute inset-y-0 flex cursor-ew-resize items-center justify-center", kind === "start" ? "left-0" : "right-0")} key={kind} style={{ width: "min(0.625rem, 34%)" }} {...adjustProps(live, kind)}>
+                      <span className="h-4 w-0.5 rounded-full bg-current opacity-50 transition-opacity group-hover/block:opacity-100 group-focus-visible/block:opacity-100" />
                     </span>
                   )) : null}
                 </button>
@@ -880,6 +918,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                 </Button>
               ) : null}
               {picked.session && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
+              {picked.event ? <Button onClick={() => onOpenEvent(picked.event!)} size="xs" variant="outline">Edit</Button> : null}
+              {picked.period ? <Button onClick={onOpenClass} size="xs" variant="outline">Edit timetable</Button> : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
               {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="ghost"><Scissors />Split</Button> : null}
               {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="ghost"><CalendarPlus />Repeat tomorrow</Button> : null}
@@ -890,6 +930,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   : <Button aria-label="Remove" className="ml-auto text-muted-foreground hover:text-destructive" onClick={() => setConfirmRemove(true)} size="xs" variant="ghost"><Trash2 />Remove</Button>
               ) : null}
             </div>
+            {picked.period ? <p className="pl-4.5 text-xs text-muted-foreground">Changes apply to this period throughout the timetable cycle.</p> : null}
+            {picked.session && timing(picked.session) ? <p className="pl-4.5 text-xs text-muted-foreground">Stop the timer to move or resize this session's intervals.</p> : null}
           </div>
         ) : null}
 

@@ -21,6 +21,7 @@ const ANALYSIS_NAVIGATION: NavigationItem[] = [
   { id: "goals" as const, label: "Goals", description: "Work backwards from score targets" },
   { id: "predictor" as const, label: "Study score", description: "Estimate study scores and ATAR" },
   { id: "vcaa" as const, label: "VCAA data", description: "Compare grades and open matching papers" },
+  { id: "friends" as const, label: "Friends", description: "Live study and a study-time leaderboard" },
 ]
 
 export const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [

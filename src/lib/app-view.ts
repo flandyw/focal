@@ -13,6 +13,7 @@ const APP_VIEWS = [
   "goals",
   "predictor",
   "vcaa",
+  "friends",
   "settings",
 ] as const
 

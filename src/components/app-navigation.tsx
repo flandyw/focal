@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp, Users } from "lucide-react"
+import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -41,7 +41,7 @@ const NAVIGATION_ICONS = {
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
-  predictor: TrendingUp, vcaa: ChartColumn,
+  predictor: TrendingUp, vcaa: ChartColumn, friends: UsersRound,
 }
 
 /** Minutes actually spent in a sitting: finished segments plus the one in progress. */

@@ -97,14 +97,14 @@ export function ChatPage({ userId, subject, onSignIn, onSettings }: { userId?: s
     if (currentChat.id === chat.id) selectChat(newLocalChat(owner, settings.model || catalog?.defaultModel || ""))
   }} /> : null
 
-  return <div className="flex h-[calc(100dvh-7rem)] min-h-96 overflow-hidden rounded-lg border bg-card lg:h-[calc(100dvh-4rem)]">
-    {!compact && sidebarVisible ? <aside aria-label="Conversations" className="w-56 shrink-0 border-r bg-muted/40">{history}</aside> : null}
+  return <div className="flex min-h-0 flex-1 overflow-hidden">
+    {!compact && sidebarVisible ? <aside aria-label="Conversations" className="w-60 shrink-0 border-r">{history}</aside> : null}
     {compact ? <Sheet open={historyOpen} onOpenChange={setHistoryOpen}><SheetContent side="left" className="gap-0">
       <SheetHeader><SheetTitle>Chats</SheetTitle><SheetDescription>Conversations saved on this device.</SheetDescription></SheetHeader>
       {history}
     </SheetContent></Sheet> : null}
     <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-3">
+      <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-4 sm:px-6">
         <Button size="icon" variant="ghost" aria-label={compact || !sidebarVisible ? "Open chat history" : "Hide chat history"} aria-expanded={compact ? historyOpen : sidebarVisible} onClick={() => compact ? setHistoryOpen(true) : setSidebarVisible(!sidebarVisible)}><PanelLeft aria-hidden /></Button>
         <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-medium">{currentChat?.title ?? "Chat"}</h1>
         {compact || !sidebarVisible ? <Button size="icon" variant="ghost" aria-label="New chat" disabled={busy || !currentChat} onClick={newChat}><Plus aria-hidden /></Button> : null}
@@ -195,12 +195,12 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
               {messages.length === 0 ? (
                 <Empty className="min-h-[50dvh] bg-transparent p-4">
                   <EmptyHeader>
-                    <EmptyTitle className="text-xl font-semibold tracking-tight">{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
+                    <EmptyTitle>{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
                     <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings > AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
                   </EmptyHeader>
                   {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
                     {([[Target, "What should I focus on today?"], [TrendingDown, "Where am I losing marks?"], [CalendarDays, "Help me plan my study for this week."]] as const).map(([Icon, prompt]) => (
-                      <Button key={prompt} variant="outline" className="h-auto flex-col items-start gap-3 whitespace-normal p-3 text-left font-normal" onClick={() => send(prompt)}>
+                      <Button key={prompt} variant="ghost" className="h-auto flex-col items-start gap-3 whitespace-normal p-3 text-left font-normal" onClick={() => send(prompt)}>
                         <Icon aria-hidden className="text-primary" />{prompt}
                       </Button>
                     ))}
@@ -251,14 +251,14 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
           {messages.length > 0 ? <MessageScrollerButton /> : null}
         </MessageScroller>
       </MessageScrollerProvider>
-      <div className="mx-auto w-full max-w-3xl shrink-0 space-y-2 px-4 pb-3 sm:px-6 sm:pb-4">
+      <div className="mx-auto w-full max-w-3xl shrink-0 space-y-2 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
         {catalogError ? <p role="alert" className="text-sm text-destructive">{catalogError} <Button size="sm" variant="outline" disabled={busy} onClick={onRetryCatalog}>Retry</Button></p> : null}
         {saveError ? <p role="alert" className="text-sm text-destructive">{saveError} <Button size="sm" variant="outline" onClick={() => { void persist() }}>Retry save</Button></p> : null}
         {catalog?.hasKey && model && !catalog.models.some((entry) => entry.id === model) ? <p role="status" className="text-sm text-muted-foreground">The saved model is unavailable. Choose another model to continue this chat.</p> : null}
         {error ? <Alert variant="destructive"><AlertTitle>Chat could not finish</AlertTitle><AlertDescription>{error.message} Check your records before repeating a change.</AlertDescription></Alert> : null}
         {stopped ? <p role="status" className="text-xs text-muted-foreground">Response interrupted. Changes may have saved; check your records before continuing.</p> : null}
         <form onSubmit={(event) => { event.preventDefault(); send() }}>
-          <InputGroup className="rounded-xl shadow-xs">
+          <InputGroup className="rounded-lg">
             <InputGroupTextarea autoFocus aria-label="Message Focal" placeholder="Ask about your study…" className="max-h-48 min-h-14 px-3.5 pt-3" value={input} onChange={(event) => setInput(event.target.value)} disabled={!available} maxLength={12000} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
             }} />

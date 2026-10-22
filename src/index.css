@@ -296,8 +296,8 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 :root { --app-font-body: "Instrument Sans Variable", sans-serif; --app-font-heading: "Newsreader", Georgia, serif; }
 @theme inline { --font-sans: var(--app-font-body); --font-heading: var(--app-font-heading); }
 .typeset-mistake { --typeset-leading: var(--reading-spacing, 1.6); }
-[data-content-width="wide"] #main-content { max-width: 1440px; margin-inline: auto; }
-[data-content-width="reading"] #main-content { max-width: 1000px; margin-inline: auto; }
+[data-content-width="wide"] #main-content:not([data-view="chat"]) { max-width: 1440px; margin-inline: auto; }
+[data-content-width="reading"] #main-content:not([data-view="chat"]) { max-width: 1000px; margin-inline: auto; }
 [data-density="compact"] .focal-navigation [data-sidebar="menu-button"] { min-height: 2rem; height: auto; padding-block: .3rem; }
 [data-density="comfortable"] .focal-navigation [data-sidebar="menu-button"] { min-height: 2.75rem; height: auto; }
 @media (min-width: 1024px) {

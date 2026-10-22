@@ -706,7 +706,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" tabIndex={-1} className="w-full min-w-0 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem)] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
               <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>
@@ -758,7 +758,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               <Button size="sm" variant="outline" onClick={reloadReferences}>Retry</Button>
             </Alert>
           ) : null}
-          <div key={`${view}:${subjectScoped ? selectedSubject : "all"}`} className="page-enter">
+          <div key={`${view}:${subjectScoped ? selectedSubject : "all"}`} className={`page-enter ${view === "chat" ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           {view === "exams" ? (
             <Suspense fallback={PAGE_LOADING}>
               <ExamsPage

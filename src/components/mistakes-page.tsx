@@ -321,7 +321,7 @@ function BrowseRow({ mistake, active, selected, now, onOpen, onSelect, onReimpor
   return (
     <li className={"group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 p-4 " + (active ? "bg-accent" : "hover:bg-muted/50")}>
       <Checkbox className="mt-1" checked={selected} onCheckedChange={() => onSelect()} aria-label={"Select " + mistake.question} />
-      <Button variant="ghost" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid h-auto min-w-0 justify-items-stretch gap-2 rounded p-0 text-left font-normal whitespace-normal hover:bg-transparent">
+      <Button variant="ghost" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid h-auto min-w-0 grid-cols-1 justify-items-stretch gap-2 rounded p-0 text-left font-normal whitespace-normal hover:bg-transparent">
         <span className="line-clamp-2 break-words text-sm font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>
         <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy].filter(Boolean).join(" · ")}</span>
         <span className={"text-xs tabular-nums " + (isDue ? "font-medium text-primary" : "text-muted-foreground")}>{mistake.suspended ? "Reviews paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}{mistake.marksLost !== undefined ? ` · ${mistake.marksLost} marks lost` : ""}</span>

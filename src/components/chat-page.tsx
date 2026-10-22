@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
-import { ArrowUp, Check, Copy, LoaderCircle, PanelLeft, Plus, Square } from "lucide-react"
+import { ArrowUp, CalendarDays, Check, ChevronRight, Copy, LoaderCircle, PanelLeft, Plus, Square, Target, TrendingDown, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { CHAT_ENDPOINT, chatHeaders, gatewayCatalogSchema, type GatewayCatalog } from "../lib/gateway-client"
 import { chatMetadataSchema, deleteLocalChat, loadLocalChats, newLocalChat, saveChatSettings, saveLocalChat, type ChatMessage, type ChatSettings, type LocalChat } from "../lib/chat-history"
@@ -14,7 +14,7 @@ import { Button } from "./ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./ui/input-group"
 import { ModelSelector } from "./model-selector"
-import { Message, MessageContent } from "./ui/message"
+import { Message, MessageContent, MessageFooter } from "./ui/message"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet"
 import {
   MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem,
@@ -107,7 +107,7 @@ export function ChatPage({ userId, subject, onSignIn, onSettings }: { userId?: s
       <header className="flex min-h-14 shrink-0 items-center gap-2 border-b px-3">
         <Button size="icon" variant="ghost" aria-label={compact || !sidebarVisible ? "Open chat history" : "Hide chat history"} aria-expanded={compact ? historyOpen : sidebarVisible} onClick={() => compact ? setHistoryOpen(true) : setSidebarVisible(!sidebarVisible)}><PanelLeft aria-hidden /></Button>
         <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-medium">{currentChat?.title ?? "Chat"}</h1>
-        <Button size="icon" variant="ghost" aria-label="New chat" disabled={busy || !currentChat} onClick={newChat}><Plus aria-hidden /></Button>
+        {compact || !sidebarVisible ? <Button size="icon" variant="ghost" aria-label="New chat" disabled={busy || !currentChat} onClick={newChat}><Plus aria-hidden /></Button> : null}
       </header>
       {historyError ? <div role="alert" className="p-4 text-sm text-destructive">{historyError} <Button variant="outline" size="sm" onClick={() => setHistoryVersion((version) => version + 1)}>Retry</Button></div> : currentChat ? <ChatConversation key={currentChat.id} chat={currentChat} userId={userId} subject={subject} onSignIn={onSignIn} onSettings={onSettings} catalog={catalog} catalogError={catalogError} onRetryCatalog={() => setCatalogVersion((version) => version + 1)} favourites={settings.favourites} onToggleFavourite={(id) => updateSettings({ ...settings, favourites: settings.favourites.includes(id) ? settings.favourites.filter((entry) => entry !== id) : [...settings.favourites, id] })} onModelChange={(model) => updateSettings({ ...settings, model })} onSave={saveChat} onBusyChange={setBusy} /> : <div role="status" className="m-6 h-24 animate-pulse rounded-md bg-muted motion-reduce:animate-none"><span className="sr-only">Opening local chats…</span></div>}
     </div>
@@ -193,14 +193,16 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
           <MessageScrollerViewport>
             <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
               {messages.length === 0 ? (
-                <Empty className="bg-transparent p-4">
+                <Empty className="min-h-[50dvh] bg-transparent p-4">
                   <EmptyHeader>
-                    <EmptyTitle>{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
+                    <EmptyTitle className="text-xl font-semibold tracking-tight">{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
                     <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings > AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
                   </EmptyHeader>
-                  {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="flex flex-col items-center gap-2">
-                    {["What should I focus on today?", "Where am I losing marks?", "Help me plan my study for this week."].map((prompt) => (
-                      <Button key={prompt} variant="outline" className="h-auto whitespace-normal py-2 text-left" disabled={!available} onClick={() => send(prompt)}>{prompt}</Button>
+                  {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
+                    {([[Target, "What should I focus on today?"], [TrendingDown, "Where am I losing marks?"], [CalendarDays, "Help me plan my study for this week."]] as const).map(([Icon, prompt]) => (
+                      <Button key={prompt} variant="outline" className="h-auto flex-col items-start gap-3 whitespace-normal p-3 text-left font-normal" onClick={() => send(prompt)}>
+                        <Icon aria-hidden className="text-primary" />{prompt}
+                      </Button>
                     ))}
                   </div> : null}
                 </Empty>
@@ -221,29 +223,29 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
                         const failed = part.state === "output-error"
                         const working = busy && message.id === messages.at(-1)?.id
                         return (
-                          <details key={part.toolCallId} className="max-w-full rounded-md border px-3 py-2 text-sm">
-                            <summary className="cursor-pointer text-muted-foreground">
-                              <span className="inline-flex items-center gap-2">
-                                {finished ? <Check aria-hidden className="size-3.5" /> : !failed && working ? <LoaderCircle aria-hidden className="size-3.5 motion-safe:animate-spin" /> : null}
-                                {getToolName(part).replaceAll("_", " ")} · {finished ? "Done" : failed ? "Failed" : working ? "Working…" : "Outcome unknown"}
-                              </span>
+                          <details key={part.toolCallId} className="group/tool w-fit max-w-full text-xs text-muted-foreground open:w-full">
+                            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 hover:text-foreground [&::-webkit-details-marker]:hidden">
+                              {finished ? <Check aria-hidden className="size-3.5" /> : failed ? <TriangleAlert aria-hidden className="size-3.5 text-destructive" /> : working ? <LoaderCircle aria-hidden className="size-3.5 motion-safe:animate-spin" /> : null}
+                              <span className="first-letter:uppercase">{getToolName(part).replaceAll("_", " ")}</span>
+                              <span>· {finished ? "Done" : failed ? "Failed" : working ? "Working…" : "Outcome unknown"}</span>
+                              <ChevronRight aria-hidden className="size-3.5 transition-transform group-open/tool:rotate-90 motion-reduce:transition-none" />
                             </summary>
-                            <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify({ input: part.input, ...(finished ? { result: part.output } : failed ? { error: part.errorText } : {}) }, null, 2)}</pre>
+                            <pre className="mt-2 max-h-60 overflow-auto rounded-md bg-muted/40 p-3 font-mono whitespace-pre-wrap break-words">{JSON.stringify({ input: part.input, ...(finished ? { result: part.output } : failed ? { error: part.errorText } : {}) }, null, 2)}</pre>
                           </details>
                         )
                       })}
-                      {message.role === "assistant" && !(busy && message.id === messages.at(-1)?.id) ? <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 text-xs text-muted-foreground">
+                      {message.role === "assistant" && !(busy && message.id === messages.at(-1)?.id) ? <MessageFooter className={`flex-wrap gap-x-3 gap-y-1 font-normal transition-opacity motion-reduce:transition-none ${message.id === messages.at(-1)?.id ? "" : "pointer-fine:opacity-0 pointer-fine:group-hover/message:opacity-100 pointer-fine:group-focus-within/message:opacity-100"}`}>
                         {message.parts.some((part) => part.type === "text" && part.text) ? <Button size="icon-sm" variant="ghost" aria-label={copied === message.id ? "Response copied" : "Copy response"} onClick={() => { void copy(message) }}>{copied === message.id ? <Check aria-hidden /> : <Copy aria-hidden />}</Button> : null}
                         <span>{catalog?.models.find((model) => model.id === message.metadata?.model)?.name ?? message.metadata?.model}</span>
                         {message.metadata?.latencyMs != null ? <span title="Time to first model output, including reasoning or a tool call">{(message.metadata.latencyMs / 1000).toFixed(2)}s latency</span> : null}
                         {message.metadata?.tokensPerSecond != null ? <span title="Output tokens per second for the final model step">{message.metadata.tokensPerSecond.toFixed(1)} tok/s</span> : null}
                         {message.metadata?.outputTokens != null ? <span>{message.metadata.outputTokens.toLocaleString()} tokens</span> : null}
-                      </div> : null}
+                      </MessageFooter> : null}
                     </MessageContent>
                   </Message>
                 </MessageScrollerItem>
               ))}
-              {busy ? <p role="status" className="text-sm text-muted-foreground">{status === "submitted" ? "Connecting…" : "Working on your request…"}</p> : null}
+              {busy ? <p role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground"><LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />{status === "submitted" ? "Connecting…" : "Working on your request…"}</p> : null}
             </MessageScrollerContent>
           </MessageScrollerViewport>
           {messages.length > 0 ? <MessageScrollerButton /> : null}
@@ -252,17 +254,17 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
       <div className="mx-auto w-full max-w-3xl shrink-0 space-y-2 px-4 pb-3 sm:px-6 sm:pb-4">
         {catalogError ? <p role="alert" className="text-sm text-destructive">{catalogError} <Button size="sm" variant="outline" disabled={busy} onClick={onRetryCatalog}>Retry</Button></p> : null}
         {saveError ? <p role="alert" className="text-sm text-destructive">{saveError} <Button size="sm" variant="outline" onClick={() => { void persist() }}>Retry save</Button></p> : null}
-        {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={(value) => { setModel(value); onModelChange(value) }} favourites={favourites} onToggleFavourite={onToggleFavourite} disabled={busy} /> : null}
         {catalog?.hasKey && model && !catalog.models.some((entry) => entry.id === model) ? <p role="status" className="text-sm text-muted-foreground">The saved model is unavailable. Choose another model to continue this chat.</p> : null}
         {error ? <Alert variant="destructive"><AlertTitle>Chat could not finish</AlertTitle><AlertDescription>{error.message} Check your records before repeating a change.</AlertDescription></Alert> : null}
         {stopped ? <p role="status" className="text-xs text-muted-foreground">Response interrupted. Changes may have saved; check your records before continuing.</p> : null}
         <form onSubmit={(event) => { event.preventDefault(); send() }}>
-          <InputGroup>
-            <InputGroupTextarea autoFocus aria-label="Message Focal" placeholder="Ask about your study…" className="max-h-40 min-h-16" value={input} onChange={(event) => setInput(event.target.value)} disabled={!available} maxLength={12000} onKeyDown={(event) => {
+          <InputGroup className="rounded-xl shadow-xs">
+            <InputGroupTextarea autoFocus aria-label="Message Focal" placeholder="Ask about your study…" className="max-h-48 min-h-14 px-3.5 pt-3" value={input} onChange={(event) => setInput(event.target.value)} disabled={!available} maxLength={12000} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
             }} />
-            <InputGroupAddon align="block-end" className="justify-between">
-              <span className="text-xs">{subject === "all" ? "All subjects" : subject}</span>
+            <InputGroupAddon align="block-end" className="gap-1 pr-2">
+              {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={(value) => { setModel(value); onModelChange(value) }} favourites={favourites} onToggleFavourite={onToggleFavourite} disabled={busy} /> : null}
+              <span className="mr-auto truncate text-xs font-normal">{subject === "all" ? "All subjects" : subject}</span>
               {busy ? <InputGroupButton size="icon-sm" aria-label="Stop response" onClick={() => { setStopped(true); void stop() }}><Square aria-hidden /></InputGroupButton> : <InputGroupButton type="submit" size="icon-sm" variant="default" aria-label="Send message" disabled={!available || !input.trim()}><ArrowUp aria-hidden /></InputGroupButton>}
             </InputGroupAddon>
           </InputGroup>

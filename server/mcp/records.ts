@@ -106,7 +106,8 @@ export function recordTools(define: Define) {
   })
 
   define("delete_exam", "Delete an exam attempt AND every mistake logged against it.", { id: z.string() }, "delete", async ({ id }) => {
-    await updateApp((data) => { required(data.attempts.find((a) => a.id === id), "exam"); return removeAttempt(data, id) })
+    required((await readAll()).data.attempts.find((a) => a.id === id), "exam")
+    await updateApp((data) => removeAttempt(data, id))
   })
 
   define("set_exam_flag", "Tick or untick an exam in the VCAA library. `tracked`: id is a VCE exam-timetable entry id (see vce_exam_timetable) and adds it to the calendar/day plan. `completed`: id is a VCAA resource URL (see vcaa_exam_resources) marked done without logging a mark.",
@@ -120,11 +121,11 @@ export function recordTools(define: Define) {
 
   /* ------------------------------------------------------------- mistakes */
 
-  const mistakeView = (mistake: Mistake, attempts: ExamAttempt[]) => {
+  const mistakeView = (mistake: Mistake, attempts: Map<string, ExamAttempt>) => {
     const schedule = getMistakeSchedule(mistake)
-    const attempt = attempts.find((a) => a.id === mistake.attemptId)
+    const attempt = attempts.get(mistake.attemptId)
     return {
-      id: mistake.id, attemptId: mistake.attemptId || null, subject: attempt?.subject, paper: attempt?.paper, question: mistake.question,
+      id: mistake.id, attemptId: mistake.attemptId || null, subject: attempt?.subject ?? mistake.subject, paper: attempt?.paper, question: mistake.question,
       questionText: mistake.questionText, category: mistake.category, explanation: mistake.explanation, correction: mistake.correction,
       totalMarks: mistake.totalMarks, marksLost: mistake.marksLost, areaOfStudy: mistake.areaOfStudy, topic: mistake.topic, itemIds: mistake.itemIds,
       state: schedule.state, dueAt: schedule.dueAt, intervalDays: schedule.intervalDays, lapses: schedule.lapses,
@@ -148,8 +149,10 @@ export function recordTools(define: Define) {
     const { data } = await readAll()
     const now = Date.now()
     const needle = search?.toLowerCase()
+    const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
+    const schedules = new Map(data.mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
     const rows = data.mistakes.filter((mistake) => {
-      const schedule = getMistakeSchedule(mistake)
+      const schedule = schedules.get(mistake.id)!
       if (status === "suspended" ? !mistake.suspended : status !== "all" && mistake.suspended) return false
       if (status === "due" && Date.parse(schedule.dueAt) > now) return false
       if (status === "open" && schedule.resolved) return false
@@ -157,10 +160,10 @@ export function recordTools(define: Define) {
       if (category && mistake.category !== category) return false
       if (attemptId !== undefined && mistake.attemptId !== attemptId) return false
       if (topic && (topic.toLowerCase() === "none" ? mistake.topic : mistake.topic?.toLowerCase() !== topic.toLowerCase())) return false
-      if (subject && data.attempts.find((a) => a.id === mistake.attemptId)?.subject.toLowerCase() !== subject.toLowerCase()) return false
+      if (subject && (attempts.get(mistake.attemptId)?.subject ?? mistake.subject)?.toLowerCase() !== subject.toLowerCase()) return false
       return !needle || [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.areaOfStudy, mistake.topic].some((field) => field?.toLowerCase().includes(needle))
     })
-    const due = (m: Mistake) => getMistakeSchedule(m).dueAt
+    const due = (m: Mistake) => schedules.get(m.id)!.dueAt
     // The id tie-break keeps pages stable when many cards share a due time or creation time.
     rows.sort(status === "due" || status === "open" ? (a, b) => due(a).localeCompare(due(b)) || a.id.localeCompare(b.id) : (a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id))
     // ponytail: the cursor is the last id returned, found again by scan; O(n) per page, fine for a few thousand cards.
@@ -168,7 +171,7 @@ export function recordTools(define: Define) {
     if (cursor !== undefined && start === 0) throw new Error("That cursor no longer matches a card in this list (it was deleted or no longer fits the filters). Start again without cursor.")
     const page = rows.slice(start, start + limit)
     const shape = (mistake: Mistake) => {
-      const view: Record<string, unknown> = { ...mistakeView(mistake, data.attempts) }
+      const view: Record<string, unknown> = { ...mistakeView(mistake, attempts) }
       if (fields) for (const key of Object.keys(view)) if (key !== "id" && !(fields as readonly string[]).includes(key)) delete view[key]
       if (compact) {
         if (!fields) { delete view.questionText; delete view.correction }
@@ -391,6 +394,7 @@ export function recordTools(define: Define) {
   define("save_event", "Create a calendar event, or update one when `id` is given. Give the time either as `date` + `startClock` (+ `endClock`, and `endDate` if it ends on another day), all in local time, e.g. an exam on 2026-10-06 from 09:00 to 11:15; or as full timestamps `startTime` / `endTime` with a UTC offset. The result returns the timestamps stored.", {
     id: z.string().optional(), title: z.string().min(1),
     date: day.optional().describe("Local start date; use with startClock"), startClock: clock.optional(), endClock: clock.optional(), endDate: day.optional().describe("Local end date if not the same as `date`"),
+    timeZone: z.string().max(100).optional().describe("IANA zone for local clock times, e.g. Australia/Melbourne; defaults to the MCP server's configured TZ"),
     startTime: instant.optional(), endTime: instant.optional(),
     eventType: z.enum(["event", "sac", "practice-sac", "exam", "assignment", "homework", "other"]).default("event"),
     subject: z.string().optional(), description: z.string().optional(), location: z.string().optional(), isFinished: z.boolean().optional(),
@@ -398,14 +402,15 @@ export function recordTools(define: Define) {
     const id = a.id ?? crypto.randomUUID()
     const timestamp = nowIso()
     if (a.startTime && (a.date || a.startClock) || a.endTime && (a.endClock || a.endDate)) throw new Error("Give the time as date + startClock/endClock, or as startTime/endTime, not both.")
-    const startTime = a.startTime ?? (a.date && a.startClock ? localInstant(a.date, a.startClock) : undefined)
+    const startTime = a.startTime ?? (a.date && a.startClock ? localInstant(a.date, a.startClock, a.timeZone) : undefined)
     if (!startTime) throw new Error("Give date and startClock, or startTime.")
     if ((a.endClock || a.endDate) && !a.date) throw new Error("endClock and endDate need date.")
-    const endTime = a.endTime ?? (a.endClock ? localInstant(a.endDate ?? a.date!, a.endClock) : undefined)
+    const endTime = a.endTime ?? (a.endClock ? localInstant(a.endDate ?? a.date!, a.endClock, a.timeZone) : undefined)
     if (endTime && Date.parse(endTime) <= Date.parse(startTime)) throw new Error("The end must be after the start.")
     await updateApp((data) => {
       const old = data.events.find((e) => e.id === id)
       if (a.id && !old) throw new Error("No event with that id.")
+      if (Date.parse(endTime ?? old?.endTime ?? "") <= Date.parse(startTime)) throw new Error("The end must be after the start.")
       const finished = a.isFinished ?? old?.isFinished ?? false
       const event: CalendarEvent = {
         ...old, id, title: a.title.trim(), startTime, endTime: endTime ?? old?.endTime, eventType: a.eventType,

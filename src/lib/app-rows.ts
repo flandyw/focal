@@ -53,9 +53,8 @@ export function sameValue(first: unknown, second: unknown): boolean {
     return Array.isArray(first) && Array.isArray(second) && first.length === second.length && first.every((value, index) => sameValue(value, second[index]))
   }
   if (!isRecord(first) || !isRecord(second)) return false
-  const firstKeys = Object.keys(first).toSorted()
-  const secondKeys = Object.keys(second).toSorted()
-  return firstKeys.length === secondKeys.length && firstKeys.every((key, index) => key === secondKeys[index] && sameValue(first[key], second[key]))
+  const firstKeys = Object.keys(first)
+  return firstKeys.length === Object.keys(second).length && firstKeys.every((key) => Object.hasOwn(second, key) && sameValue(first[key], second[key]))
 }
 
 export function diffAppData(previous: AppData, next: AppData): AppRow[] {

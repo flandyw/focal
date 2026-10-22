@@ -1,6 +1,7 @@
 import { join } from "node:path"
 import { ChatGPTError, createChatGPT } from "../vendor/siwc/local/src/index"
 import { createOsCredentialEncryption } from "./keystore"
+import { readRequestText } from "./request"
 
 // Sign in with ChatGPT runs on the user's own machine: this service owns the credentials and
 // exposes only a narrow HTTP surface to the app UI. Tokens never leave this process.
@@ -30,12 +31,13 @@ function errorResponse(error: unknown) {
 
 export function createChatGPTService({ storageDir, allowedOrigins = [] }: ChatGPTServiceOptions) {
   const allowed = new Set(allowedOrigins)
+  const encryption = createOsCredentialEncryption(storageDir)
   const chatgpt = createChatGPT({
     appName: "Focal",
     appId: "focal",
     redirectPort: REDIRECT_PORT,
     storageDir: join(storageDir, "chatgpt"),
-    credentialEncryption: createOsCredentialEncryption(storageDir),
+    credentialEncryption: encryption,
   })
 
   return async function handle(request: Request): Promise<Response> {
@@ -43,7 +45,8 @@ export function createChatGPTService({ storageDir, allowedOrigins = [] }: ChatGP
     const route = url.pathname.replace(/^\/api\/chatgpt\/?/, "")
     // Any web page can reach a loopback port, so only the app's own origins may call it.
     const origin = request.headers.get("origin")
-    const trusted = origin ? allowed.has(origin) || origin === url.origin : request.headers.get("sec-fetch-site") === "same-origin"
+    const localHost = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+    const trusted = localHost && (origin ? allowed.has(origin) || origin === url.origin : request.headers.get("sec-fetch-site") === "same-origin")
     if (!trusted) return json({ error: { message: "Forbidden", type: "forbidden", code: "forbidden" } }, 403)
     const cors: Record<string, string> = origin && allowed.has(origin) ? {
       "access-control-allow-origin": origin,
@@ -55,6 +58,27 @@ export function createChatGPTService({ storageDir, allowedOrigins = [] }: ChatGP
 
     const respond = async (): Promise<Response> => {
       try {
+        if (route === "supabase-session" && request.method === "POST") {
+          const text = await readRequestText(request, 128 * 1024)
+          if (text === null) return json({ error: { message: "Account session is too large." } }, 413)
+          const body: unknown = JSON.parse(text)
+          if (!body || typeof body !== "object" || !("value" in body) || typeof body.value !== "string" ||
+              !("operation" in body) || (body.operation !== "encrypt" && body.operation !== "decrypt")) {
+            return json({ error: { message: "Invalid account session request." } }, 400)
+          }
+          try {
+            const prefix = "focal-supabase-session:v1:"
+            if (body.operation === "encrypt") {
+              return json({ value: Buffer.from(await encryption.encrypt(prefix + body.value)).toString("base64") })
+            }
+            const value = await encryption.decrypt(Buffer.from(body.value, "base64"))
+            // Never turn this route into a way to decrypt the sidecar's ChatGPT credentials.
+            if (!value.startsWith(prefix)) throw new Error("Wrong credential type")
+            return json({ value: value.slice(prefix.length) })
+          } catch {
+            return json({ error: { message: "Account session storage is unavailable. Unlock your OS credential store and try again. Saved credentials have been preserved." } }, 503)
+          }
+        }
         if (route === "session" && request.method === "GET") return json(await chatgpt.getSession())
         if (route === "models" && request.method === "GET") return json(await chatgpt.listModels({ signal: request.signal }))
         if (route === "signin" && request.method === "POST") {
@@ -64,8 +88,8 @@ export function createChatGPTService({ storageDir, allowedOrigins = [] }: ChatGP
         if (route === "cancel" && request.method === "POST") { chatgpt.cancelSignIn(); return json(await chatgpt.getSession()) }
         if (route === "disconnect" && request.method === "POST") { await chatgpt.disconnect(); return json(await chatgpt.getSession()) }
         if (route === "v1/responses" && request.method === "POST") {
-          const text = await request.text()
-          if (text.length > MAX_REQUEST_BYTES) return json({ error: { message: "The request is too large.", type: "responses_request_too_large", code: "responses_request_too_large" } }, 413)
+          const text = await readRequestText(request, MAX_REQUEST_BYTES)
+          if (text === null) return json({ error: { message: "The request is too large.", type: "responses_request_too_large", code: "responses_request_too_large" } }, 413)
           const body = JSON.parse(text) as Record<string, unknown>
           const effort = request.headers.get("x-focal-reasoning-effort")
           if (effort && REASONING_EFFORTS.has(effort)) body.reasoning = { ...(body.reasoning as object | undefined), effort }

@@ -22,20 +22,27 @@ function mistakesPdfPlugin(): Plugin {
     name: 'mistakes-pdf',
     configureServer(server) {
       server.middlewares.use('/api/mistakes-pdf', async (request, response) => {
-        const chunks: Buffer[] = []
-        for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        const controller = new AbortController()
+        response.on('close', () => controller.abort())
         const headers = new Headers()
         for (const [name, value] of Object.entries(request.headers)) {
           for (const item of Array.isArray(value) ? value : value ? [value] : []) headers.append(name, item)
         }
-        const result = await handleMistakesPdf(new Request('http://localhost/api/mistakes-pdf', {
-          method: request.method,
-          headers,
-          body: new Uint8Array(Buffer.concat(chunks)),
-        }))
-        response.statusCode = result.status
-        result.headers.forEach((value, name) => response.setHeader(name, value))
-        response.end(new Uint8Array(await result.arrayBuffer()))
+        try {
+          const result = await handleMistakesPdf(new Request('http://localhost/api/mistakes-pdf', {
+            method: request.method,
+            headers,
+            signal: controller.signal,
+            ...(request.method === 'POST' ? { body: Readable.toWeb(request) as unknown as BodyInit, duplex: 'half' } : {}),
+          }))
+          response.statusCode = result.status
+          result.headers.forEach((value, name) => response.setHeader(name, value))
+          response.end(new Uint8Array(await result.arrayBuffer()))
+        } catch (error) {
+          if (!controller.signal.aborted) server.config.logger.error(String(error))
+          if (!response.headersSent) response.statusCode = 500
+          response.end()
+        }
       })
     },
   }
@@ -46,7 +53,7 @@ function chatPlugin(): Plugin {
     name: 'focal-chat',
     configureServer(server) {
       const env = loadEnv(server.config.mode, server.config.envDir, '')
-      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'AI_GATEWAY_MODEL']) {
+      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'AI_GATEWAY_MODEL']) {
         if (process.env[name] === undefined && env[name]) process.env[name] = env[name]
       }
       server.middlewares.use('/api/chat', async (request, response) => {

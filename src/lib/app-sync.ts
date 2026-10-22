@@ -243,7 +243,8 @@ function compareVersion(left: Pick<AppliedRow, "lamport" | "clientId">, right: P
   return left.clientId < right.client_id ? -1 : 1
 }
 
-async function bootstrap(data: AppData, accountId: string): Promise<void> {  const db = await openDatabase()
+async function bootstrap(data: AppData, accountId: string): Promise<void> {
+  const db = await openDatabase()
   const read = db.transaction([ROWS], "readonly")
   const rows = await requestResult(read.objectStore(ROWS).getAll() as IDBRequest<AppliedRow[]>)
   await transactionDone(read)
@@ -318,7 +319,13 @@ export function flushAppOutbox(accountId: string, deviceId = appSyncDeviceId()):
   return withFlushLock(`focal-app-outbox:${accountId}`, async () => {
     for (let pass = 0; pass < 4; pass++) {
       const now = Date.now()
-      const due = (await readOutbox(accountId)).filter((entry) => (entry.retryAt ?? 0) <= now)
+      const seen = new Set<string>()
+      const due = (await readOutbox(accountId)).filter((entry) => {
+        const key = logicalKey(entry.entity, entry.rowId)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return (entry.retryAt ?? 0) <= now
+      })
       if (!due.length) return
       await flush(due, accountId, deviceId)
     }
@@ -338,8 +345,12 @@ async function flush(changes: PendingRow[], accountId: string, deviceId: string)
   const db = await openDatabase()
   const transaction = db.transaction([OUTBOX], "readwrite")
   const store = transaction.objectStore(OUTBOX)
+  // An unsent edit may have been replaced since the drain read it. Never resurrect that old copy.
+  changes = (await Promise.all(changes.map((change) => requestResult(store.get(change.changeId) as IDBRequest<PendingRow | undefined>))))
+    .filter((change): change is PendingRow => change !== undefined)
   for (const change of changes) if (!change.attempted) store.put({ ...change, attempted: true })
   await transactionDone(transaction)
+  if (!changes.length) return
   const { data, error, status } = await withSupabaseSession(accountId, () => supabase!.rpc("sync_apply_changes", {
     p_expected_user_id: accountId,
     p_changes: changes.map((change) => ({
@@ -394,7 +405,9 @@ async function settleAcknowledged(accountId: string, deviceId: string, acknowled
     outbox.delete(change.changeId)
     if (seq <= 0) continue // The feed pull will record it.
     const payload = change.operation === "put" ? change.payload : null
-    rows.put({ key: rowKey(accountId, change.entity, change.rowId), accountId, entity: change.entity, rowId: change.rowId,
+    const key = rowKey(accountId, change.entity, change.rowId)
+    const current = await requestResult(rows.get(key) as IDBRequest<AppliedRow | undefined>)
+    if (!current || current.seq < seq) rows.put({ key, accountId, entity: change.entity, rowId: change.rowId,
       operation: change.operation, payload, seq, lamport: change.lamport, clientId: deviceId,
       updatedAt: new Date().toISOString() } satisfies AppliedRow)
     // Later unsent edits to this row were made on top of this one: they build on it, not on its predecessor.
@@ -427,33 +440,37 @@ async function rebaseOutbox(change: PendingRow, remote: AppliedRow | null): Prom
     requestResult(outbox.getAll() as IDBRequest<PendingRow[]>),
     requestResult(metadata.get(accountMetaKey(change.accountId)) as IDBRequest<AccountMeta | undefined>),
   ])
+  const unsent = allOutbox.filter((entry) => entry.changeId !== change.changeId && !entry.attempted &&
+    entry.accountId === change.accountId && entry.entity === change.entity && entry.rowId === change.rowId)
+    .toSorted((a, b) => a.lamport - b.lamport)
+  const latest = unsent.at(-1) ?? change
+  // App edits replace values: fold later unsent edits into this rebase, once, in the same transaction.
+  // Recursing through the same row's entries kept recreating them indefinitely.
+  outbox.delete(change.changeId)
+  for (const entry of unsent) outbox.delete(entry.changeId)
+  if (remote) {
+    const current = await requestResult(rows.get(remote.key) as IDBRequest<AppliedRow | undefined>)
+    if (!current || current.seq < remote.seq) rows.put(remote)
+  }
   const currentPayload = remote?.operation === "put" ? remote.payload : null
   const remoteDeleted = remote?.operation === "delete"
-  if (change.operation === "delete" && remoteDeleted) {
-    outbox.delete(change.changeId)
+  if (latest.operation === "delete" && remoteDeleted) {
     await transactionDone(transaction)
     return
   }
-  const merged = change.operation === "delete" ? null : mergeConcurrentValue(change.entity, change.rowId, change.basePayload, change.payload, currentPayload)
-  if (change.operation === "put" && sameValue(merged, currentPayload)) {
-    outbox.delete(change.changeId)
-    if (remote) rows.put(remote)
+  const merged = latest.operation === "delete" ? null : mergeConcurrentValue(latest.entity, latest.rowId, latest.basePayload, latest.payload, currentPayload)
+  if (latest.operation === "put" && sameValue(merged, currentPayload)) {
     await transactionDone(transaction)
     return
   }
   const meta = metaValue ?? defaultMeta(change.accountId)
   const rebased: PendingRow = {
-    ...change, changeId: crypto.randomUUID(), expectedSeq: remote?.seq ?? 0,
+    ...latest, changeId: crypto.randomUUID(), expectedSeq: remote?.seq ?? 0,
     basePayload: currentPayload, payload: merged, lamport: ++meta.lamport, attempted: false, queuedAt: Date.now(), retryAt: undefined,
   }
-  outbox.delete(change.changeId)
   outbox.put(rebased)
-  if (remote) rows.put(remote)
   metadata.put(meta)
   await transactionDone(transaction)
-  const laterSameRow = allOutbox.find((entry) => entry.changeId !== change.changeId &&
-    entry.accountId === change.accountId && entry.entity === change.entity && entry.rowId === change.rowId)
-  if (laterSameRow) await rebaseOutbox(laterSameRow, remote)
 }
 
 function mergeConcurrentValue(entity: Entity, rowId: string, base: unknown, local: unknown, remote: unknown): unknown {

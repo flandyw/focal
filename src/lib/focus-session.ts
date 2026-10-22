@@ -239,15 +239,14 @@ export function createFocusSessionMirror({
         const next = derive(previous, head)
         setBusy(true)
         try {
-          const saved = await sink?.(previous, next, head.action === "complete" || head.action === "cancel" ? head.action : undefined)
+          const saved = sink ? await sink(previous, next, head.action === "complete" || head.action === "cancel" ? head.action : undefined) : next
           commit(saved)
           boundaries.shift()
           attempts = 0
         } catch (error) {
           // A refusal carries the row the server holds; adopting it is what keeps
           // the retry from re-sending a revision the server has already moved past.
-          const canonical = error instanceof SessionRefusedError ? error.canonical : undefined
-          if (canonical) commit(canonical)
+          if (error instanceof SessionRefusedError) commit(error.canonical)
           attempts += 1
           setBusy(false)
           scheduleRetry()
@@ -258,11 +257,19 @@ export function createFocusSessionMirror({
     })()
     draining = run
     await run
-    if (draining === run) draining = null
+    if (draining === run) {
+      draining = null
+      if (!disposed && boundaries.length > 0 && retryTimer === null) void drain()
+    }
   }
 
   return {
-    setSink: (next) => { sink = next },
+    setSink: (next) => {
+      sink = next
+      // React replays effect setup after cleanup in development; reconnect the same mirror.
+      disposed = false
+      if (boundaries.length > 0) void drain()
+    },
     acknowledged: () => acknowledged,
     projected: () => boundaries.reduce<FocusTimerSession | undefined>((session, boundary) => derive(session, boundary), acknowledged),
     push: (boundary) => {

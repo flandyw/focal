@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
 import { ArrowUp, Check, LoaderCircle, Plus, Square } from "lucide-react"
-import { isSecureEndpoint, supabase } from "../lib/supabase"
+import { CHAT_ENDPOINT, chatHeaders, gatewayCatalogSchema, type GatewayCatalog } from "../lib/gateway-client"
 import { PageHeader } from "./page-header"
 import { MarkdownPreview } from "./markdown-preview"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
@@ -10,43 +10,53 @@ import { Bubble, BubbleContent } from "./ui/bubble"
 import { Button } from "./ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./ui/input-group"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "./ui/combobox"
 import { Message, MessageContent } from "./ui/message"
 import {
   MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem,
   MessageScrollerProvider, MessageScrollerViewport,
 } from "./ui/message-scroller"
 
-export function ChatPage({ userId, subject, onSignIn }: { userId?: string; subject: string; onSignIn: () => void }) {
+export function ChatPage({ userId, subject, onSignIn, onSettings }: { userId?: string; subject: string; onSignIn: () => void; onSettings: () => void }) {
   const [input, setInput] = useState("")
-  const [gatewayKey, setGatewayKey] = useState("")
+  const [catalog, setCatalog] = useState<GatewayCatalog | null>(null)
+  const [model, setModel] = useState("")
+  const [catalogError, setCatalogError] = useState("")
+  const [catalogVersion, setCatalogVersion] = useState(0)
   const [stopped, setStopped] = useState(false)
-  const endpoint = import.meta.env.VITE_CHAT_API_URL?.trim() || (import.meta.env.VITE_DESKTOP && !import.meta.env.DEV ? "" : "/api/chat")
   const transport = useMemo(() => new DefaultChatTransport({
-    api: endpoint,
-    headers: async () => {
-      if (!isSecureEndpoint(new URL(endpoint, window.location.href).href)) throw new Error("Chat needs an HTTPS endpoint or localhost.")
-      const apiKey = gatewayKey.trim()
-      if (!apiKey || !/^[\x21-\x7e]+$/.test(apiKey)) throw new Error("Enter a valid Vercel AI Gateway API key to chat.")
-      const session = await supabase?.auth.getSession()
-      if (session?.error || !session?.data.session || session.data.session.user.id !== userId) {
-        throw new Error("Sign in to Focal again to chat.")
-      }
-      return { Authorization: `Bearer ${session.data.session.access_token}`, "x-ai-gateway-api-key": apiKey }
-    },
-  }), [endpoint, userId, gatewayKey])
+    api: CHAT_ENDPOINT,
+    headers: () => chatHeaders(userId),
+  }), [userId])
   const { messages, setMessages, sendMessage, status, error, clearError, stop } = useChat({ transport, throttle: 50 })
   const busy = status === "submitted" || status === "streaming"
-  const available = Boolean(userId && endpoint && gatewayKey.trim())
+  const available = Boolean(userId && CHAT_ENDPOINT && catalog?.hasKey && catalog.models.some((entry) => entry.id === model))
   useEffect(() => () => { void stop() }, [stop])
+  useEffect(() => {
+    if (!userId || !CHAT_ENDPOINT) return
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        const response = await fetch(CHAT_ENDPOINT, { headers: await chatHeaders(userId), signal: controller.signal })
+        if (!response.ok) throw new Error(await response.text())
+        const data = gatewayCatalogSchema.parse(await response.json())
+        if (controller.signal.aborted) return
+        setCatalog(data)
+        setModel((current) => data.models.some((entry) => entry.id === current) ? current : data.defaultModel)
+        setCatalogError("")
+      } catch (error) {
+        if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Could not load chat settings.")
+      }
+    })()
+    return () => controller.abort()
+  }, [userId, catalogVersion])
 
   function send(text = input) {
     if (busy || !available || !text.trim()) return
     clearError()
     setStopped(false)
     setInput("")
-    void sendMessage({ text: text.trim() }, { body: { context: { subject, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } } })
+    void sendMessage({ text: text.trim() }, { body: { model, context: { subject, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } } })
   }
 
   return (
@@ -61,10 +71,10 @@ export function ChatPage({ userId, subject, onSignIn }: { userId?: string; subje
               {messages.length === 0 ? (
                 <Empty className="bg-transparent p-4">
                   <EmptyHeader>
-                    <EmptyTitle>{!userId ? "Sign in to chat" : !endpoint ? "Chat is not connected" : !gatewayKey.trim() ? "Add your Gateway key" : "What would help you study?"}</EmptyTitle>
-                    <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !endpoint ? "The chat service has not been configured for this desktop build." : !gatewayKey.trim() ? "Enter your own Vercel AI Gateway API key below to start. Usage is billed to your Gateway account." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
+                    <EmptyTitle>{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
+                    <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings > AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
                   </EmptyHeader>
-                  {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : available ? <div className="flex flex-col items-center gap-2">
+                  {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="flex flex-col items-center gap-2">
                     {["What should I focus on today?", "Where am I losing marks?", "Help me plan my study for this week."].map((prompt) => (
                       <Button key={prompt} variant="outline" className="h-auto whitespace-normal py-2 text-left" disabled={!available} onClick={() => send(prompt)}>{prompt}</Button>
                     ))}
@@ -109,17 +119,11 @@ export function ChatPage({ userId, subject, onSignIn }: { userId?: string; subje
         </MessageScroller>
       </MessageScrollerProvider>
       <div className="mx-auto w-full max-w-3xl space-y-3">
-        {userId && endpoint ? <details className="text-sm">
-          <summary className="cursor-pointer text-muted-foreground">Gateway API key · {gatewayKey.trim() ? "Provided" : "Required"}</summary>
-          <div className="mt-3 space-y-2">
-            <Label htmlFor="chat-gateway-key">Vercel AI Gateway API key</Label>
-            <div className="flex gap-2">
-              <Input id="chat-gateway-key" type="password" autoComplete="off" spellCheck={false} value={gatewayKey} onChange={(event) => setGatewayKey(event.target.value)} maxLength={4096} disabled={busy} aria-describedby="chat-gateway-key-help" placeholder="Paste your API key" />
-              <Button variant="outline" disabled={busy || !gatewayKey} onClick={() => { setGatewayKey(""); clearError() }}>Clear key</Button>
-            </div>
-            <p id="chat-gateway-key-help" className="text-xs text-muted-foreground">Kept in memory until you leave Chat. Sent to the chat server to call Gateway on your behalf.</p>
-          </div>
-        </details> : null}
+        {catalogError ? <p role="alert" className="text-sm text-destructive">{catalogError} <Button size="sm" variant="outline" disabled={busy} onClick={() => setCatalogVersion((current) => current + 1)}>Retry</Button></p> : null}
+        {catalog ? <Combobox items={catalog.models} value={catalog.models.find((entry) => entry.id === model) ?? null} onValueChange={(entry) => { if (entry) setModel(entry.id) }} itemToStringLabel={(entry) => `${entry.name} (${entry.id})`} itemToStringValue={(entry) => entry.id} disabled={busy} autoHighlight>
+          <ComboboxInput aria-label="Chat model" placeholder="Search models" className="w-full sm:max-w-md" />
+          <ComboboxContent><ComboboxEmpty>No matching models.</ComboboxEmpty><ComboboxList>{(entry) => <ComboboxItem key={entry.id} value={entry}>{entry.name}<span className="ml-2 text-xs text-muted-foreground">{entry.id}</span></ComboboxItem>}</ComboboxList></ComboboxContent>
+        </Combobox> : null}
         {error ? <Alert variant="destructive"><AlertTitle>Chat could not finish</AlertTitle><AlertDescription>{error.message} Check your records before repeating a change.</AlertDescription></Alert> : null}
         {stopped ? <p role="status" className="text-sm text-muted-foreground">Response stopped. Changes may have saved; check your records before retrying.</p> : null}
         <form onSubmit={(event) => { event.preventDefault(); send() }}>

@@ -19,6 +19,9 @@ import type { Project, StudySession } from"../../lib/types"
 import { cn, getSubjectById } from"../../lib/progress-utils"
 import { CalendarDays, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { getSubjectColor } from"../../lib/progress-chart-theme"
+import { useTickingNow } from "../../hooks/use-ticking-now"
+import { downloadExamFile } from "../../lib/host"
+import { csvCell } from "../../lib/csv"
 import {
  MOTION_DURATION,
  MOTION_EASE,
@@ -108,10 +111,6 @@ function stepPeriod(range: AnalyticsRange, end: number, direction: -1 | 1) {
  return getPickedPeriod(range, day)
 }
 
-function now() {
- return Date.now()
-}
-
 function toDateInput(time: number) {
  const d = new Date(time)
  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -165,24 +164,13 @@ function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
  const subject = getSubjectById(point.subjectId)?.name ??"Unassigned"
  rows.push([
  point.date,
- csvEscape(subject),
+ csvCell(subject),
  point.minutes,
  Math.round((point.minutes / 60) * 100) / 100,
  ].join(","))
  }
  const blob = new Blob(["\uFEFF", rows.join("\n")], { type:"text/csv;charset=utf-8" })
- const url = URL.createObjectURL(blob)
- const anchor = document.createElement("a")
- anchor.href = url
- anchor.download = `focal-analytics-${range === 0 ?"all" : `${range}d`}-${new Date().toISOString().slice(0, 10)}.csv`
- document.body.appendChild(anchor)
- anchor.click()
- anchor.remove()
- URL.revokeObjectURL(url)
-}
-
-function csvEscape(value: string) {
- return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+ return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${new Date().toISOString().slice(0, 10)}.csv`)
 }
 
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
@@ -194,7 +182,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  const reduceMotion = useReducedMotion() === true
  const [range, setRange] = useState<AnalyticsRange>(30)
  const [picked, setPicked] = useState<{ end: number; days: number } | null>(null)
- const periodEnd = useMemo(() => picked?.end ?? now(), [picked])
+ const tickingNow = useTickingNow()
+ const periodEnd = picked?.end ?? tickingNow.getTime()
  // A calendar month or partial week has its own length; the analytics helpers accept any day count.
  const periodDays = (picked?.days ?? range) as AnalyticsRange
  const [selectedSubjects, setSelectedSubjects] = useState<Set<string> | null>(null)
@@ -362,7 +351,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  type="date"
  aria-label={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}
  className="absolute inset-0 size-full cursor-pointer border-0 p-0 opacity-0"
- max={toDateInput(now())}
+ max={toDateInput(tickingNow.getTime())}
  value={toDateInput(periodEnd)}
  onClick={(event) => event.currentTarget.showPicker?.()}
  onChange={(event) => { if (event.target.value) setPicked(getPickedPeriod(range, new Date(`${event.target.value}T00:00`))) }}

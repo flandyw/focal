@@ -78,8 +78,8 @@ function buildStudyPlan(raw: unknown, fallback: StudyPlan, knownSubjects: string
 function planSessionMinutes(plan: StudyPlan) {
   const blocks = Math.max(1, plan.blocks)
   const breaks = blocks - 1
-  const longBreaks = Math.floor(blocks / plan.longBreakEvery)
-  return blocks * plan.workMinutes + breaks * plan.breakMinutes + longBreaks * plan.longBreakMinutes
+  const longBreaks = Math.floor(breaks / plan.longBreakEvery)
+  return blocks * plan.workMinutes + (breaks - longBreaks) * plan.breakMinutes + longBreaks * plan.longBreakMinutes
 }
 
 function planFocusMinutes(plan: StudyPlan) {

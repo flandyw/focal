@@ -1,10 +1,9 @@
 import { downloadExamFile } from "./host"
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 import { downloadMistakesPdf } from "./mistake-pdf"
+import { csvCell } from "./csv"
 
 export type ExportFormat = "pdf" | "markdown" | "csv" | "json"
-
-const csvCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`
 
 /** Embedded in the JSON export so the chatbot sees the contract with the data. Keep in step with parseMistakeRoundTrip. */
 const ROUND_TRIP_INSTRUCTIONS = [
@@ -41,7 +40,7 @@ export async function exportMistakes(format: ExportFormat, mistakes: Mistake[], 
   const types = { json: "application/json", csv: "text/csv", markdown: "text/markdown" }
   const ext = format === "markdown" ? "md" : format
   const text = format === "json" ? JSON.stringify({ instructions: ROUND_TRIP_INSTRUCTIONS, mistakes: rows }, null, 2)
-    : format === "csv" ? [Object.keys(rows[0]).map(csvCell).join(","), ...rows.map((row) => Object.values(row).map(csvCell).join(","))].join("\n")
+    : format === "csv" ? [Object.keys(rows[0] ?? {}).map(csvCell).join(","), ...rows.map((row) => Object.values(row).map(csvCell).join(","))].join("\n")
     : rows.map((row) => [
       `## ${row.question}${row.exam ? ` — ${row.exam}` : ""}`,
       `*${[row.category, row.areaOfStudy, row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,

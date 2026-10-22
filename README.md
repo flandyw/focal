@@ -65,10 +65,17 @@ The historical `examtrack` storage keys and protocol identifiers remain unchange
 
 ChatGPT analysis features remain desktop-only. Their credentials stay in the local sidecar and secure native storage. Gateway chat is available in the shared UI on web and desktop.
 
+Desktop account sessions are encrypted in SQLite using the sidecar's OS credential
+store (Keychain on macOS, Secret Service with `secret-tool` on Linux, DPAPI on
+Windows). The sidecar and an unlocked credential store are required to restore or
+save a desktop login. Existing plaintext sessions migrate after encryption succeeds;
+failed migrations keep the original value. Older database copies and backups may
+still contain the previous plaintext session.
+
 ## Study chat with Vercel AI Gateway
 
-Open **Study > Chat**, sign in to your Focal account, and enter your own Vercel
-AI Gateway API key under **Gateway API key**. The assistant can read
+Sign in and save your Vercel AI Gateway API key in **Settings > AI**. Then open
+**Study > Chat** and choose a model with the searchable model selector. The assistant can read
 your synced exams, mistakes, timetable, goals, and study history, and use the same
 validated tools as the MCP server to make requested changes. Tool activity and
 results appear in the conversation. Stop cancels generation; in-flight writes
@@ -76,17 +83,25 @@ can still finish, so check your records before retrying a change. Local unsynced
 edits and historical desktop-only sessions are not included. Chats stay in memory
 and clear when you leave the page or switch accounts.
 
-The key stays in page memory, is cleared when you leave Chat or switch accounts,
-and is sent with each authenticated request so the server can call Gateway on
-your behalf. Focal does not persist the key in browser storage, the database, or
-server logs. Use HTTPS for the hosted endpoint; localhost HTTP is allowed during
-development. No server-side Gateway key or OIDC token is required or used.
+Apply `supabase/migrations/0032_ai_gateway_vault.sql` before using saved keys.
+Keys are encrypted in [Supabase Vault](https://supabase.com/docs/guides/database/vault), outside the sync feed and exported app data.
+Authenticated users can check saved-key status, save/replace their own key, and
+remove it; they cannot read plaintext keys. Only the chat server's service role
+can retrieve a key, after verifying the caller's Supabase session. Account
+deletion also removes its Vault secret. Settings clears the input after saving,
+and never displays the saved key. Keys are not stored in browser storage or logged
+by the chat handler. Use HTTPS for the hosted endpoint; localhost HTTP is allowed
+during development. Chat no longer accepts keys in request headers.
 
-`AI_GATEWAY_MODEL` on the server selects a tool-capable model and defaults to
-`openai/gpt-6-luna`. The server also needs `VITE_SUPABASE_URL` and
-`VITE_SUPABASE_PUBLISHABLE_KEY`; chat verifies the user's Supabase session and
-keeps row-level security in place without a service-role key. Never put a user's
-Gateway key in an environment variable or a `VITE_` variable.
+The model selector loads Vercel's public catalog and shows only language models
+tagged for tool use. The server validates each selection against that catalog.
+`AI_GATEWAY_MODEL` sets the initial selection (default `openai/gpt-6-luna`);
+the user's selection applies for the current chat page. The server needs
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and
+`SUPABASE_SERVICE_ROLE_KEY` for Vault retrieval. Study-data tools still run with
+the user's session and row-level security. Keep the service-role key server-side;
+never put it or a user's Gateway key in a `VITE_` variable. No hosting Gateway
+key or OIDC fallback is used.
 
 `bun run dev` and `bun run dev:desktop` serve `/api/chat` locally. Production web
 uses the Vercel function in `api/chat.ts`, or the same handler through

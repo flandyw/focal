@@ -23,16 +23,17 @@ const DEVICE_ID = crypto.randomUUID()
 const EPOCH = "1970-01-01T00:00:00.000Z"
 const MAX_PASSES = 5
 const SNAPSHOT_TTL_MS = 5000
+const CONNECTION_TTL_MS = 5 * 60_000
 const snapshots = new Map<string, { at: number; rows: Promise<Map<string, Row>> }>()
 
 type Connection = { sb: SupabaseClient; userId: string }
 const requestUser = new AsyncLocalStorage<string>()
 const requestConnection = new AsyncLocalStorage<Connection>()
-const connections = new Map<string, Promise<Connection>>()
+const connections = new Map<string, { at: number; connection: Promise<Connection> }>()
 
 /** stdio has one user for the whole process: the owner of FOCAL_MCP_TOKEN. */
 let stdioUser: string | undefined
-export async function useStdioToken(token: string | undefined) {
+export async function authenticateStdioToken(token: string | undefined) {
   stdioUser = (token && await resolveToken(token)) || undefined
   if (!stdioUser) throw new Error("Set FOCAL_MCP_TOKEN to a valid access token (Settings > MCP access).")
 }
@@ -71,8 +72,10 @@ function connect(): Promise<Connection> {
   if (session) return Promise.resolve(session)
   const userId = requestUser.getStore() ?? stdioUser
   if (!userId) throw new Error("No authenticated user for this request.")
+  const now = Date.now()
+  for (const [id, cached] of connections) if (now - cached.at >= CONNECTION_TTL_MS) connections.delete(id)
   if (!connections.has(userId)) {
-    connections.set(userId, (async () => {
+    const connection = (async () => {
       const admin = adminClient()
       const { data: found, error: lookup } = await admin.auth.admin.getUserById(userId)
       if (lookup || !found.user.email) throw new Error("Focal account not found.")
@@ -82,9 +85,13 @@ function connect(): Promise<Connection> {
       const { error } = await sb.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: "magiclink" })
       if (error) throw new Error(`Focal sign-in failed: ${error.message}`)
       return { sb, userId }
-    })().catch((error) => { connections.delete(userId); throw error }))
+    })().catch((error) => {
+      if (connections.get(userId)?.connection === connection) connections.delete(userId)
+      throw error
+    })
+    connections.set(userId, { at: now, connection })
   }
-  return connections.get(userId)!
+  return connections.get(userId)!.connection
 }
 
 /** One RPC as the signed-in user. An expired login is re-established once. */
@@ -115,8 +122,10 @@ async function snapshot(fresh = false): Promise<Map<string, Row>> {
   // The query is heavy and clients call tools in parallel: share one read per user for a few seconds.
   // Writes drop it, and a stale-write retry (`fresh`) always re-reads.
   const userId = requestUser.getStore() ?? stdioUser ?? ""
+  const now = Date.now()
+  for (const [id, cached] of snapshots) if (now - cached.at >= SNAPSHOT_TTL_MS) snapshots.delete(id)
   const cached = snapshots.get(userId)
-  if (!fresh && cached && Date.now() - cached.at < SNAPSHOT_TTL_MS) return cached.rows
+  if (!fresh && cached) return cached.rows
   const rows = readSnapshot()
   snapshots.set(userId, { at: Date.now(), rows })
   rows.catch(() => { if (snapshots.get(userId)?.rows === rows) snapshots.delete(userId) })

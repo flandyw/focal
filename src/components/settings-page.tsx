@@ -5,6 +5,7 @@ import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
+import { GatewaySettings } from "./gateway-settings"
 import { AppearanceSettings } from "./appearance-settings"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
@@ -42,7 +43,8 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, initialSection }: {
+  initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
@@ -67,7 +69,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const [subjectToAdd, setSubjectToAdd] = useState("")
   const [customSubject, setCustomSubject] = useState("")
   const [providerToAdd, setProviderToAdd] = useState("")
-  const [section, setSection] = useState<string>(sync.status === "signed-out" || sync.status === "sign-in-required" ? "account" : "subjects")
+  const [section, setSection] = useState<string>(initialSection ?? (sync.status === "signed-out" || sync.status === "sign-in-required" ? "account" : "subjects"))
   const importInput = useRef<HTMLInputElement>(null)
   const difficulty = resolveDifficultySettings(examDifficulty)
 
@@ -110,13 +112,14 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "account", label: "Account", icon: UserRound },
     { id: "appearance", label: "Appearance", icon: Sun },
     { id: "data", label: "Data", icon: Database },
-    ...(AI_ENABLED ? [{ id: "ai", label: "AI", icon: Sparkles }, { id: "updates", label: "Updates", icon: Download }] : []),
+    { id: "ai", label: "AI", icon: Sparkles },
+    ...(AI_ENABLED ? [{ id: "updates", label: "Updates", icon: Download }] : []),
   ] as const
   const active = sections.some((item) => item.id === section) ? section : "subjects"
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Settings" description={AI_ENABLED ? "Subjects, difficulty calibration, sync, appearance, data, and AI analysis." : "Subjects, difficulty calibration, sync, appearance, and data."} />
+      <PageHeader title="Settings" description="Subjects, difficulty calibration, sync, appearance, data, and AI." />
 
       <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start lg:grid-cols-[13rem_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:px-0">
@@ -334,6 +337,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           ) : null}
 
           {active === "updates" && AI_ENABLED ? <UpdatesSection /> : null}
+
+          {active === "ai" ? <Section title="Study chat" description="Connect your Vercel AI Gateway account. Choose your model in Chat.">
+            {sync.user && sync.status !== "sign-in-required" ? <GatewaySettings key={sync.user.id} userId={sync.user.id} /> : <p className="py-4 text-sm text-muted-foreground">Sign in under Account to save your Gateway API key.</p>}
+          </Section> : null}
 
           {active === "ai" && AI_ENABLED ? (
             <Section title="AI" description="AI requests use the connected account's ChatGPT plan." action={auth.isAuthenticated ? <Badge variant="secondary"><CheckCircle2 />Connected</Badge> : null}>

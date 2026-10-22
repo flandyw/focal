@@ -125,6 +125,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       ? "exam"
       : "focus")
   const [comparisonYear, setComparisonYear] = useState(2025)
+  const [settingsSection, setSettingsSection] = useState<"ai" | "account">()
   const [examOpen, setExamOpen] = useState(false)
   const [editingAttempt, setEditingAttempt] = useState<ExamAttempt | null>(null)
   const [mistakeOpen, setMistakeOpen] = useState(false)
@@ -817,8 +818,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "friends" ? <Suspense fallback={PAGE_LOADING}><FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} onSignIn={() => setView("settings")} /></Suspense> : null}
-          {view === "chat" ? <Suspense fallback={PAGE_LOADING}><ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => setView("settings")} /></Suspense> : null}
-          {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
+          {view === "chat" ? <Suspense fallback={PAGE_LOADING}><ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /></Suspense> : null}
+          {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
           </div>
         </main>
       </SidebarInset>

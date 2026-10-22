@@ -1,3 +1,5 @@
+import { readRequestText } from "./request.js"
+
 const COMPILER_URL = "https://texlive.net/cgi-bin/latexcgi"
 
 export async function handleMistakesPdf(request: Request) {
@@ -5,7 +7,9 @@ export async function handleMistakesPdf(request: Request) {
 
   let tex: unknown
   try {
-    tex = (await request.json() as { tex?: unknown }).tex
+    const text = await readRequestText(request, 1024 * 1024)
+    if (text === null) return new Response("Worksheet request too large", { status: 413 })
+    tex = (JSON.parse(text) as { tex?: unknown } | null)?.tex
   } catch {
     return new Response("Invalid JSON", { status: 400 })
   }
@@ -20,7 +24,7 @@ export async function handleMistakesPdf(request: Request) {
   form.append("filecontents[]", tex)
 
   try {
-    const compiled = await fetch(COMPILER_URL, { method: "POST", body: form, signal: AbortSignal.timeout(55_000) })
+    const compiled = await fetch(COMPILER_URL, { method: "POST", body: form, signal: AbortSignal.any([request.signal, AbortSignal.timeout(55_000)]) })
     if (!compiled.ok || !compiled.headers.get("content-type")?.includes("application/pdf")) {
       return new Response((await compiled.text()).slice(-4_000), { status: 422 })
     }

@@ -26,7 +26,10 @@ interface IdRow {
 }
 
 export function openFocalDatabase(): Promise<Database> {
-  databasePromise ??= Database.load(DATABASE_URL)
+  databasePromise ??= Database.load(DATABASE_URL).catch((error) => {
+    databasePromise = null
+    throw error
+  })
   return databasePromise
 }
 

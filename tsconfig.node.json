@@ -5,13 +5,15 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "types": [
-      "node"
+      "node",
+      "bun-types"
     ],
     "allowImportingTsExtensions": true
   },
   "include": [
     "vite.config.ts",
-    "server/mistakes-pdf.ts",
+    "server.ts",
+    "server",
     "api"
   ]
 }

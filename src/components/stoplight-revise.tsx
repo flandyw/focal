@@ -10,6 +10,8 @@ import { Textarea } from "./ui/textarea"
 import template from "../lib/worksheet-template.tex?raw"
 import type { CurriculumArea, StoplightRating } from "../lib/learning-workspace"
 import { buildRevisionPrompt, groupBy, itemGroup, parseRatingsResponse, type ItemEvidence } from "../lib/stoplight"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 /** Chatbot round trip: copy a tutoring prompt for the subject's checklist, revise, paste the suggested ratings back. */
 export function StoplightReviseDialog({ open, subject, items, evidence, onOpenChange, onApply }: {
@@ -68,11 +70,11 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
             <ul className="divide-y rounded-lg border" aria-label="Groups to include">
               {[...groups].map(([group, groupItems]) => (
                 <li key={group}>
-                  <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                    <input type="checkbox" checked={!skipped.has(group)} onChange={() => toggle(group)} />
+                  <Label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                    <Checkbox checked={!skipped.has(group)} onCheckedChange={() => toggle(group)} />
                     <span className="min-w-0 flex-1 truncate font-medium">{group}</span>
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{groupItems.length} item{groupItems.length === 1 ? "" : "s"}</span>
-                  </label>
+                  </Label>
                 </li>
               ))}
             </ul>

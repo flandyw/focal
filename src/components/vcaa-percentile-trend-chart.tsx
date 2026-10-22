@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from "react"
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Label } from "./ui/label"
 import { ChartContainer, ChartTooltip } from "./ui/chart"
 import { SubjectCombobox } from "./subject-combobox"
 import { buildAttemptBenchmarks, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
@@ -58,7 +59,7 @@ export function VcaaPercentileTrendChart({
           </div>
           {subjects.length > 1 ? (
             <div className="flex items-center gap-2">
-              <label htmlFor={`percentile-subject-${filterId}`} className="text-sm text-muted-foreground">Subject</label>
+              <Label htmlFor={`percentile-subject-${filterId}`} className="text-sm text-muted-foreground">Subject</Label>
               <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={activeSubjectFilter} onValueChange={setSubjectFilter} includeAll id={`percentile-subject-${filterId}`} className="h-8 w-44" />
             </div>
           ) : null}

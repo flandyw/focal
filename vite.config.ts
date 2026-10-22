@@ -1,4 +1,5 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { Readable } from 'node:stream'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
@@ -40,6 +41,46 @@ function mistakesPdfPlugin(): Plugin {
   }
 }
 
+function chatPlugin(): Plugin {
+  return {
+    name: 'focal-chat',
+    configureServer(server) {
+      const env = loadEnv(server.config.mode, server.config.envDir, '')
+      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'AI_GATEWAY_MODEL']) {
+        if (process.env[name] === undefined && env[name]) process.env[name] = env[name]
+      }
+      server.middlewares.use('/api/chat', async (request, response) => {
+        const controller = new AbortController()
+        response.on('close', () => controller.abort())
+        try {
+          const { handleChat } = await server.ssrLoadModule('/server/chat.ts')
+          const headers = new Headers()
+          for (const [name, value] of Object.entries(request.headers)) {
+            for (const item of Array.isArray(value) ? value : value ? [value] : []) headers.append(name, item)
+          }
+          const result: Response = await handleChat(new Request(`http://${request.headers.host ?? 'localhost'}/api/chat`, {
+            method: request.method,
+            headers,
+            signal: controller.signal,
+            ...(request.method === 'POST' ? { body: Readable.toWeb(request) as unknown as BodyInit, duplex: 'half' } : {}),
+          }))
+          response.statusCode = result.status
+          result.headers.forEach((value, name) => response.setHeader(name, value))
+          if (result.body) for await (const chunk of result.body) {
+            if (response.destroyed) break
+            response.write(chunk)
+          }
+          response.end()
+        } catch (error) {
+          if (!controller.signal.aborted) server.config.logger.error(String(error))
+          if (!response.headersSent) response.statusCode = 500
+          response.end()
+        }
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   define: {
@@ -49,7 +90,7 @@ export default defineConfig(({ mode }) => ({
   },
   clearScreen: false,
   server: { port: mode === "desktop" ? 1420 : 5173, strictPort: true, host: process.env.TAURI_DEV_HOST ?? false },
-  plugins: [react(), tailwindcss(), mistakesPdfPlugin()],
+  plugins: [react(), tailwindcss(), mistakesPdfPlugin(), chatPlugin()],
   resolve: {
     dedupe: ['react', 'react-dom', 'katex'],
     alias: {

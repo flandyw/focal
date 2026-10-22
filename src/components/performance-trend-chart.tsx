@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from "react"
 import { CartesianGrid, Dot, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Label } from "./ui/label"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
 import { SubjectCombobox } from "./subject-combobox"
 import {
@@ -164,9 +165,9 @@ export function PerformanceTrendChart({
           </div>
           {subjects.length > 1 ? (
             <div className="flex items-center gap-2">
-              <label htmlFor={`trend-subject-${filterId}`} className="whitespace-nowrap text-sm text-muted-foreground">
+              <Label htmlFor={`trend-subject-${filterId}`} className="whitespace-nowrap text-sm text-muted-foreground">
                 Subject
-              </label>
+              </Label>
               <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={activeSubjectFilter} onValueChange={setSubjectFilter} includeAll id={`trend-subject-${filterId}`} className="h-8 w-44" />
             </div>
           ) : null}

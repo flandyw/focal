@@ -3,6 +3,7 @@ import { Plus, RotateCcw, Save, Trash2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
+import { Label } from "./ui/label"
 import { SubjectCombobox } from "./subject-combobox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
@@ -131,10 +132,10 @@ export function AtarEstimator({
               const usePrediction = row.usePrediction && prediction !== undefined
               return (
                 <div key={row.id} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(14rem,1fr)_9rem_7rem_7rem_auto] md:items-end">
-                  <label className="grid gap-1.5 text-sm font-medium">Subject
+                  <Label className="grid gap-1.5 text-sm font-medium">Subject
                     <SubjectCombobox subjects={studies.map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} />
-                  </label>
-                  <label className="grid gap-1.5 text-sm font-medium">Source
+                  </Label>
+                  <Label className="grid gap-1.5 text-sm font-medium">Source
                     <Select value={usePrediction ? "prediction" : "manual"} onValueChange={(value) => updateRow(row.id, { usePrediction: value === "prediction" })}>
                       <SelectTrigger><SelectValue>{usePrediction ? "Focal" : "Manual"}</SelectValue></SelectTrigger>
                       <SelectContent>
@@ -142,10 +143,10 @@ export function AtarEstimator({
                         <SelectItem value="manual">Manual</SelectItem>
                       </SelectContent>
                     </Select>
-                  </label>
-                  <label className="grid gap-1.5 text-sm font-medium">Raw
+                  </Label>
+                  <Label className="grid gap-1.5 text-sm font-medium">Raw
                     <Input type="number" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
-                  </label>
+                  </Label>
                   <div><p className="mb-1.5 text-sm font-medium">Scaled</p><div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm tabular-nums">{result ? result.scaledScore.toFixed(1) : "—"}</div></div>
                   <Button variant="ghost" size="icon" aria-label="Remove subject" disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><Trash2 /></Button>
                 </div>

@@ -2,6 +2,7 @@ const APP_VIEW_STORAGE_KEY = "examtrack:view:v1"
 
 const APP_VIEWS = [
   "calendar",
+  "chat",
   "exams",
   "focus",
   "mistakes",

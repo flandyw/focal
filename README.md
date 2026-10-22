@@ -63,6 +63,43 @@ Friends comparisons and cheers require migration `0031_friends_competition.sql`.
 
 The historical `examtrack` storage keys and protocol identifiers remain unchanged for compatibility with saved data and Folio. See [the sync protocol](docs/sync-protocol.md) and [the historical ExamTrack migration](docs/examtrack-merge.md).
 
-AI features remain desktop-only. Credentials stay in the local sidecar and secure native storage. The browser build does not enable AI or load desktop integration.
+ChatGPT analysis features remain desktop-only. Their credentials stay in the local sidecar and secure native storage. Gateway chat is available in the shared UI on web and desktop.
+
+## Study chat with Vercel AI Gateway
+
+Open **Study > Chat**, sign in to your Focal account, and enter your own Vercel
+AI Gateway API key under **Gateway API key**. The assistant can read
+your synced exams, mistakes, timetable, goals, and study history, and use the same
+validated tools as the MCP server to make requested changes. Tool activity and
+results appear in the conversation. Stop cancels generation; in-flight writes
+can still finish, so check your records before retrying a change. Local unsynced
+edits and historical desktop-only sessions are not included. Chats stay in memory
+and clear when you leave the page or switch accounts.
+
+The key stays in page memory, is cleared when you leave Chat or switch accounts,
+and is sent with each authenticated request so the server can call Gateway on
+your behalf. Focal does not persist the key in browser storage, the database, or
+server logs. Use HTTPS for the hosted endpoint; localhost HTTP is allowed during
+development. No server-side Gateway key or OIDC token is required or used.
+
+`AI_GATEWAY_MODEL` on the server selects a tool-capable model and defaults to
+`openai/gpt-6-luna`. The server also needs `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY`; chat verifies the user's Supabase session and
+keeps row-level security in place without a service-role key. Never put a user's
+Gateway key in an environment variable or a `VITE_` variable.
+
+`bun run dev` and `bun run dev:desktop` serve `/api/chat` locally. Production web
+uses the Vercel function in `api/chat.ts`, or the same handler through
+`bun run start`. Packaged desktop builds need
+`VITE_CHAT_API_URL=https://your-focal-host/api/chat` at build time. The hosted
+endpoint allows the Tauri origins and authenticates every request. Deploy from
+the repository root so the function includes `public` reference datasets.
+
+Each request accepts up to 60 messages / 256 KiB, runs at most six model steps,
+and times out after 55 seconds. Requests are limited to ten per user per minute
+per server instance; use a shared limiter for a strict deployment-wide cap.
+Gateway billing and access follow the user's key and Vercel team configuration.
+See [Gateway setup](https://vercel.com/docs/ai-gateway/getting-started) and the
+[shadcn chat components](https://ui.shadcn.com/docs/ai-elements/base/chat).
 
 Local SQLite migrations are immutable after release. Add a new version and register it in `src-tauri/src/lib.rs` when changing the native schema. This repository has no test suite; verify changes with builds, typechecking, linting, and the app.

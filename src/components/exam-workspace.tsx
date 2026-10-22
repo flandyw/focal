@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { FieldError } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group"
 import { cn } from "../lib/utils"
 import type { ExamWorkspaceItem, ExamWorkspaceStatus } from "../lib/ongoing-timers"
 
@@ -92,14 +93,9 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
                     <Input className="h-7 min-w-0 flex-1 border-transparent bg-transparent text-xs shadow-none hover:border-input focus-visible:border-input" aria-label={`Note for ${item.label}`} value={item.note ?? ""} onChange={(event) => update(item.id, { note: event.target.value || undefined })} placeholder="Note" />
                   </div>
                   <div className="flex items-center gap-1 justify-self-end">
-                    <div className="flex rounded-md border p-0.5" role="group" aria-label={`Confidence for ${item.label}`}>
-                      {confidences.map(([value, text]) => (
-                        <button key={value} type="button" aria-pressed={item.confidence === value} onClick={() => update(item.id, { confidence: value })}
-                          className={cn("rounded px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground", item.confidence === value && "bg-muted font-medium text-foreground")}>
-                          {text}
-                        </button>
-                      ))}
-                    </div>
+                    <ToggleGroup size="sm" variant="outline" spacing={0} aria-label={`Confidence for ${item.label}`} value={[item.confidence]} onValueChange={([value]) => { if (value) update(item.id, { confidence: value as typeof item.confidence }) }}>
+                      {confidences.map(([value, text]) => <ToggleGroupItem key={value} value={value}>{text}</ToggleGroupItem>)}
+                    </ToggleGroup>
                     <Button variant={item.status === "flagged" ? "secondary" : "ghost"} size="icon-sm" aria-pressed={item.status === "flagged"} onClick={() => update(item.id, { status: item.status === "flagged" ? "in-progress" : "flagged" })}><Flag /><span className="sr-only">Flag {item.label}</span></Button>
                     <Button variant="ghost" size="icon-sm" onClick={() => onChange(items.filter((candidate) => candidate.id !== item.id))}><Trash2 /><span className="sr-only">Remove {item.label}</span></Button>
                   </div>

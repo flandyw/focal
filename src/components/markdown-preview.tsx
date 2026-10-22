@@ -6,15 +6,21 @@ import remarkMath from "remark-math"
 import type { Root, Element } from "hast"
 import { remarkLatex } from "../lib/remark-latex"
 import { cn } from "../lib/utils"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 // Vite loads this CSS before evaluating the lazy chunk, keeping maths styled on first render.
 import "katex/dist/katex.min.css"
 
 const components: Components = {
   table: ({ children, node: _node, ...props }) => (
     <div className="typeset-table" role="region" aria-label="Table" tabIndex={0}>
-      <table {...props}>{children}</table>
+      <Table {...props}>{children}</Table>
     </div>
   ),
+  thead: ({ node: _node, ...props }) => <TableHeader {...props} />,
+  tbody: ({ node: _node, ...props }) => <TableBody {...props} />,
+  tr: ({ node: _node, ...props }) => <TableRow {...props} />,
+  th: ({ node: _node, ...props }) => <TableHead {...props} />,
+  td: ({ node: _node, ...props }) => <TableCell {...props} />,
   pre: ({ node, children }) => {
     const code = node?.children[0]
     const source = code?.type === "element" && Array.isArray(code.properties.className) && code.properties.className.includes("language-svg")

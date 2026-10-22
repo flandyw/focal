@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "./ui/button"
 import { SubjectCombobox } from "./subject-combobox"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ChevronDown } from "lucide-react"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
@@ -12,6 +12,7 @@ import { analyseAttempt, findAttemptReferenceForYear, formatExamTitle, formatRef
 import { getKnownExamMarks } from "../lib/exam-conditions"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 
 type ExamEntryProps = {
   references: AssessmentReference[]
@@ -190,21 +191,18 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
 
           <section className="grid gap-2 border-t pt-8" aria-label="Optional details">
             <h2 className="focal-section-title">Optional details</h2>
-            <details className="group rounded-lg border px-4 py-3">
-              <summary className="cursor-pointer text-sm font-medium">Comment{comment ? " ·" : ""} <span className="font-normal text-muted-foreground">{comment ? "added" : "what went well or what to improve"}</span></summary>
+            <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Comment{comment ? " ·" : ""} <span className="font-normal text-muted-foreground">{comment ? "added" : "what went well or what to improve"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
               <Field className="mt-3">
                 <FieldLabel htmlFor="exam-comment" className="sr-only">Overall comment</FieldLabel>
                 <Textarea id="exam-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What went well or what to improve next time?" />
               </Field>
-            </details>
-            <details className="rounded-lg border px-4 py-3">
-              <summary className="cursor-pointer text-sm font-medium">Conditions and headspace <span className="font-normal text-muted-foreground">{hasPerformanceContext(performanceContext) ? "· recorded" : "sleep, focus, stress"}</span></summary>
+            </CollapsibleContent></Collapsible>
+            <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Conditions and headspace <span className="font-normal text-muted-foreground">{hasPerformanceContext(performanceContext) ? "· recorded" : "sleep, focus, stress"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
               <div className="mt-3"><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="exam-context" /></div>
-            </details>
-            <details className="rounded-lg border px-4 py-3">
-              <summary className="cursor-pointer text-sm font-medium">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${questionResults.length} items` : "reveal coverage gaps"}</span></summary>
+            </CollapsibleContent></Collapsible>
+            <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${questionResults.length} items` : "reveal coverage gaps"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
               <div className="mt-3"><QuestionResultsEditor value={questionResults} onChange={setQuestionResults} /></div>
-            </details>
+            </CollapsibleContent></Collapsible>
           </section>
         </FieldGroup>
 

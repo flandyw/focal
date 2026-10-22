@@ -7,7 +7,10 @@ import { getMistakeEditChanges, type MistakeEdit } from "../lib/mistake-autofill
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 /** Second half of Export → JSON: paste (or load) the chatbot's edited file and replace fields by mistake id. */
 export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExport, onOpenChange, onApply }: {
@@ -62,7 +65,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
               <FieldLabel htmlFor="mistake-roundtrip-json">Edited JSON</FieldLabel>
               <Button type="button" size="sm" variant="outline" render={<label />}>
                 <FileUp />Load file
-                <input type="file" accept=".json,application/json,.txt" className="sr-only" onChange={(event) => {
+                <Input type="file" accept=".json,application/json,.txt" className="sr-only" onChange={(event) => {
                   void event.target.files?.[0]?.text().then((content) => { setText(content); setResult(null); setError(null) })
                   event.target.value = ""
                 }} />
@@ -81,7 +84,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
                 <div className="max-h-96 overflow-y-auto rounded-lg border">
                   {changes.map(({ mistake, list }) => (
                     <div key={mistake.id} className="grid gap-2 border-b p-3 text-sm last:border-b-0">
-                      <label className="flex items-center gap-2 font-medium"><input type="checkbox" className="size-4 accent-primary" checked={!skipped.has(mistake.id)} onChange={() => setSkipped((value) => { const next = new Set(value); if (!next.delete(mistake.id)) next.add(mistake.id); return next })} />{mistake.question}</label>
+                      <Label className="flex items-center gap-2 font-medium"><Checkbox checked={!skipped.has(mistake.id)} onCheckedChange={() => setSkipped((value) => { const next = new Set(value); if (!next.delete(mistake.id)) next.add(mistake.id); return next })} />{mistake.question}</Label>
                       {list.map(({ field, before, after }) => (
                         <div key={field} className="grid gap-2 sm:grid-cols-2">
                           <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{field} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || "(empty)"}</pre></div>

@@ -5,11 +5,14 @@ import { ArrowDown, ArrowUp, Check, Monitor, Moon, RotateCcw, Sun } from "lucide
 import { AccentPicker } from "./accent-picker"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
+import { Slider } from "./ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { NAVIGATION_GROUPS } from "../lib/navigation"
 import { ACCENT_THEMES } from "../lib/accent-theme"
 import { DEFAULT_APPEARANCE, FONT_FAMILIES, SURFACE_THEMES, selectAccent, updateAppearance, useAccent, useAppearance, type Appearance } from "../lib/appearance"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 function Setting({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return <div className="appearance-row">
@@ -22,7 +25,7 @@ function RangeSetting({ title, description, field, min, max, step = 1, unit = ""
   const appearance = useAppearance()
   return <Setting title={title} description={description}>
     <div className="flex w-full items-center gap-3 sm:w-64">
-      <Input type="range" className="appearance-range" min={min} max={max} step={step} value={appearance[field]} aria-label={title} aria-valuetext={`${appearance[field]}${unit}`} onChange={(event) => updateAppearance({ [field]: event.target.valueAsNumber })} />
+      <Slider className="min-h-11" min={min} max={max} step={step} value={appearance[field]} aria-label={title} onValueChange={(value) => updateAppearance({ [field]: Number(value) })} />
       <output className="w-14 shrink-0 text-right text-sm tabular-nums">{appearance[field]}{unit}</output>
     </div>
   </Setting>
@@ -89,10 +92,10 @@ export function AppearanceSettings() {
           <div role="group" aria-label="Colour mode" className="flex flex-wrap gap-1">{[{ value: "light", label: "Light", icon: Sun }, { value: "dark", label: "Dark", icon: Moon }, { value: "system", label: "System", icon: Monitor }].map(({ value, label, icon: Icon }) => <Button key={value} size="sm" variant={theme === value ? "secondary" : "outline"} aria-pressed={theme === value} onClick={() => setTheme(value)}><Icon />{label}</Button>)}</div>
         </Setting>
         <div className="border-b py-5"><h3 className="text-sm font-medium">Workspace theme</h3><p className="mt-1 text-sm text-muted-foreground">Each palette includes light and dark surfaces. Keep your favourite accent.</p>
-          <div role="group" aria-label="Workspace theme" className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">{SURFACE_THEMES.map((surface) => <button type="button" key={surface.id} className="appearance-swatch" aria-pressed={appearance.surface === surface.id} onClick={() => updateAppearance({ surface: surface.id })}>
+          <div role="group" aria-label="Workspace theme" className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-3">{SURFACE_THEMES.map((surface) => <Button variant="ghost" key={surface.id} className="appearance-swatch h-auto flex-col items-stretch justify-start font-normal whitespace-normal" aria-pressed={appearance.surface === surface.id} onClick={() => updateAppearance({ surface: surface.id })}>
             <span className="appearance-swatch-sample" aria-hidden="true" style={{ background: `light-dark(${surface.background}, ${surface.darkBackground})` }}><span style={{ background: `light-dark(${surface.sidebar}, ${surface.darkSidebar})` }} /><span className="min-w-0 flex-1 space-y-2 p-3"><span className="block h-1.5 w-2/3 rounded" style={{ background: accentColour }} /><span className="block h-1 w-full rounded bg-foreground/15" /><span className="block h-1 w-4/5 rounded bg-foreground/15" /></span></span>
             <span className="mt-2 flex items-center justify-between gap-2 text-sm font-medium">{surface.label}{appearance.surface === surface.id ? <Check className="size-4 text-primary" aria-hidden="true" /> : null}</span><span className="mt-0.5 block text-xs text-muted-foreground">{surface.description}</span>
-          </button>)}</div>
+          </Button>)}</div>
         </div>
         <Setting title="Accent colour" description="For actions, selected items, and focus indicators."><AccentPicker /></Setting>
         <ColourSetting title="Custom accent" description="Choose any colour. Focal adjusts its contrast for readable text in both modes." value={appearance.customAccent} fallback={accentColour} onChange={(customAccent) => updateAppearance({ customAccent })} />
@@ -112,13 +115,13 @@ export function AppearanceSettings() {
         <ChoiceSetting title="Page width" description="Use all available space or keep content centred." field="contentWidth" options={[{ value: "full", label: "Full width" }, { value: "wide", label: "Wide" }, { value: "reading", label: "Focused" }]} />
         <ChoiceSetting title="Interface density" description="Adjust spacing throughout the app." field="density" options={[{ value: "compact", label: "Compact" }, { value: "default", label: "Default" }, { value: "comfortable", label: "Comfortable" }]} />
         <RangeSetting title="Corner radius" description="From crisp square corners to softer rounded controls." field="radius" min={0} max={16} unit="px" />
-        <Setting title="Reduced motion" description="Keep transitions and animations to a minimum."><label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={appearance.reduceMotion} onChange={(event) => updateAppearance({ reduceMotion: event.target.checked })} />Reduce motion</label></Setting>
+        <Setting title="Reduced motion" description="Keep transitions and animations to a minimum."><Label className="flex items-center gap-2 text-sm"><Checkbox checked={appearance.reduceMotion} onCheckedChange={(checked) => updateAppearance({ reduceMotion: checked })} />Reduce motion</Label></Setting>
         <Setting title="Saved pane sizes" description="Drag the dividers in Calendar, the mistake library, and editors. Use arrow keys when a divider is focused."><Button variant="outline" size="sm" onClick={() => updateAppearance({ calendarPane: DEFAULT_APPEARANCE.calendarPane, mistakePane: DEFAULT_APPEARANCE.mistakePane, editorPane: DEFAULT_APPEARANCE.editorPane, sidebarWidth: DEFAULT_APPEARANCE.sidebarWidth })}><RotateCcw />Reset pane sizes</Button></Setting>
       </TabsContent>
       <TabsContent value="sidebar">
         <ChoiceSetting title="Sidebar position" description="Put navigation on the side that suits you." field="sidebarSide" options={[{ value: "left", label: "Left" }, { value: "right", label: "Right" }]} />
         <RangeSetting title="Sidebar width" description="Drag the sidebar edge to resize it, or use this slider. Collapse it with Ctrl/⌘ B." field="sidebarWidth" min={200} max={400} unit="px" />
-        <Setting title="Section labels" description="Show the Study, Assessments, and Analysis headings."><label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={appearance.sidebarLabels} onChange={(event) => updateAppearance({ sidebarLabels: event.target.checked })} />Show section labels</label></Setting>
+        <Setting title="Section labels" description="Show the Study, Assessments, and Analysis headings."><Label className="flex items-center gap-2 text-sm"><Checkbox checked={appearance.sidebarLabels} onCheckedChange={(checked) => updateAppearance({ sidebarLabels: checked })} />Show section labels</Label></Setting>
         <div className="py-5"><h3 className="text-sm font-medium">Navigation links</h3><p className="mt-1 text-sm text-muted-foreground">Show what you use and reorder links within each section. Hidden pages remain available in Search. Settings always stays available.</p>
           {NAVIGATION_GROUPS.map((group) => {
             const ordered = [...group.items].sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
@@ -127,7 +130,7 @@ export function AppearanceSettings() {
               ;[next[index], next[index + direction]] = [next[index + direction], next[index]]
               updateAppearance({ linkOrder: [...appearance.linkOrder.filter((id) => !next.some((item) => item === id)), ...next] })
             }
-            return <fieldset key={group.label} className="mt-5"><legend className="mb-2 text-sm font-medium">{group.label}</legend><div className="divide-y border-y">{ordered.map((item, index) => <div key={item.id} className="flex items-center gap-2 py-2"><label className="flex min-w-0 flex-1 items-center gap-3 text-sm"><input type="checkbox" className="size-4 shrink-0 accent-primary" checked={!appearance.hiddenLinks.includes(item.id)} onChange={(event) => updateAppearance({ hiddenLinks: event.target.checked ? appearance.hiddenLinks.filter((id) => id !== item.id) : [...appearance.hiddenLinks, item.id] })} />{item.label}</label><Button variant="ghost" size="icon-sm" aria-label={`Move ${item.label} up`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button><Button variant="ghost" size="icon-sm" aria-label={`Move ${item.label} down`} disabled={index === ordered.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button></div>)}</div></fieldset>
+            return <fieldset key={group.label} className="mt-5"><legend className="mb-2 text-sm font-medium">{group.label}</legend><div className="divide-y border-y">{ordered.map((item, index) => <div key={item.id} className="flex items-center gap-2 py-2"><Label className="flex min-w-0 flex-1 items-center gap-3 text-sm"><Checkbox checked={!appearance.hiddenLinks.includes(item.id)} onCheckedChange={(checked) => updateAppearance({ hiddenLinks: checked ? appearance.hiddenLinks.filter((id) => id !== item.id) : [...appearance.hiddenLinks, item.id] })} />{item.label}</Label><Button variant="ghost" size="icon-sm" aria-label={`Move ${item.label} up`} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp /></Button><Button variant="ghost" size="icon-sm" aria-label={`Move ${item.label} down`} disabled={index === ordered.length - 1} onClick={() => move(index, 1)}><ArrowDown /></Button></div>)}</div></fieldset>
           })}
           <Button className="mt-4" variant="outline" size="sm" onClick={() => updateAppearance({ hiddenLinks: [], linkOrder: [], sidebarLabels: true })}>Restore navigation defaults</Button>
         </div>

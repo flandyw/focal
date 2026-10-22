@@ -1,9 +1,10 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { CalendarPlus, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
+import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -147,15 +148,16 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
             </Select>
           </div>
           {visible.length ? [...groups].map(([group, groupItems]) => (
-            <details key={group} open className="rounded-xl border">
-              <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+            <Collapsible key={group} defaultOpen className="rounded-xl border">
+              <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
                 <span className="min-w-0 truncate font-medium">{group}</span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
                   {groupItems.filter((item) => item.rating === "green").length}/{groupItems.length}
                   <CountBar items={groupItems} />
+                  <ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" />
                 </span>
-              </summary>
-              <ul className="divide-y border-t">
+              </CollapsibleTrigger>
+              <CollapsibleContent keepMounted><ul className="divide-y border-t">
                 {groupItems.map((item) => {
                   const entry = evidence.get(item.id)
                   const text = entry ? evidenceText(entry) : ""
@@ -168,7 +170,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                           {isRecheckDue(item, now) ? <Badge variant="secondary">Re-check</Badge> : null}
                         </div>
                         {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
-                        {text ? <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:underline" onClick={() => setViewing(item)}>{text}</button> : null}
+                        {text ? <Button variant="link" size="xs" className="h-auto p-0 text-muted-foreground" onClick={() => setViewing(item)}>{text}</Button> : null}
                       </div>
                       <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1" onKeyDown={(event) => {
                         const offset = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 0
@@ -187,8 +189,8 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                     </li>
                   )
                 })}
-              </ul>
-            </details>
+              </ul></CollapsibleContent>
+            </Collapsible>
           )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setFilter("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (

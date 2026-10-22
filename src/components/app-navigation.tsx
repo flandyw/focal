@@ -1,6 +1,7 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
+import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "./ui/button"
 
 import {
   DropdownMenu,
@@ -40,6 +41,7 @@ type SessionSync = ReturnType<typeof useStudySessionSync>
 const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => ({ default: module.AppCommandMenu })))
 
 const NAVIGATION_ICONS = {
+  chat: MessageSquare,
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
@@ -185,24 +187,24 @@ export function AppSidebar({
     action()
   }
 
-  const searchButton = <button type="button" aria-label="Search anything" onClick={onSearch} className="mx-2 flex h-8 items-center gap-2 rounded-xs px-3 text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden">
+  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={onSearch} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
     <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
     <span className="flex-1 text-left text-[0.8125rem]">Search</span>
     <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
-  </button>
+  </Button>
 
   return (
     <Sidebar side={appearance.sidebarSide} collapsible="icon" className="focal-navigation">
       <SidebarHeader className="gap-5 px-5 pt-7 pb-5 group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-3">
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+          <Button
+            variant="ghost"
+            className="h-auto min-w-0 flex-1 justify-start gap-2 rounded-sm p-0 text-left hover:bg-transparent group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
             <span className="font-heading text-[2.75rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal<span className="text-chart-1">.</span></span>
-          </button>
+          </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/60" />
         </div>
         <SidebarMenu>
@@ -226,7 +228,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
         {commandOpen || commandLoaded ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
-        <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 items-center justify-center rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></button>
+        <Button variant="ghost" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></Button>
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
           if (!items.length) return null

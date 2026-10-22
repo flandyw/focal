@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Card, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
+import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { continuableToday, sessionBlocks, sessionItem } from "../lib/day-plan"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
@@ -13,6 +14,8 @@ import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/t
 import { cn } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
 import type { CanonicalStudySession, StudySessionEdit } from "../lib/sync/sessionContract"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 const SNAP = 5
 const LAST_MINUTE = 24 * 60 - 1
@@ -718,10 +721,11 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                 const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
                 const grab = movable(block) && !selecting && !busy && !razor
                 return (
-                  <button
+                  <Button
+                    variant="ghost"
                     aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
                     aria-pressed={blockSelected(block)}
-                    className={cn("group/block absolute h-5 min-w-0 touch-none rounded-sm text-left text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-3" : "px-0", selected === block.key && "z-10 min-w-6 ring-2 ring-foreground/60", grab && "cursor-grab active:cursor-grabbing")}
+                    className={cn("group/block absolute block h-5 min-w-0 touch-none rounded-sm border-0 text-left font-normal text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-3" : "px-0", selected === block.key && "z-10 min-w-6 ring-2 ring-foreground/60", grab && "cursor-grab active:cursor-grabbing")}
                     key={block.key}
                     onClick={() => select(block)}
                     onDoubleClick={() => zoomTo(block)}
@@ -729,7 +733,6 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                     style={{ ...place(block.start, block.end), top: 4 + (contextRows.row.get(live.key) ?? 0) * 24 }}
                     {...(grab ? adjustProps(live, "move") : {})}
                     title={`${block.title} · ${clock(block.start)}–${clock(block.end)}`}
-                    type="button"
                   >
                     {pixels(block) >= 60 ? <span className="block truncate">{block.title}</span> : null}
                     {grab ? (["start", "end"] as const).map((kind) => (
@@ -737,7 +740,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                         <span className="h-3 w-0.5 rounded-full bg-current opacity-50 transition-opacity group-hover/block:opacity-100 group-focus-visible/block:opacity-100" />
                       </span>
                     )) : null}
-                  </button>
+                  </Button>
                 )
               })}
             </div>
@@ -771,11 +774,12 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               const room = pixels(block)
               const grab = movable(block) && !selecting && !busy
               return (
-                <button
+                <Button
+                  variant="ghost"
                   aria-label={`${block.tone === "todo" ? missed(block) ? "Missed" : "Planned" : block.tone === "live" ? "Studying now" : "Done"}: ${block.title}${block.subject ? `, ${block.subject}` : ""}, ${clock(block.start)} to ${clock(block.end)}`}
                   aria-pressed={blockSelected(block)}
                   disabled={selecting && (block.session?.kind !== "focus" || timing(block.session))}
-                  className={cn("group/block absolute flex h-12 min-w-0 flex-col justify-center overflow-hidden rounded-md text-left text-xs leading-4 whitespace-nowrap shadow-xs transition-[filter,box-shadow] hover:brightness-105 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-3" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "z-10 min-w-6 ring-2 ring-ring ring-offset-1 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
+                  className={cn("group/block absolute flex h-12 min-w-0 flex-col items-stretch justify-center overflow-hidden rounded-md border-0 text-left font-normal text-xs leading-4 whitespace-nowrap shadow-xs transition-[filter,box-shadow] hover:brightness-105 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50", TONE[block.tone], room >= 36 ? "px-3" : "px-0", missed(block) && "border-destructive/50 bg-destructive/10 text-destructive", blockSelected(block) && "z-10 min-w-6 ring-2 ring-ring ring-offset-1 ring-offset-card", razor ? splittable(block) ? "cursor-crosshair" : "cursor-not-allowed" : grab ? "cursor-grab active:cursor-grabbing" : "cursor-pointer")}
                   key={block.key}
                   onClick={(event) => razor ? split(block, event.detail ? minuteAt(event.clientX, false) : splitPoint(block)) : select(block)}
                   onDoubleClick={() => { if (!razor && !selecting) zoomTo(block) }}
@@ -783,7 +787,6 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   style={{ ...place(block.start, block.end), top: 8 + (studyRows.row.get(live.key) ?? 0) * 56, ...subjectStyle(block, missed(block)) }}
                   {...(grab && !razor ? adjustProps(live, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
-                  type="button"
                 >
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
                   {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75 tabular-nums">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)}`}</span> : null}
@@ -792,7 +795,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                       <span className="h-4 w-0.5 rounded-full bg-current opacity-50 transition-opacity group-hover/block:opacity-100 group-focus-visible/block:opacity-100" />
                     </span>
                   )) : null}
-                </button>
+                </Button>
               )
             })}
             {selection ? (
@@ -858,19 +861,19 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               const active = group.some(blockSelected)
               return (
                 <li className="min-w-0 max-w-full" key={block.key}>
-                  <button
+                  <Button
+                    variant="ghost"
                     aria-pressed={active}
                     disabled={selecting && (!block.session || block.session.kind !== "focus" || timing(block.session))}
-                    className={cn("flex max-w-full min-w-0 items-center gap-2 rounded-md border bg-card px-2 py-1 text-left text-xs outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", active && "border-primary/60 bg-primary/5")}
+                    className={cn("h-auto max-w-full min-w-0 justify-start gap-2 rounded-md border-border bg-card px-2 py-1 text-left text-xs font-normal whitespace-normal hover:bg-muted/60", active && "border-primary/60 bg-primary/5")}
                     onClick={() => select(block)}
-                    type="button"
                   >
                     {swatch(block)}
                     <span className="max-w-48 truncate font-medium">{block.title}</span>
                     <span className={cn("shrink-0 text-muted-foreground tabular-nums", missed(block) && "text-destructive")}>
                       {clock(start)}–{clock(end)} · {duration(minutes)}{group.length > 1 ? ` · ${group.length} intervals` : ""}{block.tone === "todo" ? missed(block) ? " · Missed" : " · Planned" : block.tone === "live" ? " · Now" : ""}
                     </span>
-                  </button>
+                  </Button>
                 </li>
               )
             })}
@@ -946,9 +949,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               <Button aria-label="Cancel" className="ml-auto" onClick={() => setDraft(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
             </div>
             {options.length > 12 ? (
-              <select aria-label="Subject" className="h-7 w-fit rounded-md border bg-background px-1.5 text-xs" onChange={(event) => setSubjectId(event.target.value)} value={subjectId}>
-                {options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-              </select>
+              <NativeSelect size="sm" aria-label="Subject" onChange={(event) => setSubjectId(event.target.value)} value={subjectId}>
+                {options.map((option) => <NativeSelectOption key={option.id} value={option.id}>{option.name}</NativeSelectOption>)}
+              </NativeSelect>
             ) : (
               <div aria-label="Subject" className="flex flex-wrap gap-1" role="radiogroup">
                 {options.map((option) => {
@@ -968,10 +971,10 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                 ))}
                 {clash.length ? <span className="ml-1 text-xs text-muted-foreground">Overlaps {clash.slice(0, 2).map((block) => block.title).join(", ")}{clash.length > 2 ? ` +${clash.length - 2}` : ""}</span> : null}
               </div>
-              <label className={cn("flex w-fit items-center gap-2 text-xs", draft.end > now && "text-muted-foreground")}>
-                <input checked={done} className="size-3.5 accent-primary" disabled={draft.end > now} onChange={(event) => setDoneOverride(event.target.checked)} type="checkbox" />
+              <Label className={cn("flex w-fit items-center gap-2 text-xs", draft.end > now && "text-muted-foreground")}>
+                <Checkbox checked={done} disabled={draft.end > now} onCheckedChange={(checked) => setDoneOverride(checked)} />
                 Done{draft.end > now ? " (it hasn't finished yet)" : ""}
-              </label>
+              </Label>
             </div>
             <div className="flex flex-wrap gap-2">
               <Input aria-label="Study title" className="h-8 min-w-0 flex-1 basis-40" onChange={(event) => setTitle(event.target.value)} placeholder={`${options.find((option) => option.id === subjectId)?.name ?? "Study"} study`} ref={titleInput} value={title} />

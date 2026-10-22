@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
-function isSecureEndpoint(value: string | undefined): boolean {
+export function isSecureEndpoint(value: string | undefined): boolean {
   if (!value) return false
   try {
     const url = new URL(value)

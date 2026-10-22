@@ -1,6 +1,7 @@
 import { X } from "lucide-react"
 
 import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "./ui/select"
 import { groupBy, itemGroup } from "../lib/stoplight"
 import type { CurriculumArea } from "../lib/learning-workspace"
@@ -21,7 +22,7 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
       {chosen.length ? <div className="flex flex-wrap gap-1.5">{chosen.map((item) => (
         <Badge key={item.id} variant="secondary" className="gap-1">
           {item.name}
-          <button type="button" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X className="size-3" /></button>
+          <Button variant="ghost" size="icon-xs" className="size-4" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X /></Button>
         </Badge>
       ))}</div> : null}
       {value.length < 3 && options.length ? (

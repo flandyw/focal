@@ -4,7 +4,10 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
 import { Button } from "./components/ui/button"
+import { CircleAccretionDiskLoader } from "./components/ui/circle-accretion-disk-loader"
+import { Label } from "./components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
 import { PastStudyForm } from "./components/planning/PastStudyForm"
 import type { CalendarEvent, TimetableConfig } from "./lib/types"
@@ -14,7 +17,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "./components/ui/sidebar"
-import { Skeleton } from "./components/ui/skeleton"
 import { Toaster } from "./components/ui/sonner"
 import {
   EMPTY_APP_DATA,
@@ -55,7 +57,8 @@ import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, t
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
-const PAGE_LOADING = <div role="status" className="grid gap-6"><span className="sr-only">Loading page…</span><Skeleton className="h-12 w-56" /><Skeleton className="h-72 w-full" /></div>
+const ChatPage = lazy(() => import("./components/chat-page").then((module) => ({ default: module.ChatPage })))
+const PAGE_LOADING = <div className="grid min-h-[50dvh] place-items-center text-muted-foreground"><CircleAccretionDiskLoader dotSize={6} gap={5} /></div>
 
 const ExamPicker = lazy(() => import("./components/exam-picker").then((module) => ({ default: module.ExamPicker })))
 
@@ -135,6 +138,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const sync = useSupabaseSync(data, setData)
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
+  const [pendingImport, setPendingImport] = useState<AppData | null>(null)
   // Timer moves queue durably and reach the server a moment later: "saved" means both outboxes are empty.
   const examSaveStatus = sync.status === "synced" && studySessionSync.queued === 0
     ? "Saved to your account. Open Focal on another device and sign in to the same account to continue."
@@ -162,7 +166,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
 
   const selectedSubject = chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
-  const globalView = ["calendar", "timetable", "predictor", "settings", "focus", "friends"].includes(view)
+  const globalView = ["calendar", "chat", "timetable", "predictor", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
   const pageData = useMemo(() => subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data, [subjectScoped, workspace, data])
@@ -664,10 +668,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   async function importData(file: File) {
     try {
-      const imported = parseAppDataFile(await file.text())
-      if (!window.confirm(`Replace current data with ${imported.attempts.length} exams, ${imported.sacRecords.length} SACs, and ${imported.mistakes.length} mistakes?`)) return
-      setData(imported)
-      toast.success("Focal data imported")
+      setPendingImport(parseAppDataFile(await file.text()))
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not import this file.")
     }
@@ -707,7 +708,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         <main id="main-content" tabIndex={-1} className="w-full min-w-0 px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] outline-none sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12">
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
-              <label htmlFor="workspace-subject" className="mb-1.5 block text-xs font-medium text-muted-foreground">Subject</label>
+              <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>
               <SubjectCombobox id="workspace-subject" subjects={subjectOptions} preferredSubjects={data.subjects} includeAll value={subjectValue} onValueChange={chooseSubject} />
             </div>
             <p className="pb-2 text-xs text-muted-foreground" role="status">{selectedSubject === "all" ? "Showing all subjects. Choose one to focus your workspace." : `Showing ${subjectValue} only.${view === "sacs" && data.activeSacTimer && !sameStudySubject(data.activeSacTimer.subject, selectedSubject) ? ` Active timer: ${data.activeSacTimer.subject}.` : ""}`}</p>
@@ -716,6 +717,18 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
             <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>
           </div> : null}
+          <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open) setPendingImport(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Replace current data?</AlertDialogTitle>
+                <AlertDialogDescription>{pendingImport && `This replaces everything with ${pendingImport.attempts.length} exams, ${pendingImport.sacRecords.length} SACs, and ${pendingImport.mistakes.length} mistakes.`}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { if (pendingImport) { setData(pendingImport); toast.success("Focal data imported") } setPendingImport(null) }}>Replace</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
@@ -804,6 +817,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "friends" ? <Suspense fallback={PAGE_LOADING}><FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} onSignIn={() => setView("settings")} /></Suspense> : null}
+          {view === "chat" ? <Suspense fallback={PAGE_LOADING}><ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => setView("settings")} /></Suspense> : null}
           {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} /></Suspense> : null}
           </div>
         </main>

@@ -21,6 +21,9 @@ import {
 } from "../lib/class-timetable"
 import { subjectColor } from "../lib/studySubjects"
 import type { SchoolHoliday, TimetableConfig, TimetablePeriod } from "../lib/types"
+import { Checkbox } from "./ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
+import { Label } from "./ui/label"
 
 const byStart = (a: TimetablePeriod, b: TimetablePeriod) => a.startTime.localeCompare(b.startTime)
 const dayPeriods = (config: TimetableConfig, day: number) => config.entries.filter((entry) => entry.dayLabel === day).flatMap((entry) => entry.periods).toSorted(byStart)
@@ -112,7 +115,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             </div>
 
             <div className="flex border-b md:hidden">
-              {days.map((label) => <button aria-pressed={day === label} className={`min-h-16 min-w-0 flex-1 border-b-2 px-1 py-3 text-center ${day === label ? "border-primary bg-secondary/50 text-primary" : "border-transparent text-muted-foreground"}`} key={label} onClick={() => setSelectedDay(label)} type="button"><span className="block font-heading text-xl">Day {label}</span>{today === label ? <span className="text-[10px]">Today</span> : null}</button>)}
+              {days.map((label) => <Button variant="ghost" aria-pressed={day === label} className={`h-auto min-h-16 min-w-0 flex-1 flex-col rounded-none border-0 border-b-2 px-1 py-3 text-center font-normal ${day === label ? "border-primary bg-secondary/50 text-primary" : "border-transparent text-muted-foreground"}`} key={label} onClick={() => setSelectedDay(label)}><span className="block font-heading text-xl">Day {label}</span>{today === label ? <span className="text-[10px]">Today</span> : null}</Button>)}
             </div>
             <div className="hidden md:block">
               <CycleBoard config={config} days={days} selected={day} today={today} onSelect={setSelectedDay} onEdit={(label, period) => { setSelectedDay(label); setEditor({ day: label, original: period, draft: { ...period, subject: periodSubjectName(period) } }) }} />
@@ -131,12 +134,12 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             <div className="min-w-0">
               {periods.length ? <ol className="divide-y border-y">
                 {periods.map((period, index) => <li key={index}>
-                  <button aria-label={`Edit ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}`} className="group flex w-full items-center gap-3 py-4 text-left transition-colors hover:bg-secondary/40 sm:gap-5" onClick={() => setEditor({ day, original: period, draft: { ...period, subject: periodSubjectName(period) } })} type="button">
+                  <Button variant="ghost" aria-label={`Edit ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}`} className="group h-auto w-full justify-start gap-3 rounded-none border-0 px-0 py-4 text-left font-normal whitespace-normal hover:bg-secondary/40 sm:gap-5" onClick={() => setEditor({ day, original: period, draft: { ...period, subject: periodSubjectName(period) } })}>
                     <div className="w-20 shrink-0 text-xs tabular-nums text-muted-foreground"><span className="block font-medium text-foreground">{timeLabel(period.startTime)}</span><span className="mt-1 block">{timeLabel(period.endTime)}</span></div>
                     <span className="h-9 w-0.5 shrink-0" style={{ backgroundColor: periodColour(period) }} />
                     <div className="min-w-0 flex-1"><span className={`block break-words ${isBreak(period) ? "text-sm text-muted-foreground" : "font-heading text-xl"}`}>{periodSubjectName(period) || period.period}</span><span className="mt-1 block text-xs text-muted-foreground">{period.subject ? period.period : isBreak(period) ? `${minutes(period.endTime) - minutes(period.startTime)} minutes` : "Subject not set"}{period.location ? ` · ${period.location}` : ""}</span>{getTimetablePeriodError(period) ? <span className="mt-1 block text-xs text-destructive">{getTimetablePeriodError(period)}</span> : null}</div>
                     <Pencil className="mr-2 size-3.5 shrink-0 text-muted-foreground opacity-50 group-hover:text-primary group-hover:opacity-100" />
-                  </button>
+                  </Button>
                 </li>)}
               </ol> : <div className="flex min-h-36 flex-col justify-center border-y border-dashed py-6"><p className="font-heading text-2xl">Start with the first bell.</p><p className="mt-2 text-sm text-muted-foreground">Add classes and breaks, with their times and rooms.</p></div>}
             </div>
@@ -182,15 +185,15 @@ function CycleBoard({ config, days, selected, today, onSelect, onEdit }: {
     <div className="overflow-x-auto border-b bg-card">
       <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `52px repeat(${days.length}, minmax(0, 1fr))` }}>
         <div className="border-b" />
-        {columns.map(({ day, periods }) => <button aria-pressed={selected === day} className={`relative flex min-h-20 flex-col justify-center border-b border-l px-3 py-4 text-left transition-colors hover:bg-secondary/40 ${selected === day ? "bg-secondary/60 text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary" : ""}`} key={day} onClick={() => onSelect(day)} type="button"><span className="flex flex-wrap items-center justify-between gap-1 font-heading text-2xl">Day {day}{today === day ? <span className="font-sans text-[10px] font-medium">Today</span> : null}</span><span className="mt-1 text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span></button>)}
+        {columns.map(({ day, periods }) => <Button variant="ghost" aria-pressed={selected === day} className={`relative h-auto min-h-20 flex-col items-stretch justify-center rounded-none border-0 border-b border-l border-border px-3 py-4 text-left font-normal whitespace-normal hover:bg-secondary/40 ${selected === day ? "bg-secondary/60 text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary" : ""}`} key={day} onClick={() => onSelect(day)}><span className="flex flex-wrap items-center justify-between gap-1 font-heading text-2xl">Day {day}{today === day ? <span className="font-sans text-[10px] font-medium">Today</span> : null}</span><span className="mt-1 text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span></Button>)}
         <div aria-hidden="true" className="relative" style={{ height: height * 1.35 }}>
           {hours.map((hour) => <span className="absolute right-2 text-[10px] tabular-nums text-muted-foreground" key={hour} style={{ top: (hour - start) * 1.35 + 6 }}>{String(Math.floor(hour / 60) % 24).padStart(2, "0")}:00</span>)}
         </div>
         {columns.map(({ day, periods, lanes }) => <div className={`relative grid grid-flow-col-dense gap-x-1 border-l px-1.5 ${selected === day ? "bg-secondary/15" : ""}`} key={day} style={{ height: height * 1.35, gridTemplateColumns: `repeat(${lanes}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${height}, 1.35px)`, backgroundImage: "repeating-linear-gradient(to bottom, var(--border) 0px, var(--border) 1px, transparent 1px, transparent 81px)" }}>
-          {periods.filter((period) => !getTimetablePeriodError(period)).map((period, index) => <button aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${minutes(period.endTime) - minutes(period.startTime) < 20 ? "my-px" : "my-0.5"} min-w-0 overflow-hidden border-l-2 px-2 text-left transition-[filter] hover:brightness-95 ${isBreak(period) ? "border-dashed" : ""} ${minutes(period.endTime) - minutes(period.startTime) < 35 ? "flex items-center py-0" : isBreak(period) ? "py-1" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${minutes(period.endTime) - minutes(period.startTime)}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", borderColor: periodColour(period), backgroundColor: `color-mix(in srgb, ${periodColour(period)} ${isBreak(period) ? 7 : 13}%, var(--card))` }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
+          {periods.filter((period) => !getTimetablePeriodError(period)).map((period, index) => <Button variant="ghost" aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${minutes(period.endTime) - minutes(period.startTime) < 20 ? "my-px" : "my-0.5"} h-auto min-w-0 flex-col items-stretch justify-start overflow-hidden rounded-none border-0 border-l-2 px-2 text-left font-normal whitespace-normal hover:brightness-95 ${isBreak(period) ? "border-dashed" : ""} ${minutes(period.endTime) - minutes(period.startTime) < 35 ? "justify-center py-0" : isBreak(period) ? "py-1" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${minutes(period.endTime) - minutes(period.startTime)}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", borderColor: periodColour(period), backgroundColor: `color-mix(in srgb, ${periodColour(period)} ${isBreak(period) ? 7 : 13}%, var(--card))` }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
             <span className={`block ${minutes(period.endTime) - minutes(period.startTime) < 20 ? "truncate text-[10px] leading-none" : minutes(period.endTime) - minutes(period.startTime) < 35 ? "truncate text-xs leading-tight" : `break-words leading-tight ${isBreak(period) ? "text-xs" : "text-[17px]"}`} ${isBreak(period) ? "text-muted-foreground" : "font-heading"}`}>{periodSubjectName(period) || period.period}</span>
             {minutes(period.endTime) - minutes(period.startTime) >= 35 ? <span className="mt-1 flex flex-wrap justify-between gap-x-1 text-[10px] tabular-nums text-muted-foreground"><span>{period.startTime}–{period.endTime}</span>{period.location ? <span className="truncate">{period.location}</span> : null}</span> : null}
-          </button>)}
+          </Button>)}
           {!periods.length ? <p className="pointer-events-none absolute inset-x-2 top-10 text-center font-heading text-lg text-muted-foreground/70">An open day</p> : null}
         </div>)}
       </div>
@@ -244,7 +247,7 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
           <FieldGroup>
             <Field><FieldLabel htmlFor="tt-day1">Day 1 starts</FieldLabel><Input id="tt-day1" required type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
             <Field><FieldLabel htmlFor="tt-cycle">Days in the cycle</FieldLabel><Input id="tt-cycle" required max={60} min={1} type="number" value={length} onChange={(e) => setLength(e.target.value)} /><FieldDescription>Choose between 1 and 60 school days.</FieldDescription></Field>
-            <label className="flex items-center gap-3 text-sm"><input className="size-4 accent-primary" type="checkbox" checked={weekends} onChange={(e) => setWeekends(e.target.checked)} />Include weekends as school days</label>
+            <Label className="flex items-center gap-3 text-sm"><Checkbox checked={weekends} onCheckedChange={(checked) => setWeekends(checked)} />Include weekends as school days</Label>
             {valid && removed > 0 ? <p className="border-l-2 border-destructive bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
           </FieldGroup>
           <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!valid} type="submit">{removed > 0 && valid ? "Save & remove periods" : "Save cycle"}</Button></DialogFooter>
@@ -258,9 +261,9 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
   const [draft, setDraft] = useState<SchoolHoliday>({ name: "", startDate: "", endDate: "" })
   const valid = draft.name.trim() && draft.startDate && draft.endDate >= draft.startDate
   return (
-    <details className="group border-y">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 [&::-webkit-details-marker]:hidden"><div><h2 className="font-heading text-2xl">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" /></summary>
-      <div className="grid gap-5 pb-6">
+    <Collapsible className="border-y">
+      <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-4 py-5 text-left"><div><h2 className="font-heading text-2xl">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" /></CollapsibleTrigger>
+      <CollapsibleContent keepMounted><div className="grid gap-5 pb-6">
         {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) })} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
         <form className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); if (!valid) return; onChange({ ...config, holidays: [...config.holidays, { ...draft, name: draft.name.trim() }].toSorted((a, b) => a.startDate.localeCompare(b.startDate)) }); setDraft({ name: "", startDate: "", endDate: "" }); toast("Holiday added") }}>
           <Field><FieldLabel htmlFor="tt-holiday-name">Holiday name</FieldLabel><Input id="tt-holiday-name" required placeholder="Term break" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
@@ -268,8 +271,8 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
           <Field><FieldLabel htmlFor="tt-holiday-end">Until</FieldLabel><Input id="tt-holiday-end" required min={draft.startDate} type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></Field>
           <Button disabled={!valid} type="submit" variant="outline"><Plus />Add holiday</Button>
         </form>
-      </div>
-    </details>
+      </div></CollapsibleContent>
+    </Collapsible>
   )
 }
 

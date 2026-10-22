@@ -1,0 +1,93 @@
+.atom-loader,.dot-loader{grid-template-columns:repeat(var(--cols,5), var(--dot-size,5px));grid-template-rows:repeat(var(--rows,5), var(--dot-size,5px));gap:var(--gap,4px);color:currentColor;width:max-content;height:max-content;display:grid}
+.atom-loader span,.dot-loader span{grid-column:var(--x);grid-row:var(--y);width:var(--dot-size,5px);height:var(--dot-size,5px);background:var(--dot-bg,var(--dot-color,currentColor));opacity:var(--idle-opacity,.08);animation:dot-idle var(--speed,1.2s) ease-in-out infinite;animation-delay:var(--delay,0s);will-change:opacity, transform;border-radius:50%;transition:background .2s,opacity .2s,transform .2s}
+.atom-loader span.active,.dot-loader span.active{opacity:.35;animation-name:dot-active}
+.atom-loader.has-bloom span.active,.dot-loader.has-bloom span.active{filter:drop-shadow(0 0 3px var(--dot-bg,var(--dot-color,currentColor)))}
+@keyframes dot-idle{0%,to{opacity:.08;transform:scale(.75)}
+50%{opacity:.22;transform:scale(.9)}}
+@keyframes dot-active{0%,to{opacity:.25;transform:scale(.8)}
+50%{opacity:1;transform:scale(1.1)}}
+@keyframes dot-orbit{0%{opacity:.15;transform:scale(.8)}
+20%{opacity:1;transform:scale(1.2)}
+60%{opacity:.35;transform:scale(.95)}
+to{opacity:.15;transform:scale(.8)}}
+@keyframes dot-wave{0%,to{opacity:.18;transform:scale(.82)translateY(0)}
+45%{opacity:1;transform:scale(1.15)translateY(-1px)}
+70%{opacity:.4;transform:scale(.9)translateY(0)}}
+@keyframes dot-breathe{0%,to{opacity:.2;transform:scale(.85)}
+50%{opacity:.95;transform:scale(1.1)}}
+@keyframes dot-pop{0%,to{opacity:.2;transform:scale(.8)}
+30%{opacity:1;transform:scale(1.25)}
+50%{opacity:.6;transform:scale(.95)}}
+@keyframes dot-flicker{0%,to{opacity:.2;transform:scale(.9)}
+15%{opacity:.9;transform:scale(1.1)}
+25%{opacity:.3;transform:scale(.85)}
+45%{opacity:1;transform:scale(1.15)}
+60%{opacity:.15;transform:scale(.8)}
+80%{opacity:.85;transform:scale(1.05)}}
+@keyframes dot-leapfrog{0%,to{opacity:.2;transform:scale(.8)translateY(0)}
+35%{opacity:1;transform:scale(1.2)translateY(-2px)}
+65%{opacity:.5;transform:scale(.95)translateY(0)}}
+@keyframes dot-collapse{0%{opacity:.9;transform:scale(1.1)}
+50%{opacity:.2;transform:scale(.7)}
+to{opacity:.9;transform:scale(1.1)}}
+@keyframes dot-burst{0%{opacity:.2;transform:scale(.7)}
+30%{opacity:1;transform:scale(1.3)}
+70%{opacity:.4;transform:scale(.9)}
+to{opacity:.2;transform:scale(.7)}}
+@keyframes dot-iris{0%,to{opacity:.18;transform:scale(.78)}
+50%{opacity:1;transform:scale(1.18)}}
+@keyframes dot-snake{0%{opacity:.15;transform:scale(.8)}
+25%{opacity:1;transform:scale(1.2)}
+50%{opacity:.5;transform:scale(.95)}
+75%{opacity:.25;transform:scale(.85)}
+to{opacity:.15;transform:scale(.8)}}
+@keyframes dot-counterflow{0%,to{opacity:.25;transform:scale(.85)translate(0)}
+50%{opacity:1;transform:scale(1.15)translate(1px)}}
+@keyframes dot-radar{0%{opacity:.15;transform:scale(.8)}
+15%{opacity:1;transform:scale(1.2)}
+45%{opacity:.4;transform:scale(.95)}
+to{opacity:.15;transform:scale(.8)}}
+@keyframes dot-magnet{0%,to{opacity:.2;transform:scale(.8)}
+40%{opacity:1;transform:scale(1.2)}
+70%{opacity:.35;transform:scale(.85)}}
+@keyframes dot-dna{0%,to{opacity:.2;transform:scale(.8)translateY(-1px)}
+50%{opacity:1;transform:scale(1.18)translateY(1px)}}
+@keyframes dot-vortex{0%{opacity:.15;transform:scale(.75)rotate(0)}
+35%{opacity:1;transform:scale(1.25)rotate(45deg)}
+70%{opacity:.4;transform:scale(.9)rotate(90deg)}
+to{opacity:.15;transform:scale(.75)rotate(180deg)}}
+@keyframes dot-stair{0%,to{opacity:.15;transform:scale(.8)}
+30%{opacity:1;transform:scale(1.2)}
+60%{opacity:.3;transform:scale(.85)}}
+@keyframes dot-checker{0%,45%{opacity:1;transform:scale(1.15)}
+50%,95%{opacity:.18;transform:scale(.8)}
+to{opacity:1;transform:scale(1.15)}}
+@keyframes dot-glitch{0%,to{opacity:.3;transform:scale(.85)translate(0)}
+20%{opacity:1;transform:scale(1.2)translate(-1px)}
+40%{opacity:.2;transform:scale(.8)translate(1px,-1px)}
+65%{opacity:.95;transform:scale(1.15)translateY(1px)}
+85%{opacity:.25;transform:scale(.85)translate(-1px,1px)}}
+@keyframes dot-scan{0%,to{opacity:.15;transform:scale(.8)}
+25%{opacity:1;transform:scale(1.2)}
+50%{opacity:.3;transform:scale(.85)}}
+.dot-loader[data-motion=orbit] span.active{animation-name:dot-orbit}
+.dot-loader[data-motion=wave] span.active{animation-name:dot-wave}
+.dot-loader[data-motion=breathe] span.active{animation-name:dot-breathe}
+.dot-loader[data-motion=pop] span.active{animation-name:dot-pop}
+.dot-loader[data-motion=flicker] span.active{animation-name:dot-flicker}
+.dot-loader[data-motion=leapfrog] span.active{animation-name:dot-leapfrog}
+.dot-loader[data-motion=collapse] span.active{animation-name:dot-collapse}
+.dot-loader[data-motion=burst] span.active{animation-name:dot-burst}
+.dot-loader[data-motion=iris] span.active{animation-name:dot-iris}
+.dot-loader[data-motion=snake] span.active{animation-name:dot-snake}
+.dot-loader[data-motion=counterflow] span.active{animation-name:dot-counterflow}
+.dot-loader[data-motion=radar] span.active{animation-name:dot-radar}
+.dot-loader[data-motion=magnet] span.active{animation-name:dot-magnet}
+.dot-loader[data-motion=dna] span.active{animation-name:dot-dna}
+.dot-loader[data-motion=vortex] span.active{animation-name:dot-vortex}
+.dot-loader[data-motion=stair] span.active{animation-name:dot-stair}
+.dot-loader[data-motion=checker] span.active{animation-name:dot-checker}
+.dot-loader[data-motion=glitch] span.active{animation-name:dot-glitch}
+.dot-loader[data-motion=scan] span.active{animation-name:dot-scan}
+@media (prefers-reduced-motion:reduce){.atom-loader span,.dot-loader span{opacity:.15;animation:none}
+.atom-loader span.active,.dot-loader span.active{opacity:.95;transform:none}}

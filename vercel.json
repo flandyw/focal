@@ -14,6 +14,10 @@
     }
   ],
   "functions": {
+    "api/chat.ts": {
+      "maxDuration": 60,
+      "includeFiles": "public/**/*.json"
+    },
     "api/mistakes-pdf.ts": {
       "maxDuration": 60
     }

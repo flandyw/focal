@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { AsyncLocalStorage } from "node:async_hooks"
 import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { diffAppData, TIMETABLE_ROW } from "../../src/lib/app-rows"
 import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents, normalizeMistakeReviewPreferences, type AppData, type AssessmentReference } from "../../src/lib/exam-data"
@@ -26,6 +27,7 @@ const snapshots = new Map<string, { at: number; rows: Promise<Map<string, Row>> 
 
 type Connection = { sb: SupabaseClient; userId: string }
 const requestUser = new AsyncLocalStorage<string>()
+const requestConnection = new AsyncLocalStorage<Connection>()
 const connections = new Map<string, Promise<Connection>>()
 
 /** stdio has one user for the whole process: the owner of FOCAL_MCP_TOKEN. */
@@ -37,6 +39,10 @@ export async function useStdioToken(token: string | undefined) {
 
 /** Run `work` as `userId`; every store call inside it acts as that user. */
 export const asUser = <T>(userId: string, work: () => Promise<T>) => requestUser.run(userId, work)
+
+/** Chat uses the caller's verified session directly; it never needs a service-role key. */
+export const asSession = <T>(sb: SupabaseClient, userId: string, work: () => Promise<T>) =>
+  asUser(userId, () => requestConnection.run({ sb, userId }, work))
 
 const adminClient = () => {
   const url = process.env.VITE_SUPABASE_URL
@@ -61,6 +67,8 @@ export async function resolveToken(token: string): Promise<string | null> {
  * is sent) and the client redeems it, so every RPC runs with that user's own JWT.
  */
 function connect(): Promise<Connection> {
+  const session = requestConnection.getStore()
+  if (session) return Promise.resolve(session)
   const userId = requestUser.getStore() ?? stdioUser
   if (!userId) throw new Error("No authenticated user for this request.")
   if (!connections.has(userId)) {
@@ -231,7 +239,7 @@ export async function sessionCommand(command: Omit<StudySessionCommand, "mutatio
 
 const assets = new Map<string, Promise<unknown>>()
 function asset(name: string): Promise<unknown> {
-  if (!assets.has(name)) assets.set(name, readFile(new URL(`../../public/${name}`, import.meta.url), "utf8").then(JSON.parse))
+  if (!assets.has(name)) assets.set(name, readFile(process.env.VERCEL ? join(process.cwd(), "public", name) : new URL(`../../public/${name}`, import.meta.url), "utf8").then(JSON.parse))
   return assets.get(name)!
 }
 const list = <T>(value: unknown): T[] => Array.isArray(value) ? value as T[] : []

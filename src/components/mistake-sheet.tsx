@@ -2,17 +2,20 @@ import { useState, type FormEvent } from "react"
 import { useChatGPT } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
-import { ArrowLeft, Images, Pencil, Sparkles, X } from "lucide-react"
+import { ArrowLeft, ChevronDown, Images, Pencil, Sparkles, X } from "lucide-react"
 import { MistakeAttachments } from "./mistake-attachments"
 import type { CurriculumArea } from "../lib/learning-workspace"
 import { SubjectCombobox } from "./subject-combobox"
 import { StoplightItemPicker } from "./stoplight-item-picker"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
+import { Checkbox } from "./ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 import {
   Combobox,
   ComboboxContent,
@@ -453,9 +456,9 @@ export function MistakeSheet({
                 </div>
               ) : AI_ENABLED ? (
                 <Field>
-                  <details className="rounded-xl border bg-muted/20 p-4">
-                    <summary className="cursor-pointer text-sm font-semibold">Images & AI assistance <span className="font-normal text-muted-foreground">· optional</span></summary>
-                    <div className="mt-4 grid gap-4">
+                  <Collapsible className="rounded-xl border bg-muted/20 p-4">
+                    <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between text-sm font-semibold"><span>Images & AI assistance <span className="font-normal text-muted-foreground">· optional</span></span><ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger>
+                    <CollapsibleContent keepMounted><div className="mt-4 grid gap-4">
                   <FieldLabel htmlFor="mistake-image">Prompt, response, and feedback images</FieldLabel>
                   {!initialMistake ? (
                     <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-1">
@@ -491,17 +494,17 @@ export function MistakeSheet({
                   <FieldDescription>{importMode === "batch" ? "Optionally choose a shared exam, then add 2–10 images. Each image becomes a separate mistake in the same order; each can be up to 3 MB and the batch up to 15 MB." : "Optionally choose an exam, then upload one or more related images totalling up to 3 MB. Matching VCAA attempts also include the official exam PDF for context."}</FieldDescription>
                   {images.map((file, index) => <div key={index} className="flex items-center justify-between gap-2 text-sm"><span className="truncate">{index + 1}. {file.name}</span><Button type="button" size="icon-xs" variant="ghost" disabled={saving || analysing || batchDrafts.length > 0} aria-label={"Remove AI image " + (index + 1)} onClick={() => setImages((files) => files.filter((_, i) => i !== index))}><X /></Button></div>)}
                   {images.length ? (
-                    <label className="flex items-start gap-2 rounded-lg border p-3 text-sm">
-                      <input type="checkbox" className="mt-0.5 size-4" checked={saveImages} disabled={!storageUserId} onChange={(event) => { setSaveImages(event.target.checked); setError(null) }} />
+                    <Label className="items-start rounded-lg border p-3 text-sm leading-normal">
+                      <Checkbox className="mt-0.5" checked={saveImages} disabled={!storageUserId} onCheckedChange={(checked) => { setSaveImages(checked); setError(null) }} />
                       <span><span className="font-medium">Save {importMode === "batch" ? "each image with its mistake" : "these images with the mistake"}</span><br /><span className="text-xs text-muted-foreground">{storageUserId ? "Keeps graphs, annotations, and other context available during review." : "Sign in to Focal sync in Settings to store private image attachments."}</span></span>
-                    </label>
+                    </Label>
                   ) : null}
                   {progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <ChatGPTConnection />
                   </div>
                     </div>
-                  </details>
+                  </CollapsibleContent></Collapsible>
                 </Field>
               ) : null}
 

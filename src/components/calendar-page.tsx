@@ -386,10 +386,10 @@ export function CalendarPage({
               </CardDescription>
               {plan.totalCount ? <Progress aria-label="Day completed" className="h-1" value={completion} /> : null}
               {plan.dueMistakes ? (
-                <button className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground" onClick={() => onNavigate("mistakes")} type="button">
+                <Button variant="ghost" size="xs" className="w-fit px-0 text-muted-foreground hover:bg-transparent" onClick={() => onNavigate("mistakes")}>
                   <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK.mistakes)} />
                   {plan.dueMistakes} mistake{plan.dueMistakes === 1 ? "" : "s"} due for review
-                </button>
+                </Button>
               ) : null}
             </CardHeader>
             <CardContent className="grid shrink-0 gap-3" key={selected}>
@@ -409,7 +409,7 @@ export function CalendarPage({
                 </DaySection>
               ) : classTimetable ? null : (
                 <p className="text-xs text-muted-foreground">
-                  <button className="underline underline-offset-2" onClick={onOpenTimetable} type="button">Set up your class timetable</button> to see classes here and align events to class times.
+                  <Button variant="link" className="h-auto p-0 text-inherit underline" onClick={onOpenTimetable}>Set up your class timetable</Button> to see classes here and align events to class times.
                 </p>
               )}
               {open.length ? (
@@ -498,7 +498,8 @@ function DayCell({ day, active, weekend, onSelect }: {
   const visible = open.slice(0, CELL_LINES)
   const overflow = open.length - visible.length
   return (
-    <button
+    <Button
+      variant="ghost"
       aria-current={day.isToday ? "date" : undefined}
       aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
       aria-pressed={active}
@@ -512,13 +513,12 @@ function DayCell({ day, active, weekend, onSelect }: {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-calendar-date="${next}"]`)?.focus())
       }}
       className={cn(
-        "relative flex min-h-18 min-w-0 flex-col gap-1 border-l border-border p-1 text-left outline-none transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:min-h-32 sm:p-1",
+        "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset sm:min-h-32 sm:p-1",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
         active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
       )}
       onClick={() => onSelect(day.date)}
-      type="button"
     >
       <span className="flex shrink-0 items-center justify-between gap-1 pl-0.5">
         <span className={cn(
@@ -561,7 +561,7 @@ function DayCell({ day, active, weekend, onSelect }: {
           </span>
         ) : null}
       </span>
-    </button>
+    </Button>
   )
 }
 

@@ -3,8 +3,10 @@ import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "./ui/button"
+import { Checkbox } from "./ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
+import { Label } from "./ui/label"
 import { Textarea } from "./ui/textarea"
 import { buildChatbotImportPrompt, parseTextEventResponse, type TextEventDraft } from "../lib/calendarImport"
 
@@ -86,16 +88,14 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
             <ul className="divide-y rounded-lg border" aria-label="Items to import">
               {drafts.map((draft, index) => (
                 <li key={index}>
-                  <label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-primary"
+                  <Label className="cursor-pointer gap-3 px-3 py-2 font-normal">
+                    <Checkbox
                       checked={!skipped.has(index)}
-                      onChange={() => setSkipped((current) => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next })}
+                      onCheckedChange={() => setSkipped((current) => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next })}
                     />
                     <span className="min-w-0 flex-1 truncate font-medium">{draft.title}</span>
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{draft.date} · {draft.startTime} · {draft.durationMinutes}m</span>
-                  </label>
+                  </Label>
                 </li>
               ))}
             </ul>

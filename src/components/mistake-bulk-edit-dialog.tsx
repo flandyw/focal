@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Textarea } from "./ui/textarea"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 const FIELD_LABELS: Record<MistakeEditField, string> = {
   question: "Question label",
@@ -100,7 +102,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <Field>
               <FieldLabel>Fields ChatGPT may change</FieldLabel>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {MISTAKE_EDIT_FIELDS.map((field) => <label key={field} className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={fields.has(field)} onChange={() => toggleField(field)} />{FIELD_LABELS[field]}</label>)}
+                {MISTAKE_EDIT_FIELDS.map((field) => <Label key={field} className="flex items-center gap-2 text-sm"><Checkbox checked={fields.has(field)} onCheckedChange={() => toggleField(field)} />{FIELD_LABELS[field]}</Label>)}
               </div>
             </Field>
             <Field>
@@ -116,7 +118,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <div className="max-h-96 overflow-y-auto rounded-lg border">
               {changes.map(({ mistake, list }) => (
                 <div key={mistake.id} className="grid gap-2 border-b p-3 text-sm last:border-b-0">
-                  <label className="flex items-center gap-2 font-medium"><input type="checkbox" className="size-4 accent-primary" checked={!skipped.has(mistake.id)} onChange={() => setSkipped((value) => { const next = new Set(value); if (next.has(mistake.id)) next.delete(mistake.id); else next.add(mistake.id); return next })} />{mistake.question}</label>
+                  <Label className="flex items-center gap-2 font-medium"><Checkbox checked={!skipped.has(mistake.id)} onCheckedChange={() => setSkipped((value) => { const next = new Set(value); if (next.has(mistake.id)) next.delete(mistake.id); else next.add(mistake.id); return next })} />{mistake.question}</Label>
                   {list.map(({ field, before, after }) => (
                     <div key={field} className="grid gap-2 sm:grid-cols-2">
                       <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{FIELD_LABELS[field]} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || "(empty)"}</pre></div>

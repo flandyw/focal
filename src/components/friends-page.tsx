@@ -18,6 +18,9 @@ import { getHeatColor, getSubjectColor } from "../lib/progress-chart-theme"
 import { getSubjectById } from "../lib/progress-utils"
 import { supabase } from "../lib/supabase"
 import { cn } from "../lib/utils"
+import { Avatar, AvatarBadge, AvatarFallback } from "./ui/avatar"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 type SharedExam = { subject: string | null; title: string | null; provider: string | null; examYear: number | null; paper: string | null; referenceId: string | null; rawScore: number | null; rawMax: number | null; completedAt: string | null }
 type Person = {
@@ -73,12 +76,12 @@ function activity(person: Person, now: Date, fetchedAt: number) {
   }
 }
 
-function Avatar({ person, className }: { person: Person; className?: string }) {
+function PersonAvatar({ person, className }: { person: Person; className?: string }) {
   return (
-    <span className={cn("relative flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium", className)} aria-hidden>
-      {person.display_name.slice(0, 1).toUpperCase()}
-      {person.studying_since ? <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-card bg-primary" /> : null}
-    </span>
+    <Avatar className={cn("size-9 text-sm font-medium", className)} aria-hidden>
+      <AvatarFallback className="text-[length:inherit]">{person.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
+      {person.studying_since ? <AvatarBadge /> : null}
+    </Avatar>
   )
 }
 
@@ -276,7 +279,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
           {([incoming, outgoing] as const).map((requests, index) => requests.length ? <div key={index} className="grid content-start gap-3">
             <h3 className="text-sm text-muted-foreground">{index === 0 ? "Received" : "Sent"} · {requests.length}</h3>
             {requests.map((person) => <div key={person.user_id} className="flex flex-wrap items-center gap-3 text-sm">
-              <Avatar person={person} className="size-8 text-xs" />
+              <PersonAvatar person={person} className="size-8 text-xs" />
               <span className="min-w-0 flex-1 truncate" title={person.display_name}>{person.display_name}</span>
               <div className="flex gap-2">
                 {person.status === "incoming" ? <Button size="sm" disabled={!!pending} aria-label={`Accept ${person.display_name}'s friend request`} onClick={() => void call("friends_accept", { p_user_id: person.user_id }, "Could not accept the request.").then((ok) => { if (ok) toast.success("Friend request accepted") })}>Accept</Button> : null}
@@ -297,14 +300,14 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       {studying.length ? (
         <section aria-label="Studying now" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {studying.map(({ person, stats }) => (
-            <button key={person.user_id} type="button" onClick={() => setSelectedId(person.user_id)} className="flex min-w-0 items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-              <Avatar person={person} />
+            <Button key={person.user_id} variant="ghost" onClick={() => setSelectedId(person.user_id)} className="h-auto min-w-0 justify-start gap-3 rounded-xl border-primary/40 bg-primary/5 p-3 text-left font-normal whitespace-normal hover:bg-primary/10">
+              <PersonAvatar person={person} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{person.display_name}{person.status === "me" ? " (you)" : ""}</span>
                 <span className="block truncate text-xs text-muted-foreground">{person.studying_kind === "exam" ? "Exam" : person.studying_subject ? subjectName(person.studying_subject) : "Studying"} · {duration(stats.period.today)} today</span>
               </span>
               <span className="font-mono text-lg tabular-nums text-primary">{clock(stats.session)}</span>
-            </button>
+            </Button>
           ))}
         </section>
       ) : null}
@@ -345,9 +348,9 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {loading ? <div role="status" className="grid gap-3 px-2"><span className="sr-only">Loading friends</span>{[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 motion-reduce:animate-none" />)}</div> : null}
               {visibleBoard.map(({ person, stats, rank, score }) => (
                 <div key={person.user_id} className="flex min-w-0 items-center gap-1">
-                <button type="button" onClick={() => setSelectedId(person.user_id)} className={cn("grid min-w-0 flex-1 grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:grid-cols-[1.5rem_auto_minmax(0,1fr)_auto_6rem] sm:gap-3", person.status === "me" && "bg-muted/40")}>
+                <Button variant="ghost" onClick={() => setSelectedId(person.user_id)} className={cn("grid h-auto min-w-0 flex-1 grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] justify-items-stretch gap-2 rounded-lg px-2 py-2 text-left font-normal whitespace-normal hover:bg-muted/60 sm:grid-cols-[1.5rem_auto_minmax(0,1fr)_auto_6rem] sm:gap-3", person.status === "me" && "bg-muted/40")}>
                   <span className={cn("text-center text-sm tabular-nums", rank <= 3 ? "font-semibold text-primary" : "text-muted-foreground")}>{rank}</span>
-                  <Avatar person={person} />
+                  <PersonAvatar person={person} />
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
                       <span className="truncate font-medium">{person.display_name}{person.status === "me" ? <span className="text-muted-foreground"> (you)</span> : null}</span>
@@ -359,7 +362,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                   </span>
                   <span className="hidden sm:block"><WeekBars day={stats.day} /></span>
                   <span className="text-right text-sm font-medium tabular-nums">{ranking === "time" ? duration(stats.period[period]) : `${score}/${PERIOD_DAYS[period]}d`}</span>
-                </button>
+                </Button>
                 {person.status === "friend" ? <Button variant="ghost" size="icon" disabled={!!pending || !cheersLoaded || cheersError || cheered(person.user_id)} title={cheered(person.user_id) ? "Cheered · one cheer per friend every 24 hours" : `Cheer ${person.display_name}`} aria-label={cheered(person.user_id) ? `Already cheered ${person.display_name}` : `Cheer ${person.display_name}`} onClick={() => void cheerFriend(person)}>{cheered(person.user_id) ? <Check /> : <HeartHandshake />}</Button> : <span className="w-9 shrink-0" />}
                 </div>
               ))}
@@ -414,7 +417,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                 if (code === profile?.code) { toast.error("That is your own friend code. Share it with a friend instead."); return }
                 void call("friends_add", { p_code: code }, "Could not add that friend.").then((ok) => { if (ok) { setCode(""); toast.success("Friend code added") } })
               }}>
-                <label htmlFor="friend-code" className="text-sm font-medium">Their friend code</label>
+                <Label htmlFor="friend-code" className="text-sm font-medium">Their friend code</Label>
                 <div className="flex gap-2">
                   <Input id="friend-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\s/g, "").toUpperCase())} placeholder="e.g. A1B2C3D4" aria-label="Their friend code" maxLength={32} minLength={8} pattern="[A-Fa-f0-9]{8}" autoCapitalize="characters" autoComplete="off" spellCheck={false} required disabled={!!pending} className="min-w-0 font-mono uppercase" />
                   <Button type="submit" disabled={!!pending || code.length !== 8}><UserPlus />{pending === "friends_add" ? "Adding…" : "Add"}</Button>
@@ -430,18 +433,18 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {profileError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Could not load your profile.</p><Button variant="outline" size="sm" onClick={() => void loadProfile()}>Try again</Button></div> : null}
               <fieldset disabled={!profile || !!pending} className="grid min-w-0 gap-3">
                 <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); if (profile) void saveProfile({ ...profile, display_name: draft.name.trim(), status_message: draft.status.trim() }) }}>
-                  <label className="grid gap-2 text-sm font-medium">Display name<Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="How friends see you" maxLength={40} required /></label>
-                  <label className="grid gap-2 text-sm font-medium">Status (optional)<Input value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })} placeholder="e.g. Revising for Methods" maxLength={60} /></label>
+                  <Label className="grid gap-2 text-sm font-medium">Display name<Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="How friends see you" maxLength={40} required /></Label>
+                  <Label className="grid gap-2 text-sm font-medium">Status (optional)<Input value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })} placeholder="e.g. Revising for Methods" maxLength={60} /></Label>
                   <Button type="submit" variant="outline" disabled={!profile || !draft.name.trim() || (draft.name.trim() === profile.display_name && draft.status.trim() === profile.status_message)}>{pending === "friends_update_profile" ? "Saving…" : "Save profile"}</Button>
                 </form>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="size-4 accent-primary" checked={profile?.share_subjects ?? true} onChange={(event) => { if (profile) void saveProfile({ ...profile, share_subjects: event.target.checked }) }} />
+                <Label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={profile?.share_subjects ?? true} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, share_subjects: checked }) }} />
                   Share live subjects and subject study totals
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="size-4 accent-primary" checked={profile?.share_exams ?? false} onChange={(event) => { if (profile) void saveProfile({ ...profile, share_exams: event.target.checked }) }} />
+                </Label>
+                <Label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={profile?.share_exams ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, share_exams: checked }) }} />
                   Share recent exam scores and paper titles
-                </label>
+                </Label>
               </fieldset>
               <p className="text-xs text-muted-foreground">Subject and exam comparisons only use data each friend has chosen to share. Friend requests cannot see your study activity.</p>
             </CardContent>
@@ -497,7 +500,7 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <div className="flex items-center gap-3">
-            <Avatar person={person} className="size-11 text-base" />
+            <PersonAvatar person={person} className="size-11 text-base" />
             <div className="min-w-0">
               <SheetTitle>{isMe ? "You" : person.display_name}</SheetTitle>
               <SheetDescription>{person.studying_since ? `Studying now · ${clock(stats.session)}` : person.status_message || "Not studying right now"}</SheetDescription>

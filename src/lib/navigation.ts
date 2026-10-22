@@ -8,6 +8,7 @@ const ACTION_NAVIGATION: NavigationItem[] = [
   { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers" },
   { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue" },
   { id: "timetable" as const, label: "Timetable", description: "Your school class cycle" },
+  { id: "chat", label: "Chat", description: "Ask about your study and make changes" },
 ]
 
 const ASSESSMENT_NAVIGATION: NavigationItem[] = [

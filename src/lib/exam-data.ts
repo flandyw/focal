@@ -245,7 +245,8 @@ export const EMPTY_APP_DATA: AppData = {
   completedExamIdsUpdatedAt: "1970-01-01T00:00:00.000Z",
   atarEstimates: [],
   atarEstimatesUpdatedAt: "1970-01-01T00:00:00.000Z",
-  learning: EMPTY_LEARNING_WORKSPACE,
+  // Defer the default until learning-workspace's study-score import has finished initializing.
+  get learning() { return EMPTY_LEARNING_WORKSPACE },
   events: [],
 }
 

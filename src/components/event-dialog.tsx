@@ -11,6 +11,8 @@ import { Textarea } from "./ui/textarea"
 import { classPeriodsOn, isTimetableBreakLabel, periodMatchesSubject, periodSubjectName, subjectIdFor, subjectNameFor } from "../lib/class-timetable"
 import { localDate } from "../lib/learning-workspace"
 import { EVENT_TYPES, type CalendarEvent, type EventType, type TimetableConfig, type TimetablePeriod } from "../lib/types"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 
 const REPEATS = [
   { value: "none", label: "Does not repeat" },
@@ -221,10 +223,10 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           </Field>
 
           {event ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input className="size-4 accent-primary" type="checkbox" checked={finished} onChange={(e) => setFinished(e.target.checked)} />
+            <Label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={finished} onCheckedChange={(checked) => setFinished(checked)} />
               Mark as finished
-            </label>
+            </Label>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>

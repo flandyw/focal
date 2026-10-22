@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
-import { Check, ListFilter, Search } from "lucide-react"
+import { ListFilter, Search } from "lucide-react"
 import { Button } from "./ui/button"
+import { Checkbox } from "./ui/checkbox"
+import { Label } from "./ui/label"
 import {
   Dialog,
   DialogContent,
@@ -267,35 +269,18 @@ function ExamRow({
         muted && "opacity-70",
       )}
     >
-      <label
+      <Label
         htmlFor={checkboxId}
-        className="flex cursor-pointer items-start gap-3 px-3 py-2.5"
+        className="cursor-pointer items-start gap-3 px-3 py-2.5 font-normal leading-normal"
       >
-        <span className="relative mt-0.5 flex size-5 shrink-0 items-center justify-center">
-          <input
-            id={checkboxId}
-            type="checkbox"
-            checked={tracked}
-            onChange={onToggle}
-            className={cn(
-              "peer size-5 shrink-0 appearance-none rounded-md border transition-colors",
-              "border-input bg-background",
-              "checked:border-primary checked:bg-primary",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-            )}
-          />
-          <Check
-            className="pointer-events-none absolute size-3.5 text-primary-foreground opacity-0 transition-opacity peer-checked:opacity-100"
-            aria-hidden
-          />
-        </span>
+        <Checkbox id={checkboxId} className="mt-0.5 size-5" checked={tracked} onCheckedChange={onToggle} />
         <span className="min-w-0 flex-1 text-sm leading-tight">
           <span className="block font-medium">{formatExamLabel(entry)}</span>
           <span className="block text-xs text-muted-foreground tabular-nums">
             {formatExamTime(entry) ?? entry.scheduledNote ?? "Date TBD"}
           </span>
         </span>
-      </label>
+      </Label>
     </li>
   )
 }

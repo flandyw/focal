@@ -3,7 +3,7 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { AppearanceSettings } from "./appearance-settings"
 import { PageHeader } from "./page-header"
@@ -13,6 +13,8 @@ import { Button } from "./ui/button"
 import { Field, FieldDescription, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
+import { Slider } from "./ui/slider"
+import { VortexAngularSpinLoader } from "./ui/vortex-angular-spin-loader"
 import { updateActions, useUpdateState } from "../lib/update-store"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import {
@@ -119,15 +121,15 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
       <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start lg:grid-cols-[13rem_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:px-0">
           {sections.map(({ id, label, icon: Icon }) => (
-            <button
+            <Button
               key={id}
-              type="button"
+              variant="ghost"
               aria-current={active === id ? "page" : undefined}
               onClick={() => setSection(id)}
-              className="flex shrink-0 items-center gap-2 rounded-xs border-l border-transparent px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+              className="h-auto shrink-0 justify-start rounded-xs border-l px-3 py-2 text-muted-foreground aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             >
               <Icon className="size-4" />{label}
-            </button>
+            </Button>
           ))}
         </nav>
 
@@ -280,7 +282,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   <Field><FieldLabel htmlFor="account-email">Email address</FieldLabel><Input id="account-email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></Field>
                   <Field><FieldLabel htmlFor="account-password">Password</FieldLabel><div className="relative"><Input id="account-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" className="pr-12" value={password} onChange={(event) => setPassword(event.target.value)} required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff /> : <Eye />}</Button></div></Field>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="submit" disabled={Boolean(accountLoading)}>{accountLoading === "sign-in" ? <LoaderCircle className="animate-spin" /> : <Cloud />}{accountLoading === "sign-in" ? "Signing in…" : "Sign in"}</Button>
+                    <Button type="submit" disabled={Boolean(accountLoading)}>{accountLoading === "sign-in" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <Cloud />}{accountLoading === "sign-in" ? "Signing in…" : "Sign in"}</Button>
                     <Button type="button" variant="outline" disabled={Boolean(accountLoading)} onClick={async (event) => {
                       if (!event.currentTarget.form?.reportValidity()) return
                       if (accountLoading) return
@@ -296,7 +298,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                       } finally {
                         setAccountLoading(null)
                       }
-                    }}>{accountLoading === "create" ? <LoaderCircle className="animate-spin" /> : null}{accountLoading === "create" ? "Creating account…" : "Create account"}</Button>
+                    }}>{accountLoading === "create" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : null}{accountLoading === "create" ? "Creating account…" : "Create account"}</Button>
                   </div>
                 </form>
               )}
@@ -322,7 +324,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               </Row>
               <Row title="Import data" description="Replace your current data with a backup. You’ll be asked to confirm before anything is replaced.">
                 <Button variant="outline" onClick={() => importInput.current?.click()}><Upload />Import data</Button>
-                <input ref={importInput} className="hidden" type="file" accept="application/json" onChange={(event) => {
+                <Input ref={importInput} className="hidden" type="file" accept="application/json" onChange={(event) => {
                   const file = event.target.files?.[0]
                   if (file) void onImport(file)
                   event.currentTarget.value = ""
@@ -342,7 +344,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                     <h3 className="text-sm font-medium">Analysis</h3>
                     <p className="text-sm text-muted-foreground">Applies the next time you use Fill with AI.</p>
                   </div>
-                  {auth.isAuthenticated ? <Button size="sm" variant="ghost" disabled={loadingModels} onClick={() => void refreshModels()}><RefreshCw className={loadingModels ? "animate-spin" : ""} />Refresh</Button> : null}
+                  {auth.isAuthenticated ? <Button size="sm" variant="ghost" disabled={loadingModels} onClick={() => void refreshModels()}>{loadingModels ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <RefreshCw />}Refresh</Button> : null}
                 </div>
           <Field>
             <FieldLabel>Model and reasoning</FieldLabel>
@@ -359,17 +361,17 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                     const selected = model === selectedModel
                     const accent = getModelAccent(model)
                     return (
-                      <button
+                      <Button
                         key={model}
-                        type="button"
+                        variant="ghost"
                         aria-pressed={selected}
                         title={`${displayName} (${model})`}
-                        className="h-12 truncate rounded-md px-2 text-left text-sm font-medium outline-none transition-colors duration-200 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+                        className="h-12 justify-start truncate rounded-md px-2 text-left"
                         style={{ color: selected ? accent : undefined, fontWeight: selected ? 700 : undefined }}
                         onClick={() => update({ model, reasoningEffort: selectedEffort })}
                       >
                         {displayName}
-                      </button>
+                      </Button>
                     )
                   })}
                 </div>
@@ -387,21 +389,19 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                         {REASONING_OPTIONS.map((effort) => (
                           <span key={effort} aria-hidden="true" className={`relative z-10 mx-auto size-2 rounded-full transition-colors duration-200 motion-reduce:transition-none ${selected ? "bg-black/55" : "bg-muted-foreground/35"}`} />
                         ))}
-                        <input
-                          type="range"
+                        <Slider
                           min={0}
                           max={REASONING_OPTIONS.length - 1}
                           step={1}
+                          thumbAlignment="center"
                           value={REASONING_OPTIONS.indexOf(selectedEffort)}
-                          data-selected={selected}
                           aria-label={`${displayName} reasoning level`}
-                          aria-valuetext={REASONING_LABELS[selectedEffort]}
-                          className="model-reasoning-slider z-20"
-                          style={{ "--slider-accent": accent } as React.CSSProperties}
+                          className="absolute inset-y-0 right-[10%] left-[10%] z-20 w-auto"
+                          style={{ "--primary": accent } as React.CSSProperties}
                           onPointerDown={() => {
                             if (!selected) update({ model, reasoningEffort: selectedEffort })
                           }}
-                          onChange={(event) => update({ model, reasoningEffort: REASONING_OPTIONS[Number(event.currentTarget.value)] })}
+                          onValueChange={(value) => update({ model, reasoningEffort: REASONING_OPTIONS[Array.isArray(value) ? value[0] : value] })}
                         />
                     </div>
                   )
@@ -474,7 +474,7 @@ function UpdatesSection() {
         {update.status === "available" ? <Button size="sm" onClick={() => void updateActions.download?.()}><Download />Download</Button> : null}
         {update.status === "ready" ? <Button size="sm" onClick={() => void updateActions.install?.()}>Install and restart</Button> : null}
         <Button size="sm" variant="ghost" disabled={busy || update.status === "ready"} onClick={() => void updateActions.check?.()}>
-          <RefreshCw className={update.status === "checking" ? "animate-spin" : ""} />Check for updates
+          {update.status === "checking" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <RefreshCw />}Check for updates
         </Button>
       </Row>
       {update.status === "downloading" ? (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Check, Clock3, Pause, Play, RotateCcw } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/alert-dialog"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
@@ -128,7 +129,6 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
   }
 
   function discard() {
-    if (!window.confirm("Discard this timed SAC and return to setup?")) return
     saveSession(undefined, "cancel")
     setMarkingOpen(false)
   }
@@ -229,7 +229,13 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
     <div className="grid w-full min-w-0 gap-6 lg:gap-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><h2 className="text-xl font-semibold">{session.title}</h2><p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">{session.subject} · {session.provider}{session.sacNumber ? ` · SAC ${session.sacNumber}` : ""} · Unit {session.unit} · {session.durationMinutes} min · {session.maxScore} marks</p></div>
-        <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={discard}><RotateCcw />Discard</Button><Button variant="outline" onClick={session.pausedAt ? resume : pause}>{session.pausedAt ? <Play /> : <Pause />}{session.pausedAt ? "Resume" : "Pause"}</Button><Button onClick={openMarking}><Check />Finish & mark</Button></div>
+        <div className="flex flex-wrap gap-2"><AlertDialog>
+          <AlertDialogTrigger render={<Button variant="ghost" />}><RotateCcw />Discard</AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle>Discard this timed SAC?</AlertDialogTitle><AlertDialogDescription>The timer is cleared and you return to setup.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>Keep timing</AlertDialogCancel><AlertDialogAction onClick={discard}>Discard</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog><Button variant="outline" onClick={session.pausedAt ? resume : pause}>{session.pausedAt ? <Play /> : <Pause />}{session.pausedAt ? "Resume" : "Pause"}</Button><Button onClick={openMarking}><Check />Finish & mark</Button></div>
       </div>
       {session.id ? <Alert><Clock3 /><AlertTitle>Shared study session</AlertTitle><AlertDescription>Timer changes sync with Focal when you sign in to the same account.</AlertDescription></Alert> : null}
       <section className="grid gap-6 py-8 text-center">

@@ -15,8 +15,7 @@ import {
   Square,
   Timer as TimerIcon,
   Volume2,
-  VolumeX,
-} from "lucide-react"
+  VolumeX, ChevronDown } from "lucide-react"
 
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -24,6 +23,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { Field, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Skeleton } from "./ui/skeleton"
+import { Switch } from "./ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
@@ -56,6 +56,7 @@ import {
 } from "../lib/study-timer"
 import type { ExamTimerModeProps } from "./exam-timer-mode"
 import { EclairHome } from "./eclair-home"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 
 export type StudyTimerMode = "focus" | "exam"
 
@@ -75,13 +76,10 @@ function ToggleRow({ label, description, pressed, onToggle, icon }: {
   return (
     <div className="flex items-start justify-between gap-3 py-2.5">
       <div className="min-w-0 space-y-0.5">
-        <p className="text-sm font-medium">{label}</p>
+        <p className="flex items-center gap-2 text-sm font-medium [&_svg]:size-4">{icon}{label}</p>
         <p className="max-w-[68ch] text-xs text-pretty text-muted-foreground">{description}</p>
       </div>
-      <Button aria-label={label} aria-pressed={pressed} className="shrink-0" onClick={onToggle} size="sm" variant={pressed ? "secondary" : "outline"}>
-        {icon}
-        {pressed ? "On" : "Off"}
-      </Button>
+      <Switch aria-label={label} checked={pressed} onCheckedChange={onToggle} className="mt-0.5" />
     </div>
   )
 }
@@ -517,8 +515,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         </section>
       <aside className="grid min-w-0 gap-4">
         {renderSettings()}
-        {AI_ENABLED && !isFreeStudy && <details className="rounded-xl border bg-card">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Plan a session</summary>
+        {AI_ENABLED && !isFreeStudy && <Collapsible className="rounded-xl border bg-card"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left px-4 py-3 text-sm font-semibold"><span className="min-w-0">Plan a session</span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
           <StudyPlanCard
             className="rounded-none border-0 shadow-none"
             blocksToday={blocksToday}
@@ -530,7 +527,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             subjects={subjects}
             timerMode={displayMode}
           />
-        </details>}
+        </CollapsibleContent></Collapsible>}
       </aside>
       </div>
     </div>
@@ -627,8 +624,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               <RotateCcw />Restore defaults
             </Button>
           </div>
-          <details className="border-t pt-3">
-            <summary className="cursor-pointer text-sm font-medium">Alerts and flow</summary>
+          <Collapsible className="border-t pt-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Alerts and flow</span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
             <div className="mt-2 divide-y">
             <ToggleRow
               description="A short tone when a block or break ends."
@@ -657,7 +653,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               pressed={settings.autoStartFocus}
             />
             </div>
-          </details>
+          </CollapsibleContent></Collapsible>
         </CardContent>
       </Card>
     )

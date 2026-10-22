@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/instrument-sans";
 @import "./typeset.css";
+@import "./components/ui/atom-loader.css";
 
 .practice-confetti i { position: absolute; top: 0; left: var(--particle-x); width: 5px; height: 9px; border-radius: 1px; animation: practice-confetti 1s ease-out both; }
 .practice-reveal { animation: practice-reveal 180ms ease-out; }

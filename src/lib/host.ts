@@ -7,7 +7,7 @@ export const examHost: {
   report?: (html: string) => Promise<void>
 } = {}
 
-// AI features run only inside the desktop app, which hosts the local Sign in with ChatGPT service.
+// ChatGPT analysis uses the desktop sidecar; Gateway chat has its own authenticated server endpoint.
 export const AI_ENABLED = Boolean(import.meta.env.VITE_DESKTOP)
 
 const CHATGPT_BASE_PATH = import.meta.env.VITE_CHATGPT_BASE_PATH?.trim().replace(/\/+$/, "")

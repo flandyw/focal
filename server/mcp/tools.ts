@@ -11,6 +11,12 @@ export type Define = <S extends z.ZodRawShape>(
   name: string, description: string, shape: S, hint: Hint, run: (args: z.infer<z.ZodObject<S>>) => unknown,
 ) => void
 
+export function defineTools(define: Define) {
+  recordTools(define)
+  studyTools(define)
+  insightTools(define)
+}
+
 /** Every tool returns JSON text; a thrown Error becomes a tool error the model can read and correct. */
 export function registerTools(server: McpServer) {
   // The SDK types tool arguments from the zod shape; `define` already does that for callers, so register loosely.
@@ -29,7 +35,5 @@ export function registerTools(server: McpServer) {
       }
     })
   }
-  recordTools(define)
-  studyTools(define)
-  insightTools(define)
+  defineTools(define)
 }

@@ -3,6 +3,8 @@ import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
 import { Button } from "../ui/button"
+import { Input } from "../ui/input"
+import { Label } from "../ui/label"
 import {
  getAnalyticsData,
  getConsistencyForTimeTrends,
@@ -354,18 +356,18 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
 <div className="flex min-w-0 max-w-full items-center gap-1">
  <Button type="button" size="icon-sm" variant="outline" onClick={() => setPicked(stepPeriod(range, periodEnd, -1))} aria-label="Previous period"><ChevronLeft /></Button>
 <span className="min-w-0 px-1 text-center text-xs tabular-nums text-muted-foreground">{formatPeriod(periodDays, periodEnd)}</span>
- <label className="relative inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" title={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}>
+ <Label className="relative size-7 shrink-0 cursor-pointer justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" title={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}>
  <CalendarDays className="size-4" />
- <input
+ <Input
  type="date"
  aria-label={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}
- className="absolute inset-0 cursor-pointer opacity-0"
+ className="absolute inset-0 size-full cursor-pointer border-0 p-0 opacity-0"
  max={toDateInput(now())}
  value={toDateInput(periodEnd)}
  onClick={(event) => event.currentTarget.showPicker?.()}
  onChange={(event) => { if (event.target.value) setPicked(getPickedPeriod(range, new Date(`${event.target.value}T00:00`))) }}
  />
- </label>
+ </Label>
  {picked && <Button type="button" size="xs" variant="ghost" onClick={() => setPicked(null)}>Today</Button>}
  <Button type="button" size="icon-sm" variant="outline" disabled={!picked} onClick={() => setPicked(stepPeriod(range, periodEnd, 1))} aria-label="Next period"><ChevronRight /></Button>
  </div>

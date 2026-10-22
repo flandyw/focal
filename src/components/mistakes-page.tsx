@@ -1,7 +1,7 @@
 import { WorkspaceSplit } from "./workspace-layout"
 import { sameStudySubject } from "../lib/studySubjects"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { ArrowRight, BookOpenCheck, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
+import { ArrowRight, BookOpenCheck, ChevronDown, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { useMinWidth } from "../hooks/use-mobile"
@@ -63,6 +63,11 @@ import {
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import { findCachedVcaaExamForAttempt, type VcaaStudyResources } from "../lib/vcaa-resources"
 import { useTickingNow } from "../hooks/use-ticking-now"
+import { Checkbox } from "./ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
+import { Label } from "./ui/label"
+import { Textarea } from "./ui/textarea"
+import { Slider } from "./ui/slider"
 
 
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
@@ -258,7 +263,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
           {mistake.questionText?.trim() ? <MarkdownPreview unframed>{mistake.questionText}</MarkdownPreview> : null}
           <MistakeAttachments attachments={mistake.attachments} />
           <div className="grid gap-2"><p className="text-xs text-muted-foreground">Recall strength · {recallStrength(mistake)}/3 spaced recalls{isRematch(mistake) ? " · Rematch" : ""}</p><Progress value={recallStrength(mistake) / 3 * 100} aria-label="Recall strength across different days" /><fieldset disabled={revealed}><legend className="mb-2 text-sm font-medium">Before you reveal: how confident are you?</legend><div className="flex flex-wrap gap-2">{([['low', 'Guessing'], ['medium', 'Unsure'], ['high', 'Confident']] as const).map(([value, label]) => <Button key={value} size="sm" variant={confidence === value ? "secondary" : "outline"} aria-pressed={confidence === value} onClick={() => setConfidence(value)}>{label}</Button>)}</div></fieldset><p className="text-xs text-muted-foreground">Optional. Your prediction stays locked after revealing; every honest attempt earns the same XP.</p></div>
-          <div className="grid gap-2"><label htmlFor="review-recall" className="text-sm font-medium">Your approach <span className="font-normal text-muted-foreground">(optional)</span></label><textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="w-full resize-y rounded-lg border bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
+          <div className="grid gap-2"><Label htmlFor="review-recall">Your approach <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="resize-y" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
         </div>
       </div>
       {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div> : null}
@@ -297,7 +302,7 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onReimport, onToggle
       <MistakeAttachments attachments={mistake.attachments} />
       <div className="grid gap-4 border-t pt-5"><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5"><p className="text-xs text-muted-foreground">{mistake.suspended ? "Resume reviews to add this card to your queue." : `Next review · ${formatDueDate(schedule.dueAt)}`}</p><Button size="sm" onClick={() => onPractice(mistake)}><Play />Practise this mistake</Button></div>
-      {mistake.reviewHistory?.length ? <details className="border-t pt-4"><summary className="cursor-pointer rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">Review history ({mistake.reviewHistory.length})</summary><ul className="mt-3 grid max-h-60 gap-2 overflow-y-auto text-xs text-muted-foreground">{mistake.reviewHistory.toSorted((first, second) => Date.parse(second.completedAt) - Date.parse(first.completedAt)).map((review) => <li key={review.id}>{reviewLine(review)}</li>)}</ul></details> : null}
+      {mistake.reviewHistory?.length ? <Collapsible className="border-t pt-4"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between rounded text-sm font-medium">Review history ({mistake.reviewHistory.length})<ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted><ul className="mt-3 grid max-h-60 gap-2 overflow-y-auto text-xs text-muted-foreground">{mistake.reviewHistory.toSorted((first, second) => Date.parse(second.completedAt) - Date.parse(first.completedAt)).map((review) => <li key={review.id}>{reviewLine(review)}</li>)}</ul></CollapsibleContent></Collapsible> : null}
     </article>
   )
 }
@@ -315,12 +320,12 @@ function BrowseRow({ mistake, active, selected, now, onOpen, onSelect, onReimpor
   const isDue = !mistake.suspended && new Date(schedule.dueAt).getTime() <= now.getTime()
   return (
     <li className={"group grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 p-4 " + (active ? "bg-accent" : "hover:bg-muted/50")}>
-      <input type="checkbox" checked={selected} onChange={onSelect} aria-label={"Select " + mistake.question} className="mt-1 size-4 accent-primary" />
-      <button type="button" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid min-w-0 gap-2 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Checkbox className="mt-1" checked={selected} onCheckedChange={() => onSelect()} aria-label={"Select " + mistake.question} />
+      <Button variant="ghost" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid h-auto min-w-0 justify-items-stretch gap-2 rounded p-0 text-left font-normal whitespace-normal hover:bg-transparent">
         <span className="line-clamp-2 break-words text-sm font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>
         <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy].filter(Boolean).join(" · ")}</span>
         <span className={"text-xs tabular-nums " + (isDue ? "font-medium text-primary" : "text-muted-foreground")}>{mistake.suspended ? "Reviews paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}{mistake.marksLost !== undefined ? ` · ${mistake.marksLost} marks lost` : ""}</span>
-      </button>
+      </Button>
       <Button size="icon-sm" variant="ghost" onClick={onReimport} aria-label={`Reimport with changes for ${mistake.question}`} title="Reimport with changes"><FileUp /></Button>
     </li>
   )
@@ -631,10 +636,10 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
                         const attempt = attemptMap.get(mistake.attemptId)
                         return (
                           <li key={mistake.id} className="min-w-0">
-                            <button
-                              type="button"
+                            <Button
+                              variant="ghost"
                               onClick={() => onEdit(mistake)}
-                              className="grid min-h-16 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-4 py-3 text-left outline-none transition-colors hover:bg-accent focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-6"
+                              className="grid h-auto min-h-16 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] justify-items-stretch gap-x-4 gap-y-2 rounded-none px-4 py-3 text-left font-normal whitespace-normal hover:bg-accent focus-visible:relative focus-visible:z-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-6"
                             >
                               <span className="grid min-w-0 gap-1">
                                 <span className="break-words text-sm font-medium">{mistake.question}</span>
@@ -648,7 +653,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
                                 <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
                                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                               </span>
-                            </button>
+                            </Button>
                           </li>
                         )
                       })}
@@ -738,7 +743,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
             {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · ${currentPage * pageSize + 1}–${currentPage * pageSize + shownMistakes.length}` : ""}</span>
-              <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" disabled={!browsedMistakes.length} checked={browsedMistakes.length > 0 && selectedMistakes.length === browsedMistakes.length} ref={(node) => { if (node) node.indeterminate = selectedMistakes.length > 0 && selectedMistakes.length < browsedMistakes.length }} onChange={(event) => setSelected(event.target.checked ? new Set(browsedMistakes.map((mistake) => mistake.id)) : new Set())} />Select all {browsedMistakes.length} results</label><Button size="sm" variant="outline" disabled={!browsedMistakes.length} onClick={() => setPractice(worksheetMistakes)}><Play />{selectedMistakes.length ? `Practise selected (${selectedMistakes.length})` : "Practise"}</Button></div>
+              <div className="flex flex-wrap items-center gap-3"><Label className="flex items-center gap-2"><Checkbox disabled={!browsedMistakes.length} checked={browsedMistakes.length > 0 && selectedMistakes.length === browsedMistakes.length} indeterminate={selectedMistakes.length > 0 && selectedMistakes.length < browsedMistakes.length} onCheckedChange={(checked) => setSelected(checked ? new Set(browsedMistakes.map((mistake) => mistake.id)) : new Set())} />Select all {browsedMistakes.length} results</Label><Button size="sm" variant="outline" disabled={!browsedMistakes.length} onClick={() => setPractice(worksheetMistakes)}><Play />{selectedMistakes.length ? `Practise selected (${selectedMistakes.length})` : "Practise"}</Button></div>
             </div>
             {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button>{AI_ENABLED ? <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}><Sparkles />Edit with ChatGPT</Button> : null}<Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><FileDown />Export selected</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
             <WorkspaceSplit id="mistakes" primary={
@@ -798,15 +803,15 @@ function ReviewPacing({ data, onSave, onReduce }: { data: AppData; onSave: (pref
     <CardHeader><CardTitle>Review pacing</CardTitle><CardDescription>Due dates are suggestions. Practise any saved question whenever you need to. These controls sync with Folio.</CardDescription></CardHeader>
     <CardContent className="grid gap-5">
       <div className="grid gap-4 sm:grid-cols-3">
-        <label className="grid gap-2 text-sm">Successful review spacing · {spacing.toFixed(1)}×<input type="range" min="0.5" max="3" step="0.1" value={spacing} onChange={(e) => setSpacing(Number(e.target.value))} /></label>
-        <label className="grid gap-2 text-sm">Retry after a miss · {retry < 1 ? `${Math.round(retry * 60)} minutes` : `${Math.round(retry)} hours`}<input type="range" min={1 / 6} max="168" step="any" value={retry} onChange={(e) => setRetry(Number(e.target.value))} /></label>
-        <label className="grid gap-2 text-sm">Longest interval · {maximum} days<input type="range" min="7" max="365" step="1" value={maximum} onChange={(e) => setMaximum(Number(e.target.value))} /></label>
+        <Label className="grid gap-2 text-sm">Successful review spacing · {spacing.toFixed(1)}×<Slider min={0.5} max={3} step={0.1} value={spacing} onValueChange={(value) => setSpacing(Number(value))} /></Label>
+        <Label className="grid gap-2 text-sm">Retry after a miss · {retry < 1 ? `${Math.round(retry * 60)} minutes` : `${Math.round(retry)} hours`}<Slider min={1 / 6} max={168} step={1 / 60} value={retry} onValueChange={(value) => setRetry(Number(value))} /></Label>
+        <Label className="grid gap-2 text-sm">Longest interval · {maximum} days<Slider min={7} max={365} step={1} value={maximum} onValueChange={(value) => setMaximum(Number(value))} /></Label>
       </div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setSpacing(1); setRetry(1 / 6); setMaximum(365) }}>Frequent reviews</Button><Button variant="outline" onClick={() => { setSpacing(1.5); setRetry(24); setMaximum(180) }}>Relaxed defaults</Button><Button onClick={() => onSave({ ...preferences, spacingMultiplier: spacing, retryHours: retry, maximumIntervalDays: maximum, updatedAt: new Date().toISOString() })}>Save pacing</Button></div>
       <div className="grid gap-4 border-t pt-4">
         {preferences.lighterUntil && Date.parse(preferences.lighterUntil) > now ? <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Lighter schedule until {new Date(preferences.lighterUntil).toLocaleDateString()}</p><Button variant="outline" onClick={() => onSave({ ...preferences, lighterUntil: undefined })}>End lighter period</Button></div> : null}
         <h3 className="font-medium">Reduce upcoming reviews</h3>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">Next {days} days<input type="range" min="1" max="90" step="1" value={days} onChange={(e) => setDays(Number(e.target.value))} /></label><label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${target} scheduled questions per day`}<input type="range" min="0" max="50" step="1" value={target} onChange={(e) => setTarget(Number(e.target.value))} /></label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><Label className="grid gap-2 text-sm">Next {days} days<Slider min={1} max={90} step={1} value={days} onValueChange={(value) => setDays(Number(value))} /></Label><Label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${target} scheduled questions per day`}<Slider min={0} max={50} step={1} value={target} onValueChange={(value) => setTarget(Number(value))} /></Label></div>
         <p className="text-sm text-muted-foreground">{changes.size} questions will move to later dates. Overflow is spread beyond this period around existing reviews. A break resumes at up to 10 questions a day. Review history stays intact; you can still practise early. New reviews also respect this target during the period.</p>
         <Button className="w-fit" variant="outline" onClick={() => onReduce(days, target)}>Start lighter period · move {changes.size} dates</Button>
       </div>

@@ -59,6 +59,8 @@ bun run check               # Typecheck and lint shared frontend and scripts
 
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in root `.env.local` for either build. Never expose a service-role key to the frontend. Apply the existing Supabase migrations before running connected clients.
 
+Friends comparisons and cheers require migration `0031_friends_competition.sql`. Study activity is visible only to accepted friends; subject details and exam results follow each person's sharing settings. Cheers are private between the sender and recipient, with one cheer per friend every 24 hours.
+
 The historical `examtrack` storage keys and protocol identifiers remain unchanged for compatibility with saved data and Folio. See [the sync protocol](docs/sync-protocol.md) and [the historical ExamTrack migration](docs/examtrack-merge.md).
 
 AI features remain desktop-only. Credentials stay in the local sidecar and secure native storage. The browser build does not enable AI or load desktop integration.

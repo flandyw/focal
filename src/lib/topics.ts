@@ -1,4 +1,4 @@
-import { normaliseComparisonName, type ExamAttempt, type Mistake, type MistakeCategory } from "./exam-data"
+import { normaliseComparisonName, type ExamAttempt, type Mistake, type MistakeCategory } from "./exam-data.js"
 
 /**
  * Canonical topics per subject. `areaOfStudy` stays free text; `topic` is the small fixed list the

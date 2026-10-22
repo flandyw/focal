@@ -1,10 +1,10 @@
 // Pure (no React/Tauri): the stoplight checklist, its chatbot import contract, and evidence from mistakes.
-import { parseJsonPayload } from "./calendarImport"
-import { sameStudySubject } from "./studySubjects"
-import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data"
+import { parseJsonPayload } from "./calendarImport.js"
+import { sameStudySubject } from "./studySubjects.js"
+import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data.js"
 import {
   localDate, materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
-} from "./learning-workspace"
+} from "./learning-workspace.js"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const RECHECK_DAYS = { green: 21, amber: 14 }

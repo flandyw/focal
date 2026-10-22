@@ -1,5 +1,5 @@
 import type { AppData, AssessmentReference, ExamAttempt } from "./exam-data"
-import { predictStudyScore } from "./study-score"
+import { predictStudyScore } from "./study-score.js"
 
 type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
 export type StudyTaskStatus = "planned" | "completed" | "skipped"

@@ -1,9 +1,9 @@
 import { createClient } from "@supabase/supabase-js"
 import { convertToModelMessages, createGateway, stepCountIs, streamText, tool, validateUIMessages, type ToolSet } from "ai"
 import { z } from "zod"
-import { asSession } from "./mcp/store"
-import { defineTools, type Define } from "./mcp/tools"
-import { readRequestText } from "./request"
+import { asSession } from "./mcp/store.js"
+import { defineTools, type Define } from "./mcp/tools.js"
+import { readRequestText } from "./request.js"
 
 const MAX_BYTES = 256 * 1024
 const inputSchema = z.object({

@@ -1,5 +1,5 @@
-import { normaliseComparisonName, type ExamAttempt } from "./exam-data"
-import { paperTypeOf } from "./paper-types"
+import { normaliseComparisonName, type ExamAttempt } from "./exam-data.js"
+import { paperTypeOf } from "./paper-types.js"
 
 export type MathsExamFilter = "all" | "exam-1" | "exam-2"
 

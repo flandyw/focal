@@ -1,10 +1,10 @@
-import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
-import { isCompletedSac, type SacRecord } from "./sac"
-import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable"
-import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace"
-import { canContinue, isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract"
-import { subjectNameFor } from "./class-timetable"
-import { VCE_SUBJECTS, type CalendarEvent } from "./types"
+import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data.js"
+import { isCompletedSac, type SacRecord } from "./sac.js"
+import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable.js"
+import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace.js"
+import { canContinue, isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract.js"
+import { subjectNameFor } from "./class-timetable.js"
+import { VCE_SUBJECTS, type CalendarEvent } from "./types.js"
 
 /** The day plan reads the records the app already keeps. It never stores a
  *  second copy, so a task edited anywhere is edited on the calendar too. */

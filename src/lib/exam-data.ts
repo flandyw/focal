@@ -1,11 +1,11 @@
 import type { CalendarEvent, TimetableConfig } from "./types"
-import { isExamProgression, type ExamProgression } from "./exam-progression"
-import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-difficulty"
-import { isSacRecord, migrateSacRecords, type SacRecord } from "./sac"
-import { isPerformanceContext, type PerformanceContext } from "./performance-context"
-import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "./ongoing-timers"
-import { PAPER_TYPES, type PaperType } from "./paper-types"
-import { EMPTY_LEARNING_WORKSPACE, isLearningWorkspace, migrateLearningWorkspace, type LearningWorkspace } from "./learning-workspace"
+import { isExamProgression, type ExamProgression } from "./exam-progression.js"
+import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-difficulty.js"
+import { isSacRecord, migrateSacRecords, type SacRecord } from "./sac.js"
+import { isPerformanceContext, type PerformanceContext } from "./performance-context.js"
+import { isExamTimerSession, isSacTimerSession, type ExamTimerSession, type SacTimerSession } from "./ongoing-timers.js"
+import { PAPER_TYPES, type PaperType } from "./paper-types.js"
+import { EMPTY_LEARNING_WORKSPACE, isLearningWorkspace, migrateLearningWorkspace, type LearningWorkspace } from "./learning-workspace.js"
 
 export const GENERAL_MISTAKE_CATEGORIES = [
   "Concept",

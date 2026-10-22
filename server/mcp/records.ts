@@ -1,20 +1,20 @@
 import { z } from "zod"
-import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable"
+import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
 import {
   analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, normalizeMistakeReviewPreferences,
   recordMistakeReview, reduceMistakeReviews, removeAttempt, validateAttempt, validateMistakeMarks, validateQuestionResults,
   type AppData, type ExamAttempt, type Mistake, type QuestionResult,
-} from "../../src/lib/exam-data"
-import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty"
-import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression"
-import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types"
-import { demoteGreens } from "../../src/lib/stoplight"
-import { applyMistakeChanges, diffMistake, planTopicBackfill, revertMistakes, validateTopic, type MistakeChange } from "../../src/lib/topics"
-import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac"
+} from "../../src/lib/exam-data.js"
+import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty.js"
+import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression.js"
+import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types.js"
+import { demoteGreens } from "../../src/lib/stoplight.js"
+import { applyMistakeChanges, diffMistake, planTopicBackfill, revertMistakes, validateTopic, type MistakeChange } from "../../src/lib/topics.js"
+import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac.js"
 import type { CalendarEvent } from "../../src/lib/types"
-import { gradeReferences, readAll, updateApp } from "./store"
+import { gradeReferences, readAll, updateApp } from "./store.js"
 import type { Define } from "./tools"
-import { clock, day, instant, limit, localInstant, logWrite, nowIso, required, round } from "./util"
+import { clock, day, instant, limit, localInstant, logWrite, nowIso, required, round } from "./util.js"
 
 const confidence = z.enum(["low", "medium", "high"])
 const category = z.enum(MISTAKE_CATEGORIES)

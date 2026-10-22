@@ -1,5 +1,5 @@
-import { getExamClock } from "./exam-timer"
-import { isSacUnit, type SacUnit } from "./sac"
+import { getExamClock } from "./exam-timer.js"
+import { isSacUnit, type SacUnit } from "./sac.js"
 
 export type ExamTimerSession = {
   id?: string

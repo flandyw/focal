@@ -1,9 +1,9 @@
-import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data"
-import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty"
+import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data.js"
+import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty.js"
 import type { CurriculumArea } from "./learning-workspace"
-import { getAttemptMathsPaper, isTechSplitMathsSubject } from "./mistake-filters"
-import { expectedRawMax, paperTypeOf, rawMaxWarning, trustedRawMax } from "./paper-types"
-import { inferTopic, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics"
+import { getAttemptMathsPaper, isTechSplitMathsSubject } from "./mistake-filters.js"
+import { expectedRawMax, paperTypeOf, rawMaxWarning, trustedRawMax } from "./paper-types.js"
+import { inferTopic, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics.js"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
   return Math.min(maximum, Math.max(minimum, value))

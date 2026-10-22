@@ -1,5 +1,5 @@
 import type { Project, StudySession } from "./types"
-import { getSessionSubjectIds, getSessionEffectiveMinutes } from "./progress-utils"
+import { getSessionSubjectIds, getSessionEffectiveMinutes } from "./progress-utils.js"
 
 export type AnalyticsRange = 7 | 30 | 90 | 365 | 0
 

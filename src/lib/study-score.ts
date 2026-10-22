@@ -4,8 +4,8 @@ import {
   normaliseComparisonName,
   type AssessmentReference,
   type ExamAttempt,
-} from "./exam-data"
-import { normaliseScalingStudyName } from "./scaling"
+} from "./exam-data.js"
+import { normaliseScalingStudyName } from "./scaling.js"
 
 type StudyScoreEvidence = {
   attempt: ExamAttempt

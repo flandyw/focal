@@ -1,6 +1,6 @@
-import { VCE_SUBJECTS, type TimetableConfig, type TimetablePeriod } from "./types"
-import { getDayLabelForDate, getTimetablePeriodsForDate, resolveTimetableSubject } from "./class-timetable-core"
-import { normaliseComparisonName } from "./exam-data"
+import { VCE_SUBJECTS, type TimetableConfig, type TimetablePeriod } from "./types.js"
+import { getDayLabelForDate, getTimetablePeriodsForDate, resolveTimetableSubject } from "./class-timetable-core.js"
+import { normaliseComparisonName } from "./exam-data.js"
 
 export { getDayLabelForDate }
 export {
@@ -8,7 +8,7 @@ export {
   getTimetablePeriodError,
   isTimetableBreakLabel,
   parseTimetableImport,
-} from "./class-timetable-core"
+} from "./class-timetable-core.js"
 
 /** The class timetable shares its shape (and sync row) with the desktop app. */
 export function defaultClassTimetable(now = new Date()): TimetableConfig {

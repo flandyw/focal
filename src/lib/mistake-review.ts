@@ -1,4 +1,4 @@
-import { getMistakeSchedule, type Mistake, type MistakeReviewState } from "./exam-data"
+import { getMistakeSchedule, type Mistake, type MistakeReviewState } from "./exam-data.js"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 

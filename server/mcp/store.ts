@@ -3,18 +3,18 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { diffAppData, TIMETABLE_ROW } from "../../src/lib/app-rows"
-import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents, normalizeMistakeReviewPreferences, type AppData, type AssessmentReference } from "../../src/lib/exam-data"
-import { isExamDifficultySettings } from "../../src/lib/exam-difficulty"
-import { isExamProgression } from "../../src/lib/exam-progression"
-import { migrateLearningWorkspace } from "../../src/lib/learning-workspace"
-import { migrateSacRecords } from "../../src/lib/sac"
+import { diffAppData, TIMETABLE_ROW } from "../../src/lib/app-rows.js"
+import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents, normalizeMistakeReviewPreferences, type AppData, type AssessmentReference } from "../../src/lib/exam-data.js"
+import { isExamDifficultySettings } from "../../src/lib/exam-difficulty.js"
+import { isExamProgression } from "../../src/lib/exam-progression.js"
+import { migrateLearningWorkspace } from "../../src/lib/learning-workspace.js"
+import { migrateSacRecords } from "../../src/lib/sac.js"
 import type { ScalingReference } from "../../src/lib/scaling"
 import {
   parseCanonicalStudySession, parseStudySessionMutationResult,
   type CanonicalStudySession, type StudySessionCommand, type StudySessionMutationResult,
-} from "../../src/lib/sync/sessionContract"
-import { isTimetable, type Timetable } from "../../src/lib/timetable"
+} from "../../src/lib/sync/sessionContract.js"
+import { isTimetable, type Timetable } from "../../src/lib/timetable.js"
 import type { VcaaStudyResources } from "../../src/lib/vcaa-resources"
 
 // Each request runs as the user its access token belongs to (see index.ts), through the same RPCs the

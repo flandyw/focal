@@ -1,4 +1,4 @@
-import { normaliseComparisonName, type AssessmentReference, type ExamAttempt } from "./exam-data"
+import { normaliseComparisonName, type AssessmentReference, type ExamAttempt } from "./exam-data.js"
 
 const VCAA_EXAM_RESOURCES = "https://www.vcaa.vic.edu.au/assessment/vce/examination-specifications-past-examinations-and-examination-reports/examination-specifications-past-examinations-and-external-assessment-reports"
 

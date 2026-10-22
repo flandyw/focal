@@ -1,5 +1,5 @@
 import type { ExamAttempt } from "./exam-data"
-import { normaliseComparisonName } from "./exam-data"
+import { normaliseComparisonName } from "./exam-data.js"
 
 /** What a paper is: one of the two VCE exams, or one sitting that covers both ("combined"). */
 export type PaperType = "exam1" | "exam2" | "combined"

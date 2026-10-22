@@ -1,6 +1,6 @@
-import { VCE_SUBJECTS, type Project, type StudySession } from "./types"
-export { cn } from "./utils"
-import { studySubjectId } from "./studySubjects"
+import { VCE_SUBJECTS, type Project, type StudySession } from "./types.js"
+export { cn } from "./utils.js"
+import { studySubjectId } from "./studySubjects.js"
 
 export function getSubjectById(id?: string) {
   if (!id || id === "_unassigned") return undefined

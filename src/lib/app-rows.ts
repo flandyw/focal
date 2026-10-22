@@ -1,5 +1,5 @@
 import type { AppData } from "./exam-data"
-import { EMPTY_LEARNING_WORKSPACE } from "./learning-workspace"
+import { EMPTY_LEARNING_WORKSPACE } from "./learning-workspace.js"
 
 export const TIMETABLE_ROW = "timetable_config"
 export const EPOCH = "1970-01-01T00:00:00.000Z"

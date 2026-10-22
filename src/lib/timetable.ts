@@ -1,4 +1,4 @@
-import { normaliseComparisonName } from "./exam-data"
+import { normaliseComparisonName } from "./exam-data.js"
 
 type TimetableComponent =
   | "written"

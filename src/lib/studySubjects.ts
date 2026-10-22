@@ -1,4 +1,4 @@
-import { VCE_SUBJECTS, type Subject } from "./types"
+import { VCE_SUBJECTS, type Subject } from "./types.js"
 
 /** Match exact identities only: e.g. English Language must never become English. */
 export function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJECTS): string {

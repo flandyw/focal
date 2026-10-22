@@ -1,14 +1,14 @@
 import { z } from "zod"
-import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/class-timetable"
-import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan"
-import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace"
+import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/class-timetable.js"
+import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
+import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace.js"
 import {
   applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRating,
-} from "../../src/lib/stoplight"
-import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, type CanonicalStudySession } from "../../src/lib/sync/sessionContract"
-import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store"
+} from "../../src/lib/stoplight.js"
+import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
+import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
-import { day, instant, limit, nowIso, required, round } from "./util"
+import { day, instant, limit, nowIso, required, round } from "./util.js"
 
 const blocks = z.array(z.object({ start: instant, end: instant })).min(1).max(100)
   .describe("Time blocks. They must end after they start, not overlap, and last at most 24 hours each.")

@@ -13,7 +13,7 @@ import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
 import { StudySessionDialog } from "./study-session-dialog"
 import { EventDialog } from "./event-dialog"
 import { StudyTimeline } from "./study-timeline"
-import { WorkspacePage } from "./workspace-layout"
+import { WorkspacePage, WorkspaceSplit } from "./workspace-layout"
 import {
   archiveTask,
   buildCalendarMonth,
@@ -335,7 +335,7 @@ export function CalendarPage({
         }}
       /> : null}
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+      <WorkspaceSplit id="calendar" primary={
         <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
@@ -368,9 +368,9 @@ export function CalendarPage({
           </div>
           <KindLegend />
         </section>
-
-        <aside className="min-w-0 xl:relative xl:self-stretch">
-          <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] xl:absolute xl:inset-0 xl:overflow-y-auto">
+        } secondary={
+        <aside className="calendar-day-pane min-w-0">
+          <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] calendar-day-card">
             <CardHeader className="shrink-0 gap-2 pb-1">
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="text-xl">{formatDayTitle(selected)}</CardTitle>
@@ -453,7 +453,7 @@ export function CalendarPage({
             </CardContent>
           </Card>
         </aside>
-      </div>
+      } />
 
       <StudyTimeline
         key={selected}

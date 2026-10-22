@@ -5,8 +5,7 @@ import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LoaderCircle, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
-import { ModeToggle } from "./mode-toggle"
-import { AccentPicker } from "./accent-picker"
+import { AppearanceSettings } from "./appearance-settings"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
@@ -125,7 +124,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               type="button"
               aria-current={active === id ? "page" : undefined}
               onClick={() => setSection(id)}
-              className="flex shrink-0 items-center gap-2 rounded-xs border-l-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+              className="flex shrink-0 items-center gap-2 rounded-xs border-l border-transparent px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             >
               <Icon className="size-4" />{label}
             </button>
@@ -314,16 +313,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             </div>
           ) : null}
 
-          {active === "appearance" ? (
-            <Section title="Appearance" description="Choose how Focal looks on this device.">
-              <Row title="Theme" description="Use light mode, dark mode, or follow your system.">
-                <ModeToggle />
-              </Row>
-              <Row title="Accent" description="Pick the colour used for primary actions and focus on this device.">
-                <AccentPicker />
-              </Row>
-            </Section>
-          ) : null}
+          {active === "appearance" ? <AppearanceSettings /> : null}
 
           {active === "data" ? (
             <Section title="Data" description="Back up your Focal data or restore it from a JSON file.">

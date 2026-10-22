@@ -9,6 +9,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { useIsMobile } from "../../hooks/use-mobile"
 import { SidebarContext, useSidebar, type SidebarContextProps } from "../../hooks/use-sidebar"
 import { cn } from "../../lib/utils"
+import { DEFAULT_APPEARANCE, updateAppearance, useAppearance } from "../../lib/appearance"
 import { Button } from "./button"
 import { Input } from "./input"
 import { Separator } from "./separator"
@@ -28,7 +29,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "15.5rem"
+const SIDEBAR_WIDTH = "var(--app-sidebar-width, 15.5rem)"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -254,24 +255,51 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { open } = useSidebar()
+  const { sidebarWidth, sidebarSide } = useAppearance()
+  const drag = React.useRef<{ x: number; width: number } | null>(null)
+  if (!open) return null
+
+  function finish() {
+    drag.current = null
+    delete document.documentElement.dataset.sidebarResizing
+  }
 
   return (
     <button
+      type="button"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      aria-valuemin={200}
+      aria-valuemax={400}
+      aria-valuenow={Math.round(sidebarWidth)}
+      aria-valuetext={`${Math.round(sidebarWidth)} pixels`}
+      title="Drag to resize. Double-click to reset."
       data-sidebar="rail"
-      aria-label="Toggle Sidebar"
-      tabIndex={-1}
-      onClick={toggleSidebar}
-      title="Toggle Sidebar"
-      className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
-        "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-        "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-        "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
-        "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
-        "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
-        className
-      )}
+      className={cn("absolute inset-y-0 z-30 hidden w-2 touch-none cursor-col-resize select-none outline-none after:absolute after:inset-y-0 after:left-1/2 after:w-px hover:after:bg-primary focus-visible:after:bg-primary lg:block group-data-[side=left]:-right-1 group-data-[side=right]:-left-1", className)}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        drag.current = { x: event.clientX, width: sidebarWidth }
+        document.documentElement.dataset.sidebarResizing = "true"
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }}
+      onPointerMove={(event) => {
+        if (!drag.current) return
+        const delta = (event.clientX - drag.current.x) * (sidebarSide === "left" ? 1 : -1)
+        updateAppearance({ sidebarWidth: Math.round(Math.max(200, Math.min(400, drag.current.width + delta))) })
+      }}
+      onPointerUp={finish}
+      onPointerCancel={finish}
+      onLostPointerCapture={finish}
+      onDoubleClick={() => updateAppearance({ sidebarWidth: DEFAULT_APPEARANCE.sidebarWidth })}
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+        event.preventDefault()
+        const delta = (event.key === "ArrowRight" ? 10 : -10) * (sidebarSide === "left" ? 1 : -1)
+        updateAppearance({ sidebarWidth: event.key === "Home" ? 200 : event.key === "End" ? 400 : Math.max(200, Math.min(400, sidebarWidth + delta)) })
+      }}
       {...props}
     />
   )

@@ -65,7 +65,7 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+      <SheetContent resizable className="w-full">
         <SheetHeader>
           <SheetTitle>Edit goal</SheetTitle>
           <SheetDescription>Update the score target or deadline while keeping its existing progress history.</SheetDescription>

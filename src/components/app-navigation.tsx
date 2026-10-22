@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
+import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -23,6 +23,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar"
@@ -33,6 +34,7 @@ import type { useStudySessionSync } from "../lib/study-session-sync"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import type { SyncStatus } from "../lib/sync"
 import { cn } from "../lib/utils"
+import { useAppearance } from "../lib/appearance"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
 const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => ({ default: module.AppCommandMenu })))
@@ -160,6 +162,7 @@ export function AppSidebar({
   onCommandOpenChange: (open: boolean) => void
 }) {
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
+  const appearance = useAppearance()
   useEffect(() => {
     if (!commandOpen) return
     if (isMobile) setOpenMobile(true)
@@ -184,12 +187,12 @@ export function AppSidebar({
 
   const searchButton = <button type="button" aria-label="Search anything" onClick={onSearch} className="mx-2 flex h-8 items-center gap-2 rounded-xs px-3 text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden">
     <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
-    <span className="flex-1 text-left text-[13px]">Search</span>
-    <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+    <span className="flex-1 text-left text-[0.8125rem]">Search</span>
+    <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
   </button>
 
   return (
-    <Sidebar collapsible="icon" className="focal-navigation">
+    <Sidebar side={appearance.sidebarSide} collapsible="icon" className="focal-navigation">
       <SidebarHeader className="gap-5 px-5 pt-7 pb-5 group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-3">
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <button
@@ -207,7 +210,7 @@ export function AppSidebar({
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
                 <Plus aria-hidden />
-                <span className="flex-1 group-data-[collapsible=icon]:hidden">Add to your study</span>
+                <span className="min-w-0 flex-1 truncate text-left group-data-[collapsible=icon]:hidden">Add to your study</span>
                 <ChevronDown aria-hidden className="size-3! opacity-60 group-data-[collapsible=icon]:hidden" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52">
@@ -224,11 +227,14 @@ export function AppSidebar({
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
         {commandOpen || commandLoaded ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
         <button type="button" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 items-center justify-center rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></button>
-        {NAVIGATION_GROUPS.map((group, index) => <SidebarGroup className="p-0" key={group.label}>
-          <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3"><span aria-hidden className="font-normal opacity-50">0{index + 1}</span>{group.label}</SidebarGroupLabel>
+        {NAVIGATION_GROUPS.map((group) => {
+          const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
+          if (!items.length) return null
+          return <SidebarGroup className="p-0" key={group.label}>
+          {appearance.sidebarLabels ? <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3">{group.label}</SidebarGroupLabel> : null}
           <SidebarGroupContent>
             <SidebarMenu>
-              {group.items.map((item) => {
+              {items.map((item) => {
                 const Icon = NAVIGATION_ICONS[item.id as keyof typeof NAVIGATION_ICONS]
                 return (
                 <SidebarMenuItem key={item.id}>
@@ -236,7 +242,7 @@ export function AppSidebar({
                     isActive={view === item.id}
                     aria-current={view === item.id ? "page" : undefined}
                     tooltip={item.label}
-                    className="h-9 gap-3 rounded-xs px-3 text-[13px]"
+                    className="h-9 gap-3 rounded-xs px-3 text-[0.8125rem]"
                     onClick={() => navigate(item.id)}
                   >
                     <Icon aria-hidden className="size-4! opacity-70" strokeWidth={1.5} />
@@ -252,19 +258,24 @@ export function AppSidebar({
               )})}
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup>)}
+        </SidebarGroup>})}
       </SidebarContent>
       <SidebarFooter className="gap-3 px-5 pt-4 pb-5 group-data-[collapsible=icon]:px-2">
         <SharedSessions sessions={sessions} onControl={onControlSession} />
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Settings" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
+              <Settings2 aria-hidden strokeWidth={1.5} /><span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
                 <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/60" strokeWidth={1.25} />
                 <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{accountLabel}</span>
-                  <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>
+                  <span className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>
                 </span>
                 <ArrowUpRight aria-hidden className="ml-auto size-3.5! opacity-50 group-data-[collapsible=icon]:hidden" />
               </DropdownMenuTrigger>
@@ -284,6 +295,7 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   )
 }

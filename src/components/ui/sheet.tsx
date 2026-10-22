@@ -1,4 +1,6 @@
 import * as React from "react"
+import type { GroupImperativeHandle } from "react-resizable-panels"
+import { savePaneSize, useAppearance } from "../../lib/appearance"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "../../lib/utils"
@@ -51,7 +53,13 @@ function SheetContent({
   resizable?: boolean
 }) {
   const isMobile = useIsMobile()
+  const { editorPane } = useAppearance()
+  const group = React.useRef<GroupImperativeHandle>(null)
   const canResize = resizable && side === "right" && !isMobile
+
+  React.useEffect(() => {
+    if (canResize) group.current?.setLayout({ "sheet-content": editorPane, "sheet-space": 100 - editorPane })
+  }, [editorPane, canResize])
 
   return (
     <SheetPortal>
@@ -68,14 +76,16 @@ function SheetContent({
       >
         {canResize ? (
           <React.Suspense fallback={<div role="status" className="pointer-events-auto ml-auto h-full w-full max-w-lg bg-popover p-6"><SheetPrimitive.Title>Loading editor…</SheetPrimitive.Title></div>}>
-          <ResizablePanelGroup orientation="horizontal" className="h-full">
+          <ResizablePanelGroup groupRef={group} orientation="horizontal" className="h-full" defaultLayout={{ "sheet-content": editorPane, "sheet-space": 100 - editorPane }} onLayoutChanged={(layout, meta) => {
+            if (meta.isUserInteraction) savePaneSize("editorPane", (meta.requestedLayout ?? layout)["sheet-content"])
+          }}>
             <ResizablePanel id="sheet-space" className="pointer-events-none" />
-            <ResizableHandle withHandle className="pointer-events-auto z-10" />
+            <ResizableHandle withHandle aria-label="Resize editor" className="pointer-events-auto z-10" />
             <ResizablePanel
               id="sheet-content"
-              defaultSize="32rem"
+              defaultSize={`${editorPane}%`}
               minSize="24rem"
-              maxSize="90vw"
+              maxSize="85%"
               groupResizeBehavior="preserve-pixel-size"
               className="pointer-events-auto flex h-full flex-col gap-4 overflow-y-auto overscroll-contain border-l bg-popover text-popover-foreground shadow-lg"
             >

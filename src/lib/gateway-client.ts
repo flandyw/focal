@@ -13,6 +13,7 @@ export const gatewayModelSchema = z.object({
   tags: z.array(z.string()).default([]),
   intelligence: z.number().nullish(),
   outputSpeed: z.number().positive().nullish(),
+  latencySeconds: z.number().nonnegative().nullish(),
 })
 export type GatewayModel = z.infer<typeof gatewayModelSchema>
 export const gatewayCatalogSchema = z.object({

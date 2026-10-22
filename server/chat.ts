@@ -1,10 +1,11 @@
 import { createClient } from "@supabase/supabase-js"
-import { convertToModelMessages, createGateway, stepCountIs, streamText, tool, validateUIMessages, type ToolSet } from "ai"
+import { convertToModelMessages, createGateway, stepCountIs, streamText, tool, validateUIMessages, type StepResultPerformance, type ToolSet } from "ai"
 import { z } from "zod"
 import { asSession } from "./mcp/store.js"
 import { defineTools, type Define } from "./mcp/tools.js"
 import { readRequestText } from "./request.js"
 import type { GatewayModel } from "../src/lib/gateway-client.js"
+import { chatMetadataSchema, type ChatMessage } from "../src/lib/chat-history.js"
 
 const MAX_BYTES = 256 * 1024
 const inputSchema = z.object({
@@ -34,7 +35,7 @@ const benchmarkSchema = z.object({
   data: z.array(z.object({
     name: z.string(), model_creator: z.object({ name: z.string() }),
     evaluations: z.object({ artificial_analysis_intelligence_index: z.number().nullish() }),
-    performance: z.object({ median_output_tokens_per_second: z.number().nonnegative().nullish() }),
+    performance: z.object({ median_output_tokens_per_second: z.number().nonnegative().nullish(), median_time_to_first_token_seconds: z.number().nonnegative().nullish() }),
   })),
 })
 // shortcut: benchmark caching is per server instance; use a shared cache if cold starts approach the API quota.
@@ -124,7 +125,7 @@ export async function handleChat(request: Request): Promise<Response> {
           && normalize(entry.model_creator.name) === normalize(model.id.split("/")[0])) ?? []
         const benchmark = matches.length === 1 ? matches[0] : undefined
         const outputSpeed = benchmark?.performance.median_output_tokens_per_second
-        return { ...model, intelligence: benchmark?.evaluations.artificial_analysis_intelligence_index, outputSpeed: outputSpeed && outputSpeed > 0 ? outputSpeed : undefined }
+        return { ...model, intelligence: benchmark?.evaluations.artificial_analysis_intelligence_index, outputSpeed: outputSpeed && outputSpeed > 0 ? outputSpeed : undefined, latencySeconds: benchmark?.performance.median_time_to_first_token_seconds }
       })
       const preferred = process.env.AI_GATEWAY_MODEL || "openai/gpt-6-luna"
       return Response.json({ hasKey, models, defaultModel: models.find((model) => model.id === preferred)?.id ?? models[0].id, benchmarksUpdatedAt: benchmarks?.updatedAt }, { headers })
@@ -156,7 +157,7 @@ export async function handleChat(request: Request): Promise<Response> {
   defineTools(define)
   let messages
   try {
-    messages = await validateUIMessages({ messages: body.messages, tools })
+    messages = await validateUIMessages<ChatMessage>({ messages: body.messages, tools, metadataSchema: chatMetadataSchema })
     // Only text and our own tool parts are accepted; chat cannot fetch client-supplied attachment URLs.
     if (messages.some((message) => message.parts.some((part) => part.type !== "text" && part.type !== "step-start" && !part.type.startsWith("tool-")))) {
       return fail("Chat supports text messages only.", 400)
@@ -180,6 +181,9 @@ export async function handleChat(request: Request): Promise<Response> {
     return "The assistant could not finish. Check your data before retrying a change."
   }
   try {
+    const startedAt = Date.now()
+    let latencyMs: number | undefined
+    let lastPerformance: StepResultPerformance | undefined
     const result = streamText({
       model: createGateway({ apiKey: gatewayKey })(body.model),
       system: `You are Focal's study assistant for VCE students in Victoria, Australia.
@@ -193,11 +197,26 @@ Current UTC time: ${new Date().toISOString()}. Account context is the latest syn
       maxOutputTokens: 4096,
       abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(55_000)]),
       onError: () => { console.error("Chat generation failed") },
+      onStepEnd: ({ performance, stepNumber }) => {
+        if (stepNumber === 0) latencyMs = performance.timeToFirstOutputMs
+        lastPerformance = performance
+      },
     })
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
       headers,
       sendReasoning: false,
+      messageMetadata: ({ part }) => {
+        if (part.type === "start") return { model: body.model, createdAt: startedAt }
+        if (part.type !== "finish") return undefined
+        const speed = lastPerformance?.outputTokensPerSecond
+        return {
+          model: body.model, createdAt: startedAt, durationMs: Date.now() - startedAt,
+          latencyMs: latencyMs != null && Number.isFinite(latencyMs) ? latencyMs : undefined,
+          tokensPerSecond: speed != null && Number.isFinite(speed) ? speed : undefined,
+          outputTokens: part.totalUsage.outputTokens,
+        }
+      },
       onError: generationError,
     })
   } catch (error) {

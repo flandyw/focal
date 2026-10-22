@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDown, SlidersHorizontal } from "lucide-react"
+import { ChevronDown, SlidersHorizontal, Star } from "lucide-react"
 import type { GatewayCatalog, GatewayModel } from "../lib/gateway-client"
 import { Button } from "./ui/button"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command"
@@ -9,15 +9,17 @@ import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigg
 const dollars = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 3 })
 const context = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
-export function ModelSelector({ catalog, value, onValueChange, disabled }: {
+export function ModelSelector({ catalog, value, onValueChange, favourites, onToggleFavourite, disabled }: {
   catalog: GatewayCatalog
   value: string
   onValueChange: (value: string) => void
+  favourites: string[]
+  onToggleFavourite: (id: string) => void
   disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const [browse, setBrowse] = useState(false)
+  const [view, setView] = useState<"suggested" | "favourites" | "all">("suggested")
   const [price, setPrice] = useState("")
   const [capability, setCapability] = useState("")
   const [sort, setSort] = useState("")
@@ -27,19 +29,20 @@ export function ModelSelector({ catalog, value, onValueChange, disabled }: {
   const hasSpeed = catalog.models.some((model) => model.outputSpeed != null)
   const searching = Boolean(query.trim())
   const filtered = Boolean(price || capability || sort)
-  const showAll = browse || searching || filtered
+  const showAll = view === "all" || searching || filtered
+  const favouriteModels = catalog.models.filter((model) => favourites.includes(model.id))
   const ranked = [...catalog.models].sort((a, b) =>
     (b.intelligence ?? -Infinity) - (a.intelligence ?? -Infinity) || (b.released ?? 0) - (a.released ?? 0) || a.name.localeCompare(b.name))
-  const suggestions: GatewayModel[] = []
+  const suggestions: GatewayModel[] = favouriteModels.slice(0, 5)
   const defaultModel = catalog.models.find((model) => model.id === catalog.defaultModel)
-  if (defaultModel) suggestions.push(defaultModel)
+  if (defaultModel && suggestions.length < 5 && !suggestions.some((entry) => entry.id === defaultModel.id)) suggestions.push(defaultModel)
   // ponytail: one pick per creator keeps the shortlist varied; use task-specific rankings if study outcomes justify them.
   for (const model of ranked) {
     if (suggestions.length === 5) break
     if (!suggestions.some((entry) => entry.id.split("/")[0] === model.id.split("/")[0])) suggestions.push(model)
   }
   const terms = query.trim().toLowerCase().split(/\s+/)
-  const models = (showAll ? catalog.models : suggestions).filter((model) =>
+  const models = (view === "favourites" ? favouriteModels : showAll ? catalog.models : suggestions).filter((model) =>
     terms.every((term) => `${model.name} ${model.id}`.toLowerCase().includes(term))
     && (!price || (model.outputPrice != null && model.outputPrice <= Number(price)))
     && (!capability || (capability === "reasoning" ? model.tags.includes("reasoning") : (model.contextWindow ?? 0) >= 128_000))
@@ -55,7 +58,7 @@ export function ModelSelector({ catalog, value, onValueChange, disabled }: {
     setPrice("")
     setCapability("")
     setSort("")
-    setBrowse(false)
+    setView("suggested")
     setFiltersOpen(false)
   }
 
@@ -66,7 +69,7 @@ export function ModelSelector({ catalog, value, onValueChange, disabled }: {
     <PopoverContent align="start" side="top" sideOffset={8} className="max-h-(--available-height) w-[min(26rem,calc(100vw-2rem))] gap-0 overflow-y-auto p-0">
       <div className="px-4 pt-4 pb-2">
         <PopoverTitle>Choose a model</PopoverTitle>
-        <PopoverDescription className="mt-1 text-xs">{hasIntelligence ? "Default and benchmark leaders, one per creator." : "Your default and recent releases, one per creator."}</PopoverDescription>
+        <PopoverDescription className="mt-1 text-xs">{favouriteModels.length ? "Your favourites, then a few suggestions." : hasIntelligence ? "Default and benchmark leaders, one per creator." : "Your default and recent releases, one per creator."}</PopoverDescription>
       </div>
       <Command shouldFilter={false} className="h-auto shrink-0 rounded-none! p-0">
         <CommandInput value={query} onValueChange={setQuery} placeholder="Search all models…" aria-label="Search all models" className="px-2" />
@@ -74,13 +77,14 @@ export function ModelSelector({ catalog, value, onValueChange, disabled }: {
           // Keep native controls' navigation keys out of the command list.
           if (["ArrowDown", "ArrowUp", "Home", "End", "Enter"].includes(event.key) || event.ctrlKey) event.stopPropagation()
         }}>
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-1 px-3 py-2">
           <div className="flex gap-1" role="group" aria-label="Model list">
-            <Button size="sm" variant={!showAll ? "secondary" : "ghost"} aria-pressed={!showAll} onClick={reset}>Suggested</Button>
-            <Button size="sm" variant={showAll ? "secondary" : "ghost"} aria-pressed={showAll} onClick={() => setBrowse(true)}>All models</Button>
+            <Button size="sm" variant={view !== "favourites" && !showAll ? "secondary" : "ghost"} aria-pressed={view !== "favourites" && !showAll} onClick={reset}>Suggested</Button>
+            <Button size="sm" variant={view === "favourites" ? "secondary" : "ghost"} aria-pressed={view === "favourites"} onClick={() => setView("favourites")}>Favourites</Button>
+            <Button size="sm" variant={view !== "favourites" && showAll ? "secondary" : "ghost"} aria-pressed={view !== "favourites" && showAll} onClick={() => setView("all")}>All models</Button>
           </div>
-          <Button size="sm" variant={filtersOpen ? "secondary" : "ghost"} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
-            <SlidersHorizontal aria-hidden className="size-3.5" />Filters{filtered ? " · On" : ""}
+          <Button size="icon-sm" variant={filtersOpen || filtered ? "secondary" : "ghost"} aria-label={filtered ? "Model filters (active)" : "Model filters"} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
+            <SlidersHorizontal aria-hidden className="size-3.5" />
           </Button>
         </div>
         {filtersOpen ? <div className="grid gap-3 border-y px-4 py-3 sm:grid-cols-2">
@@ -105,23 +109,27 @@ export function ModelSelector({ catalog, value, onValueChange, disabled }: {
         </div> : null}
         </div>
         <div className="flex justify-between gap-3 px-4 pb-1 text-xs text-muted-foreground" aria-live="polite">
-          <span>{showAll ? `${models.length} models` : "Suggested"}</span>
+          <span>{view === "favourites" ? `${models.length} favourites` : showAll ? `${models.length} models` : "Suggested"}</span>
           <span>{sort === "speed" ? "AA tokens / sec" : sort === "intelligence" ? "AA Intelligence Index" : "Output / 1M"}</span>
         </div>
         <CommandList className="min-h-0 max-h-80 scroll-py-1 px-1 pb-1">
-          <CommandEmpty>No models match. Try another search or reset filters.</CommandEmpty>
+          <CommandEmpty>{view === "favourites" && !favouriteModels.length ? "Star a model in All models to keep it here." : "No models match. Try another search or reset filters."}</CommandEmpty>
           <CommandGroup>
-            {models.map((model) => <CommandItem key={model.id} value={model.id} data-checked={model.id === value} onSelect={() => { onValueChange(model.id); setOpen(false); reset() }} className="gap-3 py-2.5">
+            {models.map((model) => <div key={model.id} className="flex items-center">
+            <CommandItem value={model.id} data-checked={model.id === value} onSelect={() => { onValueChange(model.id); setOpen(false); reset() }} className="min-w-0 flex-1 gap-3 py-2.5">
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{model.name}{model.id === value ? <span className="sr-only"> (selected)</span> : null}</div>
                 <div className="mt-0.5 truncate text-xs text-muted-foreground">
                   {model.id.split("/")[0]}{model.contextWindow ? ` · ${context.format(model.contextWindow)} context` : ""}{model.id === catalog.defaultModel ? " · Default" : ""}
                 </div>
+                {model.latencySeconds != null || model.outputSpeed != null ? <p className="mt-0.5 text-xs text-muted-foreground">AA: {model.latencySeconds != null ? `${model.latencySeconds.toFixed(2)}s latency` : ""}{model.latencySeconds != null && model.outputSpeed != null ? " · " : ""}{model.outputSpeed != null ? `${Math.round(model.outputSpeed)} tok/s` : ""}</p> : null}
               </div>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                 {sort === "speed" ? Math.round(model.outputSpeed!) : sort === "intelligence" ? model.intelligence!.toFixed(1) : model.outputPrice == null ? "—" : dollars.format(model.outputPrice)}
               </span>
-            </CommandItem>)}
+            </CommandItem>
+            <Button size="icon-sm" variant="ghost" className="mr-1 shrink-0" aria-label={`${favourites.includes(model.id) ? "Unfavourite" : "Favourite"} ${model.name}`} aria-pressed={favourites.includes(model.id)} onClick={() => onToggleFavourite(model.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") event.stopPropagation() }}><Star aria-hidden className={favourites.includes(model.id) ? "fill-current" : undefined} /></Button>
+            </div>)}
           </CommandGroup>
         </CommandList>
       </Command>

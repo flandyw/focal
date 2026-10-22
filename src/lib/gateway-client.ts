@@ -4,8 +4,20 @@ import { z } from "zod"
 export const CHAT_ENDPOINT = import.meta.env.VITE_CHAT_API_URL?.trim()
   || (import.meta.env.VITE_DESKTOP && !import.meta.env.DEV ? "" : "/api/chat")
 
+export const gatewayModelSchema = z.object({
+  id: z.string(), name: z.string(),
+  contextWindow: z.number().int().positive().nullish(),
+  inputPrice: z.number().nonnegative().nullish(),
+  outputPrice: z.number().nonnegative().nullish(),
+  released: z.number().nonnegative().nullish(),
+  tags: z.array(z.string()).default([]),
+  intelligence: z.number().nullish(),
+  outputSpeed: z.number().positive().nullish(),
+})
+export type GatewayModel = z.infer<typeof gatewayModelSchema>
 export const gatewayCatalogSchema = z.object({
-  hasKey: z.boolean(), defaultModel: z.string(), models: z.array(z.object({ id: z.string(), name: z.string() })),
+  hasKey: z.boolean(), defaultModel: z.string(), models: z.array(gatewayModelSchema),
+  benchmarksUpdatedAt: z.string().datetime().optional(),
 })
 export type GatewayCatalog = z.infer<typeof gatewayCatalogSchema>
 

@@ -10,7 +10,7 @@ import { Bubble, BubbleContent } from "./ui/bubble"
 import { Button } from "./ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./ui/input-group"
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "./ui/combobox"
+import { ModelSelector } from "./model-selector"
 import { Message, MessageContent } from "./ui/message"
 import {
   MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem,
@@ -120,10 +120,7 @@ export function ChatPage({ userId, subject, onSignIn, onSettings }: { userId?: s
       </MessageScrollerProvider>
       <div className="mx-auto w-full max-w-3xl space-y-3">
         {catalogError ? <p role="alert" className="text-sm text-destructive">{catalogError} <Button size="sm" variant="outline" disabled={busy} onClick={() => setCatalogVersion((current) => current + 1)}>Retry</Button></p> : null}
-        {catalog ? <Combobox items={catalog.models} value={catalog.models.find((entry) => entry.id === model) ?? null} onValueChange={(entry) => { if (entry) setModel(entry.id) }} itemToStringLabel={(entry) => `${entry.name} (${entry.id})`} itemToStringValue={(entry) => entry.id} disabled={busy} autoHighlight>
-          <ComboboxInput aria-label="Chat model" placeholder="Search models" className="w-full sm:max-w-md" />
-          <ComboboxContent><ComboboxEmpty>No matching models.</ComboboxEmpty><ComboboxList>{(entry) => <ComboboxItem key={entry.id} value={entry}>{entry.name}<span className="ml-2 text-xs text-muted-foreground">{entry.id}</span></ComboboxItem>}</ComboboxList></ComboboxContent>
-        </Combobox> : null}
+        {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={setModel} disabled={busy} /> : null}
         {error ? <Alert variant="destructive"><AlertTitle>Chat could not finish</AlertTitle><AlertDescription>{error.message} Check your records before repeating a change.</AlertDescription></Alert> : null}
         {stopped ? <p role="status" className="text-sm text-muted-foreground">Response stopped. Changes may have saved; check your records before retrying.</p> : null}
         <form onSubmit={(event) => { event.preventDefault(); send() }}>

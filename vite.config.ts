@@ -53,7 +53,7 @@ function chatPlugin(): Plugin {
     name: 'focal-chat',
     configureServer(server) {
       const env = loadEnv(server.config.mode, server.config.envDir, '')
-      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'AI_GATEWAY_MODEL']) {
+      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'AI_GATEWAY_MODEL', 'ARTIFICIAL_ANALYSIS_API_KEY']) {
         if (process.env[name] === undefined && env[name]) process.env[name] = env[name]
       }
       server.middlewares.use('/api/chat', async (request, response) => {

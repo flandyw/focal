@@ -4,6 +4,7 @@ import { z } from "zod"
 import { asSession } from "./mcp/store.js"
 import { defineTools, type Define } from "./mcp/tools.js"
 import { readRequestText } from "./request.js"
+import type { GatewayModel } from "../src/lib/gateway-client.js"
 
 const MAX_BYTES = 256 * 1024
 const inputSchema = z.object({
@@ -20,10 +21,50 @@ const inputSchema = z.object({
 // shortcut: limits are per server instance; use a shared rate limiter when running multiple instances.
 const requests = new Map<string, { since: number; count: number }>()
 
+const tokenPriceSchema = z.union([z.number(), z.string().trim().min(1)]).transform(Number).pipe(z.number().nonnegative()).nullish()
 const modelSchema = z.object({ data: z.array(z.object({
   id: z.string().min(1).max(200), name: z.string(), type: z.string(), tags: z.array(z.string()).default([]),
+  context_window: z.number().int().nonnegative().nullish(), released: z.number().nonnegative().nullish(),
+  pricing: z.object({ input: tokenPriceSchema, output: tokenPriceSchema }).nullish(),
 })) })
-let modelCache: { at: number; models: { id: string; name: string }[] } | undefined
+let modelCache: { at: number; models: GatewayModel[] } | undefined
+
+const benchmarkSchema = z.object({
+  pagination: z.object({ has_more: z.boolean() }),
+  data: z.array(z.object({
+    name: z.string(), model_creator: z.object({ name: z.string() }),
+    evaluations: z.object({ artificial_analysis_intelligence_index: z.number().nullish() }),
+    performance: z.object({ median_output_tokens_per_second: z.number().nonnegative().nullish() }),
+  })),
+})
+// shortcut: benchmark caching is per server instance; use a shared cache if cold starts approach the API quota.
+let benchmarkCache: { at: number; updatedAt?: string; models: z.infer<typeof benchmarkSchema>["data"] } | undefined
+
+async function modelBenchmarks() {
+  if (!process.env.ARTIFICIAL_ANALYSIS_API_KEY) return undefined
+  if (benchmarkCache && Date.now() - benchmarkCache.at < (benchmarkCache.updatedAt ? 86_400_000 : 300_000)) return benchmarkCache
+  try {
+    const models: z.infer<typeof benchmarkSchema>["data"] = []
+    const signal = AbortSignal.timeout(5_000)
+    for (let page = 1; page <= 20; page++) {
+      const response = await fetch(`https://artificialanalysis.ai/api/v2/language/models/free?page=${page}`, {
+        headers: { "x-api-key": process.env.ARTIFICIAL_ANALYSIS_API_KEY }, signal,
+      })
+      if (!response.ok) throw new Error("Benchmarks unavailable")
+      const data = benchmarkSchema.parse(await response.json())
+      models.push(...data.data)
+      if (!data.pagination.has_more) {
+        benchmarkCache = { at: Date.now(), updatedAt: new Date().toISOString(), models }
+        return benchmarkCache
+      }
+    }
+    throw new Error("Benchmark pagination limit exceeded")
+  } catch {
+    // Optional benchmarks must never prevent model selection or chat.
+    benchmarkCache = { at: Date.now(), models: [] }
+    return benchmarkCache
+  }
+}
 
 async function chatModels() {
   if (modelCache && Date.now() - modelCache.at < 300_000) return modelCache.models
@@ -31,7 +72,11 @@ async function chatModels() {
   if (!response.ok) throw new Error("Model catalog unavailable")
   const catalog = modelSchema.parse(await response.json())
   const models = catalog.data.filter((model) => model.type === "language" && model.tags.includes("tool-use"))
-    .map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+    .map(({ id, name, tags, context_window, released, pricing }) => ({
+      id, name, tags, released, contextWindow: context_window || null,
+      inputPrice: pricing?.input == null ? null : pricing.input * 1_000_000,
+      outputPrice: pricing?.output == null ? null : pricing.output * 1_000_000,
+    })).sort((a, b) => a.name.localeCompare(b.name))
   if (!models.length) throw new Error("No tool-capable models available")
   modelCache = { at: Date.now(), models }
   return models
@@ -71,9 +116,18 @@ export async function handleChat(request: Request): Promise<Response> {
     const { data: hasKey, error } = await sb.rpc("ai_gateway_key_status", { p_expected_user_id: userId })
     if (error || typeof hasKey !== "boolean") return fail("Could not load your saved Gateway key status. Try again.", 503)
     try {
-      const models = await chatModels()
+      const [catalog, benchmarks] = await Promise.all([chatModels(), modelBenchmarks()])
+      const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "")
+      const models = catalog.map((model) => {
+        // Exact creator and variant names only: fuzzy matches can assign the wrong reasoning score.
+        const matches = benchmarks?.models.filter((entry) => entry.name.trim().toLowerCase() === model.name.trim().toLowerCase()
+          && normalize(entry.model_creator.name) === normalize(model.id.split("/")[0])) ?? []
+        const benchmark = matches.length === 1 ? matches[0] : undefined
+        const outputSpeed = benchmark?.performance.median_output_tokens_per_second
+        return { ...model, intelligence: benchmark?.evaluations.artificial_analysis_intelligence_index, outputSpeed: outputSpeed && outputSpeed > 0 ? outputSpeed : undefined }
+      })
       const preferred = process.env.AI_GATEWAY_MODEL || "openai/gpt-6-luna"
-      return Response.json({ hasKey, models, defaultModel: models.find((model) => model.id === preferred)?.id ?? models[0].id }, { headers })
+      return Response.json({ hasKey, models, defaultModel: models.find((model) => model.id === preferred)?.id ?? models[0].id, benchmarksUpdatedAt: benchmarks?.updatedAt }, { headers })
     } catch { return fail("Could not load Gateway models. Try again.", 503) }
   }
 

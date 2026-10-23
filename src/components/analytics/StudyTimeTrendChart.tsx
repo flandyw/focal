@@ -2,8 +2,9 @@ import { useMemo } from "react"
 import { useReducedMotion } from "framer-motion"
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  ComposedChart,
+  Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -11,17 +12,17 @@ import {
 } from "recharts"
 import { getSubjectColor } from "../../lib/progress-chart-theme"
 import { getSubjectById } from "../../lib/progress-utils"
-import type { StudyTimePoint } from "../../lib/progress-analytics"
+import type { ConsistencyDay, StudyTimePoint } from "../../lib/progress-analytics"
 
 interface StudyTimeTrendChartProps {
   data: StudyTimePoint[]
+  days: ConsistencyDay[]
 }
 
 interface DailyPoint {
   date: string
-  label: string
-  total: number
-  [subjectId: string]: string | number
+  average: number
+  subjects: Record<string, number>
 }
 
 const UNASSIGNED_ID = "_unassigned"
@@ -41,7 +42,7 @@ function formatTotalMinutes(m: number) {
   return rem > 0 ? `${h}h ${rem}m` : `${h}h`
 }
 
-export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
+export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
   const reduceMotion = useReducedMotion() === true
   const { chartData, subjectIds, totalMinutes, summaries } =
     useMemo(() => {
@@ -64,24 +65,11 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
         .filter(([, m]) => m > 0)
         .sort((a, b) => b[1] - a[1])
 
-      const sortedDays = Array.from(dayMap.entries()).sort(([a], [b]) =>
-        a.localeCompare(b),
-      )
-      const points: DailyPoint[] = sortedDays.map(([date, subjectMap]) => {
-        const d = new Date(date + "T00:00:00")
-        const label = d.toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        })
-        const total = Array.from(subjectMap.values()).reduce(
-          (sum, m) => sum + m,
-          0,
-        )
-        const entry: DailyPoint = { date, label, total }
-        sorted.forEach(([sid]) => {
-          entry[sid] = subjectMap.get(sid) ?? 0
-        })
-        return entry
+      const points: DailyPoint[] = days.map(({ date }, index) => {
+        const subjectMap = dayMap.get(date) ?? new Map<string, number>()
+        const window = days.slice(Math.max(0, index - 6), index + 1)
+        const average = window.reduce((sum, day) => sum + day.minutes, 0) / window.length
+        return { date, average: Math.round(average), subjects: Object.fromEntries(subjectMap) }
       })
 
       const total = sorted.reduce((sum, [, m]) => sum + m, 0)
@@ -100,9 +88,9 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
         totalMinutes: total,
         summaries,
       }
-    }, [data])
+    }, [data, days])
 
-  if (chartData.length === 0) {
+  if (totalMinutes === 0) {
     return (
       <section className="border-t border-border/70 pt-5">
         <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Study Time Trends</h3>
@@ -113,16 +101,19 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
 
   return (
     <section className="border-t border-border/70 pt-5">
-      <h3 className="font-heading text-xl font-normal tracking-tight mb-4">Study Time Trends</h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+      <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Study Time Trends</h3>
+      <p className="mb-4 text-xs text-muted-foreground">Daily study time and a rolling average of up to 7 days, including days off.</p>
+      <ResponsiveContainer width="100%" height={240}>
+        <ComposedChart accessibilityLayer data={chartData} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
-            dataKey="label"
+            dataKey="date"
+            tickFormatter={(value) => new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             axisLine={false}
             tickLine={false}
             interval="preserveStartEnd"
+            minTickGap={32}
           />
           <YAxis
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
@@ -139,8 +130,10 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
               color: "var(--popover-foreground)",
             }}
             labelStyle={{ color: "var(--muted-foreground)", fontSize: 11 }}
+            labelFormatter={(date) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             formatter={(value: unknown, name: unknown) => {
               const sid = String(name)
+              if (sid === "average") return [formatMinutes(Number(value)), "7-day average"]
               const displayName = getSubjectById(sid)?.name ?? "Unassigned"
               return [formatMinutes(Number(value)), displayName]
             }}
@@ -148,24 +141,25 @@ export function StudyTimeTrendChart({ data }: StudyTimeTrendChartProps) {
           {subjectIds.map((subjectId) => {
             const color = getSubjectColor(subjectId)
             return (
-              <Area
+              <Bar
                 key={subjectId}
-                type="monotone"
-                dataKey={subjectId}
+                dataKey={(point: DailyPoint) => point.subjects[subjectId] ?? 0}
+                name={subjectId}
                 stackId="1"
                 stroke={color}
                 fill={color}
-                fillOpacity={0.3}
-                strokeWidth={1.5}
-                dot={chartData.length === 1}
+                fillOpacity={0.65}
+                maxBarSize={28}
                 isAnimationActive={!reduceMotion}
                 animationDuration={200}
               />
             )
           })}
-        </AreaChart>
+          <Line type="linear" dataKey="average" stroke="var(--foreground)" strokeWidth={2} dot={false} isAnimationActive={false} />
+        </ComposedChart>
       </ResponsiveContainer>
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="flex items-center gap-1.5 text-caption text-muted-foreground"><span className="w-4 border-t-2 border-foreground" />7-day average</span>
         {subjectIds.map((sid) => {
           const color = getSubjectColor(sid)
           const name = getSubjectById(sid)?.name ?? "Unassigned"

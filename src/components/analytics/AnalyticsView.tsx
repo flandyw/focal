@@ -1,4 +1,4 @@
-import { sameStudySubject } from "../../lib/studySubjects"
+import { sameStudySubject, studySubjectId } from "../../lib/studySubjects"
 import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
@@ -16,6 +16,7 @@ import {
  type TimeOfDayBucket,
 } from"../../lib/progress-analytics"
 import type { Project, StudySession } from"../../lib/types"
+import type { ExamAttempt } from "../../lib/exam-data"
 import { cn, getSubjectById } from"../../lib/progress-utils"
 import { CalendarDays, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { getSubjectColor } from"../../lib/progress-chart-theme"
@@ -38,12 +39,16 @@ import { EfficiencyChart } from"./EfficiencyChart"
 import { ConsistencyHeatmap } from"./ConsistencyHeatmap"
 import { TimeOfDayChart } from"./TimeOfDayChart"
 import { EmptyAnalytics } from"./EmptyAnalytics"
+import { ExamPerformanceChart } from "./ExamPerformanceChart"
+import { WeekdayStudyChart } from "./WeekdayStudyChart"
 
 interface AnalyticsViewProps {
  subject?: string
  sessions: StudySession[]
+ attempts: ExamAttempt[]
  projects: Project[]
  onNewSession: () => void
+ onLogExam: () => void
 }
 
 const RANGE_OPTIONS: { value: AnalyticsRange; label: string }[] = [
@@ -176,8 +181,10 @@ function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
  subject,
  sessions,
+ attempts,
  projects,
  onNewSession,
+ onLogExam,
 }: AnalyticsViewProps) {
  const reduceMotion = useReducedMotion() === true
  const [range, setRange] = useState<AnalyticsRange>(30)
@@ -194,8 +201,12 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  )
 
  const allSubjectIds = useMemo(
- () => Array.from(new Set(data.subjectBreakdown.map((d) => d.subjectId))),
- [data.subjectBreakdown],
+ () => Array.from(new Set([
+ ...data.subjectBreakdown.map((d) => d.subjectId),
+ ...data.subjectCompletion.map((d) => d.subjectId),
+ ...attempts.map((attempt) => studySubjectId(attempt.subject)),
+ ])),
+ [data.subjectBreakdown, data.subjectCompletion, attempts],
  )
 
  const isFilterActive = !!subject || selectedSubjects !== null
@@ -256,6 +267,10 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  }
  return buckets
  }, [activeSet, data.timeOfDay, data.timeOfDayBySubject, isFilterActive])
+ const filteredAttempts = useMemo(
+ () => isFilterActive ? attempts.filter((attempt) => activeSet.has(studySubjectId(attempt.subject))) : attempts,
+ [attempts, activeSet, isFilterActive],
+ )
 
  const filteredTotalMinutes = useMemo(
  () => filteredBreakdown.reduce((s, d) => s + d.minutes, 0),
@@ -294,15 +309,15 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [allSubjectIds],
  )
 
- if (!data.hasData) {
+ if (!data.hasData && attempts.length === 0) {
  return (
  <div className="h-full">
  <div className="space-y-8">
  <div className="border-b border-border/70 pb-4">
  <h1 className="focal-page-title">Progress</h1>
- <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
+ <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
  </div>
- <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} /></div>
+ <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
  </div>
  </div>
  )
@@ -329,7 +344,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  >
  <div>
  <h1 className="focal-page-title">Progress</h1>
- <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Study time, consistency, and subject breakdowns.</p>
+ <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
  </div>
 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
  <Button
@@ -339,7 +354,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  onClick={handleExport}
  disabled={filteredTimeTrends.length === 0}
  >
- <Download /> Export CSV
+ <Download /> Export study CSV
  </Button>
  {range !== 0 && (
 <div className="flex min-w-0 max-w-full items-center gap-1">
@@ -393,15 +408,11 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </motion.div>
  )}
 
- <motion.div variants={staggerItem}>
- <AnalyticsHighlights {...highlights} />
- </motion.div>
-
  {/* Chart grid: crossfade on range change, cards stagger on mount */}
  <motion.div variants={staggerItem} className="relative">
  <AnimatePresence mode="wait">
  <motion.div
- key={`${range}-${periodEnd}`}
+ key={`${range}-${picked?.end ?? "live"}`}
  initial={reduceMotion ? false : { opacity: 0 }}
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}
@@ -411,13 +422,20 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  variants={staggerContainer(0.05, 0)}
  initial={reduceMotion ? false :"initial"}
  animate={reduceMotion ? undefined :"animate"}
- className="grid grid-cols-1 gap-x-7 gap-y-6 min-[900px]:grid-cols-2"
+ className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-6 min-[900px]:grid-cols-2 [&>div]:min-w-0"
  >
+ <motion.div variants={staggerItem} className="min-[900px]:col-span-2">
+ <ExamPerformanceChart attempts={filteredAttempts} range={periodDays} periodEnd={periodEnd} onLogExam={onLogExam} />
+ </motion.div>
+ {data.hasData ? <>
  <motion.div
  variants={staggerItem}
  className="relative min-[900px]:col-span-2"
  >
- <StudyTimeTrendChart data={filteredTimeTrends} />
+ <StudyTimeTrendChart data={filteredTimeTrends} days={filteredConsistency.days} />
+ </motion.div>
+ <motion.div variants={staggerItem} className="relative">
+ <WeekdayStudyChart days={filteredConsistency.days} />
  </motion.div>
  <motion.div variants={staggerItem} className="relative">
  <SubjectBreakdownChart data={filteredBreakdown} />
@@ -434,6 +452,9 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  <motion.div variants={staggerItem} className="relative">
  <EfficiencyChart data={filteredEfficiency} />
  </motion.div>
+ <motion.div variants={staggerItem} className="relative">
+ <AnalyticsHighlights {...highlights} />
+ </motion.div>
  <motion.div
  variants={staggerItem}
  className="relative min-[900px]:col-span-2"
@@ -443,6 +464,11 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  stats={filteredConsistency.stats}
  />
  </motion.div>
+ </> : <motion.div variants={staggerItem} className="border-t border-border/70 pt-5 min-[900px]:col-span-2">
+ <h2 className="font-heading text-xl font-normal tracking-tight">Study habits</h2>
+ <p className="mt-1 mb-4 text-sm text-muted-foreground">Complete your first study session to see time trends, consistency, and your weekly rhythm.</p>
+ <Button size="sm" variant="outline" onClick={onNewSession}>Start study session</Button>
+ </motion.div>}
  </motion.div>
  </motion.div>
  </AnimatePresence>

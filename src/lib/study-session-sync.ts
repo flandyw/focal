@@ -623,6 +623,9 @@ async function captureCommandTiming(accountId: string, sessionId: string, action
   const prior = await readCommandTiming(accountId, sessionId)
   const monotonicAt = performance.now()
   const timeOrigin = performance.timeOrigin
+  // After a reload (new timeOrigin) or with no anchor the monotonic clock can't measure the gap; claiming 0 ms
+  // makes the server reject the server-clock estimate as timing_invalid. Send no timing: it lands at receipt time.
+  if (action !== "start" && prior?.timeOrigin !== timeOrigin) return {}
   const elapsed = action === "start" ? 0 : elapsedSinceBoundary(prior, monotonicAt, timeOrigin)
   const occurredAt = clockAnchor ? new Date(estimateServerNow(clockAnchor, monotonicAt)).toISOString() : null
   return { occurred_at: occurredAt, elapsed_since_previous_ms: elapsed }

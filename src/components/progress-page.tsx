@@ -4,10 +4,11 @@ import { isDeleted, type CanonicalStudySession } from "../lib/sync/sessionContra
 import { toast } from "sonner"
 import { examHost } from "../lib/host"
 import { AnalyticsView } from "./analytics/AnalyticsView"
+import type { ExamAttempt } from "../lib/exam-data"
 
 const NO_PROJECTS: import("../lib/types").Project[] = []
 
-export function ProgressPage({ sessions, subject, onNewSession }: { sessions: CanonicalStudySession[]; subject?: string; onNewSession: () => void }) {
+export function ProgressPage({ sessions, attempts, subject, onNewSession, onLogExam }: { sessions: CanonicalStudySession[]; attempts: ExamAttempt[]; subject?: string; onNewSession: () => void; onLogExam: () => void }) {
   const [localSessions, setLocalSessions] = useState<StudySession[]>([])
   useEffect(() => {
     let active = true
@@ -40,5 +41,5 @@ export function ProgressPage({ sessions, subject, onNewSession }: { sessions: Ca
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} />
+  return <AnalyticsView sessions={[...history.values()]} attempts={attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} />
 }

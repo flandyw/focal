@@ -308,3 +308,9 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 [data-sidebar-resizing="true"] .group\/sidebar-wrapper * { transition-duration: 0ms !important; user-select: none; }
 .workspace-split[data-split="true"] .calendar-day-pane { position: absolute; inset: 0; margin-left: calc(var(--spacing) * 3); }
 .workspace-split[data-split="true"] .calendar-day-card { position: absolute; inset: 0; overflow-y: auto; }
+.tt-block { background-color: oklch(0.94 0.04 var(--tt-h)); color: oklch(0.38 0.11 var(--tt-h)); }
+.dark .tt-block { background-color: oklch(0.36 0.07 var(--tt-h)); color: oklch(0.92 0.06 var(--tt-h)); }
+span.tt-block { background-color: oklch(0.62 0.14 var(--tt-h)); }
+.dark span.tt-block { background-color: oklch(0.74 0.12 var(--tt-h)); }
+.tt-break { background-color: color-mix(in oklch, var(--foreground) 6%, var(--card)); color: var(--muted-foreground); }
+span.tt-break { background-color: var(--border); }

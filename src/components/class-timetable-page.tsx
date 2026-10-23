@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, Clock3, Pencil, Plus, Settings2, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
@@ -19,7 +19,6 @@ import {
   parseTimetableImport,
   periodSubjectName,
 } from "../lib/class-timetable"
-import { subjectColor } from "../lib/studySubjects"
 import type { SchoolHoliday, TimetableConfig, TimetablePeriod } from "../lib/types"
 import { Checkbox } from "./ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
@@ -31,11 +30,10 @@ const minutes = (time: string) => { const [hours, mins] = time.split(":").map(Nu
 const timeLabel = (time: string) => new Date(2000, 0, 1, ...time.split(":").map(Number)).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
 const dateLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
 const isBreak = (period: TimetablePeriod) => isTimetableBreakLabel(period.subject) || isTimetableBreakLabel(period.period)
-const periodColour = (period: TimetablePeriod) => isBreak(period) ? "var(--muted-foreground)" : subjectColor(periodSubjectName(period)) ?? "var(--primary)"
-// Soft fill with deep same-hue text; mixing against card/foreground keeps it legible in light and dark.
-const periodTint = (period: TimetablePeriod) => isBreak(period)
-  ? { backgroundColor: "var(--muted)", color: "var(--muted-foreground)" }
-  : { backgroundColor: `color-mix(in oklch, ${periodColour(period)} 18%, var(--card))`, color: `color-mix(in oklch, ${periodColour(period)} 70%, var(--foreground))` }
+// Spread hues so similar subject colours (e.g. the maths/science teals) stay distinct; light/dark tones live in .tt-* CSS.
+const HUES = [255, 150, 55, 305, 20, 195, 95, 330]
+const subjectHues = (config: TimetableConfig) => new Map([...new Set(config.entries.flatMap((entry) => entry.periods).filter((period) => !isBreak(period)).map(periodSubjectName))].toSorted().map((name, i) => [name, HUES[i % HUES.length]]))
+const periodTint = (period: TimetablePeriod, hues: Map<string, number>) => isBreak(period) ? { className: "tt-break" } : { className: "tt-block", style: { "--tt-h": hues.get(periodSubjectName(period)) ?? 255 } as CSSProperties }
 const hourLabel = (hour: number) => new Date(2000, 0, 1, Math.floor(hour / 60) % 24).toLocaleTimeString(undefined, { hour: "numeric" })
 
 function withDay(config: TimetableConfig, dayLabel: number, periods: TimetablePeriod[]): TimetableConfig {
@@ -63,6 +61,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
   const firstDay = Math.floor((day - 1) / 5) * 5 + 1
   const days = Array.from({ length: Math.min(5, cycleLength - firstDay + 1) }, (_, i) => firstDay + i)
   const classes = periods.filter((period) => !isBreak(period)).length
+  const hues = config ? subjectHues(config) : new Map<string, number>()
   const totalPeriods = config?.entries.reduce((sum, entry) => sum + entry.periods.length, 0) ?? 0
 
   function addPeriod() {
@@ -123,7 +122,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
               {days.map((label) => <Button variant="ghost" aria-pressed={day === label} className={`h-auto min-h-16 min-w-0 flex-1 flex-col rounded-none border-0 border-b-2 px-1 py-3 text-center font-normal ${day === label ? "border-primary bg-secondary/50 text-primary" : "border-transparent text-muted-foreground"}`} key={label} onClick={() => setSelectedDay(label)}><span className="block font-heading text-xl">Day {label}</span>{today === label ? <span className="text-[10px]">Today</span> : null}</Button>)}
             </div>
             <div className="hidden md:block">
-              <CycleBoard config={config} days={days} selected={day} today={today} now={date.getHours() * 60 + date.getMinutes()} onSelect={setSelectedDay} onEdit={(label, period) => { setSelectedDay(label); setEditor({ day: label, original: period, draft: { ...period, subject: periodSubjectName(period) } }) }} />
+              <CycleBoard config={config} days={days} selected={day} today={today} hues={hues} now={date.getHours() * 60 + date.getMinutes()} onSelect={setSelectedDay} onEdit={(label, period) => { setSelectedDay(label); setEditor({ day: label, original: period, draft: { ...period, subject: periodSubjectName(period) } }) }} />
               <p className="mt-3 text-xs text-muted-foreground">Select a day to see its agenda. Select a period to edit it.</p>
             </div>
           </section>
@@ -141,7 +140,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                 {periods.map((period, index) => <li key={index}>
                   <Button variant="ghost" aria-label={`Edit ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}`} className="group h-auto w-full justify-start gap-3 rounded-none border-0 px-0 py-4 text-left font-normal whitespace-normal hover:bg-secondary/40 sm:gap-5" onClick={() => setEditor({ day, original: period, draft: { ...period, subject: periodSubjectName(period) } })}>
                     <div className="w-20 shrink-0 text-xs tabular-nums text-muted-foreground"><span className="block font-medium text-foreground">{timeLabel(period.startTime)}</span><span className="mt-1 block">{timeLabel(period.endTime)}</span></div>
-                    <span className="h-9 w-1 shrink-0 rounded-full" style={{ backgroundColor: periodColour(period) }} />
+                    <span className={`h-9 w-1 shrink-0 rounded-full ${periodTint(period, hues).className}`} style={periodTint(period, hues).style} />
                     <div className="min-w-0 flex-1"><span className={`block break-words ${isBreak(period) ? "text-sm text-muted-foreground" : "font-heading text-xl"}`}>{periodSubjectName(period) || period.period}</span><span className="mt-1 block text-xs text-muted-foreground">{period.subject ? period.period : isBreak(period) ? `${minutes(period.endTime) - minutes(period.startTime)} minutes` : "Subject not set"}{period.location ? ` · ${period.location}` : ""}</span>{getTimetablePeriodError(period) ? <span className="mt-1 block text-xs text-destructive">{getTimetablePeriodError(period)}</span> : null}</div>
                     <Pencil className="mr-2 size-3.5 shrink-0 text-muted-foreground opacity-50 group-hover:text-primary group-hover:opacity-100" />
                   </Button>
@@ -171,8 +170,8 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
   )
 }
 
-function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
-  config: TimetableConfig; days: number[]; selected: number; today: number | null; now: number; onSelect: (day: number) => void; onEdit: (day: number, period: TimetablePeriod) => void
+function CycleBoard({ config, days, selected, today, hues, now, onSelect, onEdit }: {
+  config: TimetableConfig; days: number[]; selected: number; today: number | null; hues: Map<string, number>; now: number; onSelect: (day: number) => void; onEdit: (day: number, period: TimetablePeriod) => void
 }) {
   // ponytail: overlap checks are O(n²) on small school-day lists; use a sweep line if this becomes an event feed.
   const columns = days.map((day) => {
@@ -190,7 +189,7 @@ function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
     <div className="overflow-x-auto rounded-2xl border bg-card">
       <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}>
         <div className="border-b" />
-        {columns.map(({ day, periods }) => <Button variant="ghost" aria-pressed={selected === day} className={`h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-primary/6" : ""}`} key={day} onClick={() => onSelect(day)}>
+        {columns.map(({ day, periods }) => <Button variant="ghost" aria-pressed={selected === day} className={`h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
           <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Day</span>
           <span className={`flex size-10 items-center justify-center rounded-full text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
           <span className="text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span>
@@ -198,10 +197,10 @@ function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
         <div aria-hidden="true" className="relative" style={{ height: height * 1.35 }}>
           {hours.slice(1).map((hour) => <span className="absolute right-2 -translate-y-1/2 text-[11px] whitespace-nowrap tabular-nums text-muted-foreground" key={hour} style={{ top: (hour - start) * 1.35 }}>{hourLabel(hour)}</span>)}
         </div>
-        {columns.map(({ day, periods, lanes }) => <div className={`relative grid grid-flow-col-dense gap-x-1.5 border-l px-1.5 ${selected === day ? "bg-primary/6" : ""}`} key={day} style={{ height: height * 1.35, gridTemplateColumns: `repeat(${lanes}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${height}, 1.35px)`, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0px, transparent 80px, var(--border) 80px, var(--border) 81px)" }}>
+        {columns.map(({ day, periods, lanes }) => <div className={`relative grid grid-flow-col-dense gap-x-1.5 border-l px-1.5 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} style={{ height: height * 1.35, gridTemplateColumns: `repeat(${lanes}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${height}, 1.35px)`, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0px, transparent 80px, var(--border) 80px, var(--border) 81px)" }}>
           {periods.filter((period) => !getTimetablePeriodError(period)).map((period, index) => {
             const length = minutes(period.endTime) - minutes(period.startTime)
-            return <Button variant="ghost" aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${length < 20 ? "my-px rounded-md" : "my-0.5 rounded-lg"} h-auto min-w-0 flex-col items-stretch justify-start overflow-hidden border-0 px-2.5 text-left font-normal whitespace-normal hover:brightness-[0.97] dark:hover:brightness-110 ${length < 35 ? "justify-center py-0" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${length}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", ...periodTint(period) }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
+            return <Button variant="ghost" aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${periodTint(period, hues).className} ${length < 20 ? "my-px rounded-md" : "my-0.5 rounded-lg"} h-auto min-w-0 flex-col items-stretch justify-start overflow-hidden border-0 px-2.5 text-left font-normal whitespace-normal hover:brightness-[0.97] dark:hover:brightness-115 ${length < 35 ? "justify-center py-0" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${length}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", ...periodTint(period, hues).style }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
               <span className={`block font-medium ${length < 20 ? "truncate text-[10px] leading-none" : length < 35 ? "truncate text-xs leading-tight" : "break-words text-sm leading-tight"}`}>{periodSubjectName(period) || period.period}</span>
               {length >= 35 ? <span className="mt-0.5 block text-xs tabular-nums opacity-80">{timeLabel(period.startTime)} – {timeLabel(period.endTime)}{period.location ? ` · ${period.location}` : ""}</span> : null}
             </Button>

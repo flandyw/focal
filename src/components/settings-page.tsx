@@ -3,7 +3,7 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { GatewaySettings } from "./gateway-settings"
 import { AppearanceSettings } from "./appearance-settings"
@@ -43,7 +43,7 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, initialSection }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection }: {
   initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
@@ -55,6 +55,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   onExport: () => void
   onImport: (file: File) => Promise<void>
   onReplayOnboarding: () => void
+  onStartTour: () => void
 }) {
   const auth = useChatGPT()
   const [email, setEmail] = useState(sync.user?.email ?? "")
@@ -334,8 +335,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   event.currentTarget.value = ""
                 }} />
               </Row>
-              <Row title="Welcome tour" description="Replay the introduction: features, subjects, and where everything lives.">
-                <Button variant="outline" onClick={onReplayOnboarding}><RotateCcw />Replay tour</Button>
+              <Row title="Welcome and tour" description="Replay the welcome setup, or take the guided tour of the app again.">
+                <Button variant="outline" onClick={onReplayOnboarding}><RotateCcw />Replay welcome</Button>
+                <Button variant="outline" onClick={onStartTour}><Compass />Take tour</Button>
               </Row>
             </Section>
           ) : null}

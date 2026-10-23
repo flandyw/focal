@@ -15,7 +15,7 @@ const FEATURES = [
   { icon: LineChart, title: "Progress and predictions", text: "See study trends, rate skills, and estimate study scores and ATAR." },
 ]
 
-export type OnboardingFinish = "exam" | "focus" | "calendar" | "sign-in" | null
+export type OnboardingFinish = "exam" | "focus" | "calendar" | "sign-in" | "tour" | null
 
 export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubjectsChange, onFinish }: {
   subjects: string[]
@@ -120,7 +120,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubje
           {step > 0 ? <Button variant="ghost" onClick={() => setStep(step - 1)}>Back</Button> : <Button variant="ghost" onClick={() => onFinish(null)}>Skip</Button>}
           {step < steps.length - 1
             ? <Button onClick={() => setStep(step + 1)}>{step === 1 && !selectedSubjects.length ? "Skip for now" : "Continue"}</Button>
-            : <Button onClick={() => onFinish(null)}>Explore on my own</Button>}
+            : <><Button variant="outline" onClick={() => onFinish(null)}>Explore on my own</Button><Button onClick={() => onFinish("tour")}>Take the tour</Button></>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

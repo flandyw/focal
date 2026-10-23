@@ -210,7 +210,7 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
+              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" data-tour="add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
                 <Plus aria-hidden />
                 <span className="min-w-0 flex-1 truncate text-left group-data-[collapsible=icon]:hidden">Add to your study</span>
                 <ChevronDown aria-hidden className="size-3! opacity-60 group-data-[collapsible=icon]:hidden" />
@@ -244,6 +244,7 @@ export function AppSidebar({
                     isActive={view === item.id}
                     aria-current={view === item.id ? "page" : undefined}
                     tooltip={item.label}
+                    data-tour={`nav-${item.id}`}
                     className="h-9 gap-3 rounded-xs px-3 text-[0.8125rem]"
                     onClick={() => navigate(item.id)}
                   >
@@ -267,13 +268,13 @@ export function AppSidebar({
         <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Settings" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
+            <SidebarMenuButton tooltip="Settings" data-tour="settings" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
               <Settings2 aria-hidden strokeWidth={1.5} /><span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<SidebarMenuButton size="lg" tooltip={accountTooltip} aria-label={accountTooltip} />}>
+              <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-tour="account" tooltip={accountTooltip} aria-label={accountTooltip} />}>
                 <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/60" strokeWidth={1.25} />
                 <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{accountLabel}</span>

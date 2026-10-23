@@ -108,6 +108,9 @@ const ClassTimetablePage = lazy(() =>
 const OnboardingDialog = lazy(() =>
   import("./components/onboarding-dialog").then((module) => ({ default: module.OnboardingDialog })),
 )
+const AppTour = lazy(() =>
+  import("./components/app-tour").then((module) => ({ default: module.AppTour })),
+)
 const ONBOARDED_KEY = "examtrack:onboarded:v1"
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
@@ -170,6 +173,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
   const [onboarding, setOnboarding] = useState(false)
+  const [touring, setTouring] = useState(false)
   const accountEmpty = !data.subjects.length && !data.attempts.length && !data.mistakes.length && !data.sacRecords.length && !studySessionSync.sessions.length
   if (!onboarding && !embedded && accountEmpty && ["unconfigured", "signed-out", "synced"].includes(sync.status) && !(() => { try { return localStorage.getItem(ONBOARDED_KEY) } catch { return "1" } })()) setOnboarding(true)
 
@@ -180,6 +184,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     else if (next === "exam") { setEditingAttempt(null); setExamOpen(true) }
     else if (next === "focus") { setTimerMode("focus"); setView("focus") }
     else if (next === "calendar") setView("calendar")
+    else if (next === "tour") setTouring(true)
   }
 
   const referenceLoadFailed = [referencesStatus, studiesStatus, scalingStatus].includes("error")
@@ -838,7 +843,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "friends" ? <Suspense fallback={PAGE_LOADING}><FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} onSignIn={() => setView("settings")} /></Suspense> : null}
           {view === "chat" ? <Suspense fallback={PAGE_LOADING}><ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /></Suspense> : null}
-          {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} /></Suspense> : null}
+          {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} /></Suspense> : null}
           </div>
         </main>
       </SidebarInset>
@@ -867,6 +872,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         />
         </Suspense>
       ) : null}
+      {touring ? <Suspense fallback={null}><AppTour onClose={() => setTouring(false)} /></Suspense> : null}
       {onboarding ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" />}
     </SidebarProvider>

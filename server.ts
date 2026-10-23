@@ -17,7 +17,9 @@ const server = Bun.serve({
     if (path !== dist && !path.startsWith(`${dist}${sep}`)) return new Response("Bad request", { status: 400 })
 
     const file = Bun.file(path === dist ? resolve(dist, "index.html") : path)
-    return new Response(await file.exists() ? file : Bun.file(resolve(dist, "index.html")))
+    if (!await file.exists()) return new Response(Bun.file(resolve(dist, "index.html")))
+    // Vite content-hashes everything under /assets, so it can be cached forever.
+    return new Response(file, url.pathname.startsWith("/assets/") ? { headers: { "Cache-Control": "public, max-age=31536000, immutable" } } : undefined)
   },
 })
 

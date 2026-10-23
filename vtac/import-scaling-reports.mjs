@@ -52,7 +52,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     reports: REPORTS,
     references,
-  }, null, 2)}\n`)
+  })}\n`)
   process.stderr.write(`Wrote ${output}\n`)
 }
 

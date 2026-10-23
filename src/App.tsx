@@ -55,6 +55,7 @@ import { AI_ENABLED } from "./lib/host"
 import { applyItemLinks, collectLinkRecords, demoteGreens, progressStoplight, restoreItems, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
+import type { OnboardingFinish } from "./components/onboarding-dialog"
 
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
 const ChatPage = lazy(() => import("./components/chat-page").then((module) => ({ default: module.ChatPage })))
@@ -104,6 +105,10 @@ const GoalsPage = lazy(() =>
 const ClassTimetablePage = lazy(() =>
   import("./components/class-timetable-page").then((module) => ({ default: module.ClassTimetablePage })),
 )
+const OnboardingDialog = lazy(() =>
+  import("./components/onboarding-dialog").then((module) => ({ default: module.OnboardingDialog })),
+)
+const ONBOARDED_KEY = "examtrack:onboarded:v1"
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
@@ -162,6 +167,20 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     scalingStatus,
     reload: reloadReferences,
   } = useReferenceData(view === "predictor")
+
+  // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
+  const [onboarding, setOnboarding] = useState(false)
+  const accountEmpty = !data.subjects.length && !data.attempts.length && !data.mistakes.length && !data.sacRecords.length && !studySessionSync.sessions.length
+  if (!onboarding && !embedded && accountEmpty && ["unconfigured", "signed-out", "synced"].includes(sync.status) && !(() => { try { return localStorage.getItem(ONBOARDED_KEY) } catch { return "1" } })()) setOnboarding(true)
+
+  function finishOnboarding(next: OnboardingFinish) {
+    try { localStorage.setItem(ONBOARDED_KEY, "1") } catch { /* Shows again next visit without storage. */ }
+    setOnboarding(false)
+    if (next === "sign-in") { setSettingsSection("account"); setView("settings") }
+    else if (next === "exam") { setEditingAttempt(null); setExamOpen(true) }
+    else if (next === "focus") { setTimerMode("focus"); setView("focus") }
+    else if (next === "calendar") setView("calendar")
+  }
 
   const referenceLoadFailed = [referencesStatus, studiesStatus, scalingStatus].includes("error")
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
@@ -848,6 +867,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         />
         </Suspense>
       ) : null}
+      {onboarding ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" />}
     </SidebarProvider>
   )

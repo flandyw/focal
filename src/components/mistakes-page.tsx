@@ -153,10 +153,9 @@ function ExamContext({ mistake, attempt, studies }: { preferences?: MistakeRevie
   )
 }
 
-function AnswerPanel({ label, value, tone }: { label: string; value?: string; tone: "problem" | "fix" }) {
-  const border = tone === "problem" ? "border-l-destructive/60" : "border-l-primary"
+function AnswerPanel({ label, value }: { label: string; value?: string }) {
   return (
-    <section className={"min-w-0 rounded-lg border border-l-4 bg-muted/20 p-4 " + border}>
+    <section className="min-w-0 rounded-lg border bg-muted/20 p-4">
       <SectionLabel>{label}</SectionLabel>
       {value?.trim() ? <MarkdownPreview unframed>{value}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Not recorded yet.</p>}
     </section>
@@ -266,7 +265,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
           <div className="grid gap-2"><Label htmlFor="review-recall">Your approach <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="resize-y" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
         </div>
       </div>
-      {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div> : null}
+      {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
       <footer className="sticky bottom-0 z-10 grid gap-2 rounded-xl border bg-background/95 p-3 backdrop-blur">
         {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70">Space</kbd></Button>}
       </footer>
@@ -288,7 +287,7 @@ type MistakeActions = {
 function MistakeDetail({ mistake, attempt, studies, onEdit, onReimport, onToggleSuspend, onDelete, onPractice }: MistakeActions) {
   const schedule = getMistakeSchedule(mistake)
   return (
-    <article className="grid min-w-0 gap-6 rounded-xl border bg-card p-5 sm:p-6">
+    <article className="grid min-w-0 shrink-0 grid-cols-1 content-start gap-6 rounded-xl border bg-card p-5 sm:p-6">
       <header className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Badge variant="secondary">{mistake.suspended ? "Reviews paused" : stateLabel(schedule.state, schedule.resolved)}</Badge>
@@ -300,7 +299,7 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onReimport, onToggle
       </header>
       {mistake.questionText?.trim() ? <ProseField label="Question" value={mistake.questionText} /> : null}
       <MistakeAttachments attachments={mistake.attachments} />
-      <div className="grid gap-4 border-t pt-5"><AnswerPanel label="What went wrong" value={mistake.explanation} tone="problem" /><AnswerPanel label="Improved response or method" value={mistake.correction} tone="fix" /></div>
+      <div className="grid gap-4 border-t pt-5"><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5"><p className="text-xs text-muted-foreground">{mistake.suspended ? "Resume reviews to add this card to your queue." : `Next review · ${formatDueDate(schedule.dueAt)}`}</p><Button size="sm" onClick={() => onPractice(mistake)}><Play />Practise this mistake</Button></div>
       {mistake.reviewHistory?.length ? <Collapsible className="border-t pt-4"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between rounded text-sm font-medium">Review history ({mistake.reviewHistory.length})<ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted><ul className="mt-3 grid max-h-60 gap-2 overflow-y-auto text-xs text-muted-foreground">{mistake.reviewHistory.toSorted((first, second) => Date.parse(second.completedAt) - Date.parse(first.completedAt)).map((review) => <li key={review.id}>{reviewLine(review)}</li>)}</ul></CollapsibleContent></Collapsible> : null}
     </article>
@@ -757,7 +756,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
                   <Button size="sm" variant="outline" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</Button>
                 </nav>
               </section>
-              } secondary={isWorkspace ? <div className="min-w-0 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">{activeMistake
+              } secondary={isWorkspace ? <div className="min-w-0 lg:sticky lg:top-4">{activeMistake
                 ? <MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} />
                 : <div className="grid min-h-80 place-content-center gap-3 rounded-xl border border-dashed p-8 text-center"><NotebookPen className="mx-auto size-7 text-muted-foreground" /><h2 className="font-medium">Choose a mistake</h2><p className="max-w-xs text-sm text-muted-foreground">Read the question, understand what went wrong, and practise the corrected method.</p></div>}</div> : null}
             />

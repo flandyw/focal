@@ -141,12 +141,7 @@ function aggregateToAtar(
   if (aggregate < lowest.aggregate) return { atar: null, label: `<${lowest.atar.toFixed(2)}` }
   if (aggregate >= highest.aggregate) return { atar: highest.atar, label: highest.atar.toFixed(2) }
 
-  const upperIndex = points.findIndex((point) => point.aggregate > aggregate)
-  const lower = points[upperIndex - 1]
-  const upper = points[upperIndex]
-  const position = (aggregate - lower.aggregate) / (upper.aggregate - lower.aggregate)
-  const interpolated = lower.atar + position * (upper.atar - lower.atar)
-  const atar = Math.round(interpolated * 20) / 20
+  const atar = points.findLast((point) => point.aggregate <= aggregate)!.atar
   return { atar, label: atar.toFixed(2) }
 }
 
@@ -154,27 +149,29 @@ export function estimateAtar(results: AtarStudyResult[], year: number): AtarEsti
   const reference = ATAR_AGGREGATE_REFERENCES.find((item) => item.year === year)
   if (!reference) return null
 
-  const valid = deduplicateEquivalentStudies(results.filter((result) =>
+  const valid = results.filter((result) =>
     Number.isFinite(result.rawScore) &&
     Number.isFinite(result.scaledScore) &&
     result.rawScore >= 0 &&
     result.rawScore <= 50 &&
-    result.scaledScore >= 0,
-  ))
-  if (valid.length < 4) return null
+    result.scaledScore >= 0 &&
+    result.scaledScore <= 55,
+  )
+  const permissible = deduplicateEquivalentStudies(valid)
+  if (permissible.length < 4) return null
 
-  const english = valid
+  const english = permissible
     .filter((result) => isEnglishStudy(result.code))
     .toSorted((first, second) => second.scaledScore - first.scaledScore)[0]
   if (!english) return null
 
   let best: { primary: AtarStudyResult[]; increments: AtarStudyResult[]; aggregate: number } | null = null
-  const others = valid.filter((result) => result.id !== english.id)
+  const others = permissible.filter((result) => result.id !== english.id)
   for (const additionalPrimary of combinations(others, 3)) {
     const primary = [english, ...additionalPrimary]
     if (!primaryCombinationIsPermissible(primary)) continue
     const primaryIds = new Set(primary.map((result) => result.id))
-    const increments = chooseIncrements(primary, valid.filter((result) => !primaryIds.has(result.id)))
+    const increments = chooseIncrements(primary, permissible.filter((result) => !primaryIds.has(result.id)))
     const aggregate = primary.reduce((total, result) => total + result.scaledScore, 0) +
       increments.reduce((total, result) => total + result.scaledScore * 0.1, 0)
     if (!best || aggregate > best.aggregate) best = { primary, increments, aggregate }
@@ -198,10 +195,11 @@ export function estimateAtar(results: AtarStudyResult[], year: number): AtarEsti
     role: "Increment" as const,
   }))
   const selectedIds = new Set([...primaryFour, ...increments].map((result) => result.id))
-  const conversion = aggregateToAtar(best.aggregate, reference)
+  const aggregate = roundTo(best.aggregate, 2)
+  const conversion = aggregateToAtar(aggregate, reference)
 
   return {
-    aggregate: roundTo(best.aggregate, 2),
+    aggregate,
     atar: conversion.atar,
     atarLabel: conversion.label,
     primaryFour,

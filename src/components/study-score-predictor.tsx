@@ -12,13 +12,9 @@ import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { StudyScoreTrendChart } from "./study-score-trend-chart"
 import type { AppData, AssessmentReference, SavedAtarEstimate } from "../lib/exam-data"
-import { buildStudyScoreTrend, defaultExamWeight, predictStudyScore } from "../lib/study-score"
+import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore } from "../lib/study-score"
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
-
-function usesMethodsWeighting(subject: string) {
-  return /mathematical methods|specialist mathematics/i.test(subject)
-}
 
 export function StudyScorePredictor({
   data,
@@ -168,10 +164,10 @@ export function StudyScorePredictor({
                   <FieldDescription>Choose a specific official year, or use the closest available distribution for each attempt.</FieldDescription>
                 </Field>
 
-                {usesMethodsWeighting(subject) ? (
+                {isTwoPaperMathematics(subject) ? (
                   <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
-                    <div><p className="text-xs text-muted-foreground">Exam 1</p><p className="font-semibold tabular-nums">20%</p></div>
-                    <div><p className="text-xs text-muted-foreground">Exam 2</p><p className="font-semibold tabular-nums">40%</p></div>
+                    <div><p className="text-xs text-muted-foreground">Exam 1</p><p className="font-semibold tabular-nums">{normaliseScalingStudyName(subject) === "general mathematics" ? 30 : 20}%</p></div>
+                    <div><p className="text-xs text-muted-foreground">Exam 2</p><p className="font-semibold tabular-nums">{normaliseScalingStudyName(subject) === "general mathematics" ? 30 : 40}%</p></div>
                     <div><p className="text-xs text-muted-foreground">SACs</p><p className="font-semibold tabular-nums">40%</p></div>
                   </div>
                 ) : (
@@ -216,7 +212,7 @@ export function StudyScorePredictor({
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Raw</p>
                         <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1">
                           <span className="text-6xl font-semibold tracking-tight tabular-nums">{prediction.studyScore}</span>
-                          <span className="pb-1.5 text-base text-muted-foreground tabular-nums">likely range {prediction.low}–{prediction.high}</span>
+                          <span className="pb-1.5 text-base text-muted-foreground tabular-nums">estimated range {prediction.low}–{prediction.high}</span>
                         </div>
                       </div>
                       {scaledPrediction ? (
@@ -271,10 +267,10 @@ export function StudyScorePredictor({
                     {prediction.approximatedEvidenceCount > 0 || prediction.excludedAttemptCount > 0 ? (
                       <div className="mb-3 grid gap-1 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                         {prediction.approximatedEvidenceCount > 0 ? (
-                          <p>{prediction.approximatedEvidenceCount} attempt{prediction.approximatedEvidenceCount === 1 ? " uses" : "s use"} another year&apos;s distribution because its exact exam-year distribution is unavailable.</p>
+                          <p>{prediction.approximatedEvidenceCount} attempt{prediction.approximatedEvidenceCount === 1 ? " uses" : "s use"} another year&apos;s distribution. This widens the estimated range.</p>
                         ) : null}
                         {prediction.excludedAttemptCount > 0 ? (
-                          <p>{prediction.excludedAttemptCount} attempt{prediction.excludedAttemptCount === 1 ? " could" : "s could"} not be matched to any compatible distribution and {prediction.excludedAttemptCount === 1 ? "is" : "are"} excluded.</p>
+                          <p>{prediction.excludedAttemptCount} attempt{prediction.excludedAttemptCount === 1 ? " lacks a valid mark or compatible distribution and is" : "s lack valid marks or compatible distributions and are"} excluded. Combined mathematics papers need separate results for each exam.</p>
                         ) : null}
                       </div>
                     ) : null}
@@ -313,13 +309,13 @@ export function StudyScorePredictor({
         <Info />
         <AlertTitle>Estimate only</AlertTitle>
         <AlertDescription>
-          Raw scores remain uncertain because VCAA moderation, exam difficulty, cohort strength and the final statewide distribution can move the result. The scaled estimate interpolates between VTAC&apos;s published 20, 25, 30, 35, 40, 45 and 50 rows; the official process uses unrounded values and changes each year.
+          Practice percentiles are converted to normal scores before weighting. This approximates VCAA standardisation; the final cohort ranking and moderation are unknown. Ranges are indicative, with extra uncertainty for projected SACs, missing papers and other-year distributions. The scaled estimate interpolates between VTAC&apos;s published raw scores of 20–50; the official process uses unrounded values and changes each year.
         </AlertDescription>
       </Alert>
 
       <div className="flex items-start gap-3 rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
         <TrendingUp className="mt-0.5 size-4 shrink-0" />
-        The algorithm models study scores with a statewide mean of 30 and standard deviation of 7, after combining the recency-weighted exam and SAC percentile estimates.
+        The algorithm models study scores with a statewide mean of 30 and standard deviation of 7, after combining the recency-weighted exam and SAC normal-score estimates.
       </div>
 
       <AtarEstimator

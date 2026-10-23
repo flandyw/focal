@@ -10,8 +10,8 @@ import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { ATAR_AGGREGATE_REFERENCES } from "../lib/atar-data"
 import { estimateAtar, type AtarStudyResult } from "../lib/atar"
-import { normaliseComparisonName, type AppData, type AssessmentReference, type AtarEstimatorRow, type SavedAtarEstimate } from "../lib/exam-data"
-import { interpolateScaledScore, type ScalingReference } from "../lib/scaling"
+import { type AppData, type AssessmentReference, type AtarEstimatorRow, type SavedAtarEstimate } from "../lib/exam-data"
+import { interpolateScaledScore, normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
 import { predictStudyScore } from "../lib/study-score"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 
@@ -60,7 +60,7 @@ export function AtarEstimator({
     const map = new Map<string, number>()
     for (const subject of new Set(data.attempts.map((attempt) => attempt.subject))) {
       const prediction = predictStudyScore({ subject, attempts: data.attempts, references })
-      if (prediction) map.set(normaliseComparisonName(subject), prediction.studyScore)
+      if (prediction) map.set(normaliseScalingStudyName(subject), prediction.studyScore)
     }
     return map
   }, [data.attempts, references])
@@ -68,7 +68,7 @@ export function AtarEstimator({
   const results = useMemo<AtarStudyResult[]>(() => rows.flatMap((row) => {
     const reference = studies.find((item) => item.code === row.code)
     if (!reference) return []
-    const predicted = predictions.get(normaliseComparisonName(reference.studyName))
+    const predicted = predictions.get(normaliseScalingStudyName(reference.studyName))
     const rawScore = row.usePrediction && predicted !== undefined ? predicted : Number(row.raw)
     const scaledScore = interpolateScaledScore(rawScore, reference.points)
     if (scaledScore === null) return []
@@ -127,7 +127,7 @@ export function AtarEstimator({
           <CardContent className="grid gap-3">
             {rows.map((row) => {
               const reference = studies.find((item) => item.code === row.code)
-              const prediction = reference ? predictions.get(normaliseComparisonName(reference.studyName)) : undefined
+              const prediction = reference ? predictions.get(normaliseScalingStudyName(reference.studyName)) : undefined
               const result = results.find((item) => item.id === row.id)
               const usePrediction = row.usePrediction && prediction !== undefined
               return (
@@ -170,6 +170,7 @@ export function AtarEstimator({
                     <span className="w-12 text-right tabular-nums">{item.contribution.toFixed(1)}</span>
                   </div>
                 ))}
+                {estimate.excluded.length > 0 ? <p className="text-xs text-muted-foreground">Not counted under VTAC combination limits: {estimate.excluded.map((item) => item.studyName).join(", ")}.</p> : null}
               </div>
             ) : <p className="text-sm text-muted-foreground">Add four valid scores, including English, to calculate an estimate.</p>}
           </CardContent>
@@ -196,7 +197,7 @@ export function AtarEstimator({
         </CardContent>
       </Card>
 
-      <Alert><AlertTitle>Historical estimate only</AlertTitle><AlertDescription>VTAC recalculates scaling and the aggregate-to-ATAR table every year. Scores below 20 are not scaled, and course eligibility still depends on prerequisites and selection requirements.</AlertDescription></Alert>
+      <Alert><AlertTitle>Historical estimate only</AlertTitle><AlertDescription>Uses VTAC&apos;s full published aggregate bands for the selected year. Scaling is interpolated from published raw scores of 20–50; lower scores have no scaling reference here. VTAC recalculates both each year, and course eligibility depends on prerequisites and selection requirements.</AlertDescription></Alert>
     </section>
   )
 }

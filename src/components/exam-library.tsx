@@ -117,7 +117,7 @@ export function ExamLibrary({
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="VCAA exam library" description="Move from official specifications to timed papers, marking guidance, and your cohort comparison in one workflow." />
+      <PageHeader title="VCAA exam library" />
       <Alert>
         <Search />
         <AlertTitle>Confirm the current study design before using an older paper</AlertTitle>

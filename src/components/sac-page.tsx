@@ -119,7 +119,7 @@ export function SacPage({ records, subjects, preferredSubjects, activeTimer, onT
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="SACs" description="Plan Units 1–4 school assessments, preserve timed conditions, and track results by subject.">
+      <PageHeader title="SACs">
         <Button variant="outline" onClick={() => startTimer()}><Clock3 />Start timer</Button>
         <Button onClick={() => { setEditing(null); setSheetOpen(true) }}><Plus />Plan or log SAC</Button>
       </PageHeader>

@@ -580,7 +580,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
 
   return (
     <div className="grid min-w-0 gap-5 lg:gap-6">
-      <PageHeader title="Mistakes" description="Review and practise missed questions.">
+      <PageHeader title="Mistakes">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import from chatbot</Button>
         <Button onClick={onLog}><Plus />Add mistake</Button>
         <DropdownMenu>

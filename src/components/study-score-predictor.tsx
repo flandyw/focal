@@ -105,10 +105,7 @@ export function StudyScorePredictor({
 
   return (
     <div className="grid gap-8">
-      <PageHeader
-        title="Study score and ATAR"
-        description="Estimate raw and scaled study scores, then combine subjects into a historical ATAR estimate."
-      />
+      <PageHeader title="Study score and ATAR" />
 
       {subjects.length === 0 ? (
         <Empty className="min-h-80 border">

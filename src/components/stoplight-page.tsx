@@ -120,7 +120,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
 
   return (
     <WorkspacePage>
-      <PageHeader title="Stoplight" description="Rate every key knowledge and skill red, amber or green. Linked mistake reviews update your ratings as you practise.">
+      <PageHeader title="Stoplight">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />Link mistakes{unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}

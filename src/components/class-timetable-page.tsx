@@ -73,7 +73,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
 
   return (
     <WorkspacePage>
-      <PageHeader title="Class timetable" description="Your school cycle, with space for every class and break.">
+      <PageHeader title="Class timetable">
         <Button onClick={() => setImportOpen(true)} variant="outline"><Upload />Import timetable</Button>
         {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><Settings2 />Cycle settings</Button> : null}
       </PageHeader>
@@ -101,8 +101,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           <section aria-label="School cycle" className="min-w-0">
             <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
               <div>
-                <p className="focal-eyebrow text-muted-foreground">The school rhythm</p>
-                <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-2">
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
                   <h2 className="font-heading text-3xl">Your {cycleLength}-day cycle</h2>
                   <span className="text-xs text-muted-foreground">{totalPeriods} {totalPeriods === 1 ? "period" : "periods"} · {config.weekendTimetables ? "Weekends included" : "Weekdays only"}</span>
                 </div>
@@ -110,7 +109,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
               <Button disabled={today === null} onClick={() => today && setSelectedDay(today)} size="sm" variant="ghost"><span className={`size-1.5 rounded-full ${today ? "bg-primary" : "bg-muted-foreground"}`} />{today ? `Today · Day ${today}` : "No classes today"}</Button>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-y py-3">
+            <div className="flex items-center justify-between gap-3 pb-3">
               <p className="text-xs font-medium">Days {firstDay}–{days.at(-1)} <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">of {cycleLength}</span></p>
               <div className="flex items-center gap-1">
                 <Button aria-label="Previous cycle days" disabled={firstDay === 1} onClick={() => setSelectedDay(firstDay - 5)} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
@@ -186,12 +185,12 @@ function CycleBoard({ config, days, selected, today, hues, now, onSelect, onEdit
   const hours = Array.from({ length: Math.ceil(height / 60) }, (_, i) => start + i * 60)
 
   return (
-    <div className="overflow-x-auto rounded-2xl border bg-card">
+    <div className="overflow-x-auto rounded-lg border bg-card">
       <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}>
         <div className="border-b" />
         {columns.map(({ day, periods }) => <Button variant="ghost" aria-pressed={selected === day} className={`h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
           <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Day</span>
-          <span className={`flex size-10 items-center justify-center rounded-full text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
+          <span className={`flex size-10 items-center justify-center rounded-md text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
           <span className="text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span>
         </Button>)}
         <div aria-hidden="true" className="relative" style={{ height: height * 1.35 }}>
@@ -200,7 +199,7 @@ function CycleBoard({ config, days, selected, today, hues, now, onSelect, onEdit
         {columns.map(({ day, periods, lanes }) => <div className={`relative grid grid-flow-col-dense gap-x-1.5 border-l px-1.5 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} style={{ height: height * 1.35, gridTemplateColumns: `repeat(${lanes}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${height}, 1.35px)`, backgroundImage: "repeating-linear-gradient(to bottom, transparent 0px, transparent 80px, var(--border) 80px, var(--border) 81px)" }}>
           {periods.filter((period) => !getTimetablePeriodError(period)).map((period, index) => {
             const length = minutes(period.endTime) - minutes(period.startTime)
-            return <Button variant="ghost" aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${periodTint(period, hues).className} ${length < 20 ? "my-px rounded-md" : "my-0.5 rounded-lg"} h-auto min-w-0 flex-col items-stretch justify-start overflow-hidden border-0 px-2.5 text-left font-normal whitespace-normal hover:brightness-[0.97] dark:hover:brightness-115 ${length < 35 ? "justify-center py-0" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${length}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", ...periodTint(period, hues).style }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
+            return <Button variant="ghost" aria-label={`Day ${day}: ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}. Edit period.`} className={`z-10 ${periodTint(period, hues).className} ${length < 20 ? "my-px" : "my-0.5"} h-auto min-w-0 flex-col items-stretch justify-start overflow-hidden border-0 px-2.5 text-left font-normal whitespace-normal hover:brightness-[0.97] dark:hover:brightness-115 ${length < 35 ? "justify-center py-0" : "py-1.5"}`} key={index} onClick={() => onEdit(day, period)} style={{ gridRow: `${minutes(period.startTime) - start + 1} / span ${length}`, gridColumn: periods.some((other) => other !== period && minutes(other.startTime) < minutes(period.endTime) && minutes(other.endTime) > minutes(period.startTime)) ? undefined : "1 / -1", ...periodTint(period, hues).style }} title={`${periodSubjectName(period) || period.period} · ${period.period} · ${period.startTime}–${period.endTime}${period.location ? ` · ${period.location}` : ""}`} type="button">
               <span className={`block font-medium ${length < 20 ? "truncate text-[10px] leading-none" : length < 35 ? "truncate text-xs leading-tight" : "break-words text-sm leading-tight"}`}>{periodSubjectName(period) || period.period}</span>
               {length >= 35 ? <span className="mt-0.5 block text-xs tabular-nums opacity-80">{timeLabel(period.startTime)} – {timeLabel(period.endTime)}{period.location ? ` · ${period.location}` : ""}</span> : null}
             </Button>

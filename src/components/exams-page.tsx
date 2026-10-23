@@ -665,7 +665,6 @@ export function ExamsPage(props: ExamsPageProps) {
       <WorkspacePage>
         <PageHeader
           title="Exams"
-          description="Your practice exam results and the mistakes worth revisiting."
         >
           <Button onClick={onLogExam}>
             <Plus />
@@ -700,7 +699,6 @@ export function ExamsPage(props: ExamsPageProps) {
     <WorkspacePage>
       <PageHeader
         title="Exams"
-        description="Your practice exam results and the mistakes worth revisiting."
       >
         <Button variant="outline" onClick={exportReport}>
           <FileDown />

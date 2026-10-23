@@ -227,7 +227,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   if (!signedIn) {
     return (
       <WorkspacePage>
-        <PageHeader title="Friends" description="Study together: see who is studying right now, compare daily time and keep each other on track. Friends need a Focal account." />
+        <PageHeader title="Friends" />
         <div><Button onClick={onSignIn}>Sign in to add friends</Button></div>
       </WorkspacePage>
     )
@@ -262,7 +262,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
 
   return (
     <WorkspacePage>
-      <PageHeader title="Friends" description="Study together. See who is studying right now, compare time and streaks, and open a friend to see their day.">
+      <PageHeader title="Friends">
         <Button variant="outline" onClick={() => { void load(); void loadCheers() }} disabled={refreshing}><RefreshCw className={cn(refreshing && "motion-safe:animate-spin")} />Refresh</Button>
         <Button variant="outline" onClick={() => void copyCode()} disabled={!profile}><Copy />Copy code <span className="font-mono tracking-wider">{profile?.code ?? "…"}</span></Button>
         <Button onClick={() => document.getElementById("friend-code")?.focus()}><UserPlus />Add friend</Button>

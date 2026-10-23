@@ -119,7 +119,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Settings" description="Subjects, difficulty calibration, sync, appearance, data, and AI." />
+      <PageHeader title="Settings" />
 
       <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start lg:grid-cols-[13rem_minmax(0,1fr)]">
         <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:px-0">

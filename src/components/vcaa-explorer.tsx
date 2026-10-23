@@ -97,7 +97,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
   if (!references.length) {
     return (
       <div className="grid gap-6">
-        <PageHeader title="VCAA data" description="Explore official grade distributions and compare the same mark across years." />
+        <PageHeader title="VCAA data" />
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">VCAA reference data is unavailable. Reload the app to try again.</CardContent></Card>
       </div>
     )
@@ -105,7 +105,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="VCAA data" description="Explore official grade distributions, then move directly into the matching paper and marking material.">
+      <PageHeader title="VCAA data">
         {onOpenLibrary ? <Button variant="outline" onClick={onOpenLibrary}>Open VCAA library</Button> : null}
       </PageHeader>
 

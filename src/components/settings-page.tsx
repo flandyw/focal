@@ -43,7 +43,7 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, initialSection }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, initialSection }: {
   initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
@@ -54,6 +54,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   onExamDifficultyChange: (settings: ExamDifficultySettings) => void
   onExport: () => void
   onImport: (file: File) => Promise<void>
+  onReplayOnboarding: () => void
 }) {
   const auth = useChatGPT()
   const [email, setEmail] = useState(sync.user?.email ?? "")
@@ -332,6 +333,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   if (file) void onImport(file)
                   event.currentTarget.value = ""
                 }} />
+              </Row>
+              <Row title="Welcome tour" description="Replay the introduction: features, subjects, and where everything lives.">
+                <Button variant="outline" onClick={onReplayOnboarding}><RotateCcw />Replay tour</Button>
               </Row>
             </Section>
           ) : null}

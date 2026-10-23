@@ -872,7 +872,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         />
         </Suspense>
       ) : null}
-      {touring ? <Suspense fallback={null}><AppTour onClose={() => setTouring(false)} /></Suspense> : null}
+      {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
       {onboarding ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" />}
     </SidebarProvider>

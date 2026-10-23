@@ -34,6 +34,13 @@ export const MISTAKE_CATEGORIES = [
 
 export type MistakeCategory = (typeof MISTAKE_CATEGORIES)[number]
 
+export const MISTAKE_DIFFICULTIES = [1, 2, 3, 4, 5] as const
+export type MistakeDifficulty = (typeof MISTAKE_DIFFICULTIES)[number]
+
+export function isMistakeDifficulty(value: unknown): value is MistakeDifficulty {
+  return typeof value === "number" && MISTAKE_DIFFICULTIES.includes(value as MistakeDifficulty)
+}
+
 type GradeBand = {
   grade: string
   minScore: number | null
@@ -130,6 +137,7 @@ export type Mistake = {
   question: string
   questionText?: string
   category: MistakeCategory
+  difficulty?: MistakeDifficulty
   explanation: string
   correction: string
   totalMarks?: number
@@ -984,6 +992,7 @@ function isAppData(value: unknown): value is AppData {
         typeof mistake.question === "string" &&
         (mistake.questionText === undefined || typeof mistake.questionText === "string") &&
         MISTAKE_CATEGORIES.includes(mistake.category) &&
+        (mistake.difficulty === undefined || isMistakeDifficulty(mistake.difficulty)) &&
         typeof mistake.explanation === "string" &&
         typeof mistake.correction === "string" &&
         (mistake.totalMarks === undefined || typeof mistake.totalMarks === "number") &&

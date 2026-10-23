@@ -287,7 +287,7 @@ export function CalendarPage({
             {summary.assessments ? ` · ${summary.assessments} assessment${summary.assessments === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
+        <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
           <Button onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
           <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>

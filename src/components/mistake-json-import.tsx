@@ -151,6 +151,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
                     <CardContent className="grid gap-2">
                       <div className="flex flex-wrap gap-1.5">
                         <Badge variant="secondary">{draft.category}</Badge>
+                        {draft.difficulty !== undefined ? <Badge variant="outline">Difficulty {draft.difficulty}/5</Badge> : null}
                         <Badge variant="outline">{draft.marksLost}/{draft.totalMarks} marks lost</Badge>
                         {draft.areaOfStudy ? <Badge variant="outline">{draft.areaOfStudy}</Badge> : null}
                       </div>

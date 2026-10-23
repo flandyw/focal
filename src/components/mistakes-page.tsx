@@ -254,7 +254,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
     <article className="grid min-w-0 gap-5">
       <div className="overflow-hidden rounded-xl border bg-card">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
-          <div className="flex flex-wrap gap-2"><Badge variant="secondary">{mistake.category}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
+          <div className="flex flex-wrap gap-2"><Badge variant="secondary">{mistake.category}</Badge><Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
           <DropdownMenu><DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Review card actions" />}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onEdit(mistake)}><Pencil />Edit mistake</DropdownMenuItem><DropdownMenuItem onClick={() => onReimport(mistake)}><FileUp />Reimport with changes</DropdownMenuItem><DropdownMenuItem onClick={() => onToggleSuspend(mistake)}>Pause reviews</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
         </header>
         <div className="grid gap-5 p-5 sm:p-8">
@@ -295,7 +295,7 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onReimport, onToggle
         </div>
         <h2 className="text-xl leading-snug font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></h2>
         <ExamContext mistake={mistake} attempt={attempt} studies={studies} />
-        <div className="flex flex-wrap gap-2"><Badge variant="outline">{mistake.category}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
+        <div className="flex flex-wrap gap-2"><Badge variant="outline">{mistake.category}</Badge><Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
       </header>
       {mistake.questionText?.trim() ? <ProseField label="Question" value={mistake.questionText} /> : null}
       <MistakeAttachments attachments={mistake.attachments} />
@@ -322,7 +322,7 @@ function BrowseRow({ mistake, active, selected, now, onOpen, onSelect, onReimpor
       <Checkbox className="mt-1" checked={selected} onCheckedChange={() => onSelect()} aria-label={"Select " + mistake.question} />
       <Button variant="ghost" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid h-auto min-w-0 grid-cols-1 justify-items-stretch gap-2 rounded p-0 text-left font-normal whitespace-normal hover:bg-transparent">
         <span className="line-clamp-2 break-words text-sm font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>
-        <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy].filter(Boolean).join(" · ")}</span>
+        <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy, mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`].filter(Boolean).join(" · ")}</span>
         <span className={"text-xs tabular-nums " + (isDue ? "font-medium text-primary" : "text-muted-foreground")}>{mistake.suspended ? "Reviews paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}{mistake.marksLost !== undefined ? ` · ${mistake.marksLost} marks lost` : ""}</span>
       </Button>
       <Button size="icon-sm" variant="ghost" onClick={onReimport} aria-label={`Reimport with changes for ${mistake.question}`} title="Reimport with changes"><FileUp /></Button>
@@ -649,6 +649,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
                                 {attempt?.title ? <span className="break-words text-xs text-muted-foreground">{attempt.title}</span> : null}
                               </span>
                               <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-between gap-3 xl:col-auto xl:row-auto xl:flex-row xl:items-center xl:justify-end">
+                                <Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>
                                 <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
                                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                               </span>

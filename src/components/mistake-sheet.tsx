@@ -46,9 +46,11 @@ import { MarkdownPreview } from "./markdown-preview"
 import {
   GENERAL_MISTAKE_CATEGORIES,
   MATHEMATICS_MISTAKE_CATEGORIES,
+  MISTAKE_DIFFICULTIES,
   type ExamAttempt,
   type Mistake,
   type MistakeCategory,
+  type MistakeDifficulty,
   validateMistakeMarks,
 } from "../lib/exam-data"
 import { formatChatGPTProgress, validateMistakeBatchImages, validateMistakeImages, type ChatGPTProgress, type MistakeDraft } from "../lib/mistake-ai-core"
@@ -95,13 +97,14 @@ function draftFromFields({
   question,
   questionText,
   category,
+  difficulty,
   explanation,
   correction,
   areaOfStudy,
   totalMarks,
   marksLost,
 }: Omit<MistakeDraft, "attemptId"> & { attemptId: string }): MistakeDraft {
-  return { attemptId, question, questionText, category, explanation, correction, areaOfStudy, totalMarks, marksLost }
+  return { attemptId, question, questionText, category, difficulty, explanation, correction, areaOfStudy, totalMarks, marksLost }
 }
 
 function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | null {
@@ -114,12 +117,14 @@ function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | nul
 function createMistake(draft: MistakeDraft, timestamp: string, initialMistake?: Mistake | null, itemIds: string[] = []): Mistake {
   const unchanged = itemIds.join() === (initialMistake?.itemIds ?? []).join()
   return {
+    ...initialMistake,
     id: initialMistake?.id ?? crypto.randomUUID(),
     attemptId: draft.attemptId,
     subject: initialMistake?.subject,
     question: draft.question.trim(),
     questionText: draft.questionText.trim(),
     category: draft.category,
+    difficulty: draft.difficulty,
     explanation: draft.explanation.trim(),
     correction: draft.correction.trim(),
     areaOfStudy: draft.areaOfStudy.trim() || undefined,
@@ -160,6 +165,7 @@ export function MistakeSheet({
   const [question, setQuestion] = useState(initialMistake?.question ?? "")
   const [questionText, setQuestionText] = useState(initialMistake?.questionText ?? "")
   const [category, setCategory] = useState<MistakeCategory>(initialMistake?.category ?? "Concept")
+  const [difficulty, setDifficulty] = useState<MistakeDifficulty | undefined>(initialMistake?.difficulty)
   const [explanation, setExplanation] = useState(initialMistake?.explanation ?? "")
   const [correction, setCorrection] = useState(initialMistake?.correction ?? "")
   const [areaOfStudy, setAreaOfStudy] = useState(initialMistake?.areaOfStudy ?? "")
@@ -178,11 +184,11 @@ export function MistakeSheet({
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [initialSnapshot] = useState(() => JSON.stringify({
-    attemptId, question, questionText, category, explanation, correction,
+    attemptId, question, questionText, category, difficulty, explanation, correction,
     subject, areaOfStudy, itemIds, totalMarks, marksLost, imageCount: 0, batchCount: 0, questionImageCount: 0, attachmentIds: (initialMistake?.attachments ?? []).map(({ id }) => id),
   }))
   const dirty = JSON.stringify({
-    attemptId, question, questionText, category, explanation, correction,
+    attemptId, question, questionText, category, difficulty, explanation, correction,
     subject, areaOfStudy, itemIds, totalMarks, marksLost,
     imageCount: images.length, batchCount: batchDrafts.length, questionImageCount: questionImages.length, attachmentIds: savedAttachments.map(({ id }) => id),
   }) !== initialSnapshot
@@ -212,6 +218,7 @@ export function MistakeSheet({
     setQuestion("")
     setQuestionText("")
     setCategory("Concept")
+    setDifficulty(undefined)
     setExplanation("")
     setCorrection("")
     setAreaOfStudy("")
@@ -234,6 +241,7 @@ export function MistakeSheet({
     setQuestion(draft.question)
     setQuestionText(draft.questionText)
     setCategory(draft.category)
+    setDifficulty(draft.difficulty)
     setExplanation(draft.explanation)
     setCorrection(draft.correction)
     setAreaOfStudy(draft.areaOfStudy)
@@ -247,6 +255,7 @@ export function MistakeSheet({
       question,
       questionText,
       category,
+      difficulty,
       explanation,
       correction,
       areaOfStudy,
@@ -277,7 +286,7 @@ export function MistakeSheet({
         setActiveBatchIndex(null)
       } else {
         setBatchDrafts([])
-        applyDraft(await analyseMistakeImages(images, attempts, selectedAttempt, studies, setProgress))
+        applyDraft({ ...await analyseMistakeImages(images, attempts, selectedAttempt, studies, setProgress), difficulty })
       }
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not analyse this image.")
@@ -433,6 +442,7 @@ export function MistakeSheet({
                   <CardContent className="grid gap-3">
                     <div className="flex flex-wrap gap-1.5">
                       <Badge variant="secondary">{draft.category}</Badge>
+                      {draft.difficulty !== undefined ? <Badge variant="outline">Difficulty {draft.difficulty}/5</Badge> : null}
                       <Badge variant="outline">{draft.marksLost}/{draft.totalMarks} marks lost</Badge>
                       {draft.areaOfStudy ? <Badge variant="outline">{draft.areaOfStudy}</Badge> : null}
                     </div>
@@ -547,6 +557,18 @@ export function MistakeSheet({
                 <Button type="button" variant="outline" disabled={!(totalMarks > 0)} onClick={() => setMarksLost(totalMarks)}>All marks</Button>
                 {marksError ? <FieldError className="sm:col-span-3">{marksError}</FieldError> : null}
               </div>
+
+              <Field>
+                <FieldLabel htmlFor="mistake-difficulty">Difficulty (optional)</FieldLabel>
+                <Select value={difficulty === undefined ? "unrated" : String(difficulty)} onValueChange={(value) => setDifficulty(MISTAKE_DIFFICULTIES.find((rating) => String(rating) === value))}>
+                  <SelectTrigger id="mistake-difficulty" className="w-full"><SelectValue>{difficulty === undefined ? "Unrated" : `${difficulty}/5`}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unrated">Unrated</SelectItem>
+                    {MISTAKE_DIFFICULTIES.map((rating) => <SelectItem key={rating} value={String(rating)}>{rating}/5{rating === 1 ? " · Easy" : rating === 5 ? " · Very hard" : ""}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>How difficult this question feels: 1 is easy, 5 is very hard. Separate from your recall rating during reviews.</FieldDescription>
+              </Field>
 
               <MarkdownField id="question-text" label="Prompt or task" rows={4} value={questionText} onChange={setQuestionText} placeholder="Enter the full question, essay prompt, stimulus task, or practical requirement." hint="Markdown and LaTeX ($x^2$) are supported." />
 

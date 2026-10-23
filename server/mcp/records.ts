@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
 import {
-  analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, normalizeMistakeReviewPreferences,
+  analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, MISTAKE_DIFFICULTIES, normalizeMistakeReviewPreferences,
   recordMistakeReview, reduceMistakeReviews, removeAttempt, validateAttempt, validateMistakeMarks, validateQuestionResults,
   type AppData, type ExamAttempt, type Mistake, type QuestionResult,
 } from "../../src/lib/exam-data.js"
@@ -19,6 +19,7 @@ import { clock, day, instant, limit, localInstant, logWrite, nowIso, required, r
 const confidence = z.enum(["low", "medium", "high"])
 const category = z.enum(MISTAKE_CATEGORIES)
 const rating = z.enum(["again", "hard", "good", "easy"])
+const difficulty = z.literal(MISTAKE_DIFFICULTIES).describe("Question difficulty: 1 = easy, 5 = very hard; separate from spaced-repetition recall ratings")
 const text = (value: string | undefined) => value?.trim() || undefined
 const topicHelp = "Canonical topic for the exam's subject. Methods: Functions/domains/transformations; Inverse functions & intersections; Differentiation & applications; Integration & area; Probability (discrete, conditional, binomial); Continuous distributions, normal, sampling & CIs; Circular functions; Other. The matrix groups by this; areaOfStudy stays the free-text detail."
 
@@ -53,7 +54,7 @@ export function recordTools(define: Define) {
     { id: z.string() }, "read", async ({ id }) => {
       const { data } = await readAll()
       const attempt = required(data.attempts.find((a) => a.id === id), "exam")
-      return { attempt, mistakes: data.mistakes.filter((m) => m.attemptId === id).map((m) => ({ id: m.id, question: m.question, category: m.category, resolved: m.resolved })) }
+      return { attempt, mistakes: data.mistakes.filter((m) => m.attemptId === id).map((m) => ({ id: m.id, question: m.question, category: m.category, difficulty: m.difficulty ?? null, resolved: m.resolved })) }
     })
 
   define("save_exam", "Log a new practice exam, or update one when `id` is given. With an `id`, every field you omit is kept, so `{ id, questionResults }` alone attaches (replaces) the question results of an existing exam in one call; without an `id`, subject, provider, examYear, paper, completedAt, rawScore and rawMax are required. Question results are optional but power the topic analytics. For Methods and Specialist the total is checked against the paper (Exam 1 = 40, Exam 2 = 80, combined = 120 or 160): a mismatch still saves but comes back in `warnings`, so read them and correct the paper or rawMax with another save_exam call using the same id.", {
@@ -127,6 +128,7 @@ export function recordTools(define: Define) {
     return {
       id: mistake.id, attemptId: mistake.attemptId || null, subject: attempt?.subject ?? mistake.subject, paper: attempt?.paper, question: mistake.question,
       questionText: mistake.questionText, category: mistake.category, explanation: mistake.explanation, correction: mistake.correction,
+      difficulty: mistake.difficulty ?? null,
       totalMarks: mistake.totalMarks, marksLost: mistake.marksLost, areaOfStudy: mistake.areaOfStudy, topic: mistake.topic, itemIds: mistake.itemIds,
       state: schedule.state, dueAt: schedule.dueAt, intervalDays: schedule.intervalDays, lapses: schedule.lapses,
       reviews: mistake.reviewHistory?.length ?? 0, resolved: schedule.resolved, suspended: mistake.suspended ?? false, attachments: mistake.attachments?.length ?? 0,
@@ -136,7 +138,7 @@ export function recordTools(define: Define) {
   const stripSvg = (value: string) => value.replace(/<svg[\s\S]*?<\/svg>/gi, "[svg]")
   const MISTAKE_FIELDS = [
     "attemptId", "subject", "paper", "question", "questionText", "category", "explanation", "correction", "totalMarks", "marksLost", "areaOfStudy", "topic",
-    "itemIds", "state", "dueAt", "intervalDays", "lapses", "reviews", "resolved", "suspended", "attachments",
+    "difficulty", "itemIds", "state", "dueAt", "intervalDays", "lapses", "reviews", "resolved", "suspended", "attachments",
   ] as const
 
   define("list_mistakes", "List mistake cards (the spaced-repetition revision queue), 50 at a time. status: due = due for review now, open = not yet mastered, resolved, suspended, all. By default the list is COMPACT: no questionText or correction and no inline SVG, which keeps a whole subject small enough to read; pass compact false (with a small limit) when you need the full text, e.g. to quiz a card. `fields` picks columns (id is always included). If `nextCursor` is not null, pass it back as `cursor` for the next page. `topic` filters by canonical topic; \"none\" finds cards with no stored topic (see backfill_topics / update_mistakes).", {
@@ -186,11 +188,12 @@ export function recordTools(define: Define) {
     attemptId: z.string().default("").describe("The exam attempt id, or empty for an uncategorised mistake"),
     question: z.string().min(1).describe("Short label, e.g. 'Q4b'"), questionText: z.string().min(1).describe("The question itself"),
     category, explanation: z.string().min(1).describe("What went wrong"), correction: z.string().min(1).describe("The improved response"),
+    difficulty: difficulty.optional(),
     totalMarks: z.number().positive().optional(), marksLost: z.number().min(0).optional(),
     areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), itemIds: z.array(z.string()).max(3).optional().describe("Stoplight item ids this mistake tests"),
   })
 
-  define("add_mistakes", "Add one or more mistake cards. Each becomes due for review immediately. Marks must be given together or not at all. Linking a green stoplight item drops it to amber.",
+  define("add_mistakes", "Record one or more mistake cards, optionally with difficulty from 1 (easy) to 5 (very hard). Each becomes due for review immediately. Marks must be given together or not at all. Linking a green stoplight item drops it to amber.",
     { mistakes: z.array(newMistake).min(1).max(50) }, "write", async ({ mistakes }) => {
       const ids = mistakes.map(() => crypto.randomUUID())
       const timestamp = nowIso()
@@ -203,6 +206,7 @@ export function recordTools(define: Define) {
         const added: Mistake[] = mistakes.map((m, i) => ({
           id: ids[i], attemptId: m.attemptId, question: m.question.trim(), questionText: m.questionText.trim(), category: m.category,
           explanation: m.explanation.trim(), correction: m.correction.trim(), totalMarks: m.totalMarks, marksLost: m.marksLost,
+          difficulty: m.difficulty,
           areaOfStudy: text(m.areaOfStudy), topic: checkedTopic(data, m.attemptId, m.topic), itemIds: m.itemIds?.length ? m.itemIds : undefined, itemsBy: m.itemIds?.length ? "user" : undefined,
           dueAt: timestamp, resolved: false, createdAt: timestamp, updatedAt: timestamp,
         }))
@@ -211,9 +215,10 @@ export function recordTools(define: Define) {
       return { ids }
     })
 
-  define("update_mistake", "Edit a mistake card; omitted fields are kept. Use `resolved` to mark it mastered or reopen it.", {
+  define("update_mistake", "Edit a mistake card; omitted fields are kept. Set difficulty to 1–5, or null to clear the rating. Use `resolved` to mark it mastered or reopen it.", {
     id: z.string(), attemptId: z.string().optional(), question: z.string().min(1).optional(), questionText: z.string().optional(), category: category.optional(),
     explanation: z.string().min(1).optional(), correction: z.string().min(1).optional(), totalMarks: z.number().positive().optional(),
+    difficulty: difficulty.nullable().optional(),
     marksLost: z.number().min(0).optional(), areaOfStudy: z.string().optional(), topic: z.string().optional().describe(topicHelp), itemIds: z.array(z.string()).max(3).optional(), resolved: z.boolean().optional(),
   }, "write", async ({ id, ...patch }) => {
     const timestamp = nowIso()
@@ -221,6 +226,7 @@ export function recordTools(define: Define) {
       const old = required(data.mistakes.find((m) => m.id === id), "mistake")
       const next: Mistake = { ...old, updatedAt: timestamp }
       for (const [key, value] of Object.entries(patch)) if (value !== undefined) (next as Record<string, unknown>)[key] = typeof value === "string" ? value.trim() : value
+      if (patch.difficulty === null) delete next.difficulty
       if (patch.itemIds) { next.itemIds = patch.itemIds.length ? patch.itemIds : undefined; next.itemsBy = patch.itemIds.length ? "user" : undefined }
       if (patch.topic !== undefined) next.topic = checkedTopic(data, next.attemptId, patch.topic)
       const error = next.totalMarks === undefined && next.marksLost === undefined ? null : validateMistakeMarks(next.totalMarks ?? 0, next.marksLost ?? 0)

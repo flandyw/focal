@@ -1,10 +1,11 @@
 import { MISTAKE_EDIT_FIELDS, type MistakeEdit } from "./mistake-autofill"
-import { MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory } from "./exam-data"
+import { isMistakeDifficulty, MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory, type MistakeDifficulty } from "./exam-data"
 
 export type ParsedMistakeDraft = {
   question: string
   questionText: string
   category: MistakeCategory
+  difficulty?: MistakeDifficulty
   explanation: string
   correction: string
   totalMarks: number
@@ -44,7 +45,7 @@ OUTPUT RULES
 - Diagrams: where a question needs a graph or figure, draw it as an SVG (see DIAGRAMS below) instead of only describing it.
 - Write concise, student-friendly text. Never invent unreadable or missing content; use context to infer what you can.
 
-Each object must use exactly these keys:
+Each object must use these keys (and may include an optional "difficulty"):
 
 {
   "question": "...",
@@ -68,6 +69,7 @@ FIELD DETAILS
 - "totalMarks" (required number > 0): total marks available for the whole item; infer from mark schemes, bracketed marks, or question wording.
 - "marksLost" (required number >= 0): marks I lost on the item; never greater than totalMarks; infer from cross marks, annotations, subtotals, or my description. Use 0 if I received full marks but still want the habit logged.
 - "areaOfStudy" (optional string): concise topic, skill, or curriculum area, e.g. "Calculus", "Argument analysis", "Cellular respiration"; "" if unknown.
+- "difficulty" (optional integer 1–5): how difficult the question feels to the student, from 1 (easy) to 5 (very hard). Include only if the student supplied a rating; otherwise omit it. This is separate from spaced-repetition recall ratings.
 
 ${SVG_GUIDE}
 
@@ -152,10 +154,13 @@ export function parseMistakeImport(text: string): ParsedMistakeDraft[] {
     const index = itemIndex + 1
     const totalMarks = coerceNumber(item.totalMarks, "totalMarks", index)
     const marksLost = coerceNumber(item.marksLost, "marksLost", index)
+    const difficulty = item.difficulty === null || item.difficulty === "" ? undefined : item.difficulty
+    if (difficulty !== undefined && !isMistakeDifficulty(difficulty)) throw new Error(`Item ${index}: "difficulty" must be an integer from 1 to 5.`)
     const draft: ParsedMistakeDraft = {
       question: coerceString(item.question, "question", index),
       questionText: coerceString(item.questionText, "questionText", index),
       category: coerceCategory(item.category, index),
+      difficulty,
       explanation: coerceString(item.explanation, "explanation", index),
       correction: coerceString(item.correction, "correction", index),
       areaOfStudy: coerceOptionalString(item.areaOfStudy, "areaOfStudy", index),
@@ -179,6 +184,7 @@ export function createMistakesFromImport(
     question: draft.question,
     questionText: draft.questionText,
     category: draft.category,
+    difficulty: draft.difficulty,
     explanation: draft.explanation,
     correction: draft.correction,
     totalMarks: draft.totalMarks,

@@ -7,6 +7,7 @@ import { registerTools } from "./tools"
 
 const INSTRUCTIONS = `Focal is a VCE (Victoria, Australia) study app: practice exams, mistakes with spaced repetition, SACs, calendar, study timer, stoplight skill checklists, goals and predictions.
 Start with get_overview. Records are addressed by the ids that list_* tools return. Dates are YYYY-MM-DD in the account's local time zone; instants carry a UTC offset.
+Use add_mistakes to record mistakes and update_mistake to edit them. Mistake difficulty is an optional integer from 1 (easy) to 5 (very hard); omit it when unknown. This is separate from recall ratings used by review_mistake.
 Writes are applied to the same synced data the web and desktop apps use, so they appear there within seconds. Subjects are free text but should match the account's subject names (get_settings).`
 
 export function createMcpServer() {

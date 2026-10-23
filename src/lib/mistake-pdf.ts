@@ -57,13 +57,14 @@ function buildMistakesTex(mistakes: Mistake[], attempts: ExamAttempt[]) {
     const source = attempt
       ? `${attempt.provider} ${attempt.examYear} ${attempt.paper}`
       : "Source examination unavailable"
+    const sourceDetails = mistake.difficulty === undefined ? source : `${source} · Difficulty ${mistake.difficulty}/5`
     const marks = mistake.totalMarks === undefined
       ? "\\markbox{--}"
       : `\\markbox{${mistake.totalMarks}}`
     const pageStyle = index === mistakes.length - 1 ? "\\thispagestyle{lastquestion}\n" : ""
 
     return `${pageStyle}\\questionheader{Question ${index + 1}}{${marks}}
-\\sourcequestion{${escapeTex(source)}}{${escapeTex(mistake.question)}}
+\\sourcequestion{${escapeTex(sourceDetails)}}{${escapeTex(mistake.question)}}
 
 \\vspace{1.2em}
 ${questionToTex(mistake.questionText?.trim() || mistake.question)}

@@ -26,6 +26,7 @@ function toRows(mistakes: Mistake[], attempts: ExamAttempt[]) {
       id: mistake.id,
       exam: attempt?.title ?? "", subject: attempt?.subject ?? mistake.subject ?? "", paper: attempt?.paper ?? "",
       question: mistake.question, questionText: mistake.questionText ?? "", category: mistake.category,
+      difficulty: mistake.difficulty ?? "",
       areaOfStudy: mistake.areaOfStudy ?? "",
       marksLost: mistake.marksLost ?? "", totalMarks: mistake.totalMarks ?? "",
       explanation: mistake.explanation, correction: mistake.correction,
@@ -43,7 +44,7 @@ export async function exportMistakes(format: ExportFormat, mistakes: Mistake[], 
     : format === "csv" ? [Object.keys(rows[0] ?? {}).map(csvCell).join(","), ...rows.map((row) => Object.values(row).map(csvCell).join(","))].join("\n")
     : rows.map((row) => [
       `## ${row.question}${row.exam ? ` — ${row.exam}` : ""}`,
-      `*${[row.category, row.areaOfStudy, row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,
+      `*${[row.category, row.areaOfStudy, row.difficulty !== "" ? `Difficulty ${row.difficulty}/5` : "", row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,
       row.questionText && `**Question**\n\n${row.questionText}`,
       row.explanation && `**What went wrong**\n\n${row.explanation}`,
       row.correction && `**Correction**\n\n${row.correction}`,

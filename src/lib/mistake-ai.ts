@@ -102,6 +102,7 @@ function mistakeContext(mistakes: Mistake[], attempts: ExamAttempt[]) {
       question: mistake.question,
       questionText: mistake.questionText,
       category: mistake.category,
+      difficulty: mistake.difficulty,
       explanation: mistake.explanation,
       correction: mistake.correction,
       areaOfStudy: mistake.areaOfStudy,

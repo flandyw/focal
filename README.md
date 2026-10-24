@@ -116,6 +116,17 @@ select cron.schedule('focal-web-push', '* * * * *', $$
 $$);
 ```
 
+Migration `0034_web_push_wakeup.sql` also calls the dispatcher straight from the
+database when a friend starts studying or sends a cheer, so those alerts arrive in
+seconds instead of on the next cron tick. Save the full dispatch URL in Vault to
+turn it on (without it, the triggers do nothing and the cron still delivers):
+
+```sql
+select vault.create_secret('https://your-focal.example/api/push?dispatch=1', 'focal_push_dispatch_url');
+```
+
+Keep the cron: planned-study reminders and retries still depend on it.
+
 The sender claims up to 50 deliveries per tick, retries interrupted/transient
 failures after five minutes, and deletes expired browser endpoints. Events older
 than 15 minutes are skipped, so a scheduler outage does not flood devices with

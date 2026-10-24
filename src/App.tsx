@@ -400,6 +400,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setData((current) => ({ ...current, events: update(current.events) }))
   }
 
+  function startFocus(subject: string | undefined, intent: string, sessionId?: string) {
+    if (!sessionId) { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus"); return }
+    const session = studySessionSync.sessions.find((row) => row.id === sessionId)
+    if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }
+    const open = () => { setFocusPreset(undefined); setTimerMode("focus"); setView("focus") }
+    if (isRunning(session)) open()
+    else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
+      .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
+  }
+
   function saveClassTimetable(classTimetable: TimetableConfig) {
     setData((current) => ({ ...current, classTimetable }))
   }
@@ -851,17 +861,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             setData(next)
             try { await studySessionSync.remove(session) }
             catch (error) { throw new Error(`Events saved, but the study session could not be removed. Retry conversion to finish. ${error instanceof Error ? error.message : ""}`) }
-          }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={(subject, intent, sessionId) => {
-            if (!sessionId) { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus"); return }
-            const session = studySessionSync.sessions.find((row) => row.id === sessionId)
-            if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }
-            const open = () => { setFocusPreset(undefined); setTimerMode("focus"); setView("focus") }
-            if (isRunning(session)) open()
-            else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
-              .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
-          }} /></Suspense> : null}
+          }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={startFocus} /></Suspense> : null}
           {view === "progress" ? <Suspense fallback={PAGE_LOADING}><ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} attempts={pageData.attempts} onLogExam={openNewExam} onNewSession={() => setView("focus")} /></Suspense> : null}
-          {view === "focus" ? <Suspense fallback={PAGE_LOADING}><StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
+          {view === "focus" ? <Suspense fallback={PAGE_LOADING}><StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "stoplight" ? <Suspense fallback={PAGE_LOADING}><StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={PAGE_LOADING}><GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /></Suspense> : null}
           {view === "mistakes" ? <Suspense fallback={PAGE_LOADING}><MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {

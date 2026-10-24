@@ -38,7 +38,9 @@ import { continuableToday, sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
 import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
-import { VCE_SUBJECTS } from "../lib/types"
+import { VCE_SUBJECTS, type CalendarEvent, type TimetableConfig } from "../lib/types"
+import { classPeriodsOn } from "../lib/class-timetable"
+import { StudyTimeline } from "./study-timeline"
 import { StudyPlanCard } from "./study-plan-card"
 import { AI_ENABLED } from "../lib/host"
 import type { StudyPlan } from "../lib/study-plan"
@@ -123,7 +125,7 @@ function blockSummary(block: FocusBlock) {
 function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, eclair, setEclair, examActive = false }: {
   subjects: string[]
   preferredSubjects: string[]
-  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge">
   examActive?: boolean
   onTimedPaper: () => void
   eclair: boolean
@@ -673,6 +675,38 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   }
 }
 
+/** Today's (or any day's) blocks, on the page where they are made; events and classes are shown, not edited. */
+function DayTimeline({ sessions, subjects, events, classTimetable, actions, onStartFocus }: {
+  sessions: CanonicalStudySession[]
+  subjects: string[]
+  events?: CalendarEvent[]
+  classTimetable?: TimetableConfig
+  actions: NonNullable<Parameters<typeof FocusBlocks>[0]["plannedActions"]>
+  onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
+}) {
+  const now = useTickingNow(30_000)
+  const [date, setDate] = useState(() => localDate(now))
+  const classes = useMemo(() => classPeriodsOn(date, classTimetable), [date, classTimetable])
+  return (
+    <StudyTimeline
+      key={date}
+      classes={classes}
+      date={date}
+      events={events ?? []}
+      nowMs={now.getTime()}
+      onDateChange={setDate}
+      onEdit={actions.edit}
+      onLog={(entry) => actions.log(entry, crypto.randomUUID())}
+      onMerge={actions.merge}
+      onPlan={(entry) => actions.plan([entry]).then(() => undefined)}
+      onRemove={actions.remove}
+      onStartFocus={onStartFocus}
+      sessions={sessions}
+      subjects={subjects}
+    />
+  )
+}
+
 export function StudyTimerPage({
   subjects,
   preferredSubjects,
@@ -683,6 +717,9 @@ export function StudyTimerPage({
   onFocusSessionChange,
   onControlSession,
   plannedActions,
+  events,
+  classTimetable,
+  onStartFocus,
   exam,
   embedded = false,
 }: {
@@ -690,8 +727,12 @@ export function StudyTimerPage({
   /** The student's own subjects, floated to the top of the picker. */
   preferredSubjects: string[]
   mode: StudyTimerMode
-  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove">
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge">
   focusPreset?: { subject?: string; intent: string }
+  events?: CalendarEvent[]
+  classTimetable?: TimetableConfig
+  /** Opens the timer on a block picked in the timeline. */
+  onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   /** The shared sittings, so today's focus time includes study done in Focal or Folio. */
   sessions?: CanonicalStudySession[]
   onModeChange: (mode: StudyTimerMode) => void
@@ -731,6 +772,7 @@ export function StudyTimerPage({
 
         {!embedded && <TabsContent className="mt-0" value="focus">
           <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} eclair={eclair} setEclair={setEclair} />
+          {plannedActions && sessions ? <div className="mt-6 lg:mt-8"><DayTimeline actions={plannedActions} classTimetable={classTimetable} events={events} onStartFocus={onStartFocus} sessions={sessions} subjects={preferredSubjects} /></div> : null}
         </TabsContent>}
         <TabsContent className="mt-0" value="exam">
           <Suspense fallback={<Skeleton className="h-96 w-full" />}>

@@ -140,12 +140,13 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   onRemove?: (session: CanonicalStudySession) => Promise<void>
   /** Moves or resizes a session's block, or marks it done or not done. */
   onEdit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>
-  onEditEvent: (event: CalendarEvent, patch: { startTime: string; endTime: string }) => void
-  onEditClass: (period: TimetablePeriod, patch: { startTime: string; endTime: string }) => void
-  onOpenEvent: (event: CalendarEvent) => void
-  onOpenClass: () => void
+  /** Omit the event and class handlers (and `onOpenSession`) for a timeline that only edits study. */
+  onEditEvent?: (event: CalendarEvent, patch: { startTime: string; endTime: string }) => void
+  onEditClass?: (period: TimetablePeriod, patch: { startTime: string; endTime: string }) => void
+  onOpenEvent?: (event: CalendarEvent) => void
+  onOpenClass?: () => void
   onMerge: (sessions: CanonicalStudySession[]) => Promise<void>
-  onOpenSession: (session: CanonicalStudySession) => void
+  onOpenSession?: (session: CanonicalStudySession) => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
 }) {
   const isToday = date === localDate(new Date(nowMs))
@@ -378,7 +379,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   })
 
   /** Timers own their intervals until stopped; all other blocks can be adjusted. */
-  const movable = (block: Block) => Boolean(block.event || block.period || (block.session && !timing(block.session)))
+  const movable = (block: Block) => Boolean((block.event && onEditEvent) || (block.period && onEditClass) || (block.session && !timing(block.session)))
   const adjustProps = (block: Block, kind: "start" | "end" | "move") => ({
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
       event.stopPropagation()
@@ -427,9 +428,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
         await onEdit(block.session, { blocks: intervals })
       } else if (block.event) {
         const { start, end } = shift(block.event.startTime, block.event.endTime ?? new Date(Date.parse(block.event.startTime) + 60 * 60_000).toISOString())
-        onEditEvent(block.event, { startTime: start, endTime: end })
+        onEditEvent?.(block.event, { startTime: start, endTime: end })
       } else if (block.period) {
-        onEditClass(block.period, { startTime: hhmm(range.start), endTime: hhmm(range.end) })
+        onEditClass?.(block.period, { startTime: hhmm(range.start), endTime: hhmm(range.end) })
       }
       toast.success(`Updated to ${clock(range.start)}–${clock(range.end)}`)
     } catch (failure) {
@@ -920,9 +921,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   {picked.session.completed ? <><RotateCcw />Not done</> : <><Check />Mark done</>}
                 </Button>
               ) : null}
-              {picked.session && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
-              {picked.event ? <Button onClick={() => onOpenEvent(picked.event!)} size="xs" variant="outline">Edit</Button> : null}
-              {picked.period ? <Button onClick={onOpenClass} size="xs" variant="outline">Edit timetable</Button> : null}
+              {picked.session && onOpenSession && !timing(picked.session) ? <Button onClick={() => onOpenSession(picked.session!)} size="xs" variant="outline">Edit</Button> : null}
+              {picked.event && onOpenEvent ? <Button onClick={() => onOpenEvent(picked.event!)} size="xs" variant="outline">Edit</Button> : null}
+              {picked.period && onOpenClass ? <Button onClick={onOpenClass} size="xs" variant="outline">Edit timetable</Button> : null}
               {picked.session && missed(picked) && movable(picked) ? <Button disabled={adjust !== null} onClick={() => restart(picked)} size="xs" variant="outline"><RotateCcw />Move to now</Button> : null}
               {splittable(picked) ? <Button disabled={busy} onClick={() => split(picked, splitPoint(picked))} size="xs" title={isToday && now > picked.start && now < picked.end ? "Split at the current time" : "Split in half"} variant="ghost"><Scissors />Split</Button> : null}
               {picked.session?.subject_id ? <Button onClick={() => repeatTomorrow(picked)} size="xs" variant="ghost"><CalendarPlus />Repeat tomorrow</Button> : null}

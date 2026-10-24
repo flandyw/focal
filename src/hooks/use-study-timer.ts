@@ -271,7 +271,7 @@ export function useStudyTimer({
     const label = state.mode === "work" ? "Focus block complete" : "Break over"
     if (settingsRef.current.soundEnabled) playChime()
     if (settingsRef.current.notificationsEnabled) {
-      void notifyTimer(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`)
+      void notifyTimer(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`, state.mode === "work" ? "focus" : "breaks")
     }
   }, [enabled, state.mode, state.cycles, state.secondsLeft, state.studyOvertime])
 

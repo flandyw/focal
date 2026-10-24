@@ -3,7 +3,7 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { GatewaySettings } from "./gateway-settings"
 import { AppearanceSettings } from "./appearance-settings"
@@ -114,6 +114,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "difficulty", label: "Difficulty", icon: SlidersHorizontal },
     { id: "account", label: "Account", icon: UserRound },
     { id: "appearance", label: "Appearance", icon: Sun },
+    { id: "notifications", label: "Notifications", icon: Bell },
     ...(!import.meta.env.VITE_DESKTOP ? [{ id: "app", label: "Mobile app", icon: Smartphone }] : []),
     { id: "data", label: "Data", icon: Database },
     { id: "ai", label: "AI", icon: Sparkles },
@@ -324,6 +325,12 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
           {active === "appearance" ? <AppearanceSettings /> : null}
 
+          {active === "notifications" ? (
+            <Section title="Notifications" description="Choose which alerts reach you and when. Preferences apply to this device.">
+              <PushSettings key={sync.status === "sign-in-required" ? "signed-out" : sync.user?.id ?? "signed-out"} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} />
+            </Section>
+          ) : null}
+
           {active === "app" ? (
             <Section title="Focal on your phone" description="Add Focal to your Home Screen for a dedicated app window and quick access to your study.">
               <div className="space-y-6 py-4 text-sm">
@@ -333,11 +340,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   <p className="text-muted-foreground"><strong className="text-foreground">Android:</strong> open your browser’s menu and choose Install app or Add to Home screen.</p>
                   <p className="text-muted-foreground">An internet connection is needed to load Focal. Your existing saved study data stays in this browser; sign in to sync it across devices or app installations.</p>
                 </div>
-                <PushSettings key={sync.status === "sign-in-required" ? "signed-out" : sync.user?.id ?? "signed-out"} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} />
                 <div className="space-y-2 border-t pt-5">
-                  <h3 className="font-medium">Timer notifications</h3>
-                  <p className="text-muted-foreground">In Study timer, open Pomodoro settings → Alerts and flow, then turn on Notifications and allow the browser prompt. On iPhone and iPad, use the Home Screen app on iOS 16.4 or later.</p>
-                  <p className="text-muted-foreground">Keep Focal open for timer alerts. Your phone can suspend background apps and delay timer alerts when locked. Planned study and friend reminders above use push and work while Focal is closed.</p>
+                  <h3 className="font-medium">Study reminders</h3>
+                  <p className="text-muted-foreground">Set up study, deadline, friend and timer alerts in Notifications. On iPhone and iPad, open the Home Screen app on iOS 16.4 or later.</p>
+                  <Button variant="outline" onClick={() => setSection("notifications")}><Bell />Notification settings</Button>
                 </div>
               </div>
             </Section>

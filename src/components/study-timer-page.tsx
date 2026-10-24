@@ -29,7 +29,7 @@ import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
 import { TimerReadout } from "./timer-readout"
 import { useStudyTimer } from "../hooks/use-study-timer"
-import { requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
+import { notificationPermission, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import type { useStudySessionSync } from "../lib/study-session-sync"
 import { StudySessionDialog } from "./study-session-dialog"
 import type { StudySessionEdit } from "../lib/sync/sessionContract"
@@ -244,17 +244,20 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const isFreeStudy = state.mode === "free"
   const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
   const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
-  const [notificationPermission, setNotificationPermission] = useState(() => typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+  const [permission, setNotificationPermission] = useState<string>("default")
   useEffect(() => {
-    const refresh = () => setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+    let cancelled = false
+    const refresh = () => void notificationPermission().then((value) => { if (!cancelled) setNotificationPermission(value) })
+    refresh()
     window.addEventListener("focus", refresh)
     document.addEventListener("visibilitychange", refresh)
     return () => {
+      cancelled = true
       window.removeEventListener("focus", refresh)
       document.removeEventListener("visibilitychange", refresh)
     }
   }, [])
-  const notificationsEnabled = settings.notificationsEnabled && notificationPermission === "granted"
+  const notificationsEnabled = settings.notificationsEnabled && permission === "granted"
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
   const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} started.`
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
@@ -330,7 +333,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   async function toggleNotifications() {
     if (notificationsEnabled) return updateSettings({ notificationsEnabled: false })
     const granted = await requestTimerNotifications()
-    setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+    setNotificationPermission(await notificationPermission())
     updateSettings({ notificationsEnabled: granted })
     setNotificationBlockedMode(granted ? null : displayMode)
   }

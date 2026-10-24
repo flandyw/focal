@@ -26,6 +26,8 @@ type SharedExam = { subject: string | null; title: string | null; provider: stri
 type Person = {
   user_id: string
   display_name: string
+  username: string
+  nickname: string | null
   status_message: string
   status: "me" | "friend" | "incoming" | "outgoing"
   studying_since: string | null
@@ -37,7 +39,7 @@ type Person = {
   subjects: Record<string, number> | null
   exams: SharedExam[] | null
 }
-type Profile = { code: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
+type Profile = { username: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
 type Period = "today" | "week" | "month"
 type Ranking = "time" | "days"
 type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string }
@@ -46,6 +48,8 @@ type StudyStats = ReturnType<typeof activity>
 const PERIOD_LABEL: Record<Period, string> = { today: "Today", week: "7 days", month: "30 days" }
 const PERIOD_DAYS: Record<Period, number> = { today: 1, week: 7, month: 30 }
 const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+const personName = (person: Person) => person.nickname || person.display_name
 
 const duration = (ms: number) => ms < 60_000 ? "0m" : ms < 3_600_000 ? `${Math.floor(ms / 60_000)}m` : `${Math.floor(ms / 3_600_000)}h ${Math.floor(ms / 60_000) % 60}m`
 const clock = (ms: number) => [Math.floor(ms / 3_600_000), Math.floor(ms / 60_000) % 60, Math.floor(ms / 1000) % 60].map((n) => String(n).padStart(2, "0")).join(":")
@@ -79,7 +83,7 @@ function activity(person: Person, now: Date, fetchedAt: number) {
 function PersonAvatar({ person, className }: { person: Person; className?: string }) {
   return (
     <Avatar className={cn("size-9 text-sm font-medium", className)} aria-hidden>
-      <AvatarFallback className="text-[length:inherit]">{person.display_name.slice(0, 1).toUpperCase()}</AvatarFallback>
+      <AvatarFallback className="text-[length:inherit]">{personName(person).slice(0, 1).toUpperCase()}</AvatarFallback>
       {person.studying_since ? <AvatarBadge /> : null}
     </Avatar>
   )
@@ -160,10 +164,10 @@ supabase?.auth.onAuthStateChange((_event, session) => { if (session?.user.id !==
 
 export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignIn: () => void }) {
   const [profile, setProfile] = useState(cache.profile)
-  const [draft, setDraft] = useState({ name: cache.profile?.display_name ?? "", status: cache.profile?.status_message ?? "" })
+  const [draft, setDraft] = useState({ name: cache.profile?.display_name ?? "", username: cache.profile?.username ?? "", status: cache.profile?.status_message ?? "" })
   const [people, setPeople] = useState(cache.people)
   const [fetchedAt, setFetchedAt] = useState(cache.fetchedAt)
-  const [code, setCode] = useState("")
+  const [friendUsername, setFriendUsername] = useState("")
   const [period, setPeriod] = useState<Period>("today")
   const [ranking, setRanking] = useState<Ranking>("time")
   const [cheers, setCheers] = useState(cache.cheers ?? [])
@@ -221,11 +225,12 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       setProfileError(false)
       cache.profile = data
       setProfile(data)
-      setDraft({ name: data.display_name, status: data.status_message })
+      setDraft({ name: data.display_name, username: data.username, status: data.status_message })
+      await load()
     } catch {
       setProfileError(true)
     }
-  }, [])
+  }, [load])
 
   useEffect(() => {
     if (!signedIn) return
@@ -256,7 +261,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   }
 
   async function saveProfile(next: Profile) {
-    const args = { p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects, p_require_requests: next.require_requests }
+    const args = { p_username: next.username, p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects, p_require_requests: next.require_requests }
     if (await call("friends_update_profile", args, "Could not save your profile.")) {
       cache.profile = next
       setProfile(next)
@@ -268,7 +273,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
     const rows = people.filter((person) => person.status === "me" || person.status === "friend").map((person) => {
       const stats = activity(person, now, fetchedAt)
       return { person, stats, score: ranking === "time" ? Math.floor(stats.period[period] / 60_000) : stats.activeDays(PERIOD_DAYS[period]), rank: 0 }
-    }).sort((a, b) => b.score - a.score || a.person.display_name.localeCompare(b.person.display_name) || a.person.user_id.localeCompare(b.person.user_id))
+    }).sort((a, b) => b.score - a.score || personName(a.person).localeCompare(personName(b.person)) || a.person.user_id.localeCompare(b.person.user_id))
     for (let index = 0; index < rows.length; index++) {
       const previous = rows[index - 1]
       rows[index].rank = previous?.score === rows[index].score ? previous.rank : index + 1
@@ -298,22 +303,22 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   }, {})).sort((a, b) => b[1] - a[1])
   const groupSubjectTotal = groupSubjects.reduce((sum, [, ms]) => sum + ms, 0) || 1
   const visibleBoard = board.filter(({ person }) =>
-    (!liveOnly || person.studying_since) && `${person.display_name} ${person.status === "me" ? "you" : ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    (!liveOnly || person.studying_since) && `${personName(person)} ${person.display_name} @${person.username} ${person.status === "me" ? "you" : ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
   const loading = !fetchedAt && !loadError
   const receivedCheers = cheers.filter((cheer) => cheer.recipient_id === me?.person.user_id && board.some(({ person }) => person.status === "friend" && person.user_id === cheer.sender_id))
   const cheered = (id: string) => cheers.some((cheer) => cheer.sender_id === me?.person.user_id && cheer.recipient_id === id && now.getTime() - new Date(cheer.created_at).getTime() < 86_400_000)
   const cheerFriend = async (person: Person) => {
     if (person.status !== "friend" || cheered(person.user_id)) return
-    if (await call("friends_cheer", { p_user_id: person.user_id }, "Could not send your cheer. Try again.")) toast.success(`Cheer sent to ${person.display_name}`)
+    if (await call("friends_cheer", { p_user_id: person.user_id }, "Could not send your cheer. Try again.")) toast.success(`Cheer sent to ${personName(person)}`)
   }
   const gapLabel = (score: number) => ranking === "time" ? duration(score * 60_000) : `${score} active ${score === 1 ? "day" : "days"}`
-  const copyCode = async () => {
+  const copyUsername = async () => {
     if (!profile) return
     try {
-      await navigator.clipboard.writeText(profile.code)
-      toast.success("Friend code copied")
+      await navigator.clipboard.writeText(`@${profile.username}`)
+      toast.success("Username copied")
     } catch {
-      toast.error("Could not copy your code. Select it below and copy it manually.")
+      toast.error("Could not copy your username. Select it below and copy it manually.")
     }
   }
 
@@ -321,8 +326,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
     <WorkspacePage>
       <PageHeader title="Friends">
         <Button variant="outline" onClick={() => { void load(); void loadCheers() }} disabled={refreshing}><RefreshCw className={cn(refreshing && "motion-safe:animate-spin")} />Refresh</Button>
-        <Button variant="outline" onClick={() => void copyCode()} disabled={!profile}><Copy />Copy code <span className="font-mono tracking-wider">{profile?.code ?? "…"}</span></Button>
-        <Button onClick={() => document.getElementById("friend-code")?.focus()}><UserPlus />Add friend</Button>
+        <Button variant="outline" onClick={() => void copyUsername()} disabled={!profile} aria-label={profile ? `Copy your username @${profile.username}` : "Copy username"}><Copy /><span className="max-w-48 truncate">{profile ? `@${profile.username}` : "Copy username"}</span></Button>
+        <Button onClick={() => document.getElementById("friend-username")?.focus()}><UserPlus />Add friend</Button>
       </PageHeader>
 
       {loadError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
@@ -337,10 +342,10 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
             <h3 className="text-sm text-muted-foreground">{index === 0 ? "Received" : "Sent"} · {requests.length}</h3>
             {requests.map((person) => <div key={person.user_id} className="flex flex-wrap items-center gap-3 text-sm">
               <PersonAvatar person={person} className="size-8 text-xs" />
-              <span className="min-w-0 flex-1 truncate" title={person.display_name}>{person.display_name}</span>
+              <span className="min-w-0 flex-1"><span className="block truncate">{personName(person)}</span><span className="block truncate text-xs text-muted-foreground">@{person.username}</span></span>
               <div className="flex gap-2">
-                {person.status === "incoming" ? <Button size="sm" disabled={!!pending} aria-label={`Accept ${person.display_name}'s friend request`} onClick={() => void call("friends_accept", { p_user_id: person.user_id }, "Could not accept the request.").then((ok) => { if (ok) toast.success("Friend request accepted") })}>Accept</Button> : null}
-                <Button size="sm" variant="outline" disabled={!!pending} aria-label={`${person.status === "incoming" ? "Decline" : "Cancel"} ${person.display_name}'s friend request`} onClick={() => void call("friends_remove", { p_user_id: person.user_id }, "Could not update the request.").then((ok) => { if (ok) toast.success(person.status === "incoming" ? "Request declined" : "Request cancelled") })}>{person.status === "incoming" ? "Decline" : "Cancel"}</Button>
+                {person.status === "incoming" ? <Button size="sm" disabled={!!pending} aria-label={`Accept ${personName(person)}'s friend request`} onClick={() => void call("friends_accept", { p_user_id: person.user_id }, "Could not accept the request.").then((ok) => { if (ok) toast.success("Friend request accepted") })}>Accept</Button> : null}
+                <Button size="sm" variant="outline" disabled={!!pending} aria-label={`${person.status === "incoming" ? "Decline" : "Cancel"} ${personName(person)}'s friend request`} onClick={() => void call("friends_remove", { p_user_id: person.user_id }, "Could not update the request.").then((ok) => { if (ok) toast.success(person.status === "incoming" ? "Request declined" : "Request cancelled") })}>{person.status === "incoming" ? "Decline" : "Cancel"}</Button>
               </div>
             </div>)}
           </div> : null)}
@@ -360,7 +365,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
             <Button key={person.user_id} variant="ghost" onClick={() => setSelectedId(person.user_id)} className="h-auto min-w-0 justify-start gap-3 rounded-xl border-primary/40 bg-primary/5 p-3 text-left font-normal whitespace-normal hover:bg-primary/10">
               <PersonAvatar person={person} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{person.display_name}{person.status === "me" ? " (you)" : ""}</span>
+                <span className="block truncate font-medium">{personName(person)}{person.status === "me" ? " (you)" : ""}</span>
                 <span className="block truncate text-xs text-muted-foreground">{person.studying_kind === "exam" ? "Exam" : person.studying_subject ? subjectName(person.studying_subject) : "Studying"} · {duration(stats.period.today)} today</span>
               </span>
               <span className="font-mono text-lg tabular-nums text-primary">{clock(stats.session)}</span>
@@ -384,7 +389,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {me && board.length > 1 ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 p-3 text-sm">
                 <div className="flex min-w-0 items-start gap-2">
                   <Trophy className="mt-0.5 size-4 shrink-0 text-primary" />
-                  <p>{nextRival ? <><span className="font-medium">{gapLabel(nextRival.score - me.score)} to match the next place.</span> <span className="text-muted-foreground">Catch {nextRival.person.display_name} · #{nextRival.rank}</span></>
+                  <p>{nextRival ? <><span className="font-medium">{gapLabel(nextRival.score - me.score)} to match the next place.</span> <span className="text-muted-foreground">Catch {personName(nextRival.person)} · #{nextRival.rank}</span></>
                     : board[0].score === 0 ? "Your group is at the starting line. Log a session to set the pace."
                     : board.filter((entry) => entry.rank === 1).length > 1 ? "You’re tied for the lead. Keep the momentum going."
                     : <><span className="font-medium">You lead the group.</span> <span className="text-muted-foreground">{gapLabel(me.score - board[1].score)} ahead of the next place.</span></>}</p>
@@ -394,7 +399,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               <div className="mb-3 flex flex-wrap items-center gap-3 px-2">
                 <div className="relative min-w-40 flex-1 max-sm:basis-full">
                   <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name" aria-label="Search friends by name" className="pl-9" type="search" />
+                  <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or @username" aria-label="Search friends by name, nickname or username" className="pl-9" type="search" />
                 </div>
                 <Select value={ranking} onValueChange={(value) => { if (value) setRanking(value as Ranking) }}>
                   <SelectTrigger aria-label="Rank friends by"><SelectValue>{ranking === "time" ? "Study time" : "Active days"}</SelectValue></SelectTrigger>
@@ -410,9 +415,10 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                   <PersonAvatar person={person} />
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
-                      <span className="truncate font-medium">{person.display_name}{person.status === "me" ? <span className="text-muted-foreground"> (you)</span> : null}</span>
+                      <span className="truncate font-medium">{personName(person)}{person.status === "me" ? <span className="text-muted-foreground"> (you)</span> : null}</span>
                       {stats.streak > 1 ? <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground" title={`${stats.streak}-day streak`}><Flame className="size-3" />{stats.streak}</span> : null}
                     </span>
+                    <span className="block truncate text-xs text-muted-foreground">@{person.username}</span>
                     <span className="block truncate text-xs text-muted-foreground">{person.studying_since ? `Studying now${person.studying_subject ? ` · ${subjectName(person.studying_subject)}` : ""}` : person.status_message || "Not studying right now"}</span>
                     {me && person.status !== "me" ? <span className="block truncate text-xs text-muted-foreground">{score === me.score ? "Tied with you" : `${gapLabel(Math.abs(score - me.score))} ${score > me.score ? "ahead of" : "behind"} you`}</span> : null}
                     <span className="mt-1 block h-1 overflow-hidden rounded-full bg-muted"><span className="block h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-500" style={{ width: `${score / leader * 100}%` }} /></span>
@@ -420,11 +426,11 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                   <span className="hidden sm:block"><WeekBars day={stats.day} /></span>
                   <span className="text-right text-sm font-medium tabular-nums">{ranking === "time" ? duration(stats.period[period]) : `${score}/${PERIOD_DAYS[period]}d`}</span>
                 </Button>
-                {person.status === "friend" ? <Button variant="ghost" size="icon" disabled={!!pending || !cheersLoaded || cheersError || cheered(person.user_id)} title={cheered(person.user_id) ? "Cheered · one cheer per friend every 24 hours" : `Cheer ${person.display_name}`} aria-label={cheered(person.user_id) ? `Already cheered ${person.display_name}` : `Cheer ${person.display_name}`} onClick={() => void cheerFriend(person)}>{cheered(person.user_id) ? <Check /> : <HeartHandshake />}</Button> : <span className="w-9 shrink-0" />}
+                {person.status === "friend" ? <Button variant="ghost" size="icon" disabled={!!pending || !cheersLoaded || cheersError || cheered(person.user_id)} title={cheered(person.user_id) ? "Cheered · one cheer per friend every 24 hours" : `Cheer ${personName(person)}`} aria-label={cheered(person.user_id) ? `Already cheered ${personName(person)}` : `Cheer ${personName(person)}`} onClick={() => void cheerFriend(person)}>{cheered(person.user_id) ? <Check /> : <HeartHandshake />}</Button> : <span className="w-9 shrink-0" />}
                 </div>
               ))}
               {!loading && fetchedAt && !visibleBoard.length ? <div role="status" className="grid justify-items-start gap-2 px-2 py-5"><p className="text-sm text-muted-foreground">{search.trim() ? "No friends match your search." : "No one is studying right now."}</p><Button variant="outline" size="sm" onClick={() => { setSearch(""); setLiveOnly(false) }}>Show everyone</Button></div> : null}
-              {fetchedAt && board.length < 2 ? <p className="px-2 pt-3 text-sm text-muted-foreground">Your study group starts here. Share your code or add a friend below.</p> : null}
+              {fetchedAt && board.length < 2 ? <p className="px-2 pt-3 text-sm text-muted-foreground">Your study group starts here. Share your @username or add a friend below.</p> : null}
             </CardContent>
           </Card>
 
@@ -434,8 +440,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {loading ? <Skeleton className="h-16 motion-reduce:animate-none" /> : null}
               {visibleBoard.map(({ person, stats }) => (
                 <div key={person.user_id} className="grid grid-cols-[minmax(0,4rem)_minmax(0,1fr)_3.5rem] items-center gap-2 text-sm sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3.5rem] sm:gap-3">
-                  <span className="truncate">{person.status === "me" ? "You" : person.display_name}</span>
-                  <div role="img" aria-label={`${person.display_name}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} /></div>
+                  <span className="truncate">{person.status === "me" ? "You" : personName(person)}</span>
+                  <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} /></div>
                   <span className="text-right tabular-nums text-muted-foreground">{duration(stats.period.today)}</span>
                 </div>
               ))}
@@ -466,7 +472,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                     ]
                     const bests = [(s: StudyStats) => s.period.today, (s: StudyStats) => s.period.week, (s: StudyStats) => s.period.month, (s: StudyStats) => s.activeDays(30), (s: StudyStats) => s.streak].map((get) => Math.max(...board.map((entry) => get(entry.stats))))
                     return <TableRow key={person.user_id}>
-                      <TableCell className="max-w-32 truncate" title={person.display_name}>{person.status === "me" ? "You" : person.display_name}</TableCell>
+                      <TableCell className="max-w-32 truncate" title={personName(person)}>{person.status === "me" ? "You" : personName(person)}</TableCell>
                       {cells.map((cell, index) => <TableCell key={index} className={cn("text-right tabular-nums", cell.value > 0 && cell.value === bests[index] && "font-semibold text-primary")}>{cell.text}</TableCell>)}
                     </TableRow>
                   })}</TableBody>
@@ -510,22 +516,23 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Add a friend</CardTitle><CardDescription>Anyone with your code can add you, and you can add anyone with theirs. Study activity is shared once you are connected.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Add a friend</CardTitle><CardDescription>Connect using @usernames. Study activity is shared once you are friends.</CardDescription></CardHeader>
             <CardContent className="grid gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                <span className="text-sm text-muted-foreground">Your friend code</span>
-                <span className="select-all font-mono tracking-wider">{profile?.code ?? "—"}</span>
+                <span className="text-sm text-muted-foreground">Your username</span>
+                <span className="min-w-0 select-all break-all">{profile ? `@${profile.username}` : "—"}</span>
               </div>
               <form className="grid gap-2" onSubmit={(event) => {
                 event.preventDefault()
-                if (!/^[A-F0-9]{8}$/.test(code)) { toast.error("Enter the 8-character friend code."); return }
-                if (code === profile?.code) { toast.error("That is your own friend code. Share it with a friend instead."); return }
-                void call("friends_add", { p_code: code }, "Could not add that friend.").then((ok) => { if (ok) { setCode(""); toast.success("Friend code added") } })
+                const username = friendUsername.trim().replace(/^@/, "").toLowerCase()
+                if (!/^[a-z0-9_]{3,24}$/.test(username)) { toast.error("Enter a username with 3–24 letters, numbers or underscores."); return }
+                if (username === profile?.username) { toast.error("That is your username. Share it with a friend instead."); return }
+                void call("friends_add", { p_username: username }, "Could not add that friend.").then((ok) => { if (ok) { setFriendUsername(""); toast.success(cache.people.some((person) => person.username === username && person.status === "outgoing") ? "Friend request sent" : "Friend added") } })
               }}>
-                <Label htmlFor="friend-code" className="text-sm font-medium">Their friend code</Label>
+                <Label htmlFor="friend-username" className="text-sm font-medium">Their username</Label>
                 <div className="flex gap-2">
-                  <Input id="friend-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\s/g, "").toUpperCase())} placeholder="e.g. A1B2C3D4" aria-label="Their friend code" maxLength={32} minLength={8} pattern="[A-Fa-f0-9]{8}" autoCapitalize="characters" autoComplete="off" spellCheck={false} required disabled={!!pending} className="min-w-0 font-mono uppercase" />
-                  <Button type="submit" disabled={!!pending || code.length !== 8}><UserPlus />{pending === "friends_add" ? "Adding…" : "Add"}</Button>
+                  <Input id="friend-username" value={friendUsername} onChange={(event) => setFriendUsername(event.target.value)} placeholder="@username" maxLength={25} autoCapitalize="none" autoComplete="off" spellCheck={false} required disabled={!!pending} className="min-w-0" />
+                  <Button type="submit" disabled={!!pending || !friendUsername.trim()}><UserPlus />{pending === "friends_add" ? "Adding…" : "Add"}</Button>
                 </div>
                 <p className="text-xs text-muted-foreground">Turn on friend requests below to approve people who add you.</p>
               </form>
@@ -537,10 +544,17 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
             <CardContent className="grid gap-3">
               {profileError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Could not load your profile.</p><Button variant="outline" size="sm" onClick={() => void loadProfile()}>Try again</Button></div> : null}
               <fieldset disabled={!profile || !!pending} className="grid min-w-0 gap-3">
-                <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); if (profile) void saveProfile({ ...profile, display_name: draft.name.trim(), status_message: draft.status.trim() }) }}>
-                  <Label className="grid gap-2 text-sm font-medium">Display name<Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="How friends see you" maxLength={40} required /></Label>
+                <form className="grid gap-2" onSubmit={(event) => {
+                  event.preventDefault()
+                  const username = draft.username.trim().replace(/^@/, "").toLowerCase()
+                  if (!/^[a-z0-9_]{3,24}$/.test(username)) { toast.error("Use 3–24 letters, numbers or underscores for your username."); return }
+                  if (profile) void saveProfile({ ...profile, username, display_name: draft.name.trim(), status_message: draft.status.trim() })
+                }}>
+                  <Label className="grid gap-2 text-sm font-medium">Username<Input value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} placeholder="@username" maxLength={25} autoCapitalize="none" autoComplete="off" spellCheck={false} aria-describedby="username-help" required /></Label>
+                  <p id="username-help" className="text-xs text-muted-foreground">Your unique @handle. Use 3–24 letters, numbers or underscores.</p>
+                  <Label className="grid gap-2 text-sm font-medium">Display name (optional)<Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="How friends see you" maxLength={40} /></Label>
                   <Label className="grid gap-2 text-sm font-medium">Status (optional)<Input value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })} placeholder="e.g. Revising for Methods" maxLength={60} /></Label>
-                  <Button type="submit" variant="outline" disabled={!profile || !draft.name.trim() || (draft.name.trim() === profile.display_name && draft.status.trim() === profile.status_message)}>{pending === "friends_update_profile" ? "Saving…" : "Save profile"}</Button>
+                  <Button type="submit" variant="outline" disabled={!profile || !draft.username.trim() || (draft.username.trim().replace(/^@/, "").toLowerCase() === profile.username && draft.name.trim() === profile.display_name && draft.status.trim() === profile.status_message)}>{pending === "friends_update_profile" ? "Saving…" : "Save profile"}</Button>
                 </form>
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={profile?.share_subjects ?? true} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, share_subjects: checked }) }} />
@@ -552,7 +566,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                 </Label>
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={profile?.require_requests ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, require_requests: checked }) }} />
-                  Require my approval when someone adds my code
+                  Require my approval when someone adds me
                 </Label>
               </fieldset>
               <p className="text-xs text-muted-foreground">Subject and exam comparisons only use data each friend has chosen to share. Friend requests cannot see your study activity.</p>
@@ -561,11 +575,11 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
         </div>
       </div>
 
-      {selected ? <FriendSheet person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} cheerDisabled={!!pending || !cheersLoaded || cheersError} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
+      {selected ? <FriendSheet key={selected.person.user_id} person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} pending={pending} onSaveNickname={(nickname) => call("friends_set_nickname", { p_user_id: selected.person.user_id, p_nickname: nickname }, "Could not save this nickname.")} cheerDisabled={!!pending || !cheersLoaded || cheersError} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
       <Dialog open={removing && !!selected} onOpenChange={(open) => { if (!pending) setRemoving(open) }}>
         <DialogContent showCloseButton={!pending}>
           <DialogHeader>
-            <DialogTitle>Remove {selected?.person.display_name}?</DialogTitle>
+            <DialogTitle>Remove {selected ? personName(selected.person) : ""}?</DialogTitle>
             <DialogDescription>You will stop sharing study activity with each other. You can reconnect later with a new friend request.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -583,10 +597,12 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   )
 }
 
-function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, cheerDisabled, onCheer, onClose, onRemove }: {
+function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, pending, onSaveNickname, cheerDisabled, onCheer, onClose, onRemove }: {
   person: Person; stats: StudyStats; me: { person: Person; stats: StudyStats } | undefined; period: Period; now: Date
   onPeriodChange: (period: Period) => void; cheered: boolean; cheerDisabled: boolean; onCheer: () => void; onClose: () => void; onRemove: () => void
+  pending: string | null; onSaveNickname: (nickname: string) => Promise<boolean>
 }) {
+  const [nickname, setNickname] = useState(person.nickname ?? "")
   const isMe = person.status === "me"
   // 12 Monday-first columns ending with this week; cells hold "days ago" (negative = later this week).
   const weekday = (now.getDay() + 6) % 7
@@ -606,7 +622,7 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
 
   const chartSeries = [
     ...(!isMe && me ? [{ name: "You", day: me.stats.day, className: "bg-muted-foreground/50" }] : []),
-    { name: isMe ? "You" : person.display_name, day: stats.day, className: "bg-primary" },
+    { name: isMe ? "You" : personName(person), day: stats.day, className: "bg-primary" },
   ]
 
   return (
@@ -616,13 +632,26 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
           <div className="flex items-center gap-3">
             <PersonAvatar person={person} className="size-11 text-base" />
             <div className="min-w-0">
-              <SheetTitle>{isMe ? "You" : person.display_name}</SheetTitle>
+              <SheetTitle className="break-words">{isMe ? "You" : personName(person)}</SheetTitle>
+              <p className="break-all text-sm text-muted-foreground">@{person.username}{person.nickname ? ` · ${person.display_name}` : ""}</p>
               <SheetDescription>{person.studying_since ? `Studying now · ${clock(stats.session)}` : person.status_message || "Not studying right now"}</SheetDescription>
             </div>
           </div>
         </SheetHeader>
 
         <div className="grid gap-6 px-4 pb-6">
+          {!isMe ? <form className="grid gap-2" onSubmit={(event) => {
+            event.preventDefault()
+            const value = nickname.trim()
+            void onSaveNickname(value).then((ok) => { if (ok) { setNickname(value); toast.success(value ? "Nickname saved" : "Nickname removed") } })
+          }}>
+            <Label htmlFor="friend-nickname" className="text-sm font-medium">Nickname</Label>
+            <div className="flex gap-2">
+              <Input id="friend-nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder={person.display_name} maxLength={40} disabled={!!pending} aria-describedby="nickname-help" className="min-w-0" />
+              <Button type="submit" variant="outline" disabled={!!pending || nickname.trim() === (person.nickname ?? "")}>{pending === "friends_set_nickname" ? "Saving…" : "Save"}</Button>
+            </div>
+            <p id="nickname-help" className="text-xs text-muted-foreground">Only you see this nickname. Clear it and save to use their display name.</p>
+          </form> : null}
           {!isMe ? <div className="grid justify-items-start gap-2"><Button variant="outline" disabled={cheerDisabled || cheered} onClick={onCheer}>{cheered ? <Check /> : <HeartHandshake />}{cheered ? "Cheered" : "Send a cheer"}</Button><p className="text-xs text-muted-foreground">One cheer per friend every 24 hours.</p></div> : null}
 
           {comparison.length ? <section className="grid min-w-0 gap-2">
@@ -631,7 +660,7 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
               <Tabs value={period} onValueChange={(value) => onPeriodChange(value as Period)}><TabsList aria-label="Comparison period">{(Object.keys(PERIOD_LABEL) as Period[]).map((key) => <TabsTrigger key={key} value={key}>{PERIOD_LABEL[key]}</TabsTrigger>)}</TabsList></Tabs>
             </div>
             <Table className="[&_td]:px-2 [&_th]:px-2">
-              <TableHeader><TableRow><TableHead>Metric</TableHead><TableHead className="text-right">You</TableHead><TableHead className="max-w-32 truncate text-right" title={person.display_name}>{person.display_name}</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Metric</TableHead><TableHead className="text-right">You</TableHead><TableHead className="max-w-32 truncate text-right" title={personName(person)}>{personName(person)}</TableHead></TableRow></TableHeader>
               <TableBody>{comparison.map(({ label, mine, theirs, display }) => <TableRow key={label}>
                 <TableCell>{label}</TableCell><TableCell className={cn("text-right", mine > theirs && "font-semibold text-primary")}>{display(mine)}{mine > theirs ? <span className="sr-only">, ahead</span> : null}</TableCell><TableCell className={cn("text-right", theirs > mine && "font-semibold text-primary")}>{display(theirs)}{theirs > mine ? <span className="sr-only">, ahead</span> : null}</TableCell>
               </TableRow>)}</TableBody>
@@ -649,7 +678,7 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
           </dl>
 
           <section className="grid gap-2">
-            <h3 className="text-sm font-medium">{isMe ? "Daily study · 30 days" : "Daily study · you vs " + person.display_name}</h3>
+            <h3 className="text-sm font-medium">{isMe ? "Daily study · 30 days" : "Daily study · you vs " + personName(person)}</h3>
             <DailyChart now={now} series={chartSeries} />
           </section>
 
@@ -679,9 +708,9 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
 
           <section className="grid gap-2">
             <h3 className="text-sm font-medium">Subjects · 30 days</h3>
-            {person.subjects == null ? <p className="text-sm text-muted-foreground">{person.display_name} keeps their subjects private.</p>
+            {person.subjects == null ? <p className="text-sm text-muted-foreground">{personName(person)} keeps their subjects private.</p>
               : comparedSubjects.length ? <Table>
-                <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead className="text-right">You</TableHead><TableHead className="max-w-32 truncate text-right" title={person.display_name}>{person.display_name}</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Subject</TableHead><TableHead className="text-right">You</TableHead><TableHead className="max-w-32 truncate text-right" title={personName(person)}>{personName(person)}</TableHead></TableRow></TableHeader>
                 <TableBody>{comparedSubjects.map((id) => <TableRow key={id}><TableCell className="max-w-40 whitespace-normal">{subjectName(id || null)}</TableCell><TableCell className="text-right">{me?.person.subjects == null ? "—" : duration(me.person.subjects[id] ?? 0)}</TableCell><TableCell className="text-right">{duration(person.subjects?.[id] ?? 0)}</TableCell></TableRow>)}</TableBody>
               </Table>
               : subjects.length === 0 ? <p className="text-sm text-muted-foreground">No study in the last 30 days.</p>
@@ -701,7 +730,7 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
 
           <section className="grid gap-2">
             <h3 className="text-sm font-medium">Recent exams</h3>
-            {!person.exams?.length ? <p className="text-sm text-muted-foreground">{person.exams || isMe ? "No exams logged yet." : `${person.display_name} doesn't share exam results.`}</p>
+            {!person.exams?.length ? <p className="text-sm text-muted-foreground">{person.exams || isMe ? "No exams logged yet." : `${personName(person)} doesn't share exam results.`}</p>
               : person.exams.map((exam, index) => {
                 const score = percent(exam)
                 const myExam = !isMe ? me?.person.exams?.find((candidate) => candidate.subject === exam.subject && candidate.rawMax === exam.rawMax && percent(candidate) != null && (

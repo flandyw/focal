@@ -49,7 +49,7 @@ import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace
 import { SubjectCombobox } from "./components/subject-combobox"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
-import { clearPushForOtherAccount } from "./lib/pwa"
+import { clearPushForOtherAccount, notifyTimer, watchDesktopNotifications } from "./lib/pwa"
 import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
@@ -147,6 +147,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const [focusPreset, setFocusPreset] = useState<{ subject?: string; intent: string } | undefined>()
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
   const sync = useSupabaseSync(data, setData)
+  const notificationUserId = ["sign-in-required", "restoring"].includes(sync.status) ? undefined : sync.user?.id
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
   const [pendingImport, setPendingImport] = useState<AppData | null>(null)
@@ -297,18 +298,44 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     return () => window.clearTimeout(id)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- re-arms whenever the session changes, which refreshes the closure
   }, [data.activeExamTimer])
+  useEffect(() => {
+    const now = canonicalNow().getTime()
+    const exam = data.activeExamTimer
+    const sac = data.activeSacTimer
+    const alerts: { at: number; title: string; body: string; type: "reading" | "writing" | "sac"; path: string }[] = []
+    if (exam && exam.pausedAt === undefined) {
+      const clock = getExamClock(exam, now)
+      if (clock.phase === "reading") alerts.push({ at: clock.endsAt.reading, title: "Reading time over", body: "You can start writing now.", type: "reading", path: "/?timer=exam" })
+      if (clock.phase !== "overtime") alerts.push({ at: clock.endsAt.writing, title: "Writing time over", body: "Your timed paper has reached the end of writing time.", type: "writing", path: "/?timer=exam" })
+    }
+    if (sac && sac.pausedAt === undefined) alerts.push({ at: sac.startedAt + sac.durationMinutes * 60_000, title: "SAC time over", body: "Your SAC has reached the end of its allotted time.", type: "sac", path: "/?timer=sac" })
+    const timers = alerts.filter((alert) => alert.at > now).map((alert) => window.setTimeout(() => {
+      void notifyTimer(alert.title, alert.body, alert.type, alert.path)
+    }, alert.at - now))
+    return () => timers.forEach(window.clearTimeout)
+  }, [data.activeExamTimer, data.activeSacTimer])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
   useEffect(() => {
     if (sync.status === "restoring" || sync.status === "reconnecting") return
-    void clearPushForOtherAccount(sync.status === "sign-in-required" ? undefined : sync.user?.id)
+    const refresh = () => void clearPushForOtherAccount(sync.status === "sign-in-required" ? undefined : sync.user?.id)
+    refresh()
+    window.addEventListener("focus", refresh)
+    window.addEventListener("online", refresh)
+    return () => { window.removeEventListener("focus", refresh); window.removeEventListener("online", refresh) }
   }, [sync.status, sync.user?.id])
+  useEffect(() => {
+    if (!import.meta.env.VITE_DESKTOP || !notificationUserId) return
+    return watchDesktopNotifications(notificationUserId)
+  }, [notificationUserId])
   useEffect(() => {
     if (import.meta.env.VITE_DESKTOP || !("serviceWorker" in navigator)) return
     const openNotification = (event: MessageEvent) => {
       if (event.data?.type !== "focal:notification-click") return
       if (event.data.path === "/?view=friends") setView("friends")
       else if (event.data.path === "/?timer=calendar") setView("calendar")
+      else if (event.data.path === "/?timer=sac") setView("sacs")
+      else if (event.data.path === "/?timer=exam") { setTimerMode("exam"); setView("focus") }
       else { setTimerMode("focus"); setView("focus") }
     }
     navigator.serviceWorker.addEventListener("message", openNotification)

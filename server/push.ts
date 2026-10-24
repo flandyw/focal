@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import webpush from "web-push"
 import { timingSafeEqual } from "node:crypto"
 import { readRequestText } from "./request.js"
+import { notificationPreferencesSchema } from "../src/lib/notification-preferences.js"
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } })
 type PushJob = { subscription_id: string; endpoint: string; p256dh: string; auth: string; event_key: string; body: string; path: string }
@@ -96,10 +97,10 @@ export async function handlePush(request: Request): Promise<Response> {
       return json({ ok: true })
     }
     if (request.method === "POST") {
-      const { data, error } = await db.from("push_subscriptions").select("planned,friends")
+      const { data, error } = await db.from("push_subscriptions").select("planned,friends,preferences")
         .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()
       if (error) throw error
-      return json(data)
+      return json(data ? { ...data.preferences, planned: data.planned, friends: data.friends } : null)
     }
     if (request.method === "DELETE") {
       await db.from("push_subscriptions").delete().eq("user_id", user.id).eq("endpoint", input.endpoint).throwOnError()
@@ -109,6 +110,11 @@ export async function handlePush(request: Request): Promise<Response> {
     if (!keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string" ||
         !/^[A-Za-z0-9_-]{87}$/.test(keys.p256dh) || !/^[A-Za-z0-9_-]{22}$/.test(keys.auth) ||
         typeof input.planned !== "boolean" || typeof input.friends !== "boolean") return json({ error: "Invalid push subscription" }, 400)
+    const { data: existing, error: existingError } = await db.from("push_subscriptions").select("preferences,enabled_at")
+      .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()
+    if (existingError) throw existingError
+    const preferences = notificationPreferencesSchema.safeParse({ cheers: input.friends, ...existing?.preferences, ...input })
+    if (!preferences.success) return json({ error: "Invalid notification preferences. Check the times and timezone." }, 400)
     const { count, error: countError } = await db.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", user.id)
     if (countError) throw countError
     if ((count ?? 0) >= 20) {
@@ -117,7 +123,7 @@ export async function handlePush(request: Request): Promise<Response> {
     }
     await db.from("push_subscriptions").upsert({ user_id: user.id, endpoint: input.endpoint,
       p256dh: keys.p256dh, auth: keys.auth, planned: input.planned, friends: input.friends,
-      enabled_at: new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
+      preferences: preferences.data, enabled_at: existing?.enabled_at ?? new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
     return json({ ok: true })
   } catch {
     return json({ error: "Push reminders are temporarily unavailable. Try again later." }, 503)

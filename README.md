@@ -61,29 +61,48 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in root `.env.local`
 
 Friends comparisons and cheers require migration `0031_friends_competition.sql`. Study activity is visible only to accepted friends; subject details and exam results follow each person's sharing settings. Cheers are private between the sender and recipient, with one cheer per friend every 24 hours.
 
+Friends usernames and private nicknames require `0037_friend_usernames.sql`. Apply it before deploying the updated frontend. Users can change their unique @username in Friends and set a nickname in a friend's details; nicknames are visible only to their owner. Existing friendships, sharing preferences and legacy friend codes are preserved.
+
 The historical `examtrack` storage keys and protocol identifiers remain unchanged for compatibility with saved data and Folio. See [the sync protocol](docs/sync-protocol.md) and [the historical ExamTrack migration](docs/examtrack-merge.md).
 
 ## Mobile installation and Web Push
 
-Open **Settings > Mobile app** for installation instructions and per-device reminder controls.
+Open **Settings > Mobile app** for installation instructions and **Settings > Notifications**
+for per-device reminder controls on web and desktop.
 On iPhone/iPad, install Focal with **Share > Add to Home Screen**, launch its icon,
 then enable reminders (iOS/iPadOS 16.4+). Android browsers offer **Install app** or
 **Add to Home screen** in their menu. Installation requires HTTPS, except localhost
 for development. The service worker handles notifications; it does not cache the
 app for offline loading.
 
-Signed-in users can opt into planned study starts and friend activity (accepted
-friends starting study and received cheers). Plans made in Folio are included once
-synced. Each planned block gets a reminder at its start, unless the session has
-already started, completed, or been cancelled. Push text is generic, without subject
+Signed-in users can opt into planned study, calendar deadlines and SACs, a daily
+study nudge, friends starting study, and received cheers. Each type has its own
+switch. Plans made in Folio are included once synced. Planned blocks support 0–60
+minutes of notice; deadlines support same-day, 1-, 3-, or 7-day notice at the
+chosen daily time (or the deadline's start if earlier on the same day). Started,
+completed and cancelled study is skipped. Text is generic, without subject
 names, study titles, or friend names. Subscriptions are per browser installation;
 signing out or switching accounts revokes the previous account’s subscription.
-Timer phase alerts are separate, under **Study timer > Pomodoro settings > Alerts and
-flow**; those depend on the page running and may be delayed in the background.
+Quiet hours use the saved device timezone and skip alerts rather than queueing
+them; identical start and end times mute the whole day. New deadline and daily
+reminders default off. Focus, break, exam reading, exam writing and SAC time-up
+alerts have separate controls. Focus and break alerts also follow **Study timer >
+Pomodoro settings > Alerts and flow > Notifications** and need the Study timer page
+open. Timed-paper and SAC alerts work on any page. All timer alerts need the app
+running and may be delayed by browser background suspension.
+
+Desktop uses Tauri's notification plugin. Synced study and friend reminders are
+checked every 30 seconds while Focal is running or minimized; they require sign-in,
+internet access and migration `0036_notification_preferences.sql`. Timer alerts
+work without an account. Closing the desktop app stops alerts. The test button
+bypasses quiet hours. Native delivery still needs verification on packaged macOS,
+Windows and Linux builds.
 
 To activate closed-app push:
 
-1. Apply `supabase/migrations/0033_web_push.sql` after the existing migrations.
+1. Apply the Supabase migrations in order, including `0033_web_push.sql`,
+   `0034_web_push_wakeup.sql` and `0036_notification_preferences.sql`, before deploying
+   the updated push server. Existing subscription choices are preserved.
 2. Generate a persistent VAPID pair with `bunx web-push generate-vapid-keys --json`.
    Set `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT` on the
    server, together with the existing Supabase URL and service-role key.
@@ -125,7 +144,7 @@ turn it on (without it, the triggers do nothing and the cron still delivers):
 select vault.create_secret('https://your-focal.example/api/push?dispatch=1', 'focal_push_dispatch_url');
 ```
 
-Keep the cron: planned-study reminders and retries still depend on it.
+Keep the cron: planned-study, deadline and daily reminders, plus retries, still depend on it.
 
 The sender claims up to 50 deliveries per tick, retries interrupted/transient
 failures after five minutes, and deletes expired browser endpoints. Events older

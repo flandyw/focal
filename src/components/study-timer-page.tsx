@@ -32,14 +32,14 @@ import { useStudyTimer } from "../hooks/use-study-timer"
 import { notificationPermission, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import type { useStudySessionSync } from "../lib/study-session-sync"
 import { StudySessionDialog } from "./study-session-dialog"
-import type { StudySessionEdit } from "../lib/sync/sessionContract"
+import type { StudySessionEdit, SubjectSwitch } from "../lib/sync/sessionContract"
 import type { FocusSessionSink } from "../lib/focus-session"
 import { continuableToday, sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionSubjects, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
-import { VCE_SUBJECTS, type CalendarEvent, type TimetableConfig } from "../lib/types"
-import { classPeriodsOn } from "../lib/class-timetable"
+import type { CalendarEvent, TimetableConfig } from "../lib/types"
+import { classPeriodsOn, subjectNameFor } from "../lib/class-timetable"
 import { StudyTimeline } from "./study-timeline"
 import { StudyPlanCard } from "./study-plan-card"
 import { AI_ENABLED } from "../lib/host"
@@ -166,7 +166,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
   const visiblePlans = planned.filter((session) => {
     const plan = studySessionPlan(session)
-    const text = [session.title, session.subject_id, VCE_SUBJECTS.find((subject) => subject.id === session.subject_id)?.name, plan.description, ...plan.topics].join(" ").toLowerCase()
+    const text = [session.title, ...studySessionSubjects(session).flatMap((id) => [id, subjectNameFor(id)]), plan.description, ...plan.topics].join(" ").toLowerCase()
     if (!text.includes(planSearch.trim().toLowerCase())) return false
     if (planFilter === "overdue") return !!plan.blocks.length && Date.parse(plan.blocks.at(-1)!.end) < now.getTime()
     if (planFilter === "today") return plan.blocks.some((block) => Date.parse(block.start) < todayEnd.getTime() && Date.parse(block.end) > todayStart.getTime())
@@ -192,6 +192,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     const legacy = metadata.legacy_metadata
     const details = legacy && typeof legacy === "object" && !Array.isArray(legacy) ? { ...legacy, ...metadata } : metadata
     await plannedActions.plan([{ title: patch.title ?? "Study", subjectId: patch.subject_id ?? undefined,
+      subjectSwitches: Array.isArray(details.subjectSwitches) ? details.subjectSwitches as SubjectSwitch[] : undefined,
       start: patch.blocks[0].start, end: patch.blocks.at(-1)!.end, blocks: patch.blocks,
       description: typeof details.description === "string" ? details.description : undefined,
       topics: Array.isArray(details.topics) ? details.topics.filter((topic): topic is string => typeof topic === "string") : undefined }])
@@ -299,7 +300,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const timerIdle = !sharedSession && !state.running && !state.studyOvertime && state.overtimeSeconds === 0 && (isFreeStudy || state.secondsLeft === state.totalSeconds)
   const offerContinue = timerIdle && !blockedPlan && onControlSession && lastFinished ? lastFinished : undefined
   const continueLabel = offerContinue
-    ? `Continue ${VCE_SUBJECTS.find((item) => item.id === offerContinue.subject_id)?.name ?? offerContinue.subject_id ?? offerContinue.title} · ${Math.round(offerContinue.accumulated_active_ms / 60_000)} min`
+    ? `Continue ${studySessionSubjects(offerContinue).map(subjectNameFor).join(" · ") || offerContinue.title} · ${Math.round(offerContinue.accumulated_active_ms / 60_000)} min`
     : ""
   const recordCount = todaysRecord?.length ?? blocksToday
   const recordSeconds = todaysRecord
@@ -358,13 +359,14 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           </div>
           {sharedSession ? (
             <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{VCE_SUBJECTS.find((item) => item.id === sharedSession.subject_id)?.name ?? sharedSession.subject_id ?? "Study"}</span>
+              <span className="font-medium text-foreground">{studySessionSubjects(sharedSession).map(subjectNameFor).join(" · ") || "Study"}</span>
               {sharedSession.title ? ` · ${sharedSession.title}` : ""}
             </p>
           ) : (
             <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:w-auto lg:max-w-[34rem] lg:flex-1">
               <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
               <Input aria-label="Intent" id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Intent, e.g. redo the 2023 organic paper" value={intent} />
+              {state.running ? <p className="text-xs text-muted-foreground sm:col-span-2">Change the subject to switch; this session keeps going and records each subject's time.</p> : null}
             </div>
           )}
         </div>
@@ -440,7 +442,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           const plan = studySessionPlan(session)
           return <Card key={session.id} size="sm"><CardContent className="grid gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0"><h3 className="break-words font-medium">{session.title}</h3><p className="text-sm text-muted-foreground">{VCE_SUBJECTS.find((subject) => subject.id === session.subject_id)?.name ?? session.subject_id ?? "No subject"} · {Math.round(plan.milliseconds / 60_000)} min planned</p></div>
+              <div className="min-w-0"><h3 className="break-words font-medium">{session.title}</h3><p className="text-sm text-muted-foreground">{studySessionSubjects(session).map(subjectNameFor).join(" · ") || "No subject"} · {Math.round(plan.milliseconds / 60_000)} min planned</p></div>
               <div className="flex gap-2"><Button disabled={!!blockedPlan || !!planBusy || !onControlSession} onClick={() => void startPlan(session)} size="sm"><Play />{planBusy === session.id ? "Starting…" : "Start session"}</Button>
                 {plannedActions ? <Button aria-label={`Edit ${session.title}`} onClick={() => { setCreatingPlan(false); setEditingPlan(session) }} size="icon-sm" variant="outline"><Pencil /></Button> : null}</div>
             </div>

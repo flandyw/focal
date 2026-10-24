@@ -8,8 +8,8 @@ import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Textarea } from "./ui/textarea"
 import { continuableToday, sessionBlocks } from "../lib/day-plan"
-import { studySubjectOptions } from "../lib/studySubjects"
-import { isDeleted, isPaused, isRunning, type CanonicalStudySession, type StudySessionEdit } from "../lib/sync/sessionContract"
+import { studySubjectId, studySubjectOptions } from "../lib/studySubjects"
+import { isDeleted, isPaused, isRunning, studySessionSubjectSpans, type CanonicalStudySession, type StudySessionEdit, type SubjectSwitch } from "../lib/sync/sessionContract"
 import { EVENT_TYPES, type CalendarEvent, type EventType } from "../lib/types"
 
 function localTime(iso: string) {
@@ -36,10 +36,11 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   delete metadata.legacy_metadata
   const [openedRevision] = useState(session.revision)
   const [title, setTitle] = useState(session.title)
-  const [subject, setSubject] = useState(session.subject_id ?? "")
   const [notes, setNotes] = useState(typeof metadata.description === "string" ? metadata.description : "")
   const [topics, setTopics] = useState(Array.isArray(metadata.topics) ? metadata.topics.filter((topic) => typeof topic === "string").join("\n") : "")
-  const [blocks, setBlocks] = useState(() => sessionBlocks(session).map((block) => ({ id: crypto.randomUUID(), start: localTime(block.start), end: localTime(block.end) })))
+  // One subject at a time: a block where the subject switched is shown as one block per subject.
+  const [blocks, setBlocks] = useState(() => studySessionSubjectSpans(session, sessionBlocks(session)).map((block) => ({ id: crypto.randomUUID(),
+    start: localTime(block.start), end: localTime(block.end), subject: block.subjectId ? studySubjectId(block.subjectId) : "" })))
   const [converting, setConverting] = useState(false)
   const [eventType, setEventType] = useState<EventType>("event")
   const [location, setLocation] = useState("")
@@ -47,10 +48,11 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const options = studySubjectOptions([...subjects, ...(subject ? [subject] : [])])
+  const options = studySubjectOptions([...subjects, ...blocks.map((block) => block.subject)])
+  const lastSubject = blocks.at(-1)?.subject ?? ""
   const totalMinutes = blocks.reduce((sum, block) => sum + Math.max(0, (Date.parse(block.end) - Date.parse(block.start)) / 60_000 || 0), 0)
 
-  function updateBlock(id: string, patch: Partial<{ start: string; end: string }>) {
+  function updateBlock(id: string, patch: Partial<{ start: string; end: string; subject: string }>) {
     setBlocks((current) => current.map((block) => block.id === id ? { ...block, ...patch } : block))
     setError(null)
   }
@@ -79,11 +81,23 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
       if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end.getTime() - start.getTime() > 86_400_000) {
         throw new Error("Each block must have a valid start and end, last up to 24 hours, and end after it starts.")
       }
-      return { start: start.toISOString(), end: end.toISOString() }
+      return { start: start.toISOString(), end: end.toISOString(), subject: block.subject }
     }).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
     if (sorted.some((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))) throw new Error("Time blocks must not overlap.")
-    const details = { ...metadata, subjectIds: subject ? [subject] : [], description: notes.trim(), topics: [...new Set(topics.split("\n").map((topic) => topic.trim()).filter(Boolean))], schedule: session.started_at === null ? { blocks: sorted } : metadata.schedule ?? { blocks: sorted } }
-    return { title: title.trim(), subject_id: subject || null, blocks: sorted, metadata: legacy ? { ...session.metadata, ...details, legacy_metadata: details } : details }
+    if (sorted.some((block) => !block.subject) && sorted.some((block) => block.subject)) throw new Error("Give every block a subject, or none of them.")
+    const subjectIds = [...new Set(sorted.flatMap((block) => block.subject ? [block.subject] : []))]
+    const subjectSwitches = subjectIds.length > 1
+      ? sorted.reduce<SubjectSwitch[]>((list, block) => list.at(-1)?.subjectId === block.subject ? list : [...list, { at: block.start, subjectId: block.subject }], [])
+      : undefined
+    // Touching blocks are one stretch of study; the switches already say where the subject changed.
+    const merged = sorted.reduce<{ start: string; end: string }[]>((list, block) => {
+      const last = list.at(-1)
+      if (last && last.end === block.start) last.end = block.end
+      else list.push({ start: block.start, end: block.end })
+      return list
+    }, [])
+    const details = { ...metadata, subjectIds, subjectSwitches, description: notes.trim(), topics: [...new Set(topics.split("\n").map((topic) => topic.trim()).filter(Boolean))], schedule: session.started_at === null ? { blocks: merged } : metadata.schedule ?? { blocks: merged } }
+    return { title: title.trim(), subject_id: sorted.at(-1)?.subject || null, blocks: merged, metadata: legacy ? { ...session.metadata, ...details, legacy_metadata: details } : details }
   }
 
   async function submit(action: "save" | "duplicate" | "delete" | "convert") {
@@ -115,7 +129,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
             const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`
             return {
               id,
-              title: changes.title!, description: description || undefined, subjectId: subject || undefined,
+              title: changes.title!, description: description || undefined, subjectId: lastSubject || undefined,
               startTime: block.start, endTime: block.end, eventType, location: location.trim() || undefined,
               isFinished: false, created_at: now, updated_at: now,
             }
@@ -143,13 +157,6 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               <FieldLabel htmlFor="session-title">Title</FieldLabel>
               <Input autoFocus id="session-title" maxLength={512} value={title} onChange={(e) => setTitle(e.target.value)} />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="session-subject">Subject</FieldLabel>
-              <Select items={[{ value: "__none", label: "No subject" }, ...options.map((option) => ({ value: option.id, label: option.name }))]} value={subject || "__none"} onValueChange={(value) => setSubject(!value || value === "__none" ? "" : value)}>
-                <SelectTrigger id="session-subject" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="__none">No subject</SelectItem>{options.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </Field>
             <div className="grid gap-3" role="group" aria-label="Time blocks">
               <p className="text-sm font-medium">Time blocks · {Math.round(totalMinutes)} min total</p>
               {session.started_at === null ? <div className="flex flex-wrap gap-2">
@@ -164,6 +171,13 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
                   </div>
+                  <Field className="min-w-0">
+                    <FieldLabel htmlFor={`session-subject-${block.id}`}>Subject</FieldLabel>
+                    <Select items={[{ value: "__none", label: "No subject" }, ...options.map((option) => ({ value: option.id, label: option.name }))]} value={block.subject || "__none"} onValueChange={(value) => updateBlock(block.id, { subject: !value || value === "__none" ? "" : value })}>
+                      <SelectTrigger id={`session-subject-${block.id}`} className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="__none">No subject</SelectItem>{options.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </Field>
                   <div className="flex flex-wrap gap-1" role="group" aria-label={`Block ${index + 1} duration`}>
                     {[15, 25, 30, 45, 60, 90, 120, 180].map((minutes) => <Button key={minutes} size="xs" variant="outline" disabled={!Number.isFinite(Date.parse(block.start))} onClick={() => updateBlock(block.id, { end: localTime(new Date(Date.parse(block.start) + minutes * 60_000).toISOString()) })}>{minutes}m</Button>)}
                   </div>
@@ -171,7 +185,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               ))}
               <Button variant="outline" disabled={blocks.length >= 100 || !Number.isFinite(Date.parse(blocks.at(-1)?.end ?? ""))} onClick={() => {
                 const start = Date.parse(blocks.at(-1)!.end) + 15 * 60_000
-                setBlocks((current) => [...current, { id: crypto.randomUUID(), start: localTime(new Date(start).toISOString()), end: localTime(new Date(start + 30 * 60_000).toISOString()) }])
+                setBlocks((current) => [...current, { id: crypto.randomUUID(), start: localTime(new Date(start).toISOString()), end: localTime(new Date(start + 30 * 60_000).toISOString()), subject: lastSubject }])
               }}><Plus />Add time block</Button>
             </div>
             <Field><FieldLabel htmlFor="session-notes">Notes</FieldLabel><Textarea id="session-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>

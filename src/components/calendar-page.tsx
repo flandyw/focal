@@ -34,7 +34,7 @@ import type { Timetable } from "../lib/timetable"
 import { cn } from "../lib/utils"
 import type { CalendarEvent, TimetableConfig, TimetablePeriod } from "../lib/types"
 import type { TextEventDraft } from "../lib/calendarImport"
-import { isPaused, isRunning, type StudySessionEdit, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, type StudySessionEdit, type SubjectSwitch, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import type { PastStudyLog } from "../lib/pastStudy"
 
 const today = () => localDate(new Date())
@@ -125,7 +125,7 @@ export function CalendarPage({
   onClassTimetableChange: (config: TimetableConfig) => void
   onEventsChange: (update: (events: CalendarEvent[]) => CalendarEvent[]) => void
   onOpenTimetable: () => void
-  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: { start: string; end: string }[] }>) => Promise<number>
+  onPlanSessions: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: { start: string; end: string }[] }>) => Promise<number>
   onLogStudy: (entry: PastStudyLog) => Promise<void>
   onRemoveSession: (session: CanonicalStudySession) => Promise<void>
   onConvertSession: (session: CanonicalStudySession, events: CalendarEvent[]) => Promise<void>
@@ -328,6 +328,7 @@ export function CalendarPage({
           const nested = patch.metadata?.legacy_metadata
           const metadata = nested && typeof nested === "object" ? nested as Record<string, unknown> : patch.metadata
           await onPlanSessions([{ title: patch.title!, subjectId: patch.subject_id ?? undefined,
+            subjectSwitches: Array.isArray(patch.metadata?.subjectSwitches) ? patch.metadata.subjectSwitches as SubjectSwitch[] : undefined,
             start: patch.blocks![0].start, end: patch.blocks!.at(-1)!.end, blocks: patch.blocks,
             description: typeof metadata?.description === "string" ? metadata.description : undefined,
             topics: Array.isArray(metadata?.topics) ? metadata.topics.filter((topic): topic is string => typeof topic === "string") : undefined }])

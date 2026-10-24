@@ -5,15 +5,26 @@ import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learni
 import {
   applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRating,
 } from "../../src/lib/stoplight.js"
-import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
+import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
 import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
 import { day, instant, limit, nowIso, required, round } from "./util.js"
 
-const blocks = z.array(z.object({ start: instant, end: instant })).min(1).max(100)
+const blocks = z.array(z.object({ start: instant, end: instant, subject: z.string().optional().describe("Subject of this block, when the session switched subject; defaults to `subject`") })).min(1).max(100)
   .describe("Time blocks. They must end after they start, not overlap, and last at most 24 hours each.")
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
 const text = (value: string | undefined) => value?.trim() || undefined
+
+/** One subject at a time: per-block subjects become the session's subject switches, and `subject_id` is the last one. */
+function subjectsFor(subject: string | undefined, list: { start: string; end: string; subject?: string }[]) {
+  const sorted = list.toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
+  const ids = sorted.map((block) => block.subject ?? subject).map((name) => name?.trim() ? subjectIdFor(name) : null)
+  if (ids.some((id) => !id) && ids.some(Boolean)) throw new Error("Give every block a subject, or none of them.")
+  const subjectIds = [...new Set(ids.filter((id): id is string => !!id))]
+  const subjectSwitches = subjectIds.length > 1 ? sorted.reduce<SubjectSwitch[]>((switches, block, index) =>
+    switches.at(-1)?.subjectId === ids[index] ? switches : [...switches, { at: block.start, subjectId: ids[index]! }], []) : undefined
+  return { subject_id: ids.at(-1) ?? null, blocks: sorted.map(({ start, end }) => ({ start, end })), subjectIds, subjectSwitches }
+}
 
 function stateOf(session: CanonicalStudySession) {
   return isRunning(session) ? "running" : isPaused(session) ? "paused" : session.completed ? "completed" : isPlanned(session) ? "planned" : "stopped"
@@ -23,9 +34,9 @@ function sessionView(session: CanonicalStudySession, now = Date.now()) {
   const plan = studySessionPlan(session)
   const reflection = isRecord(session.metadata.reflection) ? session.metadata.reflection : {}
   return {
-    id: session.id, title: session.title, subject: subjectNameFor(session.subject_id ?? undefined) || null, kind: session.kind, state: stateOf(session),
+    id: session.id, title: session.title, subject: subjectNameFor(session.subject_id ?? undefined) || null, subjects: studySessionSubjects(session).map(subjectNameFor), kind: session.kind, state: stateOf(session),
     minutesStudied: round(studySessionActiveMilliseconds(session, now) / 60_000),
-    blocks: sessionBlocks(session, now).map(({ start, end, done, live }) => ({ start, end, done, live })),
+    blocks: studySessionSubjectSpans(session, sessionBlocks(session, now)).map(({ start, end, done, live, subjectId }) => ({ start, end, done, live, subject: subjectNameFor(subjectId ?? undefined) || null })),
     description: plan.description || undefined, topics: plan.topics.length ? plan.topics : undefined, notes: typeof reflection.notes === "string" ? reflection.notes : undefined,
   }
 }
@@ -46,41 +57,46 @@ export function studyTools(define: Define) {
 
   define("plan_study_session", "Schedule future study on the calendar (a planned session that can later be started on the timer).",
     { title: z.string().min(1).max(512), subject: z.string().optional(), blocks, description: z.string().optional(), topics: z.array(z.string()).max(30).optional() },
-    "write", async ({ title, subject, blocks, description, topics }) => {
+    "write", async ({ title, subject, blocks: given, description, topics }) => {
       const id = crypto.randomUUID()
+      const { subject_id, blocks, subjectIds, subjectSwitches } = subjectsFor(subject, given)
       await sessionCommand({
-        session_id: id, expected_revision: 0, action: "create", kind: "focus", phase: "focus", title: title.trim(),
-        subject_id: subject ? subjectIdFor(subject) : null, blocks,
-        metadata: { subjectIds: subject ? [subjectIdFor(subject)] : [], createdVia: "assistant", description: text(description), topics, schedule: { blocks } },
+        session_id: id, expected_revision: 0, action: "create", kind: "focus", phase: "focus", title: title.trim(), subject_id, blocks,
+        metadata: { subjectIds, subjectSwitches, createdVia: "assistant", description: text(description), topics, schedule: { blocks } },
       })
       return { id }
     })
 
   define("log_study", "Record study that already happened (every block must have finished).",
-    { title: z.string().min(1).max(512), subject: z.string().min(1), blocks, notes: z.string().optional() }, "write", async ({ title, subject, blocks, notes }) => {
+    { title: z.string().min(1).max(512), subject: z.string().min(1), blocks, notes: z.string().optional() }, "write", async ({ title, subject, blocks: given, notes }) => {
       const id = crypto.randomUUID()
-      const subjectId = subjectIdFor(subject)
+      const { subject_id, blocks, subjectIds, subjectSwitches } = subjectsFor(subject, given)
       await sessionCommand({
-        session_id: id, expected_revision: 0, action: "log", kind: "focus", phase: "focus", title: title.trim(), subject_id: subjectId, blocks,
-        metadata: { subjectIds: [subjectId], reflection: { notes: text(notes) }, createdVia: "assistant", schedule: { blocks } },
+        session_id: id, expected_revision: 0, action: "log", kind: "focus", phase: "focus", title: title.trim(), subject_id, blocks,
+        metadata: { subjectIds, subjectSwitches, reflection: { notes: text(notes) }, createdVia: "assistant", schedule: { blocks } },
       })
       return { id }
     })
 
-  define("edit_study_session", "Change a session that is not running or paused: title, subject, notes, blocks (replaces all of them), or mark it done/not done. Done blocks must have finished.", {
+  define("edit_study_session", "Change a session that is not running or paused: title, subject, notes, blocks (replace all of them; give each block a subject where the session switched subject), or mark it done/not done. Done blocks must have finished.", {
     id: z.string(), title: z.string().min(1).max(512).optional(), subject: z.string().optional(), blocks: blocks.optional(), completed: z.boolean().optional(),
     description: z.string().optional(), topics: z.array(z.string()).max(30).optional(), notes: z.string().optional(),
-  }, "write", async ({ id, title, subject, blocks, completed, description, topics, notes }) => {
+  }, "write", async ({ id, title, subject, blocks: given, completed, description, topics, notes }) => {
     const session = required((await readAll()).sessions.find((s) => s.id === id), "study session")
     const metadata: Record<string, unknown> = { ...session.metadata }
     if (description !== undefined) metadata.description = text(description)
     if (topics !== undefined) metadata.topics = topics
     if (notes !== undefined) metadata.reflection = { ...(isRecord(metadata.reflection) ? metadata.reflection : {}), notes: text(notes) }
+    // Blocks without subjects keep the session's subjects as they were; otherwise the subjects are rebuilt.
+    const subjects = given && (subject !== undefined || given.some((block) => block.subject))
+      ? subjectsFor(subject ?? session.subject_id ?? undefined, given)
+      : subject !== undefined ? { subject_id: subject ? subjectIdFor(subject) : null, subjectSwitches: undefined } : undefined
+    const blocks = given?.map(({ start, end }) => ({ start, end }))
     if (blocks && isRecord(metadata.schedule)) metadata.schedule = { ...metadata.schedule, blocks }
-    if (subject !== undefined) metadata.subjectIds = subject ? [subjectIdFor(subject)] : []
+    if (subjects) Object.assign(metadata, { subjectIds: subjects.subject_id ? [...new Set(subjects.subjectSwitches?.map((item) => item.subjectId) ?? [subjects.subject_id])] : [], subjectSwitches: subjects.subjectSwitches })
     await sessionCommand({
       session_id: id, expected_revision: session.revision, action: "save_progress", title: title?.trim(),
-      subject_id: subject === undefined ? undefined : subject ? subjectIdFor(subject) : null, metadata, blocks, completed,
+      subject_id: subjects?.subject_id, metadata, blocks, completed,
     })
   })
 

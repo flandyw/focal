@@ -138,6 +138,8 @@ export type FocusTimerSession = {
   id?: string
   revision?: number
   subject: string
+  /** When the subject changed during this session; `subject` is the latest. Saved as `metadata.subjectSwitches`. */
+  subjectSwitches?: { at: string; subjectId: string }[]
   provider: string
   title: string
   cycleNumber?: number

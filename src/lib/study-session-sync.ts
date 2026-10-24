@@ -19,6 +19,8 @@ import {
   parseCanonicalStudySession,
   parseStudySessionMutationResult,
   studySessionActiveMilliseconds,
+  studySessionSwitches,
+  type SubjectSwitch,
   type CanonicalStudySession,
   type StudySessionAction,
   type StudySessionCommand,
@@ -722,7 +724,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -927,7 +929,7 @@ export function useStudySessionSync(
   }
 
   async function log(entry: PastStudyLog, id: string) {
-    const metadata = { subjectIds: [entry.subjectId], reflection: { notes: entry.notes }, createdVia: "manual", schedule: { blocks: entry.blocks } }
+    const metadata = { subjectIds: [entry.subjectId], reflection: { notes: entry.notes }, createdVia: "manual", schedule: { blocks: entry.blocks }, subjectSwitches: entry.subjectSwitches }
     if (userId && supabase) {
       // The checks the server will make, made here first so a bad entry is a readable error now, not a rejection later.
       guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks: entry.blocks, completed: true, metadata })
@@ -942,13 +944,13 @@ export function useStudySessionSync(
   }
 
   /** Schedule study that has not happened yet: a session with times and `completed` false. */
-  async function plan(entries: Array<{ title: string; subjectId?: string; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) {
+  async function plan(entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) {
     const planned = entries.map((entry) => {
       const id = crypto.randomUUID()
       const blocks = entry.blocks ?? [{ start: entry.start, end: entry.end }]
       const metadata = {
         subjectIds: entry.subjectId ? [entry.subjectId] : [], createdVia: "manual",
-        description: entry.description, topics: entry.topics, schedule: { blocks },
+        description: entry.description, topics: entry.topics, schedule: { blocks }, subjectSwitches: entry.subjectSwitches,
       }
       return { entry, id, blocks, metadata, session: guestSession(id, { title: entry.title, subjectId: entry.subjectId, blocks, completed: false, metadata }) }
     })
@@ -1022,6 +1024,12 @@ export function useStudySessionSync(
       topics: [...new Set(details.flatMap((metadata) => Array.isArray(metadata.topics) ? metadata.topics.filter((topic): topic is string => typeof topic === "string") : []))],
       reflection: { ...(isRecord(details[0].reflection) ? details[0].reflection : {}), notes: [...new Set(notes)].join("\n\n") },
       schedule: first.completed ? first.metadata.schedule : { blocks },
+      // Each source keeps its own subjects: its switches, or its one subject from its first block.
+      subjectSwitches: chosen.flatMap((session) => {
+        const own = studySessionSwitches(session)
+        const start = sessionBlocks(session)[0]?.start
+        return own.length ? own : start && session.subject_id ? [{ at: start, subjectId: session.subject_id }] : []
+      }).toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at)).reduce<SubjectSwitch[]>((list, item) => list.at(-1)?.subjectId === item.subjectId ? list : [...list, item], []),
       // ponytail: retain source details within the existing 60 KiB metadata ceiling; use separate history storage for larger groups.
       merge_sources: chosen.map((session) => ({ id: session.id, title: session.title, metadata: session.metadata })),
     }

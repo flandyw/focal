@@ -2,6 +2,8 @@ export interface PastStudyLog {
   subjectId: string
   title: string
   notes?: string
+  /** Where the subject switched inside these blocks; `subjectId` is the last subject. */
+  subjectSwitches?: { at: string; subjectId: string }[]
   blocks: { start: string; end: string }[]
 }
 

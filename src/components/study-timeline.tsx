@@ -7,9 +7,10 @@ import { Card, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
 import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { continuableToday, sessionBlocks, sessionItem } from "../lib/day-plan"
-import { isPaused, isRunning } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, studySessionSubjectSpans, type SubjectSwitch } from "../lib/sync/sessionContract"
+import { subjectNameFor } from "../lib/class-timetable"
 import { localDate } from "../lib/learning-workspace"
-import { studySubjectOptions, subjectColor } from "../lib/studySubjects"
+import { studySubjectId, studySubjectOptions, subjectColor } from "../lib/studySubjects"
 import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/types"
 import { cn } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
@@ -25,6 +26,8 @@ type Tone = "class" | "event" | "done" | "todo" | "live"
 interface Block {
   key: string; start: number; end: number; tone: Tone
   title: string; subject?: string; short: string; color?: string
+  /** Where the subject switched inside this block, in minutes of the day. */
+  bands?: { start: number; end: number; color?: string }[]
   session?: CanonicalStudySession
   interval?: number
   event?: CalendarEvent
@@ -135,7 +138,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   events: CalendarEvent[]
   subjects: string[]
   onLog: (entry: PastStudyLog) => Promise<void>
-  onPlan: (entry: { title: string; subjectId: string; start: string; end: string }) => Promise<void>
+  onPlan: (entry: { title: string; subjectId: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string }) => Promise<void>
   /** Deletes a session, done or not. */
   onRemove?: (session: CanonicalStudySession) => Promise<void>
   /** Moves or resizes a session's block, or marks it done or not done. */
@@ -172,16 +175,20 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
       if (end > 0 && start < DAY) out.push({ key: `event-${event.id}`, start, end: end > start ? end : start + 15, event, tone: "event", title: event.title, short: event.title.slice(0, 3) })
     }
     for (const session of sessions) {
-      const subject = VCE_SUBJECTS.find((item) => item.id === session.subject_id)
       sessionBlocks(session, nowMs).forEach((block, index) => {
         const start = minuteOf(date, block.start)
         const end = minuteOf(date, block.end)
         if (end <= 0 || start >= DAY) return
+        // One subject at a time: a block the subject switched in shows each subject's stretch.
+        const pieces = studySessionSubjectSpans(session, [block])
+        const ids = [...new Set(pieces.flatMap((piece) => piece.subjectId ? [piece.subjectId] : []))]
+        const codes = ids.map((id) => VCE_SUBJECTS.find((item) => item.id === studySubjectId(id))?.shortCode ?? subjectNameFor(id).slice(0, 3))
         out.push({
           key: `session-${session.id}-${index}`, start, end, session, interval: index,
           tone: block.live ? "live" : session.completed || session.started_at !== null ? "done" : "todo",
-          title: session.title, subject: subject?.name ?? session.subject_id ?? undefined,
-          short: subject?.shortCode ?? session.title.slice(0, 3), color: subjectColor(session.subject_id),
+          title: session.title, subject: ids.map(subjectNameFor).join(" · ") || undefined,
+          short: codes.join("→") || session.title.slice(0, 3), color: subjectColor(ids[0] ?? null),
+          bands: pieces.length > 1 ? pieces.map((piece) => ({ start: minuteOf(date, piece.start), end: minuteOf(date, piece.end), color: subjectColor(piece.subjectId) })) : undefined,
         })
       })
     }
@@ -473,12 +480,20 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     persist(block, { start, end: start + length })
   }
 
+  /** A copy of the block's subjects for the same stretch moved by `shift` ms: its last subject and, if it switched, where. */
+  function copiedSubjects(block: Block, from: string, to: string, shift = 0) {
+    const pieces = studySessionSubjectSpans(block.session!, [{ start: from, end: to }])
+    const switches = pieces.flatMap((piece) => piece.subjectId ? [{ at: new Date(Date.parse(piece.start) + shift).toISOString(), subjectId: piece.subjectId }] : [])
+    return { subjectId: switches.at(-1)?.subjectId ?? block.session!.subject_id!, subjectSwitches: switches.length > 1 ? switches : undefined }
+  }
+
   async function repeatTomorrow(block: Block) {
     const session = block.session
     if (!session?.subject_id) return
     const next = shiftDate(date, 1)
     try {
-      await onPlan({ title: session.title, subjectId: session.subject_id, start: isoAt(next, block.start), end: isoAt(next, block.end) })
+      const shift = Date.parse(isoAt(next, block.start)) - Date.parse(isoAt(date, block.start))
+      await onPlan({ title: session.title, ...copiedSubjects(block, isoAt(date, block.start), isoAt(date, block.end), shift), start: isoAt(next, block.start), end: isoAt(next, block.end) })
       toast.success(`Planned again for ${clock(block.start)} tomorrow`)
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : "Could not plan that again.")
@@ -495,11 +510,11 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     const session = block.session
     if (!session?.subject_id || !splittable(block) || busy) return
     if (cut - block.start < SNAP || block.end - cut < SNAP) return void toast.error(`Cut at least ${SNAP} minutes from either end.`)
-    const rest = { title: session.title, subjectId: session.subject_id, start: isoAt(date, cut), end: isoAt(date, block.end) }
+    const rest = { title: session.title, ...copiedSubjects(block, isoAt(date, cut), isoAt(date, block.end)), start: isoAt(date, cut), end: isoAt(date, block.end) }
     let created = false
     setBusy(true)
     try {
-      if (block.tone === "done") await onLog({ subjectId: rest.subjectId, title: rest.title, blocks: [{ start: rest.start, end: rest.end }] })
+      if (block.tone === "done") await onLog({ subjectId: rest.subjectId, subjectSwitches: rest.subjectSwitches, title: rest.title, blocks: [{ start: rest.start, end: rest.end }] })
       else await onPlan(rest)
       created = true
       await onEdit(session, { blocks: [{ start: isoAt(date, block.start), end: isoAt(date, cut) }] })
@@ -789,6 +804,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                   {...(grab && !razor ? adjustProps(live, "move") : { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => event.stopPropagation() })}
                   title={`${block.title}${block.subject ? ` · ${block.subject}` : ""} · ${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)} (double-click to zoom)`}
                 >
+                  {block.bands ? <span aria-hidden className="absolute inset-x-0 bottom-0 h-1">{block.bands.map((band) => (
+                    <span className="absolute inset-y-0" key={band.start} style={{ left: `${(band.start - block.start) / (block.end - block.start) * 100}%`, width: `${(band.end - band.start) / (block.end - block.start) * 100}%`, backgroundColor: band.color ?? "var(--primary)" }} />
+                  ))}</span> : null}
                   {room >= 150 ? <span className="block truncate font-medium">{block.title}</span> : room >= 36 ? <span className="block truncate">{block.short}</span> : null}
                   {room >= 150 ? <span className="block truncate text-[0.625rem] opacity-75 tabular-nums">{block.tone === "live" ? "Studying now" : `${clock(block.start)}–${clock(block.end)} · ${duration(block.end - block.start)}`}</span> : null}
                   {grab && !razor ? (["start", "end"] as const).map((kind) => (

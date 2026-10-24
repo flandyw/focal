@@ -67,6 +67,17 @@ replace the session's blocks, up to 100, at most 24 hours each, not overlapping)
 A session with no blocks cannot be completed. Expected concurrency is returned as structured
 results such as `stale_revision`, `session_terminal`, `invalid_transition`, `already_running`.
 
+**Switching subject** keeps one session, studied one subject at a time, with no new field or
+kind. `metadata.subjectSwitches` is `[{ at, subjectId }]` in order: each subject holds from `at`
+until the next switch, and `subject_id` is always the latest subject. Read it with
+`studySessionSwitches` / `studySessionSubjectSpans` (Folio: `focalSubjectSwitches` /
+`focalSubjectSpans`), which cut blocks at switches. A list whose last subject is not `subject_id`
+was overruled by a client that only edits `subject_id` and is ignored. A switch within a minute of
+the previous one replaces it (a correction). The timers record switches when the subject changes
+mid-session, the editor stores per-block subjects as switches, and Progress counts each subject's
+own time. Server-side rules (short-fragment merging, duplicate pruning, manual merge, friend stats)
+still key on `subject_id` alone.
+
 Migration `0017` added `log` for past study: an expected-revision-zero command with 1–100 explicit
 `blocks` (`start`/`end` timestamps), a title and a subject. The server validates positive,
 non-overlapping, already-finished blocks (at most 24 hours each), then atomically creates a

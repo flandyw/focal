@@ -13,6 +13,8 @@ export interface FocusSessionDecision {
 export interface FocusSessionIdentity {
   subject: string
   title: string
+  /** Set when the subject changed: the session's switches including this one. */
+  subjectSwitches?: { at: string; subjectId: string }[]
 }
 
 /**

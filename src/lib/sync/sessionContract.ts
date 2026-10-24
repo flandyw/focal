@@ -158,6 +158,56 @@ export const canContinue = (session: CanonicalStudySession) =>
 /** Deleted sessions are kept as tombstones so every device learns of the removal. */
 export const isDeleted = (session: CanonicalStudySession) => session.cancelled_at !== null
 
+/** The subject studied from `at` until the next switch. Saved in order as `metadata.subjectSwitches`. */
+export interface SubjectSwitch { at: string; subjectId: string }
+
+/** A session studies one subject at a time; switching subject mid-session is recorded here, and `subject_id` is always the
+ *  latest subject. A list whose last subject is not `subject_id` was overruled by a client that only edits `subject_id`. */
+export function studySessionSwitches(session: Pick<CanonicalStudySession, "subject_id" | "metadata">): SubjectSwitch[] {
+  const legacy = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : {}
+  const raw = session.metadata.subjectSwitches ?? legacy.subjectSwitches
+  const switches = (Array.isArray(raw) ? raw : []).flatMap((item) =>
+    isRecord(item) && typeof item.at === "string" && Number.isFinite(Date.parse(item.at)) && typeof item.subjectId === "string" && item.subjectId.trim()
+      ? [{ at: item.at, subjectId: item.subjectId }] : []).toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at))
+  return session.subject_id && switches.at(-1)?.subjectId === session.subject_id ? switches : []
+}
+
+/** Cuts blocks where the subject switched, so every piece has one subject. Time before the first switch takes its subject. */
+export function studySessionSubjectSpans<T extends { start: string; end: string }>(
+  session: Pick<CanonicalStudySession, "subject_id" | "metadata">, blocks: readonly T[],
+): Array<T & { subjectId: string | null }> {
+  const switches = studySessionSwitches(session)
+  if (!switches.length) return blocks.map((block) => ({ ...block, subjectId: session.subject_id }))
+  const subjectAt = (ms: number) => (switches.findLast((item) => Date.parse(item.at) <= ms) ?? switches[0]).subjectId
+  return blocks.flatMap((block) => {
+    const start = Date.parse(block.start), end = Date.parse(block.end)
+    const points = [block.start, ...switches.map((item) => item.at).filter((at) => Date.parse(at) > start && Date.parse(at) < end), block.end]
+    const pieces: Array<T & { subjectId: string | null }> = []
+    for (let index = 1; index < points.length; index++) {
+      const subjectId = subjectAt(Date.parse(points[index - 1]))
+      const last = pieces.at(-1)
+      if (last?.subjectId === subjectId) last.end = points[index]
+      else pieces.push({ ...block, start: points[index - 1], end: points[index], subjectId })
+    }
+    return pieces
+  })
+}
+
+/** Every subject a session's blocks cover, in the order they were studied. */
+export function studySessionSubjects(session: Pick<CanonicalStudySession, "subject_id" | "metadata" | "segments">): string[] {
+  const blocks = session.segments.map((segment) => ({ start: segment.started_at,
+    end: segment.ended_at ?? new Date(Math.max(Date.now(), Date.parse(segment.started_at))).toISOString() }))
+  const ids = studySessionSubjectSpans(session, blocks).flatMap((piece) => piece.subjectId ? [piece.subjectId] : [])
+  return [...new Set(ids.length ? ids : session.subject_id ? [session.subject_id] : [])]
+}
+
+/** Records a switch to `subjectId` at `at`. A change within a minute of the last one corrects it rather than ending it. */
+export function withSubjectSwitch(switches: readonly SubjectSwitch[], at: string, subjectId: string): SubjectSwitch[] {
+  const last = switches.at(-1)
+  const kept = last && Date.parse(at) - Date.parse(last.at) < 60_000 ? switches.slice(0, -1) : [...switches]
+  return kept.at(-1)?.subjectId === subjectId ? kept : [...kept, { at, subjectId }]
+}
+
 /** Original intent survives replacing a plan's segments with actual timer intervals. */
 export function studySessionPlan(session: CanonicalStudySession) {
   const legacy = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : {}

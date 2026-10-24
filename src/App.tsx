@@ -1,4 +1,4 @@
-import { isPaused, isRunning } from "./lib/sync/sessionContract"
+import { isPaused, isRunning, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle, ChevronDown, Search } from "lucide-react"
@@ -206,7 +206,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     ...data.subjects, ...data.attempts.map((attempt) => attempt.subject),
     ...data.sacRecords.map((record) => record.subject), ...data.mistakes.flatMap((mistake) => mistake.subject ? [mistake.subject] : []), ...data.learning.curriculumAreas.map((item) => item.subject),
     ...data.learning.goals.flatMap((goal) => goal.subject ? [goal.subject] : []),
-    ...studySessionSync.sessions.flatMap((session) => session.subject_id ? [session.subject_id] : []),
+    ...studySessionSync.sessions.flatMap(studySessionSubjects),
     ...references.map((reference) => reference.studyName), ...(selectedSubject === "all" ? [] : [selectedSubject]),
   ]).map((subject) => subject.name), [data.subjects, data.attempts, data.sacRecords, data.mistakes, data.learning.curriculumAreas, data.learning.goals, studySessionSync.sessions, references, selectedSubject])
   const subjectValue = subjectOptions.find((subject) => sameStudySubject(subject, selectedSubject)) ?? selectedSubject

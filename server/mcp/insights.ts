@@ -11,12 +11,12 @@ import { getGoalProgress, localDate } from "../../src/lib/learning-workspace.js"
 import { getMistakeProgress, getMistakeQueueCounts, buildRevisionPriorities } from "../../src/lib/mistake-review.js"
 import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality, buildPaperWeaknessMatrix, buildReviewForecast, buildSubjectOutlooks, type MatrixGrouping } from "../../src/lib/performance-insights.js"
 import { getAnalyticsData } from "../../src/lib/progress-analytics.js"
+import { analyticsSessions } from "../../src/lib/progress-utils.js"
 import { getUpcomingSacs } from "../../src/lib/sac.js"
 import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
 import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score.js"
 import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable.js"
-import { isDeleted, isPaused, isRunning } from "../../src/lib/sync/sessionContract.js"
-import type { StudySession } from "../../src/lib/types"
+import { isPaused, isRunning } from "../../src/lib/sync/sessionContract.js"
 import { getCachedVcaaExams, getVcaaExamCompanions, isVcaaExamLogged } from "../../src/lib/vcaa-resources.js"
 import { examResources, gradeReferences, readAll, scalingReferences, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
@@ -25,24 +25,6 @@ import { day, limit, nowIso, round } from "./util.js"
 const same = (a: string, b: string) => normaliseComparisonName(a) === normaliseComparisonName(b)
 const contains = (haystack: string, needle: string) => normaliseComparisonName(haystack).includes(normaliseComparisonName(needle))
 
-/** The same canonical-session to analytics-session mapping the Progress page uses. */
-function analyticsSessions(sessions: Parameters<typeof isDeleted>[0][]): StudySession[] {
-  return sessions.filter((session) => !isDeleted(session)).map((session): StudySession => {
-    const blocks = session.segments.filter((segment) => segment.ended_at).map((segment) => ({ start: segment.started_at, end: segment.ended_at! }))
-    const start = session.started_at ?? session.created_at
-    const metadata = (session.metadata.legacy_metadata && typeof session.metadata.legacy_metadata === "object" ? session.metadata.legacy_metadata : session.metadata) as Record<string, unknown>
-    const reflection = metadata.reflection as StudySession["reflection"]
-    return {
-      schemaVersion: 2, createdVia: "examtrack", created_at: session.created_at, id: session.id, title: session.title,
-      reflection: reflection && typeof reflection.confidence === "number" && Number.isInteger(reflection.confidence) && reflection.confidence >= 1 && reflection.confidence <= 5 ? { confidence: reflection.confidence } : undefined,
-      subjectIds: session.subject_id ? [session.subject_id] : [],
-      schedule: { blocks: blocks.length ? blocks : [{ start, end: session.completed_at ?? start }] },
-      execution: session.completed
-        ? { state: "completed", completedAt: session.completed_at!, intervals: blocks.map((block) => ({ ...block, source: "manual" as const })) }
-        : { state: "planned", intervals: [] },
-    }
-  })
-}
 
 export function buildExamAnalytics(data: AppData, references: AssessmentReference[], { subject, groupBy = "topic", paper }: { subject?: string; groupBy?: MatrixGrouping; paper?: "Exam 1" | "Exam 2" }) {
   const attempts = data.attempts.filter((a) => (!subject || same(a.subject, subject)) && (!paper || getAttemptMathsPaper(a) === (paper === "Exam 1" ? 1 : 2)))

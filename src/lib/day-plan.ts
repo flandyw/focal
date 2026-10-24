@@ -2,7 +2,7 @@ import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data.
 import { isCompletedSac, type SacRecord } from "./sac.js"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable.js"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace.js"
-import { canContinue, isDeleted, isPaused, isRunning, type CanonicalStudySession } from "./sync/sessionContract.js"
+import { canContinue, isDeleted, isPaused, isRunning, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
 import { subjectNameFor } from "./class-timetable.js"
 import { VCE_SUBJECTS, type CalendarEvent } from "./types.js"
 
@@ -196,9 +196,7 @@ function mergedMinutes(ranges: readonly { start: string; end: string }[]): numbe
 function sessionSchedule(session: CanonicalStudySession) {
   const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
   const legacy = isRecord(nested) ? nested : {}
-  const subjectIds = Array.isArray(legacy.subjectIds)
-    ? legacy.subjectIds.filter((id): id is string => typeof id === "string")
-    : []
+  const subjectIds = studySessionSubjects(session)
   // A session's blocks are its segments, done or not. Only a row with none (a timer still on its
   // first interval, or an old row) falls back to a stored schedule, then to start plus an hour,
   // which is where the desktop files such a sitting.

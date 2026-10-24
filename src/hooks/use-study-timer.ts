@@ -28,6 +28,7 @@ import {
   type FocusSessionSink,
 } from "../lib/focus-session"
 import { canonicalNow } from "../lib/study-session-sync"
+import { withSubjectSwitch } from "../lib/sync/sessionContract"
 import type { FocusTimerSession } from "../lib/ongoing-timers"
 import { notifyTimer } from "../lib/pwa"
 
@@ -196,14 +197,22 @@ export function useStudyTimer({
         sessionMirror.push({
           action: "start", at: decision.at,
           session: {
-            id: crypto.randomUUID(), ...identity, provider: "Focal", cycleNumber: next.cycles + 1,
+            id: crypto.randomUUID(), ...identity, provider: "Focal",
+            subjectSwitches: identity.subject ? [{ at: new Date(decision.at).toISOString(), subjectId: identity.subject }] : [], cycleNumber: next.cycles + 1,
             workMinutes: settingsNow.workMinutes, startedAt: decision.at, pausedSeconds: 0,
           },
         })
         return
-      case "update":
-        sessionMirror.push({ action: "update", at: decision.at, identity })
+      case "update": {
+        // Switching subject mid-session keeps one session: the time after the switch is filed under the new subject.
+        const open = sessionMirror.projected()
+        const switched = open && identity.subject && open.subject !== identity.subject
+          ? withSubjectSwitch(open.subjectSwitches ?? (open.subject ? [{ at: new Date(open.startedAt).toISOString(), subjectId: open.subject }] : []),
+            new Date(decision.at).toISOString(), identity.subject)
+          : undefined
+        sessionMirror.push({ action: "update", at: decision.at, identity: switched ? { ...identity, subjectSwitches: switched } : identity })
         return
+      }
       default:
         sessionMirror.push({ action: decision.action, at: decision.at })
     }

@@ -53,7 +53,12 @@ export async function handlePush(request: Request): Promise<Response> {
           } catch (error) {
             if ([404, 410].includes((error as { statusCode?: number }).statusCode ?? 0)) {
               await db.from("push_subscriptions").delete().eq("id", job.subscription_id).throwOnError()
-            } else failed++
+            } else {
+              // Without this a misconfigured VAPID key/subject just looks like a silent 503 from the scheduler.
+              const { statusCode, body } = error as { statusCode?: number; body?: string }
+              console.error("push send failed", new URL(job.endpoint).hostname, statusCode, body ?? String(error))
+              failed++
+            }
             return
           }
           await db.from("push_deliveries").update({ delivered_at: new Date().toISOString() })

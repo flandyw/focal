@@ -20,6 +20,12 @@ applyAppearance()
 if (import.meta.env.VITE_DESKTOP) await import("./lib/desktop")
 else void registerPwa()
 
+// Match the phone's status bar to the current surface and light/dark theme.
+const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+const syncThemeColor = () => { if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--background').trim() }
+syncThemeColor()
+new MutationObserver(syncThemeColor).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-surface'] })
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="light">

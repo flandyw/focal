@@ -1,5 +1,8 @@
+import { supabase } from "./supabase"
+
 let registration: Promise<ServiceWorkerRegistration | null> | undefined
 export const PUSH_OWNER_KEY = "focal:push-owner:v1"
+export const PUSH_PREFERENCES_KEY = "focal:push-preferences:v1"
 let accountCleanup = Promise.resolve()
 
 export function clearPushForOtherAccount(userId?: string) {
@@ -7,16 +10,37 @@ export function clearPushForOtherAccount(userId?: string) {
     if (import.meta.env.VITE_DESKTOP) return
     try {
       const owner = localStorage.getItem(PUSH_OWNER_KEY)
-      if (owner === userId || !owner) return
+      if (!owner) return
+      if (owner === userId) return await resyncPush()
       const worker = await registerPwa()
       const subscription = await worker?.pushManager.getSubscription()
       if (subscription && !await subscription.unsubscribe()) return
       localStorage.removeItem(PUSH_OWNER_KEY)
+      localStorage.removeItem(PUSH_PREFERENCES_KEY)
     } catch {
       // Offline revocation is retried on the next account refresh.
     }
   })
   return accountCleanup
+}
+
+// Browsers rotate or expire push subscriptions silently; re-register so reminders don't quietly stop.
+async function resyncPush() {
+  const worker = await registerPwa()
+  const { data } = await supabase?.auth.getSession() ?? { data: null }
+  if (!worker || !data?.session || Notification.permission !== "granted") return
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` }
+  let subscription = await worker.pushManager.getSubscription()
+  if (subscription) {
+    const known = await fetch("/api/push", { method: "POST", headers, body: JSON.stringify({ endpoint: subscription.endpoint }) })
+    if (!known.ok || await known.json()) return
+    await subscription.unsubscribe()
+  }
+  const { publicKey } = await (await fetch("/api/push")).json()
+  if (!publicKey) return
+  subscription = await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKey })
+  const preferences = JSON.parse(localStorage.getItem(PUSH_PREFERENCES_KEY) ?? '{"planned":true,"friends":true}')
+  await fetch("/api/push", { method: "PUT", headers, body: JSON.stringify({ ...subscription.toJSON(), ...preferences }) })
 }
 
 export function registerPwa() {
@@ -40,7 +64,8 @@ export async function notifyTimer(title: string, body: string) {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return
   try {
     const worker = await registerPwa()
-    const options = { body, tag: "focal-study-timer", icon: "/icon-192.png" }
+    // renotify: a repeated tag otherwise replaces the last alert silently, so later block ends never buzz.
+    const options = { body, tag: "focal-study-timer", renotify: true, icon: "/icon-192.png" } as NotificationOptions
     // ponytail: alerts depend on the running page; use server push for reliable closed-app reminders.
     if (worker) await worker.showNotification(title, options)
     else new Notification(title, options)

@@ -295,7 +295,13 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 :root { --app-font-body: "Instrument Sans Variable", sans-serif; --app-font-heading: "Newsreader", Georgia, serif; }
 @theme inline { --font-sans: var(--app-font-body); --font-heading: var(--app-font-heading); }
 
+:root { --mobile-tabbar: 0px; }
+
 @media (max-width: 1023px) {
+  :root { --mobile-tabbar: calc(3.5rem + env(safe-area-inset-bottom)); }
+  .mobile-app-header, .mobile-tabbar { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .mobile-tabbar button { touch-action: manipulation; }
+  .mobile-tabbar button:active { opacity: 0.6; }
   .mobile-app-header {
     height: calc(3.5rem + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
@@ -306,7 +312,13 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   }
 }
 
+html { -webkit-tap-highlight-color: transparent; }
+/* Installed app: no rubber-band reveal or pull-to-refresh behind the fixed bars. */
+@media (display-mode: standalone) { html, body { overscroll-behavior-y: none; } }
+
 @media (pointer: coarse) {
+  a, button, [role="button"], input, select, textarea, label { touch-action: manipulation; }
+  [data-slot="button"]:active:not(:disabled) { opacity: 0.7; }
   [data-slot="button"], [data-sidebar="menu-button"], [role="combobox"], [role="tab"],
   [role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"] {
     min-height: 2.75rem;

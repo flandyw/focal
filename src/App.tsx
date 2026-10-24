@@ -1,7 +1,7 @@
 import { isPaused, isRunning } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -15,7 +15,6 @@ import { sameStudySubject, studySubjectOptions } from "./lib/studySubjects"
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
 } from "./components/ui/sidebar"
 import { Toaster } from "./components/ui/sonner"
 import {
@@ -46,7 +45,7 @@ import type { FocusTimerSession } from "./lib/ongoing-timers"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { SubjectCombobox } from "./components/subject-combobox"
-import { AppSidebar } from "./components/app-navigation"
+import { AppSidebar, MobileTabBar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
 import { clearPushForOtherAccount } from "./lib/pwa"
 import { useReferenceData } from "./hooks/use-reference-data"
@@ -738,15 +737,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       />}
       <SidebarInset className="min-w-0">
         {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
-          <SidebarTrigger />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
-          <Button variant="ghost" size="sm" onClick={() => setCommandOpen(true)}>Search</Button>
+          <span className="min-w-0 flex-1 truncate font-heading text-xl font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
+          <Button variant="ghost" size="icon" aria-label="Search" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
               <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>
@@ -862,6 +860,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} /></Suspense> : null}
           </div>
         </main>
+        {!embedded && <MobileTabBar view={view} dueMistakes={dueMistakeCount} plannedTasks={dueStudyTaskCount} onViewChange={setView} />}
       </SidebarInset>
       {examOpen ? (
         <Suspense fallback={null}>
@@ -890,7 +889,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       ) : null}
       {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
       {onboarding ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
-      {!embedded && <Toaster position="bottom-right" />}
+      {!embedded && <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + 0.75rem)" }} />}
     </SidebarProvider>
   )
 }

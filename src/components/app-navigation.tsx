@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
+import { ArrowUpRight, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
 
@@ -46,6 +46,32 @@ const NAVIGATION_ICONS = {
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
   predictor: TrendingUp, vcaa: ChartColumn, friends: UsersRound,
+}
+
+const MOBILE_TABS = [
+  { id: "calendar", label: "Today" }, { id: "focus", label: "Timer" },
+  { id: "mistakes", label: "Mistakes" }, { id: "exams", label: "Exams" },
+] as const
+
+/** Phone-style tab bar for the four daily destinations; everything else stays in the "More" sheet. */
+export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: { view: AppView; dueMistakes: number; plannedTasks: number; onViewChange: (view: AppView) => void }) {
+  const { openMobile, setOpenMobile } = useSidebar()
+  const inTabs = MOBILE_TABS.some((tab) => tab.id === view)
+  const tab = (key: string, label: string, Icon: typeof Menu, active: boolean, onClick: () => void, badge = 0) => (
+    <button key={key} type="button" aria-current={active ? "page" : undefined} onClick={onClick}
+      className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium ${active ? "text-primary" : "text-muted-foreground"}`}>
+      <Icon aria-hidden className="size-5" strokeWidth={active ? 2 : 1.5} />
+      {label}
+      {badge > 0 ? <span aria-label={`${badge} due`} className="absolute top-1.5 left-1/2 ml-1.5 min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 text-primary-foreground">{badge > 99 ? "99+" : badge}</span> : null}
+    </button>
+  )
+  return (
+    <nav aria-label="Main" className="mobile-tabbar fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] lg:hidden">
+      {MOBILE_TABS.map((item) => tab(item.id, item.label, NAVIGATION_ICONS[item.id], !openMobile && view === item.id, () => { setOpenMobile(false); onViewChange(item.id) },
+        item.id === "mistakes" ? dueMistakes : item.id === "calendar" ? plannedTasks : 0))}
+      {tab("more", "More", Menu, openMobile || !inTabs, () => setOpenMobile(!openMobile))}
+    </nav>
+  )
 }
 
 /** Minutes actually spent in a sitting: finished segments plus the one in progress. */

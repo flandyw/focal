@@ -18,7 +18,8 @@ self.addEventListener("notificationclick", (event) => {
   const url = new URL(path, self.location.origin).href
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true })
-    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin)
+    const ours = windows.filter((client) => new URL(client.url).origin === self.location.origin)
+    const existing = ours.find((client) => client.focused) ?? ours[0]
     if (existing) {
       existing.postMessage({ type: "focal:notification-click", path })
       await existing.focus()

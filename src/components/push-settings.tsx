@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { Bell, BellOff } from "lucide-react"
 import { supabase } from "../lib/supabase"
-import { PUSH_OWNER_KEY, clearPushForOtherAccount, registerPwa, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
+import { PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY, clearPushForOtherAccount, registerPwa, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
 
@@ -46,7 +46,7 @@ export function PushSettings({ userId }: { userId?: string }) {
         if (cancelled) return
         setConfig(nextConfig)
         if (nextConfig.configured && current && userId) setEnabled(!!saved)
-        if (saved) setPreferences(saved)
+        if (saved) { setPreferences(saved); localStorage.setItem(PUSH_PREFERENCES_KEY, JSON.stringify(saved)) }
       } catch (error) {
         if (!cancelled) setError(error instanceof Error ? error.message : "Could not load reminders.")
       } finally {
@@ -65,6 +65,7 @@ export function PushSettings({ userId }: { userId?: string }) {
     setError(null)
     try {
       await api("PUT", { ...subscription.toJSON(), ...next })
+      localStorage.setItem(PUSH_PREFERENCES_KEY, JSON.stringify(next))
       setPreferences(next)
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save reminders.") }
     finally { setBusy(false) }
@@ -80,6 +81,7 @@ export function PushSettings({ userId }: { userId?: string }) {
         setEnabled(false)
         setSubscription(null)
         localStorage.removeItem(PUSH_OWNER_KEY)
+        localStorage.removeItem(PUSH_PREFERENCES_KEY)
         if (current) await api("DELETE", { endpoint: current.endpoint })
         return
       }
@@ -90,6 +92,7 @@ export function PushSettings({ userId }: { userId?: string }) {
       current = await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
       await api("PUT", { ...current.toJSON(), ...preferences })
       localStorage.setItem(PUSH_OWNER_KEY, userId!)
+      localStorage.setItem(PUSH_PREFERENCES_KEY, JSON.stringify(preferences))
       setSubscription(current)
       setEnabled(true)
     } catch (error) {

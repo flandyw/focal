@@ -299,11 +299,11 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 
 @media (max-width: 1023px) {
   :root {
-    /* The home indicator already has its own margin, so the bar overlaps part of it instead of stacking a full inset below. */
-    --mobile-tabbar-pad: max(0.25rem, calc(env(safe-area-inset-bottom) - 0.75rem));
-    --mobile-tabbar: calc(3.25rem + 1px + var(--mobile-tabbar-pad));
+    /* Floating pill: sits just above the home indicator (or 0.75rem off the edge without one). */
+    --mobile-tabbar-gap: max(0.75rem, calc(env(safe-area-inset-bottom) - 0.25rem));
+    --mobile-tabbar: calc(3.5rem + 2px + var(--mobile-tabbar-gap));
   }
-  .mobile-tabbar { padding-bottom: var(--mobile-tabbar-pad); }
+  .mobile-tabbar { padding-bottom: var(--mobile-tabbar-gap); }
   .mobile-app-header, .mobile-tabbar { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .mobile-tabbar button { touch-action: manipulation; }
   .mobile-tabbar button:active { opacity: 0.6; }
@@ -318,6 +318,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   /* Phone page actions: the primary action keeps its label and the width; secondary ones
      shrink to their icon. The label stays in the DOM (font-size 0) as the accessible name. */
   [data-tour="page-actions"] > [data-variant="outline"] { flex: none; width: 2.75rem; padding: 0; gap: 0; font-size: 0; }
+  [data-tour="page-actions"] > [data-variant="ghost"] { flex: none; }
   .mobile-app-header {
     height: calc(3.5rem + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);

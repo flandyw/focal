@@ -52,7 +52,7 @@ export function registerPwa() {
   return registration
 }
 
-// An installed PWA resumes instead of relaunching, so it can sit on an old deploy for days; check on resume and every 30 min.
+// The shell opens from cache, so check on launch, on resume, and every 30 min; the service worker caches a new version before this reports it.
 export function watchForUpdates() {
   if (!import.meta.env.PROD || import.meta.env.VITE_DESKTOP) return
   const current = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute("src")
@@ -70,6 +70,7 @@ export function watchForUpdates() {
       // Offline or a flaky network; the next resume tries again.
     }
   }
+  void check()
   document.addEventListener("visibilitychange", () => void check())
   setInterval(() => void check(), 30 * 60_000)
 }

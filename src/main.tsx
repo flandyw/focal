@@ -7,11 +7,11 @@ import { applyAppearance } from './lib/appearance.ts'
 import App from './App.tsx'
 import { registerPwa, watchForUpdates } from './lib/pwa.ts'
 
-// A chunk from a previous deploy is gone; reload to pick up the new index.html, at most once a minute to avoid a loop.
+// A chunk from a previous deploy is gone; refresh the cached shell and reload, at most once a minute to avoid a loop.
 window.addEventListener('vite:preloadError', () => {
   if (Date.now() - Number(sessionStorage.getItem('chunk-reload')) > 60_000) {
     sessionStorage.setItem('chunk-reload', String(Date.now()))
-    location.reload()
+    void fetch('/', { cache: 'no-store' }).catch(() => undefined).finally(() => location.reload())
   }
 })
 

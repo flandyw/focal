@@ -22,18 +22,31 @@ function fetchAndCache(event, key) {
   return network
 }
 
+// Swaps in a new shell only after its entry chunks are cached, so a deploy never opens on a blank screen while they download.
+async function refreshShell() {
+  const response = await fetch("/", { cache: "no-store" })
+  if (!response.ok) return response
+  const copy = response.clone()
+  const html = await response.clone().text()
+  const assets = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1]))]
+  await (await caches.open(CACHE)).addAll(assets)
+  await put("/", copy)
+  return response
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event
   const url = new URL(request.url)
   if (request.method !== "GET" || url.origin !== self.location.origin) return
   // API calls stay live; Vite dev modules must never be served stale.
   if (["/api/", "/src/", "/node_modules/", "/@"].some((prefix) => url.pathname.startsWith(prefix))) return
+  // Cache first so launch never waits on the network; the page's update check refreshes the shell for the next launch.
   if (request.mode === "navigate") {
-    // Network first so a deploy is picked up immediately; the cached shell opens offline or on a stalled network.
-    const network = fetchAndCache(event, "/")
-    const stalled = new Promise((resolve) => setTimeout(resolve, 3000)).then(() => caches.match("/"))
-    event.respondWith(Promise.race([network, stalled.then((cached) => cached ?? network)])
-      .catch(async () => (await caches.match("/")) ?? Response.error()))
+    event.respondWith(caches.match("/").then((cached) => cached ?? refreshShell()).catch(() => Response.error()))
+    return
+  }
+  if (url.pathname === "/") {
+    event.respondWith(refreshShell())
     return
   }
   const immutable = url.pathname.startsWith("/assets/")

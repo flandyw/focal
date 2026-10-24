@@ -330,8 +330,17 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   [data-tour="page-actions"] > [data-variant="outline"] { flex: none; width: 2.75rem; padding: 0; gap: 0; font-size: 0; }
   [data-tour="page-actions"] > [data-variant="ghost"] { flex: none; }
   .mobile-app-header {
-    height: calc(3.5rem + env(safe-area-inset-top));
+    height: calc(2.75rem + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
+  }
+  /* The header scrolls away, so keep the notch area opaque instead of showing content under it. */
+  [data-slot="sidebar-inset"]::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 20;
+    height: env(safe-area-inset-top);
+    background: var(--background);
   }
   [data-slot="sidebar-inset"] {
     padding-left: env(safe-area-inset-left);

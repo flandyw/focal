@@ -1,7 +1,7 @@
 import { isPaused, isRunning } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, ListFilter, Search } from "lucide-react"
+import { AlertCircle, ChevronDown, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -740,17 +740,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onCommandOpenChange={setCommandOpen}
       />}
       <SidebarInset className="min-w-0">
-        {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background px-4 lg:hidden">
-          <span className="mr-2 flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-heading text-xl leading-tight font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
-            {!globalView && <span className="truncate text-xs text-muted-foreground">{subjectScoped ? subjectValue : "All subjects"}</span>}
-          </span>
+        {/* Mobile: one compact row that scrolls away with the page, so content gets the full height. */}
+        {!embedded && <header className="mobile-app-header flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
+          <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
           {!globalView && <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="relative" />}>
-              <ListFilter aria-hidden />
-              {subjectScoped && <span aria-hidden className="absolute top-2.5 right-2.5 size-2 rounded-full bg-primary ring-2 ring-background" style={{ background: subjectColor(studySubjectId(subjectValue)) }} />}
+            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="min-w-0 shrink text-muted-foreground" />}>
+              {subjectScoped && <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: subjectColor(studySubjectId(subjectValue)) }} />}
+              <span className="truncate">{subjectScoped ? subjectValue : "All subjects"}</span>
+              <ChevronDown aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-[60dvh] w-60">
+            <DropdownMenuContent align="start" className="max-h-[60dvh] w-60">
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Subject</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={subjectScoped ? subjectValue : "all"} onValueChange={(value) => chooseSubject(value as string)}>
@@ -762,13 +761,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>}
-          <Button variant="ghost" size="icon" aria-label="Search" className="-mr-2" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
+          <Button variant="ghost" size="icon" aria-label="Search" className="ml-auto text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 py-4 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4 max-lg:hidden">
             <div className="w-full sm:w-72">
               <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>

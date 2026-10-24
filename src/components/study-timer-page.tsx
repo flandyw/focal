@@ -347,7 +347,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     <div className="grid gap-6 lg:gap-8">
       <Card className="min-w-0 gap-0 py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-          <div className="flex gap-1 border-b pb-2" aria-label="Study mode" role="group">
+          <div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:w-auto" aria-label="Study mode" role="group">
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
@@ -363,7 +363,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </div>
           )}
         </div>
-        <CardContent className="px-4 py-10 sm:px-6 sm:py-14">
+        <CardContent className="px-4 py-4 sm:px-6 sm:py-14">
           <TimerReadout
             animationKey={`${displayMode}:${state.cycles}`}
             caption={caption}
@@ -376,17 +376,17 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             progress={progress}
             status={statusLabel}
           >
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {/* A lifecycle command is one transaction with the server: its button
                   stays down until the server has answered for the boundary. */}
-              <Button className="min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
+              <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
                 {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
               </Button>
               {isFreeStudy ? (
-                <Button disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
+                <Button className="flex-1 sm:flex-none" disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
               ) : null}
-              <Button disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
-              {onBreak ? <Button onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
+              <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
+              {onBreak ? <Button className="flex-1 sm:flex-none" onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
             </div>
             {offerContinue ? (
               <Button disabled={!!planBusy} onClick={() => void startPlan(offerContinue, "resume")} variant="ghost">
@@ -413,9 +413,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
         <div className="grid grid-cols-3 divide-x border-t text-center">
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
-          <div className="px-2 py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
 

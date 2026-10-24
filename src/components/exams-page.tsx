@@ -340,24 +340,15 @@ function StatRow({ data }: { data: AppData }) {
     // so the rules stay on the exact column/row boundaries at every breakpoint. (The old
     // per-breakpoint border-l/border-t mix drifted by one padding step on some columns.)
     <div className="grid grid-cols-2 overflow-hidden border-y bg-transparent lg:grid-cols-4">
-      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
-        <p className="text-sm text-muted-foreground">Practice exams</p>
-        <p className="focal-stat-value tabular-nums">{stats.count}</p>
-        <p className="text-xs text-muted-foreground">
-          {stats.count === 0
-            ? "Log your first paper to begin"
-            : `${stats.subjects} subject${stats.subjects === 1 ? "" : "s"}`}
-          {stats.lastDate ? ` · last ${formatDate(stats.lastDate)}` : null}
-        </p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-b border-r p-4 sm:p-5">
+      {/* The average leads on phones: full width, with the per-paper split beside the number. */}
+      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 border-b p-3 sm:p-5 lg:order-2 lg:col-span-1 lg:border-r">
         <p className="text-sm text-muted-foreground">VCAA-aligned average</p>
-        <div className="flex flex-wrap items-baseline gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <p className="focal-stat-value tabular-nums">
             {stats.count === 0 ? "—" : `${stats.average.toFixed(1)}%`}
           </p>
           {stats.count >= 2 && stats.trend !== "flat" ? (
-            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-foreground tabular-nums">
+            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-foreground tabular-nums" title={stats.trend === "up" ? "Improving vs your earlier half" : "Dropping vs your earlier half"}>
               {stats.trend === "up" ? (
                 <ArrowUpRight className="size-3.5" aria-hidden />
               ) : (
@@ -367,14 +358,14 @@ function StatRow({ data }: { data: AppData }) {
               {stats.trendDiff.toFixed(1)}%
             </span>
           ) : null}
+          {stats.exam1Average !== null || stats.exam2Average !== null ? (
+            <p className="flex gap-3 text-sm tabular-nums max-lg:ml-auto lg:basis-full">
+              <span className="whitespace-nowrap"><span className="text-muted-foreground">Exam 1</span> <span className="font-semibold">{stats.exam1Average === null ? "—" : `${stats.exam1Average.toFixed(1)}%`}</span></span>
+              <span className="whitespace-nowrap"><span className="text-muted-foreground">Exam 2</span> <span className="font-semibold">{stats.exam2Average === null ? "—" : `${stats.exam2Average.toFixed(1)}%`}</span></span>
+            </p>
+          ) : null}
         </div>
-        {stats.exam1Average !== null || stats.exam2Average !== null ? (
-          <p className="text-sm tabular-nums">
-            <span className="text-muted-foreground">Exam 1</span> <span className="font-semibold">{stats.exam1Average === null ? "—" : `${stats.exam1Average.toFixed(1)}%`}</span>
-            <span className="text-muted-foreground"> · Exam 2</span> <span className="font-semibold">{stats.exam2Average === null ? "—" : `${stats.exam2Average.toFixed(1)}%`}</span>
-          </p>
-        ) : null}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground max-sm:hidden">
           {stats.count < 2
             ? "Difficulty-adjusted planning estimate"
             : stats.trend === "flat"
@@ -384,12 +375,21 @@ function StatRow({ data }: { data: AppData }) {
                 : "Dropping vs your earlier half"}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-4 sm:p-5">
+      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-3 sm:p-5 lg:order-1">
+        <p className="text-sm text-muted-foreground">Practice exams</p>
+        <p className="focal-stat-value tabular-nums">{stats.count}</p>
+        <p className="text-xs text-muted-foreground">
+          {stats.count === 0
+            ? "Log your first paper to begin"
+            : <><span className="max-sm:hidden">{stats.subjects} subject{stats.subjects === 1 ? "" : "s"}</span>{stats.lastDate ? <><span className="max-sm:hidden"> · </span>last {formatDate(stats.lastDate)}</> : null}</>}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1.5 border-b p-3 sm:p-5 lg:order-3 lg:border-r">
         <p className="text-sm text-muted-foreground">Best mark</p>
         <p className="focal-stat-value tabular-nums">{stats.best.toFixed(1)}%</p>
-        <p className="text-xs text-muted-foreground">Your strongest recorded practice result</p>
+        <p className="text-xs text-muted-foreground max-sm:hidden">Your strongest recorded practice result</p>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-b p-4 sm:p-5">
+      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 p-3 sm:p-5 lg:order-4 lg:col-span-1 lg:border-b">
         <p className="text-sm text-muted-foreground">Mistake cards</p>
         <div className="flex items-baseline gap-2">
           <p className="focal-stat-value tabular-nums">{total === 0 ? "—" : due}</p>
@@ -398,8 +398,8 @@ function StatRow({ data }: { data: AppData }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Progress value={completion} className="w-24" />
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <Progress value={completion} className="min-w-8 flex-1 lg:max-w-24" />
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
             {total === 0 ? "0/0" : `${mature}/${total} mature`}
           </span>
         </div>

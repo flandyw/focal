@@ -152,7 +152,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
         </form></CardContent>
       </Card>
 
-      {progress.length ? <div className="grid gap-4 lg:grid-cols-2">{progress.map(({ goal, progress: item }) => {
+      {progress.length ? <div className="grid gap-4 lg:grid-cols-2 max-lg:order-first">{progress.map(({ goal, progress: item }) => {
         const achieved = item.current !== null && item.current >= goal.target
         const expired = !achieved && goal.deadline < localDate(now)
         return <Card key={goal.id}>

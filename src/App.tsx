@@ -740,8 +740,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onCommandOpenChange={setCommandOpen}
       />}
       <SidebarInset className="min-w-0">
-        {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
-          <span className="flex min-w-0 flex-1 flex-col">
+        {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-1 border-b border-border bg-background px-4 lg:hidden">
+          <span className="mr-2 flex min-w-0 flex-1 flex-col">
             <span className="truncate font-heading text-xl leading-tight font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
             {!globalView && <span className="truncate text-xs text-muted-foreground">{subjectScoped ? subjectValue : "All subjects"}</span>}
           </span>
@@ -762,7 +762,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>}
-          <Button variant="ghost" size="icon" aria-label="Search" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
+          <Button variant="ghost" size="icon" aria-label="Search" className="-mr-2" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}

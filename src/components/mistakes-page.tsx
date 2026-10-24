@@ -436,7 +436,6 @@ function MistakeFieldMergeDialog({
 
 export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
-  const [subject, setSubject] = useState(workspaceSubject ?? "all")
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>("browse")
   const [search, setSearch] = useState("")
@@ -466,13 +465,14 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   const [autofillProgress, setAutofillProgress] = useState<ChatGPTProgress | null>(null)
   const attemptMap = useMemo(() => new Map(data.attempts.map((attempt) => [attempt.id, attempt])), [data.attempts])
   const subjects = useMemo(() => [...new Set([...data.subjects, ...data.attempts.map((attempt) => attempt.subject), ...data.mistakes.flatMap((mistake) => mistake.subject ? [mistake.subject] : [])])].toSorted(), [data.attempts, data.mistakes, data.subjects])
-  const activeSubject = subject === "all" || subject === "unlinked" || subjects.includes(subject) ? subject : "all"
+  // The app-wide subject filter (header on mobile, workspace bar on desktop) scopes this page.
+  const activeSubject = workspaceSubject ?? "all"
   const mathsSubject = activeSubject !== "all" ? activeSubject : subjects.length === 1 ? subjects[0] : null
   const showMathsExamFilter = mathsSubject !== null && isTechSplitMathsSubject(mathsSubject)
   const activeMathsExamFilter = showMathsExamFilter ? mathsExamFilter : "all"
   const visibleMistakes = useMemo(() => data.mistakes.filter((mistake) => {
     const attempt = attemptMap.get(mistake.attemptId)
-    const matchesSubject = activeSubject === "all" || (activeSubject === "unlinked" ? !attempt : sameStudySubject(attempt?.subject ?? mistake.subject, activeSubject))
+    const matchesSubject = activeSubject === "all" || sameStudySubject(attempt?.subject ?? mistake.subject, activeSubject)
     return matchesSubject && matchesMathsExamFilter(attempt, activeMathsExamFilter)
   }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter])
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
@@ -510,7 +510,6 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   ]
   const topicOptions = [{ value: "all", label: "All topics" }, ...topics.map((item) => ({ value: item, label: item }))]
   const activeFilters = [
-    ...(activeSubject !== "all" ? [{ key: "subject", label: `Subject: ${activeSubject === "unlinked" ? "No linked exam" : activeSubject}`, clear: () => { setSubject("all"); setMathsExamFilter("all") } }] : []),
     ...(activeMathsExamFilter !== "all" ? [{ key: "paper", label: activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active", clear: () => setMathsExamFilter("all") }] : []),
     ...(search.trim() ? [{ key: "search", label: `Search: ${search.trim()}`, clear: () => setSearch("") }] : []),
     ...(examId !== "all" ? [{ key: "exam", label: `Exam: ${examOptions.find((item) => item.value === examId)?.label ?? "Deleted exam"}`, clear: () => setExamId("all") }] : []),
@@ -522,7 +521,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   ]
   function clearSelection() { setSelected(new Set()); setActiveId(null); setPage(0) }
   function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setExamId("all"); setProvider("all"); setResolution("all"); clearSelection() }
-  function clearAllFilters() { setSubject("all"); setMathsExamFilter("all"); resetFilters() }
+  function clearAllFilters() { setMathsExamFilter("all"); resetFilters() }
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
     const startOfToday = new Date(now)
@@ -599,7 +598,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
         <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryProgress.matureCards} mature</p></div></div>
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section>
-      <div className="flex flex-wrap items-center gap-2"><span className="text-sm text-muted-foreground">Showing</span><Select value={activeSubject} onValueChange={(value) => { setSubject(value ?? "all"); setMathsExamFilter("all"); resetFilters() }}><SelectTrigger aria-label="Filter mistake cards by subject"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject === "unlinked" ? "No linked exam" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}<SelectItem value="unlinked">No linked exam</SelectItem></SelectContent></Select>{showMathsExamFilter ? <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select> : null}</div>
+      {showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select></div> : null}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>

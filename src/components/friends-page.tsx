@@ -110,6 +110,48 @@ function WeekBars({ day }: { day: (offset: number) => number }) {
   )
 }
 
+/** Paired bars (you, then them) for the last 30 days, or one series alone; oldest day on the left. */
+function DailyChart({ series, now }: { series: { name: string; day: (offset: number) => number; className: string }[]; now: Date }) {
+  const days = Array.from({ length: 30 }, (_, index) => 29 - index)
+  const max = Math.max(...series.flatMap((s) => days.map(s.day)), 3_600_000)
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
+        {days.map((offset) => (
+          <div key={offset} className="flex h-full flex-1 items-end gap-px" title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
+            {series.map((s) => <span key={s.name} className={cn("w-full rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 4 : 0, s.day(offset) / max * 100)}%` }} />)}
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between text-xs text-muted-foreground"><span>30 days ago</span><span className="flex gap-3">{series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} />{s.name}</span>)}</span><span>Today</span></div>
+    </div>
+  )
+}
+
+/** Average study per weekday over the last 12 weeks, Monday first. */
+function WeekdayChart({ series, now }: { series: { name: string; day: (offset: number) => number; className: string }[]; now: Date }) {
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+  const today = (now.getDay() + 6) % 7
+  const averages = (day: (offset: number) => number) => names.map((_, weekday) => {
+    const offsets = Array.from({ length: 84 }, (_, offset) => offset).filter((offset) => ((today - offset) % 7 + 7) % 7 === weekday)
+    return offsets.reduce((sum, offset) => sum + day(offset), 0) / offsets.length
+  })
+  const data = series.map((s) => ({ ...s, values: averages(s.day) }))
+  const max = Math.max(...data.flatMap((s) => s.values), 3_600_000)
+  return (
+    <div className="grid grid-cols-7 gap-2" role="img" aria-label={`Average study per weekday over 12 weeks. ${data.map((s) => `${s.name}: ${s.values.map((v, i) => `${names[i]} ${duration(v)}`).join(", ")}`).join(". ")}.`}>
+      {names.map((name, index) => (
+        <div key={name} className="grid gap-1 text-center text-xs text-muted-foreground">
+          <div className="flex h-20 items-end justify-center gap-0.5">
+            {data.map((s) => <span key={s.name} className={cn("w-full max-w-4 rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.values[index] ? 4 : 0, s.values[index] / max * 100)}%` }} title={`${s.name}: ${duration(s.values[index])} on average`} />)}
+          </div>
+          {name}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignIn: () => void }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [draft, setDraft] = useState({ name: "", status: "" })
@@ -240,6 +282,11 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   const me = board.find(({ person }) => person.status === "me")
   const nextRival = me ? board.findLast((entry) => entry.score > me.score) : undefined
   const selected = board.find(({ person }) => person.user_id === selectedId)
+  const groupSubjects = Object.entries(board.reduce<Record<string, number>>((totals, { person }) => {
+    for (const [id, ms] of Object.entries(person.subjects ?? {})) totals[id] = (totals[id] ?? 0) + ms
+    return totals
+  }, {})).sort((a, b) => b[1] - a[1])
+  const groupSubjectTotal = groupSubjects.reduce((sum, [, ms]) => sum + ms, 0) || 1
   const visibleBoard = board.filter(({ person }) =>
     (!liveOnly || person.studying_since) && `${person.display_name} ${person.status === "me" ? "you" : ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
   const loading = !fetchedAt && !loadError
@@ -387,6 +434,54 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               </div>
             </CardContent>
           </Card>
+
+          {board.length > 1 ? <>
+            <Card>
+              <CardHeader><CardTitle>Group study</CardTitle><CardDescription>Combined daily study for everyone, last 30 days.</CardDescription></CardHeader>
+              <CardContent><DailyChart now={now} series={[{ name: "Group", day: (offset) => board.reduce((sum, { stats }) => sum + stats.day(offset), 0), className: "bg-primary" }]} /></CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Comparison</CardTitle><CardDescription>Everyone side by side. Best in each column is highlighted.</CardDescription></CardHeader>
+              <CardContent className="px-2 sm:px-4">
+                <Table className="[&_td]:px-2 [&_th]:px-2">
+                  <TableHeader><TableRow><TableHead>Name</TableHead><TableHead className="text-right">Today</TableHead><TableHead className="text-right">7 days</TableHead><TableHead className="text-right">30 days</TableHead><TableHead className="text-right">Active</TableHead><TableHead className="text-right">Streak</TableHead></TableRow></TableHeader>
+                  <TableBody>{board.map(({ person, stats }) => {
+                    const cells = [
+                      { value: stats.period.today, text: duration(stats.period.today) },
+                      { value: stats.period.week, text: duration(stats.period.week) },
+                      { value: stats.period.month, text: duration(stats.period.month) },
+                      { value: stats.activeDays(30), text: `${stats.activeDays(30)}/30d` },
+                      { value: stats.streak, text: `${stats.streak}d` },
+                    ]
+                    const bests = [(s: StudyStats) => s.period.today, (s: StudyStats) => s.period.week, (s: StudyStats) => s.period.month, (s: StudyStats) => s.activeDays(30), (s: StudyStats) => s.streak].map((get) => Math.max(...board.map((entry) => get(entry.stats))))
+                    return <TableRow key={person.user_id}>
+                      <TableCell className="max-w-32 truncate" title={person.display_name}>{person.status === "me" ? "You" : person.display_name}</TableCell>
+                      {cells.map((cell, index) => <TableCell key={index} className={cn("text-right tabular-nums", cell.value > 0 && cell.value === bests[index] && "font-semibold text-primary")}>{cell.text}</TableCell>)}
+                    </TableRow>
+                  })}</TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Group subjects</CardTitle><CardDescription>Where the group studied in the last 30 days. Only friends who share subjects are included.</CardDescription></CardHeader>
+              <CardContent className="grid gap-2">
+                {groupSubjects.length === 0 ? <p className="text-sm text-muted-foreground">No shared subject study in the last 30 days.</p> : <>
+                  <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Group subject split: ${groupSubjects.map(([id, ms]) => `${subjectName(id || null)} ${duration(ms)}`).join(", ")}.`}>
+                    {groupSubjects.map(([id, ms]) => <span key={id} style={{ width: `${ms / groupSubjectTotal * 100}%`, backgroundColor: getSubjectColor(id) }} />)}
+                  </div>
+                  {groupSubjects.map(([id, ms]) => (
+                    <div key={id} className="flex items-center gap-2 text-sm">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: getSubjectColor(id) }} />
+                      <span className="min-w-0 flex-1 truncate">{subjectName(id || null)}</span>
+                      <span className="tabular-nums text-muted-foreground">{duration(ms)} · {Math.round(ms / groupSubjectTotal * 100)}%</span>
+                    </div>
+                  ))}
+                </>}
+              </CardContent>
+            </Card>
+          </> : null}
         </div>
 
         <div className="grid content-start gap-6">
@@ -495,6 +590,11 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
   const comparedSubjects = !isMe && me && person.subjects != null ? [...new Set([...Object.keys(person.subjects), ...Object.keys(me.person.subjects ?? {})])]
     .sort((a, b) => ((person.subjects?.[b] ?? 0) + (me.person.subjects?.[b] ?? 0)) - ((person.subjects?.[a] ?? 0) + (me.person.subjects?.[a] ?? 0))) : []
 
+  const chartSeries = [
+    ...(!isMe && me ? [{ name: "You", day: me.stats.day, className: "bg-muted-foreground/50" }] : []),
+    { name: isMe ? "You" : person.display_name, day: stats.day, className: "bg-primary" },
+  ]
+
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
@@ -533,6 +633,16 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
               </div>
             ))}
           </dl>
+
+          <section className="grid gap-2">
+            <h3 className="text-sm font-medium">{isMe ? "Daily study · 30 days" : "Daily study · you vs " + person.display_name}</h3>
+            <DailyChart now={now} series={chartSeries} />
+          </section>
+
+          <section className="grid gap-2">
+            <h3 className="text-sm font-medium">Typical week · 12 weeks</h3>
+            <WeekdayChart now={now} series={chartSeries} />
+          </section>
 
           <section className="grid gap-2">
             <h3 className="text-sm font-medium">Today</h3>

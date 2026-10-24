@@ -37,7 +37,7 @@ type Person = {
   subjects: Record<string, number> | null
   exams: SharedExam[] | null
 }
-type Profile = { code: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean }
+type Profile = { code: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
 type Period = "today" | "week" | "month"
 type Ranking = "time" | "days"
 type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string }
@@ -256,7 +256,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   }
 
   async function saveProfile(next: Profile) {
-    const args = { p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects }
+    const args = { p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects, p_require_requests: next.require_requests }
     if (await call("friends_update_profile", args, "Could not save your profile.")) {
       cache.profile = next
       setProfile(next)
@@ -510,7 +510,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Add a friend</CardTitle><CardDescription>Exchange codes to connect. Your study activity is shared once the request is accepted.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Add a friend</CardTitle><CardDescription>Anyone with your code can add you, and you can add anyone with theirs. Study activity is shared once you are connected.</CardDescription></CardHeader>
             <CardContent className="grid gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
                 <span className="text-sm text-muted-foreground">Your friend code</span>
@@ -527,7 +527,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                   <Input id="friend-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\s/g, "").toUpperCase())} placeholder="e.g. A1B2C3D4" aria-label="Their friend code" maxLength={32} minLength={8} pattern="[A-Fa-f0-9]{8}" autoCapitalize="characters" autoComplete="off" spellCheck={false} required disabled={!!pending} className="min-w-0 font-mono uppercase" />
                   <Button type="submit" disabled={!!pending || code.length !== 8}><UserPlus />{pending === "friends_add" ? "Adding…" : "Add"}</Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Adding someone who already sent you a request accepts it.</p>
+                <p className="text-xs text-muted-foreground">Turn on friend requests below to approve people who add you.</p>
               </form>
             </CardContent>
           </Card>
@@ -549,6 +549,10 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={profile?.share_exams ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, share_exams: checked }) }} />
                   Share recent exam scores and paper titles
+                </Label>
+                <Label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={profile?.require_requests ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, require_requests: checked }) }} />
+                  Require my approval when someone adds my code
                 </Label>
               </fieldset>
               <p className="text-xs text-muted-foreground">Subject and exam comparisons only use data each friend has chosen to share. Friend requests cannot see your study activity.</p>

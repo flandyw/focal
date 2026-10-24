@@ -27,6 +27,7 @@ import { Switch } from "./ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
+import { PageHeader } from "./page-header"
 import { TimerReadout } from "./timer-readout"
 import { useStudyTimer } from "../hooks/use-study-timer"
 import { notificationPermission, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
@@ -755,16 +756,8 @@ export function StudyTimerPage({
   }
   return (
     <WorkspacePage>
-      <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
-        <div className="mb-6 flex flex-col gap-4 border-b pb-6 max-lg:mb-4 max-lg:pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1 max-lg:sr-only">
-            <h1 className="focal-page-title text-balance">{embedded ? "Timed paper" : "Study timer"}</h1>
-            <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-pretty text-muted-foreground">
-              {embedded
-                ? "Sit a timed paper. Every session feeds your study record."
-                : "Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record."}
-            </p>
-          </div>
+      <Tabs className="gap-6 lg:gap-8" onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
+        <PageHeader title={embedded ? "Timed paper" : "Study timer"}>
           {!embedded && <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start sm:gap-3">
             <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
               <TabsTrigger value="focus">Study</TabsTrigger>
@@ -773,7 +766,7 @@ export function StudyTimerPage({
             <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
             <Button className="ml-auto text-muted-foreground hover:text-foreground sm:ml-0" onClick={() => { onModeChange("focus"); setEclair(true) }} title="Open the full-screen study launcher" variant="ghost"><Smartphone />Launcher</Button>
           </div>}
-        </div>
+        </PageHeader>
 
         {!embedded && <TabsContent className="mt-0" value="focus">
           <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} eclair={eclair} setEclair={setEclair} />

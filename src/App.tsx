@@ -7,7 +7,6 @@ import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
 import { Button } from "./components/ui/button"
 import { CircleAccretionDiskLoader } from "./components/ui/circle-accretion-disk-loader"
-import { Label } from "./components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
 import { PastStudyForm } from "./components/planning/PastStudyForm"
 import type { CalendarEvent, TimetableConfig } from "./lib/types"
@@ -46,7 +45,6 @@ import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
-import { SubjectCombobox } from "./components/subject-combobox"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
 import { clearPushForOtherAccount, notifyTimer, watchDesktopNotifications } from "./lib/pwa"
@@ -755,6 +753,28 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     }
   }
 
+  // One subject picker: the mobile top bar and, on desktop, a quiet control above the page heading.
+  const subjectMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="min-w-0 shrink text-muted-foreground" />}>
+        {subjectScoped && <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: subjectColor(studySubjectId(subjectValue)) }} />}
+        <span className="truncate">{subjectScoped ? subjectValue : "All subjects"}</span>
+        <ChevronDown aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-h-[60dvh] w-60">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Subject</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={subjectScoped ? subjectValue : "all"} onValueChange={(value) => chooseSubject(value as string)}>
+            {/* Your subjects (and the current one) first; every other VCE subject follows under its own label. */}
+            {["all", ...mySubjects].map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="max-lg:min-h-10">{subject === "all" ? "All subjects" : subject}</DropdownMenuRadioItem>)}
+            {otherSubjects.length > 0 && <><DropdownMenuSeparator /><DropdownMenuLabel>Other subjects</DropdownMenuLabel></>}
+            {otherSubjects.map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="max-lg:min-h-10">{subject}</DropdownMenuRadioItem>)}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <SidebarProvider keyboardShortcut={!embedded} className={embedded ? "min-h-0" : undefined} defaultOpen={loadSidebarOpen(typeof document === "undefined" ? null : document.cookie)}>
       <a href="#main-content" className="fixed left-2 top-2 z-50 -translate-y-20 rounded-md bg-background px-3 py-2 text-sm shadow focus:translate-y-0">Skip to content</a>
@@ -781,24 +801,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             and being sticky at the top edge makes iOS Safari tint the status bar from it instead of blurring it. */}
         {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
           <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
-          {!globalView && <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="min-w-0 shrink text-muted-foreground" />}>
-              {subjectScoped && <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: subjectColor(studySubjectId(subjectValue)) }} />}
-              <span className="truncate">{subjectScoped ? subjectValue : "All subjects"}</span>
-              <ChevronDown aria-hidden />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-[60dvh] w-60">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Subject</DropdownMenuLabel>
-                <DropdownMenuRadioGroup value={subjectScoped ? subjectValue : "all"} onValueChange={(value) => chooseSubject(value as string)}>
-                  {/* Your subjects (and the current one) first; every other VCE subject follows under its own label. */}
-                  {["all", ...mySubjects].map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="min-h-10">{subject === "all" ? "All subjects" : subject}</DropdownMenuRadioItem>)}
-                  {otherSubjects.length > 0 && <><DropdownMenuSeparator /><DropdownMenuLabel>Other subjects</DropdownMenuLabel></>}
-                  {otherSubjects.map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="min-h-10">{subject}</DropdownMenuRadioItem>)}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>}
+          {!globalView && subjectMenu}
           <Button variant="ghost" size="icon" aria-label="Search" className="ml-auto text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
@@ -806,13 +809,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
-          {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4 max-lg:hidden">
-            <div className="w-full sm:w-72">
-              <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>
-              <SubjectCombobox id="workspace-subject" subjects={subjectOptions} preferredSubjects={data.subjects} includeAll value={subjectValue} onValueChange={chooseSubject} />
-            </div>
-            <p className="pb-2 text-xs text-muted-foreground" role="status">{selectedSubject === "all" ? "Showing all subjects. Choose one to focus your workspace." : `Showing ${subjectValue} only.${view === "sacs" && data.activeSacTimer && !sameStudySubject(data.activeSacTimer.subject, selectedSubject) ? ` Active timer: ${data.activeSacTimer.subject}.` : ""}`}</p>
-          </div>}
+          {!globalView && <div className="-ml-2.5 mb-1 max-lg:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
             <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>

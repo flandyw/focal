@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
 import { Button } from "../ui/button"
+import { PageHeader } from "../page-header"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import {
@@ -313,10 +314,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  return (
  <div className="h-full">
  <div className="space-y-8">
- <div className="border-b border-border/70 pb-4 max-lg:sr-only">
- <h1 className="focal-page-title">Progress</h1>
- <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
- </div>
+ <PageHeader title="Progress" />
  <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
  </div>
  </div>
@@ -338,14 +336,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  animate={reduceMotion ? undefined :"animate"}
  >
  {/* Header row */}
- <motion.div
- variants={staggerItem}
- className="flex flex-wrap items-end justify-between gap-3 border-b border-border/70 pb-4"
- >
- <div className="max-lg:sr-only">
- <h1 className="focal-page-title">Progress</h1>
- <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
- </div>
+ <motion.div variants={staggerItem}>
+ <PageHeader title="Progress">
 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
  <Button
  type="button"
@@ -378,6 +370,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  )}
  <RangeToggle value={range} onChange={(next) => { setRange(next); setPicked(null) }} reduceMotion={reduceMotion} />
  </div>
+ </PageHeader>
  </motion.div>
  <motion.div variants={staggerItem}>
  <KpiStrip

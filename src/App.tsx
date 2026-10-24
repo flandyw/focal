@@ -740,8 +740,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onCommandOpenChange={setCommandOpen}
       />}
       <SidebarInset className="min-w-0">
-        {/* Mobile: one compact row; it stays sticky so iOS Safari tints the status bar from it instead of blurring it. */}
-        {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
+        {/* Mobile: one compact row that scrolls away; the negative sticky top keeps only its safe-area padding pinned,
+            and being sticky at the top edge makes iOS Safari tint the status bar from it instead of blurring it. */}
+        {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
           <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
           {!globalView && <DropdownMenu>
             <DropdownMenuTrigger render={<Button variant="ghost" size="sm" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="min-w-0 shrink text-muted-foreground" />}>

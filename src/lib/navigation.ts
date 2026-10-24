@@ -6,6 +6,7 @@ const ACTION_NAVIGATION: NavigationItem[] = [
   { id: "calendar" as const, label: "Calendar", description: "Day plan for any date" },
   { id: "exams" as const, label: "Exams", description: "Practice results and analysis" },
   { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers" },
+  { id: "friends" as const, label: "Friends", description: "Live study and a study-time leaderboard" },
   { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue" },
   { id: "timetable" as const, label: "Timetable", description: "Your school class cycle" },
   { id: "chat", label: "Chat", description: "Ask about your study and make changes" },
@@ -22,7 +23,6 @@ const ANALYSIS_NAVIGATION: NavigationItem[] = [
   { id: "goals" as const, label: "Goals", description: "Work backwards from score targets" },
   { id: "predictor" as const, label: "Study score", description: "Estimate study scores and ATAR" },
   { id: "vcaa" as const, label: "VCAA data", description: "Compare grades and open matching papers" },
-  { id: "friends" as const, label: "Friends", description: "Live study and a study-time leaderboard" },
 ]
 
 export const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [

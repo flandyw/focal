@@ -1,7 +1,7 @@
 import { isPaused, isRunning, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, ChevronDown, Search } from "lucide-react"
+import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -802,7 +802,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
           <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
           {!globalView && subjectMenu}
-          <Button variant="ghost" size="icon" aria-label="Search" className="ml-auto text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
+          <Button variant="ghost" size="icon" aria-label="Friends" aria-current={view === "friends" ? "page" : undefined} className={`ml-auto ${view === "friends" ? "text-foreground" : "text-muted-foreground"}`} onClick={() => setView("friends")}><UsersRound aria-hidden /></Button>
+          <Button variant="ghost" size="icon" aria-label="Search" className="text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}

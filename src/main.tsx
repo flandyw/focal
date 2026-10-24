@@ -5,12 +5,12 @@ import './index.css'
 import { AppErrorBoundary } from './components/error-boundary.tsx'
 import { applyAppearance } from './lib/appearance.ts'
 import App from './App.tsx'
-import { registerPwa } from './lib/pwa.ts'
+import { registerPwa, watchForUpdates } from './lib/pwa.ts'
 
-// A chunk from a previous deploy is gone; reload once to pick up the new index.html.
+// A chunk from a previous deploy is gone; reload to pick up the new index.html, at most once a minute to avoid a loop.
 window.addEventListener('vite:preloadError', () => {
-  if (!sessionStorage.getItem('chunk-reload')) {
-    sessionStorage.setItem('chunk-reload', '1')
+  if (Date.now() - Number(sessionStorage.getItem('chunk-reload')) > 60_000) {
+    sessionStorage.setItem('chunk-reload', String(Date.now()))
     location.reload()
   }
 })
@@ -18,7 +18,10 @@ window.addEventListener('vite:preloadError', () => {
 // Set before the first render so the chosen accent never flashes in from the default.
 applyAppearance()
 if (import.meta.env.VITE_DESKTOP) await import("./lib/desktop")
-else void registerPwa()
+else {
+  void registerPwa()
+  watchForUpdates()
+}
 
 // Match the phone's status bar to the current surface and light/dark theme.
 const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
@@ -35,3 +38,11 @@ createRoot(document.getElementById('root')!).render(
     </ThemeProvider>
   </StrictMode>,
 )
+
+// Warm the page chunks once the app has settled, so the first visit to each tab doesn't wait on the network.
+if (!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData) {
+  setTimeout(() => {
+    const pages = import.meta.glob(['./components/*-page.tsx', './components/{exam,mistake}-sheet.tsx', '!./components/chat-page.tsx'])
+    for (const load of Object.values(pages)) void load().catch(() => undefined)
+  }, 3000)
+}

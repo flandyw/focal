@@ -39,6 +39,7 @@ import { useAppearance } from "../lib/appearance"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
 const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => ({ default: module.AppCommandMenu })))
+const MobileSearch = lazy(() => import("./app-command-menu").then((module) => ({ default: module.MobileSearch })))
 
 const NAVIGATION_ICONS = {
   chat: MessageSquare,
@@ -192,10 +193,8 @@ export function AppSidebar({
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const appearance = useAppearance()
   useEffect(() => {
-    if (!commandOpen) return
-    if (isMobile) setOpenMobile(true)
-    else setOpen(true)
-  }, [commandOpen, isMobile, setOpen, setOpenMobile])
+    if (commandOpen && !isMobile) setOpen(true)
+  }, [commandOpen, isMobile, setOpen])
   const [commandLoaded, setCommandLoaded] = useState(false)
   if (commandOpen && !commandLoaded) setCommandLoaded(true)
   const accountLabel = user?.email || "Account"
@@ -213,13 +212,15 @@ export function AppSidebar({
     action()
   }
 
-  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={onSearch} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={() => run(onSearch)} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
     <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
     <span className="flex-1 text-left text-[0.8125rem]">Search</span>
     <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
   </Button>
 
   return (
+    <>
+    {isMobile && commandLoaded && <Suspense fallback={null}><MobileSearch open={commandOpen} onOpenChange={onCommandOpenChange} icons={NAVIGATION_ICONS} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense>}
     <Sidebar side={appearance.sidebarSide} collapsible="icon" className="focal-navigation">
       <SidebarHeader className="gap-5 px-5 pt-7 pb-5 group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-3">
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
@@ -253,7 +254,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
-        {commandOpen || commandLoaded ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
+        {!isMobile && (commandOpen || commandLoaded) ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
         <Button variant="ghost" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></Button>
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
@@ -326,5 +327,6 @@ export function AppSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+    </>
   )
 }

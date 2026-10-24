@@ -1,9 +1,11 @@
 import { Command as CommandPrimitive } from "cmdk"
 import { useEffect, useRef, useState } from "react"
-import { Search } from "lucide-react"
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
+import { History, Plus, Search, Settings2, Timer, X, type LucideIcon } from "lucide-react"
 import type { AppView } from "../lib/app-view"
 import { ALL_NAVIGATION } from "../lib/navigation"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "./ui/command"
+import { Button } from "./ui/button"
 import { Label } from "./ui/label"
 
 const itemClass = "h-8 rounded-xs px-3 py-0 text-[13px] text-popover-foreground outline-none data-selected:bg-sidebar-accent data-selected:text-sidebar-accent-foreground"
@@ -104,5 +106,108 @@ export function AppCommandMenu({
         </div>
       )}
     </Command>
+  )
+}
+
+const mobileItemClass = "min-h-12 gap-3 rounded-sm px-3 py-2 text-[15px] data-selected:bg-muted"
+const mobileHeadingClass = "focal-eyebrow px-3 pt-4 pb-1.5 text-muted-foreground"
+
+/** Full-screen search for phones and tablets, where the sidebar input would sit inside the drawer. */
+export function MobileSearch({
+  open,
+  onOpenChange,
+  icons,
+  onViewChange,
+  onLogExam,
+  onLogMistake,
+  onLogPastStudy,
+  onStartExam,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  icons: Partial<Record<AppView, LucideIcon>>
+  onViewChange: (view: AppView) => void
+  onLogExam: () => void
+  onLogMistake: () => void
+  onLogPastStudy: () => void
+  onStartExam: () => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState("")
+
+  function run(action: () => void) {
+    onOpenChange(false)
+    action()
+  }
+
+  const actions = [
+    { label: "Log practice exam", value: "log practice exam add result", Icon: Plus, action: onLogExam },
+    { label: "Log mistake", value: "log mistake add revision card", Icon: Plus, action: onLogMistake },
+    { label: "Log past study", value: "log past study record session", Icon: History, action: onLogPastStudy },
+    { label: "Start timed paper", value: "start timed paper exam timer practice", Icon: Timer, action: onStartExam },
+  ]
+
+  return (
+    <DialogPrimitive.Root open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) setQuery("") }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Popup
+          initialFocus={input}
+          aria-label="Search"
+          className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)] text-foreground outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0"
+        >
+          <Command className="min-h-0 flex-1 rounded-none! bg-transparent p-0">
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+              <Label className="h-11 min-w-0 flex-1 gap-2 rounded-sm bg-muted px-3 font-normal">
+                <Search className="size-4.5 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+                <CommandPrimitive.Input
+                  ref={input}
+                  aria-label="Search pages and actions"
+                  placeholder="Search pages and actions"
+                  value={query}
+                  onValueChange={setQuery}
+                  enterKeyHint="go"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  // 16px keeps iOS Safari from zooming on focus.
+                  className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+                />
+                {query && (
+                  <button type="button" aria-label="Clear search" onClick={() => { setQuery(""); input.current?.focus() }} className="-mr-1.5 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground">
+                    <X className="size-4" aria-hidden />
+                  </button>
+                )}
+              </Label>
+              <DialogPrimitive.Close render={<Button variant="ghost" className="h-11 px-2 text-[15px] text-primary" />}>Cancel</DialogPrimitive.Close>
+            </div>
+            <CommandList className="max-h-none flex-1 overscroll-contain px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <CommandEmpty className="px-6 py-12 text-center text-[15px] text-muted-foreground">No results for “{query}”.<br />Try a page name or “log”.</CommandEmpty>
+              <CommandGroup heading={<div className={mobileHeadingClass}>Quick actions</div>} className="p-0">
+                {actions.map(({ label, value, Icon, action }) => (
+                  <CommandItem key={label} value={value} onSelect={() => run(action)} className={mobileItemClass}>
+                    <Icon className="size-5! text-primary" strokeWidth={1.75} aria-hidden />
+                    {label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandGroup heading={<div className={mobileHeadingClass}>Go to</div>} className="p-0">
+                {ALL_NAVIGATION.map((item) => {
+                  const Icon = icons[item.id] ?? Settings2
+                  return (
+                    <CommandItem key={item.id} value={`${item.label} ${item.description}`} onSelect={() => run(() => onViewChange(item.id))} className={mobileItemClass}>
+                      <Icon className="size-5! text-muted-foreground" strokeWidth={1.5} aria-hidden />
+                      <span className="flex min-w-0 flex-col">
+                        <span>{item.label}</span>
+                        <span className="truncate text-[13px] text-muted-foreground">{item.description}</span>
+                      </span>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }

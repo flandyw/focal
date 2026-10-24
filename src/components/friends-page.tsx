@@ -152,17 +152,23 @@ function WeekdayChart({ series, now }: { series: { name: string; day: (offset: n
   )
 }
 
+type FriendsCache = { userId?: string; profile: Profile | null; people: Person[]; fetchedAt: number; cheers: Cheer[] | null }
+const emptyCache = (userId?: string): FriendsCache => ({ userId, profile: null, people: [], fetchedAt: 0, cheers: null })
+// In memory only: revisiting Friends shows the last result at once while it refreshes. Another account never sees it.
+let cache = emptyCache()
+supabase?.auth.onAuthStateChange((_event, session) => { if (session?.user.id !== cache.userId) cache = emptyCache(session?.user.id) })
+
 export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignIn: () => void }) {
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [draft, setDraft] = useState({ name: "", status: "" })
-  const [people, setPeople] = useState<Person[]>([])
-  const [fetchedAt, setFetchedAt] = useState(0)
+  const [profile, setProfile] = useState(cache.profile)
+  const [draft, setDraft] = useState({ name: cache.profile?.display_name ?? "", status: cache.profile?.status_message ?? "" })
+  const [people, setPeople] = useState(cache.people)
+  const [fetchedAt, setFetchedAt] = useState(cache.fetchedAt)
   const [code, setCode] = useState("")
   const [period, setPeriod] = useState<Period>("today")
   const [ranking, setRanking] = useState<Ranking>("time")
-  const [cheers, setCheers] = useState<Cheer[]>([])
+  const [cheers, setCheers] = useState(cache.cheers ?? [])
   const [cheersError, setCheersError] = useState(false)
-  const [cheersLoaded, setCheersLoaded] = useState(false)
+  const [cheersLoaded, setCheersLoaded] = useState(cache.cheers !== null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [liveOnly, setLiveOnly] = useState(false)
@@ -180,7 +186,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
     try {
       const { data, error } = await supabase!.rpc("friends_cheers")
       if (error) throw error
-      setCheers((data ?? []) as Cheer[])
+      cache.cheers = (data ?? []) as Cheer[]
+      setCheers(cache.cheers)
       setCheersError(false)
       setCheersLoaded(true)
     } catch {
@@ -196,8 +203,9 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       const { data, error } = await supabase!.rpc("friends_list", { p_tz: TIME_ZONE })
       if (sequence !== loadSequence.current) return
       if (error) throw error
-      setPeople((data ?? []) as Person[])
-      setFetchedAt(Date.now())
+      cache = { ...cache, people: (data ?? []) as Person[], fetchedAt: Date.now() }
+      setPeople(cache.people)
+      setFetchedAt(cache.fetchedAt)
       setLoadError(false)
     } catch {
       if (sequence === loadSequence.current) setLoadError(true)
@@ -211,6 +219,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       const { data, error } = await supabase!.rpc("friends_me").single<Profile>()
       if (error) throw error
       setProfileError(false)
+      cache.profile = data
       setProfile(data)
       setDraft({ name: data.display_name, status: data.status_message })
     } catch {
@@ -249,6 +258,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   async function saveProfile(next: Profile) {
     const args = { p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects }
     if (await call("friends_update_profile", args, "Could not save your profile.")) {
+      cache.profile = next
       setProfile(next)
       toast.success("Profile updated")
     }

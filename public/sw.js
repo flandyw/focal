@@ -1,5 +1,50 @@
+const CACHE = "focal-v1"
+
 self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()))
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()))
+self.addEventListener("activate", (event) => event.waitUntil((async () => {
+  for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key)
+  await self.clients.claim()
+})()))
+
+async function put(request, response) {
+  if (!response.ok || response.type !== "basic") return
+  const cache = await caches.open(CACHE)
+  await cache.put(request, response)
+  // shortcut: oldest-first trim by insertion order, not LRU; fine while a deploy is ~100 chunks.
+  const keys = await cache.keys()
+  for (const key of keys.slice(0, Math.max(0, keys.length - 300))) await cache.delete(key)
+}
+
+// Clones before the page reads the body; waitUntil is registered synchronously so the write isn't cut off.
+function fetchAndCache(event, key) {
+  const network = fetch(event.request)
+  event.waitUntil(network.then((response) => put(key, response.clone())).catch(() => undefined))
+  return network
+}
+
+self.addEventListener("fetch", (event) => {
+  const { request } = event
+  const url = new URL(request.url)
+  if (request.method !== "GET" || url.origin !== self.location.origin) return
+  // API calls stay live; Vite dev modules must never be served stale.
+  if (["/api/", "/src/", "/node_modules/", "/@"].some((prefix) => url.pathname.startsWith(prefix))) return
+  if (request.mode === "navigate") {
+    // Network first so a deploy is picked up immediately; the cached shell opens offline or on a stalled network.
+    const network = fetchAndCache(event, "/")
+    const stalled = new Promise((resolve) => setTimeout(resolve, 3000)).then(() => caches.match("/"))
+    event.respondWith(Promise.race([network, stalled.then((cached) => cached ?? network)])
+      .catch(async () => (await caches.match("/")) ?? Response.error()))
+    return
+  }
+  const immutable = url.pathname.startsWith("/assets/")
+  if (!immutable && !/\.(json|woff2|png|svg|webmanifest)$/.test(url.pathname)) return
+  event.respondWith(caches.match(request).then((cached) => {
+    // Hashed chunks never change; datasets, fonts and icons render from cache and refresh in the background.
+    if (cached && immutable) return cached
+    const network = fetchAndCache(event, request)
+    return cached ?? network
+  }))
+})
 
 self.addEventListener("push", (event) => {
   let message

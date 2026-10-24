@@ -141,7 +141,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
     <WorkspacePage>
       <PageHeader title="Score goals" />
       <Card className="gap-5">
-        <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription>Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription className="max-lg:hidden">Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
         <CardContent><form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!subjectScoped ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
           {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={setSubject} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}

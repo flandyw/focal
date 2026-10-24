@@ -9,9 +9,10 @@ export function PageHeader({
   description?: string
   children?: ReactNode
 }) {
+  // On mobile the top bar already names the page, so only the actions stay visible.
   return (
-    <div className="flex flex-col gap-5 border-b border-border pb-6 md:flex-row md:items-end md:justify-between md:gap-6">
-      <div className="min-w-0">
+    <div className={`flex flex-col gap-5 border-b border-border pb-6 max-lg:pb-4 md:flex-row md:items-end md:justify-between md:gap-6 ${children ? "" : "max-lg:sr-only"}`}>
+      <div className="min-w-0 max-lg:sr-only">
         <h1 className="focal-page-title text-balance">{title}</h1>
         {description ? <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-muted-foreground text-pretty">{description}</p> : null}
       </div>

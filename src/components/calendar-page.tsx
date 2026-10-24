@@ -274,7 +274,7 @@ export function CalendarPage({
           of figures that repeated the day panel. */}
       <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">Calendar</p>
+          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase max-lg:hidden">Calendar</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title">{monthLabel}</h1>
             <div className="flex items-center gap-0.5">

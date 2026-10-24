@@ -302,6 +302,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   .mobile-app-header, .mobile-tabbar { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .mobile-tabbar button { touch-action: manipulation; }
   .mobile-tabbar button:active { opacity: 0.6; }
+  .focal-page-title { font-size: 1.75rem; }
   .mobile-app-header {
     height: calc(3.5rem + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);

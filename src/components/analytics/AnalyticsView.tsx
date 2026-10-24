@@ -313,7 +313,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  return (
  <div className="h-full">
  <div className="space-y-8">
- <div className="border-b border-border/70 pb-4">
+ <div className="border-b border-border/70 pb-4 max-lg:sr-only">
  <h1 className="focal-page-title">Progress</h1>
  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
  </div>
@@ -342,7 +342,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  variants={staggerItem}
  className="flex flex-wrap items-end justify-between gap-3 border-b border-border/70 pb-4"
  >
- <div>
+ <div className="max-lg:sr-only">
  <h1 className="focal-page-title">Progress</h1>
  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Your study habits and exam results, over time.</p>
  </div>

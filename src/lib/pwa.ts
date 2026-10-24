@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { supabase } from "./supabase"
 
 let registration: Promise<ServiceWorkerRegistration | null> | undefined
@@ -49,6 +50,28 @@ export function registerPwa() {
     .then(() => navigator.serviceWorker.ready)
     .catch(() => null)
   return registration
+}
+
+// An installed PWA resumes instead of relaunching, so it can sit on an old deploy for days; check on resume and every 30 min.
+export function watchForUpdates() {
+  if (!import.meta.env.PROD || import.meta.env.VITE_DESKTOP) return
+  const current = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute("src")
+  let notified = false
+  const check = async () => {
+    if (notified || document.visibilityState !== "visible" || !navigator.onLine) return
+    void registerPwa().then((worker) => worker?.update()).catch(() => undefined)
+    try {
+      const html = await (await fetch("/", { cache: "no-store" })).text()
+      const latest = html.match(/<script[^>]*type="module"[^>]*src="([^"]+)"/)?.[1]
+      if (!current || !latest || latest === current) return
+      notified = true
+      toast("A new version of Focal is available", { duration: Infinity, action: { label: "Reload", onClick: () => location.reload() } })
+    } catch {
+      // Offline or a flaky network; the next resume tries again.
+    }
+  }
+  document.addEventListener("visibilitychange", () => void check())
+  setInterval(() => void check(), 30 * 60_000)
 }
 
 export function timerNotificationHelp() {

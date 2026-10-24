@@ -1,7 +1,7 @@
 import { isPaused, isRunning } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, Search } from "lucide-react"
+import { AlertCircle, ListFilter, Search } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -11,7 +11,9 @@ import { Label } from "./components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
 import { PastStudyForm } from "./components/planning/PastStudyForm"
 import type { CalendarEvent, TimetableConfig } from "./lib/types"
-import { sameStudySubject, studySubjectOptions } from "./lib/studySubjects"
+import { sameStudySubject, studySubjectId, studySubjectOptions, subjectColor } from "./lib/studySubjects"
+import { isPreferredSubject } from "./lib/subjects"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu"
 import {
   SidebarInset,
   SidebarProvider,
@@ -207,6 +209,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     ...references.map((reference) => reference.studyName), ...(selectedSubject === "all" ? [] : [selectedSubject]),
   ]).map((subject) => subject.name), [data.subjects, data.attempts, data.sacRecords, data.mistakes, data.learning.curriculumAreas, data.learning.goals, studySessionSync.sessions, references, selectedSubject])
   const subjectValue = subjectOptions.find((subject) => sameStudySubject(subject, selectedSubject)) ?? selectedSubject
+  const mySubjects = subjectOptions.filter((subject) => isPreferredSubject(subject, data.subjects) || (subjectScoped && subject === subjectValue))
+  const otherSubjects = subjectOptions.filter((subject) => !mySubjects.includes(subject)).toSorted((first, second) => first.localeCompare(second))
   const dueMistakeCount = useMemo(() => getDueMistakes(workspace.mistakes).length, [workspace.mistakes])
   const dueStudyTaskCount = useMemo(() => data.learning.tasks.filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor <= localDate(new Date())).length, [data.learning.tasks])
 
@@ -737,15 +741,35 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       />}
       <SidebarInset className="min-w-0">
         {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
-          <span className="min-w-0 flex-1 truncate font-heading text-xl font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate font-heading text-xl leading-tight font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
+            {!globalView && <span className="truncate text-xs text-muted-foreground">{subjectScoped ? subjectValue : "All subjects"}</span>}
+          </span>
+          {!globalView && <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Subject: ${subjectScoped ? subjectValue : "All subjects"}`} className="relative" />}>
+              <ListFilter aria-hidden />
+              {subjectScoped && <span aria-hidden className="absolute top-2.5 right-2.5 size-2 rounded-full bg-primary ring-2 ring-background" style={{ background: subjectColor(studySubjectId(subjectValue)) }} />}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-[60dvh] w-60">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Subject</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={subjectScoped ? subjectValue : "all"} onValueChange={(value) => chooseSubject(value as string)}>
+                  {/* Your subjects (and the current one) first; every other VCE subject follows under its own label. */}
+                  {["all", ...mySubjects].map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="min-h-10">{subject === "all" ? "All subjects" : subject}</DropdownMenuRadioItem>)}
+                  {otherSubjects.length > 0 && <><DropdownMenuSeparator /><DropdownMenuLabel>Other subjects</DropdownMenuLabel></>}
+                  {otherSubjects.map((subject) => <DropdownMenuRadioItem key={subject} value={subject} className="min-h-10">{subject}</DropdownMenuRadioItem>)}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>}
           <Button variant="ghost" size="icon" aria-label="Search" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
-          {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 py-4 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+          {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4 max-lg:hidden">
             <div className="w-full sm:w-72">
               <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>
               <SubjectCombobox id="workspace-subject" subjects={subjectOptions} preferredSubjects={data.subjects} includeAll value={subjectValue} onValueChange={chooseSubject} />

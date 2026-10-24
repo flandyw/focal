@@ -710,8 +710,8 @@ export function StudyTimerPage({
   return (
     <WorkspacePage>
       <Tabs onValueChange={(value) => onModeChange(value as StudyTimerMode)} value={embedded ? "exam" : mode}>
-        <div className="mb-6 flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0 space-y-1">
+        <div className="mb-6 flex flex-col gap-4 border-b pb-6 max-lg:mb-4 max-lg:pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 space-y-1 max-lg:sr-only">
             <h1 className="focal-page-title text-balance">{embedded ? "Timed paper" : "Study timer"}</h1>
             <p className="mt-3 max-w-[60ch] text-sm leading-relaxed text-pretty text-muted-foreground">
               {embedded

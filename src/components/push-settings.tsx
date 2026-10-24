@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Bell, BellOff } from "lucide-react"
+import { Bell, BellOff, Send } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY, clearPushForOtherAccount, registerPwa, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import { Button } from "./ui/button"
@@ -14,13 +14,14 @@ export function PushSettings({ userId }: { userId?: string }) {
   const [enabled, setEnabled] = useState(false)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const supported = window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && typeof Notification !== "undefined"
 
-  async function api(method: string, input: unknown) {
+  async function api(method: string, input: unknown, query = "") {
     if (!supabase || !userId) throw new Error("Sign in again to manage reminders.")
     const { data, error } = await supabase.auth.getSession()
     if (error || !data.session || data.session.user.id !== userId) throw new Error("Sign in again to manage reminders.")
-    const response = await fetch("/api/push", { method,
+    const response = await fetch(`/api/push${query}`, { method,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
       body: JSON.stringify(input),
     })
@@ -68,6 +69,18 @@ export function PushSettings({ userId }: { userId?: string }) {
       localStorage.setItem(PUSH_PREFERENCES_KEY, JSON.stringify(next))
       setPreferences(next)
     } catch (error) { setError(error instanceof Error ? error.message : "Could not save reminders.") }
+    finally { setBusy(false) }
+  }
+
+  async function test() {
+    if (!subscription) return
+    setBusy(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await api("POST", { endpoint: subscription.endpoint }, "?test=1")
+      setNotice("Test sent. It should arrive within a few seconds.")
+    } catch (error) { setError(error instanceof Error ? error.message : "Could not send a test notification.") }
     finally { setBusy(false) }
   }
 
@@ -123,6 +136,8 @@ export function PushSettings({ userId }: { userId?: string }) {
       <Button variant="outline" disabled={busy || (!enabled && (!userId || !supported || !config?.configured))} onClick={() => void toggle()}>
         {enabled ? <BellOff /> : <Bell />}{busy ? "Please wait…" : enabled ? "Disable reminders on this device" : "Enable reminders"}
       </Button>
+      {enabled ? <Button variant="outline" disabled={busy} onClick={() => void test()}><Send />Send test notification</Button> : null}
+      {notice ? <p role="status" className="text-muted-foreground">{notice}</p> : null}
       {enabled ? <p role="status" className="text-muted-foreground">Reminders enabled on this device. Delivery depends on your device’s notification settings.</p> : null}
       {enabled && Notification.permission !== "granted" ? <p className="text-muted-foreground">{timerNotificationHelp()}</p> : null}
       {error ? <p role="alert" className="text-destructive">{error}</p> : null}

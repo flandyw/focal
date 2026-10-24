@@ -28,6 +28,11 @@ export async function handlePush(request: Request): Promise<Response> {
   if (request.method === "GET" && !dispatch) return json({ configured, publicKey: configured ? publicKey : null })
   if (!configured) return json({ error: "Push reminders aren’t available on this server yet." }, 503)
   const db = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false } })
+  const send = (target: { endpoint: string; p256dh: string; auth: string }, body: string, tag: string, path: string) =>
+    webpush.sendNotification({ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
+      JSON.stringify({ title: "Focal", body, tag, path }), {
+        vapidDetails: { subject: subject!, publicKey: publicKey!, privateKey: privateKey! }, TTL: 900, timeout: 8_000,
+      })
   try {
     if (dispatch) {
       if (request.method !== "GET" && request.method !== "POST") return json({ error: "Method not allowed" }, 405)
@@ -46,10 +51,7 @@ export async function handlePush(request: Request): Promise<Response> {
             return
           }
           try {
-            await webpush.sendNotification({ endpoint: job.endpoint, keys: { p256dh: job.p256dh, auth: job.auth } },
-              JSON.stringify({ title: "Focal", body: job.body, tag: job.event_key, path: job.path }), {
-                vapidDetails: { subject: subject!, publicKey: publicKey!, privateKey: privateKey! }, TTL: 900, timeout: 8_000,
-              })
+            await send(job, job.body, job.event_key, job.path)
           } catch (error) {
             if ([404, 410].includes((error as { statusCode?: number }).statusCode ?? 0)) {
               await db.from("push_subscriptions").delete().eq("id", job.subscription_id).throwOnError()
@@ -79,6 +81,20 @@ export async function handlePush(request: Request): Promise<Response> {
     let input: Record<string, unknown>
     try { input = JSON.parse(text) } catch { return json({ error: "Invalid JSON" }, 400) }
     if (!input || typeof input !== "object" || !validEndpoint(input.endpoint)) return json({ error: "Invalid push subscription" }, 400)
+    if (request.method === "POST" && new URL(request.url).searchParams.get("test") === "1") {
+      const { data, error } = await db.from("push_subscriptions").select("endpoint,p256dh,auth")
+        .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()
+      if (error) throw error
+      if (!data) return json({ error: "This device isn’t registered. Disable and re-enable reminders." }, 404)
+      try {
+        await send(data, "Test notification. Reminders are working on this device.", "focal-test", "/")
+      } catch (error) {
+        // Surface the push service's reason (e.g. 403 BadJwtToken) so misconfiguration is diagnosable from the app.
+        const { statusCode, body } = error as { statusCode?: number; body?: string }
+        return json({ error: `Push service rejected the test${statusCode ? ` (${statusCode})` : ""}: ${body || String(error)}`.slice(0, 300) }, 502)
+      }
+      return json({ ok: true })
+    }
     if (request.method === "POST") {
       const { data, error } = await db.from("push_subscriptions").select("planned,friends")
         .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()

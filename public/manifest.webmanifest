@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Focal",
+  "short_name": "Focal",
+  "description": "Plan your study, track practice exams, and focus.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f4ee",
+  "theme_color": "#315647",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

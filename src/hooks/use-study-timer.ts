@@ -29,6 +29,7 @@ import {
 } from "../lib/focus-session"
 import { canonicalNow } from "../lib/study-session-sync"
 import type { FocusTimerSession } from "../lib/ongoing-timers"
+import { notifyTimer } from "../lib/pwa"
 
 const TICK_MS = 1000
 
@@ -81,22 +82,6 @@ function playChime() {
   } catch {
     // Audio is a nicety; a blocked or unavailable context never blocks the timer.
   }
-}
-
-function notify(title: string, body: string) {
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return
-  try {
-    new Notification(title, { body, tag: "focal-study-timer" })
-  } catch {
-    // Some browsers only allow notifications from a service worker.
-  }
-}
-
-export function requestTimerNotifications() {
-  if (typeof Notification === "undefined") return Promise.resolve(false)
-  if (Notification.permission === "granted") return Promise.resolve(true)
-  if (Notification.permission === "denied") return Promise.resolve(false)
-  return Notification.requestPermission().then((permission) => permission === "granted")
 }
 
 export function useStudyTimer({
@@ -286,7 +271,7 @@ export function useStudyTimer({
     const label = state.mode === "work" ? "Focus block complete" : "Break over"
     if (settingsRef.current.soundEnabled) playChime()
     if (settingsRef.current.notificationsEnabled) {
-      notify(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`)
+      void notifyTimer(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`)
     }
   }, [enabled, state.mode, state.cycles, state.secondsLeft, state.studyOvertime])
 

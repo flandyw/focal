@@ -48,6 +48,7 @@ import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace
 import { SubjectCombobox } from "./components/subject-combobox"
 import { AppSidebar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
+import { clearPushForOtherAccount } from "./lib/pwa"
 import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
@@ -295,6 +296,21 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }, [data.activeExamTimer])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
+  useEffect(() => {
+    if (sync.status === "restoring" || sync.status === "reconnecting") return
+    void clearPushForOtherAccount(sync.status === "sign-in-required" ? undefined : sync.user?.id)
+  }, [sync.status, sync.user?.id])
+  useEffect(() => {
+    if (import.meta.env.VITE_DESKTOP || !("serviceWorker" in navigator)) return
+    const openNotification = (event: MessageEvent) => {
+      if (event.data?.type !== "focal:notification-click") return
+      if (event.data.path === "/?view=friends") setView("friends")
+      else if (event.data.path === "/?timer=calendar") setView("calendar")
+      else { setTimerMode("focus"); setView("focus") }
+    }
+    navigator.serviceWorker.addEventListener("message", openNotification)
+    return () => navigator.serviceWorker.removeEventListener("message", openNotification)
+  }, [])
   useEffect(() => {
     if (embedded) return
     const openCommandMenu = (event: KeyboardEvent) => {
@@ -721,7 +737,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onCommandOpenChange={setCommandOpen}
       />}
       <SidebarInset className="min-w-0">
-        {!embedded && <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
+        {!embedded && <header className="mobile-app-header sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 lg:hidden">
           <SidebarTrigger />
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
           <Button variant="ghost" size="sm" onClick={() => setCommandOpen(true)}>Search</Button>
@@ -730,7 +746,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem)] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-3.5rem-env(safe-area-inset-top))] flex-col lg:h-dvh" : "px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
           {!globalView && <div className="mb-6 flex flex-wrap items-end gap-3 border-b pb-4">
             <div className="w-full sm:w-72">
               <Label htmlFor="workspace-subject" className="mb-1.5 text-xs text-muted-foreground">Subject</Label>

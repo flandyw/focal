@@ -294,6 +294,28 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 
 :root { --app-font-body: "Instrument Sans Variable", sans-serif; --app-font-heading: "Newsreader", Georgia, serif; }
 @theme inline { --font-sans: var(--app-font-body); --font-heading: var(--app-font-heading); }
+
+@media (max-width: 1023px) {
+  .mobile-app-header {
+    height: calc(3.5rem + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+  [data-slot="sidebar-inset"] {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+@media (pointer: coarse) {
+  [data-slot="button"], [data-sidebar="menu-button"], [role="combobox"], [role="tab"],
+  [role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"] {
+    min-height: 2.75rem;
+  }
+  [data-slot="button"][data-size^="icon"] { min-width: 2.75rem; }
+  input:not([type="checkbox"], [type="radio"], [type="range"]), select { min-height: 2.75rem; }
+  input, textarea, select { font-size: max(1rem, 16px); }
+  [data-density] .focal-navigation [data-sidebar="menu-button"] { min-height: 2.75rem; }
+}
 .typeset-mistake { --typeset-leading: var(--reading-spacing, 1.6); }
 [data-content-width="wide"] #main-content:not([data-view="chat"]) { max-width: 1440px; margin-inline: auto; }
 [data-content-width="reading"] #main-content:not([data-view="chat"]) { max-width: 1000px; margin-inline: auto; }

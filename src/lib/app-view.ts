@@ -29,6 +29,7 @@ export function loadAppView(
   search = "",
 ): AppView {
   const timer = new URLSearchParams(search).get("timer")
+  if (new URLSearchParams(search).get("view") === "friends") return "friends"
   // The timed paper is a mode of the study timer now, not a view of its own.
   if (timer === "exam") return "focus"
   if (timer === "calendar" || timer === "day") return "calendar"

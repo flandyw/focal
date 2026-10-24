@@ -2,6 +2,7 @@ import { resolve, sep } from "node:path"
 import { handleMcp } from "./server/mcp"
 import { handleMistakesPdf } from "./server/mistakes-pdf"
 import { handleChat } from "./server/chat"
+import { handlePush } from "./server/push"
 
 const dist = resolve(import.meta.dir, "dist")
 
@@ -11,6 +12,7 @@ const server = Bun.serve({
     const url = new URL(request.url)
     if (url.pathname === "/api/mistakes-pdf") return handleMistakesPdf(request)
     if (url.pathname === "/api/chat") return handleChat(request)
+    if (url.pathname === "/api/push") return handlePush(request)
     if (url.pathname === "/api/mcp") return handleMcp(request)
 
     const path = resolve(dist, `.${url.pathname}`)

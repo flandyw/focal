@@ -48,42 +48,44 @@ function mistakesPdfPlugin(): Plugin {
   }
 }
 
-function chatPlugin(): Plugin {
+function apiPlugin(): Plugin {
   return {
-    name: 'focal-chat',
+    name: 'focal-api',
     configureServer(server) {
       const env = loadEnv(server.config.mode, server.config.envDir, '')
-      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'AI_GATEWAY_MODEL', 'ARTIFICIAL_ANALYSIS_API_KEY']) {
+      for (const name of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'AI_GATEWAY_MODEL', 'ARTIFICIAL_ANALYSIS_API_KEY', 'WEB_PUSH_PUBLIC_KEY', 'WEB_PUSH_PRIVATE_KEY', 'WEB_PUSH_SUBJECT', 'CRON_SECRET']) {
         if (process.env[name] === undefined && env[name]) process.env[name] = env[name]
       }
-      server.middlewares.use('/api/chat', async (request, response) => {
-        const controller = new AbortController()
-        response.on('close', () => controller.abort())
-        try {
-          const { handleChat } = await server.ssrLoadModule('/server/chat.ts')
-          const headers = new Headers()
-          for (const [name, value] of Object.entries(request.headers)) {
-            for (const item of Array.isArray(value) ? value : value ? [value] : []) headers.append(name, item)
+      for (const [route, module, handler] of [['/api/chat', '/server/chat.ts', 'handleChat'], ['/api/push', '/server/push.ts', 'handlePush']] as const) {
+        server.middlewares.use(route, async (request, response) => {
+          const controller = new AbortController()
+          response.on('close', () => controller.abort())
+          try {
+            const handlers = await server.ssrLoadModule(module)
+            const headers = new Headers()
+            for (const [name, value] of Object.entries(request.headers)) {
+              for (const item of Array.isArray(value) ? value : value ? [value] : []) headers.append(name, item)
+            }
+            const result: Response = await handlers[handler](new Request(`http://${request.headers.host ?? 'localhost'}${route}${request.url ?? ''}`, {
+              method: request.method,
+              headers,
+              signal: controller.signal,
+              ...(!['GET', 'HEAD'].includes(request.method ?? 'GET') ? { body: Readable.toWeb(request) as unknown as BodyInit, duplex: 'half' } : {}),
+            }))
+            response.statusCode = result.status
+            result.headers.forEach((value, name) => response.setHeader(name, value))
+            if (result.body) for await (const chunk of result.body) {
+              if (response.destroyed) break
+              response.write(chunk)
+            }
+            response.end()
+          } catch (error) {
+            if (!controller.signal.aborted) server.config.logger.error(String(error))
+            if (!response.headersSent) response.statusCode = 500
+            response.end()
           }
-          const result: Response = await handleChat(new Request(`http://${request.headers.host ?? 'localhost'}/api/chat`, {
-            method: request.method,
-            headers,
-            signal: controller.signal,
-            ...(request.method === 'POST' ? { body: Readable.toWeb(request) as unknown as BodyInit, duplex: 'half' } : {}),
-          }))
-          response.statusCode = result.status
-          result.headers.forEach((value, name) => response.setHeader(name, value))
-          if (result.body) for await (const chunk of result.body) {
-            if (response.destroyed) break
-            response.write(chunk)
-          }
-          response.end()
-        } catch (error) {
-          if (!controller.signal.aborted) server.config.logger.error(String(error))
-          if (!response.headersSent) response.statusCode = 500
-          response.end()
-        }
-      })
+        })
+      }
     },
   }
 }
@@ -97,7 +99,7 @@ export default defineConfig(({ mode }) => ({
   },
   clearScreen: false,
   server: { port: mode === "desktop" ? 1420 : 5173, strictPort: true, host: process.env.TAURI_DEV_HOST ?? false },
-  plugins: [react(), tailwindcss(), mistakesPdfPlugin(), chatPlugin()],
+  plugins: [react(), tailwindcss(), mistakesPdfPlugin(), apiPlugin()],
   resolve: {
     dedupe: ['react', 'react-dom', 'katex'],
     alias: {

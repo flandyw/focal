@@ -3,10 +3,11 @@ import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/cha
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
+import { Download, ArrowDown, ArrowUp, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { GatewaySettings } from "./gateway-settings"
 import { AppearanceSettings } from "./appearance-settings"
+import { PushSettings } from "./push-settings"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
@@ -113,6 +114,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "difficulty", label: "Difficulty", icon: SlidersHorizontal },
     { id: "account", label: "Account", icon: UserRound },
     { id: "appearance", label: "Appearance", icon: Sun },
+    ...(!import.meta.env.VITE_DESKTOP ? [{ id: "app", label: "Mobile app", icon: Smartphone }] : []),
     { id: "data", label: "Data", icon: Database },
     { id: "ai", label: "AI", icon: Sparkles },
     ...(AI_ENABLED ? [{ id: "updates", label: "Updates", icon: Download }] : []),
@@ -321,6 +323,25 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           ) : null}
 
           {active === "appearance" ? <AppearanceSettings /> : null}
+
+          {active === "app" ? (
+            <Section title="Focal on your phone" description="Add Focal to your Home Screen for a dedicated app window and quick access to your study.">
+              <div className="space-y-6 py-4 text-sm">
+                <div className="space-y-2">
+                  <h3 className="font-medium">Install Focal</h3>
+                  <p className="text-muted-foreground"><strong className="text-foreground">iPhone or iPad:</strong> open the Share menu, choose Add to Home Screen, then Add. Open Focal from its new icon. If offered, keep Open as Web App enabled.</p>
+                  <p className="text-muted-foreground"><strong className="text-foreground">Android:</strong> open your browser’s menu and choose Install app or Add to Home screen.</p>
+                  <p className="text-muted-foreground">An internet connection is needed to load Focal. Your existing saved study data stays in this browser; sign in to sync it across devices or app installations.</p>
+                </div>
+                <PushSettings key={sync.status === "sign-in-required" ? "signed-out" : sync.user?.id ?? "signed-out"} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} />
+                <div className="space-y-2 border-t pt-5">
+                  <h3 className="font-medium">Timer notifications</h3>
+                  <p className="text-muted-foreground">In Study timer, open Pomodoro settings → Alerts and flow, then turn on Notifications and allow the browser prompt. On iPhone and iPad, use the Home Screen app on iOS 16.4 or later.</p>
+                  <p className="text-muted-foreground">Keep Focal open for timer alerts. Your phone can suspend background apps and delay timer alerts when locked. Planned study and friend reminders above use push and work while Focal is closed.</p>
+                </div>
+              </div>
+            </Section>
+          ) : null}
 
           {active === "data" ? (
             <Section title="Data" description="Back up your Focal data or restore it from a JSON file.">

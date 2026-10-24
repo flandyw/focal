@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useRef, useState } from "react"
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import {
   Bell,
   CalendarPlus,
@@ -28,7 +28,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
 import { TimerReadout } from "./timer-readout"
-import { requestTimerNotifications, useStudyTimer } from "../hooks/use-study-timer"
+import { useStudyTimer } from "../hooks/use-study-timer"
+import { requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import type { useStudySessionSync } from "../lib/study-session-sync"
 import { StudySessionDialog } from "./study-session-dialog"
 import type { StudySessionEdit } from "../lib/sync/sessionContract"
@@ -241,8 +242,19 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const isFreeStudy = state.mode === "free"
   const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
   const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
+  const [notificationPermission, setNotificationPermission] = useState(() => typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+  useEffect(() => {
+    const refresh = () => setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission)
+    window.addEventListener("focus", refresh)
+    document.addEventListener("visibilitychange", refresh)
+    return () => {
+      window.removeEventListener("focus", refresh)
+      document.removeEventListener("visibilitychange", refresh)
+    }
+  }, [])
+  const notificationsEnabled = settings.notificationsEnabled && notificationPermission === "granted"
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
-  const announcement = notificationBlockedMode === displayMode ? "Notifications are blocked for this site." : `${displayMode} started.`
+  const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} started.`
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
@@ -314,10 +326,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   }
 
   async function toggleNotifications() {
-    if (settings.notificationsEnabled) return updateSettings({ notificationsEnabled: false })
+    if (notificationsEnabled) return updateSettings({ notificationsEnabled: false })
     const granted = await requestTimerNotifications()
+    setNotificationPermission(typeof Notification === "undefined" ? "unsupported" : Notification.permission)
     updateSettings({ notificationsEnabled: granted })
-    if (!granted) setNotificationBlockedMode(displayMode)
+    setNotificationBlockedMode(granted ? null : displayMode)
   }
 
   const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
@@ -441,7 +454,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
         locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
         subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
-        settings={settings} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
+        settings={{ ...settings, notificationsEnabled }} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
         continueLabel={offerContinue ? continueLabel : undefined}
         onContinue={offerContinue ? () => void startPlan(offerContinue, "resume") : undefined}
         plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
@@ -634,11 +647,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               pressed={settings.soundEnabled}
             />
             <ToggleRow
-              description="A desktop notification when the timer changes phase. Needs your browser's permission."
-              icon={settings.notificationsEnabled ? <Bell /> : <BellOff />}
+              description={timerNotificationHelp()}
+              icon={notificationsEnabled ? <Bell /> : <BellOff />}
               label="Notifications"
               onToggle={() => void toggleNotifications()}
-              pressed={settings.notificationsEnabled}
+              pressed={notificationsEnabled}
             />
             <ToggleRow
               description="Roll straight into the break when a focus block ends."
@@ -706,13 +719,13 @@ export function StudyTimerPage({
                 : "Study freely with an elapsed timer, use Pomodoro blocks, or sit a timed paper. Every session feeds your study record."}
             </p>
           </div>
-          {!embedded && <div className="flex shrink-0 items-center gap-3">
-            <TabsList className="h-auto! w-fit border-b-0 pb-0">
+          {!embedded && <div className="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-start sm:gap-3">
+            <TabsList className="h-auto! w-fit shrink-0 border-b-0 pb-0">
               <TabsTrigger value="focus">Study</TabsTrigger>
               <TabsTrigger value="exam">Timed paper</TabsTrigger>
             </TabsList>
-            <span aria-hidden className="h-5 w-px bg-border" />
-            <Button className="text-muted-foreground hover:text-foreground" onClick={() => { onModeChange("focus"); setEclair(true) }} title="Open the full-screen study launcher" variant="ghost"><Smartphone />Launcher</Button>
+            <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+            <Button className="ml-auto text-muted-foreground hover:text-foreground sm:ml-0" onClick={() => { onModeChange("focus"); setEclair(true) }} title="Open the full-screen study launcher" variant="ghost"><Smartphone />Launcher</Button>
           </div>}
         </div>
 

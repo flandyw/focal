@@ -31,12 +31,13 @@ type MistakeJsonImportDialogProps = {
   attempts: ExamAttempt[]
   initialAttemptId?: string | null
   onOpenChange: (open: boolean) => void
-  onSaveMistakes: (mistakes: Mistake[]) => void
+  onSaveMistakes: (mistakes: Mistake[], attempt?: ExamAttempt) => void
 }
 
 export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOpenChange, onSaveMistakes }: MistakeJsonImportDialogProps) {
   const [jsonText, setJsonText] = useState("")
   const [drafts, setDrafts] = useState<ParsedMistakeDraft[] | null>(null)
+  const [exam, setExam] = useState<ExamAttempt | null>(null)
   const [attemptId, setAttemptId] = useState(initialAttemptId ?? "")
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -62,7 +63,8 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   function review() {
     try {
       const parsed = parseMistakeImport(jsonText)
-      setDrafts(parsed)
+      setDrafts(parsed.drafts)
+      setExam(parsed.exam)
       setError(null)
     } catch (reviewError) {
       setDrafts(null)
@@ -71,8 +73,8 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   }
 
   function importMistakes() {
-    if (!drafts?.length) return
-    onSaveMistakes(createMistakesFromImport(drafts, attemptId))
+    if (!drafts || (!drafts.length && !exam)) return
+    onSaveMistakes(createMistakesFromImport(drafts, exam?.id ?? attemptId), exam ?? undefined)
     onOpenChange(false)
   }
 
@@ -82,7 +84,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
         <DialogHeader>
           <DialogTitle>Import mistakes from any chatbot</DialogTitle>
           <DialogDescription>
-            Copy the prompt below into your favourite AI chatbot together with your marked exam or notes, then paste the returned JSON here to log the mistakes.
+            Copy the prompt below into your favourite AI chatbot together with your marked exam or notes, then paste the returned JSON here to log the mistakes, and the exam itself when the chatbot can see your total mark.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -107,6 +109,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
               onChange={(event) => {
                 setJsonText(event.target.value)
                 setDrafts(null)
+                setExam(null)
                 setError(null)
               }}
               placeholder='[{"question": "Section B, Question 4", ...}]'
@@ -118,21 +121,21 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0 flex-1">
                 <FieldLabel htmlFor="mistake-import-exam">3. Choose an exam (optional)</FieldLabel>
-                <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => setAttemptId(value?.value ?? "")} autoHighlight>
+                {exam ? <p id="mistake-import-exam" className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">New exam: {exam.title} · {exam.paper} · <span className="tabular-nums">{exam.rawScore}/{exam.rawMax}</span> · {exam.completedAt}</p> : <Combobox items={attemptOptions} value={selectedAttemptOption} onValueChange={(value) => setAttemptId(value?.value ?? "")} autoHighlight>
                   <ComboboxInput id="mistake-import-exam" className="w-full" placeholder="Search practice exams" />
                   <ComboboxContent>
                     <ComboboxEmpty>No matching practice exams.</ComboboxEmpty>
                     <ComboboxList>{(item) => <ComboboxItem key={item.value} value={item}>{item.label}</ComboboxItem>}</ComboboxList>
                   </ComboboxContent>
-                </Combobox>
+                </Combobox>}
               </div>
               {!drafts ? (
                 <Button type="button" variant="secondary" disabled={!jsonText.trim()} onClick={review}>Review JSON</Button>
               ) : (
-                <Button type="button" variant="outline" onClick={() => { setDrafts(null); setError(null) }}>Edit JSON</Button>
+                <Button type="button" variant="outline" onClick={() => { setDrafts(null); setExam(null); setError(null) }}>Edit JSON</Button>
               )}
             </div>
-            <FieldDescription>Choose Uncategorised to save these mistakes without an exam.</FieldDescription>
+            <FieldDescription>{exam ? "The chatbot logged this exam, so the mistakes are saved against it." : "Choose Uncategorised to save these mistakes without an exam."}</FieldDescription>
           </Field>
 
           {drafts ? (
@@ -167,11 +170,11 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
         <DialogFooter>
           <Button
             type="button"
-            disabled={!drafts?.length}
+            disabled={!drafts || (!drafts.length && !exam)}
             onClick={importMistakes}
           >
             <Check />
-            Import {drafts?.length ? `${drafts.length} mistake${drafts.length === 1 ? "" : "s"}` : "mistakes"}
+            Import {exam ? "exam" + (drafts?.length ? " and " : "") : ""}{drafts?.length ? `${drafts.length} mistake${drafts.length === 1 ? "" : "s"}` : exam ? "" : "mistakes"}
           </Button>
         </DialogFooter>
       </DialogContent>

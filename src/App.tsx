@@ -686,11 +686,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     toast.success(suspended ? "Selected cards paused" : "Selected cards returned to the review queue")
   }
 
-  function importMistakes(incoming: Mistake[]) {
+  function importMistakes(incoming: Mistake[], attempt?: ExamAttempt) {
     const imported = incoming.map((mistake) => !mistake.attemptId && !mistake.subject && selectedSubject !== "all" ? { ...mistake, subject: selectedSubject } : mistake)
-    setData((current) => ({ ...current, mistakes: [...current.mistakes, ...imported] }))
-    toast.success(`${imported.length} mistake${imported.length === 1 ? "" : "s"} imported`)
-    linkInBackground({ ...data, mistakes: [...data.mistakes, ...imported] }, imported.map((mistake) => mistake.id))
+    const attempts = attempt ? [attempt] : []
+    setData((current) => ({ ...current, attempts: [...current.attempts, ...attempts], mistakes: [...current.mistakes, ...imported] }))
+    toast.success(`${attempt ? `${attempt.title} and ` : ""}${imported.length} mistake${imported.length === 1 ? "" : "s"} imported`)
+    linkInBackground({ ...data, attempts: [...data.attempts, ...attempts], mistakes: [...data.mistakes, ...imported] }, imported.map((mistake) => mistake.id))
   }
 
   function applyAutofills(autofills: MistakeAutofill[]) {

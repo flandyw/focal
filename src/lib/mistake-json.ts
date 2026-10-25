@@ -1,5 +1,5 @@
 import { MISTAKE_EDIT_FIELDS, type MistakeEdit } from "./mistake-autofill"
-import { isMistakeDifficulty, MISTAKE_CATEGORIES, validateMistakeMarks, type Mistake, type MistakeCategory, type MistakeDifficulty } from "./exam-data"
+import { formatExamTitle, isMistakeDifficulty, MISTAKE_CATEGORIES, validateAttempt, validateMistakeMarks, type ExamAttempt, type Mistake, type MistakeCategory, type MistakeDifficulty } from "./exam-data"
 
 export type ParsedMistakeDraft = {
   question: string
@@ -79,6 +79,17 @@ EXAMPLE OF A COMPLETE RECORD
 ${PROMPT_EXAMPLE}
 \`\`\`
 
+EXAM LOG (optional)
+If the material shows the result of a whole practice exam or SAC (a total mark), also log the exam: instead of a bare array, return one object {"exam": {...}, "mistakes": [ ...the records above... ]}. The exam object uses these keys:
+- "subject" (required string): VCE subject name, e.g. "Mathematical Methods".
+- "provider" (string): who wrote the paper, e.g. "VCAA", "Neap", "Insight", or the school; "Other" if unknown.
+- "examYear" (required integer): year the paper was published.
+- "paper" (required string): e.g. "Exam 1", "Exam 2", "SAC 1".
+- "completedAt" (string): date I sat it, YYYY-MM-DD; omit if unknown.
+- "rawScore" (required number >= 0) and "rawMax" (required number > 0): my total mark and the paper's maximum.
+- "comment" (optional string): one short line of overall feedback.
+Omit "exam" entirely if no total mark is visible.
+
 Material to analyse follows after this line.`
 }
 
@@ -92,28 +103,31 @@ function extractJsonPayload(text: string): string {
   return fenced ? fenced[1] : trimmed
 }
 
+// Index 0 is the "exam" object; mistake records count from 1.
+const where = (index: number) => index ? `Item ${index}` : "Exam"
+
 function coerceString(value: unknown, label: string, index: number): string {
-  if (value === undefined || value === null || value === "") throw new Error(`Item ${index}: "${label}" is required.`)
-  if (typeof value !== "string") throw new Error(`Item ${index}: "${label}" must be text.`)
+  if (value === undefined || value === null || value === "") throw new Error(`${where(index)}: "${label}" is required.`)
+  if (typeof value !== "string") throw new Error(`${where(index)}: "${label}" must be text.`)
   const trimmed = value.trim()
-  if (!trimmed) throw new Error(`Item ${index}: "${label}" cannot be empty.`)
+  if (!trimmed) throw new Error(`${where(index)}: "${label}" cannot be empty.`)
   return trimmed
 }
 
 function coerceOptionalString(value: unknown, label: string, index: number): string {
   if (value === undefined || value === null) return ""
   if (typeof value === "number" && Number.isFinite(value)) return String(value)
-  if (typeof value !== "string") throw new Error(`Item ${index}: "${label}" must be text.`)
+  if (typeof value !== "string") throw new Error(`${where(index)}: "${label}" must be text.`)
   return value.trim()
 }
 
 function coerceNumber(value: unknown, label: string, index: number): number {
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error(`Item ${index}: "${label}" must be a finite number.`)
+    if (!Number.isFinite(value)) throw new Error(`${where(index)}: "${label}" must be a finite number.`)
     return value
   }
   if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value)
-  throw new Error(`Item ${index}: "${label}" must be a number.`)
+  throw new Error(`${where(index)}: "${label}" must be a number.`)
 }
 
 function coerceCategory(value: unknown, index: number): MistakeCategory {
@@ -126,30 +140,65 @@ function coerceCategory(value: unknown, index: number): MistakeCategory {
   throw new Error(`Item ${index}: "category" must be exactly one of the listed values.`)
 }
 
-export function parseMistakeImport(text: string): ParsedMistakeDraft[] {
-  let parsed: unknown
+function readImportJson(text: string): unknown {
   try {
-    parsed = JSON.parse(extractJsonPayload(text))
+    return JSON.parse(extractJsonPayload(text))
   } catch {
     const start = text.search(/[[{]/)
     const end = Math.max(text.lastIndexOf("]"), text.lastIndexOf("}"))
-    if (start === -1 || end <= start) throw new Error("Paste the JSON array returned by your chatbot.")
+    if (start === -1 || end <= start) throw new Error("Paste the JSON returned by your chatbot.")
     try {
-      parsed = JSON.parse(text.slice(start, end + 1))
+      return JSON.parse(text.slice(start, end + 1))
     } catch {
       throw new Error("This is not valid JSON. Ask your chatbot to return one fenced JSON code block, then paste it again.")
     }
   }
+}
+
+function parseExam(value: unknown, timestamp: string): ExamAttempt {
+  if (!isRecord(value)) throw new Error('"exam" must be a JSON object.')
+  const subject = coerceString(value.subject, "subject", 0)
+  const provider = coerceOptionalString(value.provider, "provider", 0) || "Other"
+  const examYear = coerceNumber(value.examYear, "examYear", 0)
+  if (!Number.isInteger(examYear) || examYear < 1990 || examYear > 2100) throw new Error(`Exam: "examYear" must be a year such as 2025.`)
+  const completedAt = coerceOptionalString(value.completedAt, "completedAt", 0) || timestamp.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(completedAt) || Number.isNaN(Date.parse(completedAt))) throw new Error(`Exam: "completedAt" must be a date in YYYY-MM-DD form.`)
+  const rawScore = coerceNumber(value.rawScore, "rawScore", 0)
+  const rawMax = coerceNumber(value.rawMax, "rawMax", 0)
+  const scoreError = validateAttempt({ rawScore, rawMax })
+  if (scoreError) throw new Error(`Exam: ${scoreError}`)
+  return {
+    id: crypto.randomUUID(),
+    subject,
+    provider,
+    title: formatExamTitle(provider, examYear, subject),
+    examYear,
+    paper: coerceString(value.paper, "paper", 0),
+    completedAt,
+    rawScore,
+    rawMax,
+    comment: coerceOptionalString(value.comment, "comment", 0) || undefined,
+    referenceId: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+/** Reads a chatbot reply: a bare array of mistakes, or `{ exam?, mistakes }` to also log the exam they came from. */
+export function parseMistakeImport(text: string, timestamp = new Date().toISOString()): { exam: ExamAttempt | null; drafts: ParsedMistakeDraft[] } {
+  const parsed = readImportJson(text)
+  const exam = isRecord(parsed) && parsed.exam !== undefined && parsed.exam !== null ? parseExam(parsed.exam, timestamp) : null
 
   let items: unknown[]
   if (Array.isArray(parsed)) items = parsed
   else if (isRecord(parsed) && Array.isArray(parsed.mistakes)) items = parsed.mistakes
+  else if (exam) items = []
   else if (isRecord(parsed)) items = [parsed]
   else throw new Error("The JSON must be an array of mistake objects.")
 
-  if (!items.length) throw new Error("The JSON contains no mistake records.")
+  if (!items.length && !exam) throw new Error("The JSON contains no mistake records.")
 
-  return items.map((item, itemIndex) => {
+  const drafts = items.map((item, itemIndex) => {
     if (!isRecord(item)) throw new Error(`Item ${itemIndex + 1}: each record must be a JSON object.`)
     const index = itemIndex + 1
     const totalMarks = coerceNumber(item.totalMarks, "totalMarks", index)
@@ -171,6 +220,7 @@ export function parseMistakeImport(text: string): ParsedMistakeDraft[] {
     if (marksError) throw new Error(`Item ${index}: ${marksError}`)
     return draft
   })
+  return { exam, drafts }
 }
 
 export function createMistakesFromImport(

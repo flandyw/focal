@@ -16,6 +16,7 @@ import { MetricCard, MetricGrid, WorkspacePage } from "./workspace-layout"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { getHeatColor, getSubjectColor } from "../lib/progress-chart-theme"
 import { getSubjectById } from "../lib/progress-utils"
+import { studySubjectId } from "../lib/studySubjects"
 import { supabase } from "../lib/supabase"
 import { cn } from "../lib/utils"
 import { Avatar, AvatarBadge, AvatarFallback } from "./ui/avatar"
@@ -298,7 +299,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   const nextRival = me ? board.findLast((entry) => entry.score > me.score) : undefined
   const selected = board.find(({ person }) => person.user_id === selectedId)
   const groupSubjects = Object.entries(board.reduce<Record<string, number>>((totals, { person }) => {
-    for (const [id, ms] of Object.entries(person.subjects ?? {})) totals[id] = (totals[id] ?? 0) + ms
+    for (const [id, ms] of Object.entries(person.subjects ?? {})) { const key = studySubjectId(id); totals[key] = (totals[key] ?? 0) + ms }
     return totals
   }, {})).sort((a, b) => b[1] - a[1])
   const groupSubjectTotal = groupSubjects.reduce((sum, [, ms]) => sum + ms, 0) || 1

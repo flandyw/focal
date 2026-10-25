@@ -57,7 +57,7 @@ function roundTo(value: number, places: number) {
   return Math.round(value * factor) / factor
 }
 
-function isEnglishStudy(code: string) {
+export function isEnglishStudy(code: string) {
   return ENGLISH_CODES.has(code)
 }
 

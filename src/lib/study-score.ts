@@ -97,6 +97,15 @@ function normalPercentile(z: number): number {
   return clamp((z >= 0 ? 1 - tail : tail) * 100, 0, 100)
 }
 
+// Moderation maps a school SAC rank onto that school's exam results, so the
+// school's median study score shifts the student's within-school position.
+// shortcut: assumes the school's spread matches the state's; use school score spread if it becomes available.
+export function sacPercentileFromRank(rank: number, cohortSize: number, schoolMedianStudyScore = 30): number | null {
+  if (!Number.isInteger(rank) || !Number.isInteger(cohortSize) || rank < 1 || rank > cohortSize) return null
+  const withinSchool = (cohortSize - rank + 0.5) / cohortSize
+  return clamp(normalPercentile((schoolMedianStudyScore - 30) / 7 + inverseNormalCdf(withinSchool)), 0.1, 99.9)
+}
+
 export function defaultExamWeight(subject: string): number {
   const name = normaliseScalingStudyName(subject)
   if (isTwoPaperMathematics(subject) || name === "algorithmics hess") return 60

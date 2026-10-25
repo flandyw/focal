@@ -7,12 +7,11 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { AtarEstimator } from "./atar-estimator"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { StudyScoreTrendChart } from "./study-score-trend-chart"
-import type { AppData, AssessmentReference, SavedAtarEstimate } from "../lib/exam-data"
-import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore } from "../lib/study-score"
+import type { AppData, AssessmentReference } from "../lib/exam-data"
+import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore, sacPercentileFromRank } from "../lib/study-score"
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
 
@@ -20,14 +19,10 @@ export function StudyScorePredictor({
   data,
   references,
   scalingReferences,
-  onSaveAtarEstimate,
-  onDeleteAtarEstimate,
 }: {
   data: AppData
   references: AssessmentReference[]
   scalingReferences: ScalingReference[]
-  onSaveAtarEstimate: (estimate: SavedAtarEstimate) => void
-  onDeleteAtarEstimate: (id: string) => void
 }) {
   const subjects = useMemo(
     () => prioritiseSubjects(data.attempts.map((attempt) => attempt.subject), data.subjects),
@@ -37,6 +32,10 @@ export function StudyScorePredictor({
   const subject = subjects.includes(selectedSubject) ? selectedSubject : subjects[0] ?? ""
   const [savedInputs, setSavedInputs] = useState(() => ({
     subject,
+    sacMode: "rank",
+    sacRank: "",
+    sacCohort: "",
+    schoolMedian: "",
     sacPercentile: "",
     examWeight: defaultExamWeight(subject),
     distributionYear: "automatic",
@@ -44,6 +43,10 @@ export function StudyScorePredictor({
   }))
   const inputs = savedInputs.subject === subject ? savedInputs : {
     subject,
+    sacMode: "rank",
+    sacRank: "",
+    sacCohort: "",
+    schoolMedian: "",
     sacPercentile: "",
     examWeight: defaultExamWeight(subject),
     distributionYear: "automatic",
@@ -51,7 +54,7 @@ export function StudyScorePredictor({
   }
   if (selectedSubject !== subject) setSubject(subject)
   if (savedInputs.subject !== subject) setSavedInputs(inputs)
-  const { sacPercentile, examWeight, distributionYear, scalingYear } = inputs
+  const { sacMode, sacRank, sacCohort, schoolMedian, sacPercentile, examWeight, distributionYear, scalingYear } = inputs
 
   const distributionYears = useMemo(
     () => [...new Set(references
@@ -61,7 +64,13 @@ export function StudyScorePredictor({
   )
   const selectedDistributionYear = distributionYear === "automatic" ? null : Number(distributionYear)
 
-  const parsedSac = sacPercentile.trim() === "" ? null : Number(sacPercentile)
+  const parsedSac = sacMode === "rank"
+    ? sacRank.trim() === "" || sacCohort.trim() === "" ? null : sacPercentileFromRank(
+      Number(sacRank),
+      Number(sacCohort),
+      schoolMedian.trim() === "" || !Number.isFinite(Number(schoolMedian)) ? undefined : Number(schoolMedian),
+    )
+    : sacPercentile.trim() === "" ? null : Number(sacPercentile)
   const prediction = useMemo(
     () => predictStudyScore({
       subject,
@@ -105,14 +114,14 @@ export function StudyScorePredictor({
 
   return (
     <div className="grid gap-8">
-      <PageHeader title="Study score and ATAR" />
+      <PageHeader title="Study score" />
 
       {subjects.length === 0 ? (
         <Empty className="min-h-80 border">
           <EmptyHeader>
             <EmptyMedia variant="icon"><Calculator /></EmptyMedia>
             <EmptyTitle>Log a practice exam first</EmptyTitle>
-            <EmptyDescription>The study-score predictor needs at least one recorded result. You can still enter raw study scores manually in the ATAR estimator below.</EmptyDescription>
+            <EmptyDescription>The study-score predictor needs at least one recorded result. You can still enter raw study scores manually on the ATAR page.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -130,21 +139,76 @@ export function StudyScorePredictor({
                 </Field>
 
                 <Field>
-                  <FieldLabel htmlFor="sac-percentile">Estimated moderated SAC percentile</FieldLabel>
-                  <Input
-                    id="sac-percentile"
-                    type="number"
-                    min="0.1"
-                    max="99.9"
-                    step="0.1"
-                    inputMode="decimal"
-                    placeholder="Optional"
-                    value={sacPercentile}
-                    onChange={(event) => setSavedInputs({ ...inputs, sacPercentile: event.target.value })}
-                  />
-                  <FieldDescription>
-                    Enter your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile.
-                  </FieldDescription>
+                  <FieldLabel htmlFor="sac-mode">SAC results</FieldLabel>
+                  <Select value={sacMode} onValueChange={(value) => setSavedInputs({ ...inputs, sacMode: value ?? "rank" })}>
+                    <SelectTrigger id="sac-mode" className="w-full">
+                      <SelectValue>{sacMode === "rank" ? "School rank" : "Moderated percentile"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rank">School rank</SelectItem>
+                      <SelectItem value="percentile">Moderated percentile</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {sacMode === "rank" ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          aria-label="SAC rank"
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          placeholder="Rank"
+                          value={sacRank}
+                          onChange={(event) => setSavedInputs({ ...inputs, sacRank: event.target.value })}
+                        />
+                        <Input
+                          aria-label="Students in subject at your school"
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          placeholder="Out of"
+                          value={sacCohort}
+                          onChange={(event) => setSavedInputs({ ...inputs, sacCohort: event.target.value })}
+                        />
+                      </div>
+                      <Input
+                        aria-label="School median study score"
+                        type="number"
+                        min="20"
+                        max="45"
+                        step="1"
+                        inputMode="numeric"
+                        placeholder="School median study score (optional, 30 is average)"
+                        value={schoolMedian}
+                        onChange={(event) => setSavedInputs({ ...inputs, schoolMedian: event.target.value })}
+                      />
+                      <FieldDescription>
+                        {parsedSac !== null
+                          ? `About the ${parsedSac.toFixed(0)}th percentile statewide after moderation.`
+                          : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}
+                      </FieldDescription>
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        id="sac-percentile"
+                        aria-label="Moderated SAC percentile"
+                        type="number"
+                        min="0.1"
+                        max="99.9"
+                        step="0.1"
+                        inputMode="decimal"
+                        placeholder="Optional"
+                        value={sacPercentile}
+                        onChange={(event) => setSavedInputs({ ...inputs, sacPercentile: event.target.value })}
+                      />
+                      <FieldDescription>
+                        Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile.
+                      </FieldDescription>
+                    </>
+                  )}
                 </Field>
 
                 <Field>
@@ -314,15 +378,6 @@ export function StudyScorePredictor({
         <TrendingUp className="mt-0.5 size-4 shrink-0" />
         The algorithm models study scores with a statewide mean of 30 and standard deviation of 7, after combining the recency-weighted exam and SAC normal-score estimates.
       </div>
-
-      <AtarEstimator
-        data={data}
-        references={references}
-        scalingReferences={scalingReferences}
-        savedEstimates={data.atarEstimates}
-        onSaveEstimate={onSaveAtarEstimate}
-        onDeleteEstimate={onDeleteAtarEstimate}
-      />
     </div>
   )
 }

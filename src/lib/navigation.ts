@@ -21,7 +21,8 @@ const ANALYSIS_NAVIGATION: NavigationItem[] = [
   { id: "progress", label: "Progress", description: "Study patterns and progress graphs" },
   { id: "stoplight" as const, label: "Stoplight", description: "Rate every skill red, amber or green" },
   { id: "goals" as const, label: "Goals", description: "Work backwards from score targets" },
-  { id: "predictor" as const, label: "Study score", description: "Estimate study scores and ATAR" },
+  { id: "predictor" as const, label: "Study score", description: "Predict raw and scaled study scores" },
+  { id: "atar" as const, label: "ATAR", description: "Estimate an ATAR from study scores" },
   { id: "vcaa" as const, label: "VCAA data", description: "Compare grades and open matching papers" },
 ]
 

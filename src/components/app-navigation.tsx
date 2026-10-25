@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
+import { ArrowUpRight, Calculator, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
 
@@ -46,7 +46,7 @@ const NAVIGATION_ICONS = {
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
-  predictor: TrendingUp, vcaa: ChartColumn, friends: UsersRound,
+  predictor: TrendingUp, atar: Calculator, vcaa: ChartColumn, friends: UsersRound,
 }
 
 const MOBILE_TABS = [

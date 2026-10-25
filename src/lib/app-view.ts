@@ -13,6 +13,7 @@ const APP_VIEWS = [
   "stoplight",
   "goals",
   "predictor",
+  "atar",
   "vcaa",
   "friends",
   "settings",

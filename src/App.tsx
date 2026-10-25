@@ -78,6 +78,9 @@ const VcaaExplorer = lazy(() =>
 const SettingsPage = lazy(() =>
   import("./components/settings-page").then((module) => ({ default: module.SettingsPage })),
 )
+const AtarEstimator = lazy(() =>
+  import("./components/atar-estimator").then((module) => ({ default: module.AtarEstimator })),
+)
 const StudyScorePredictor = lazy(() =>
   import("./components/study-score-predictor").then((module) => ({ default: module.StudyScorePredictor })),
 )
@@ -170,7 +173,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     studiesStatus,
     scalingStatus,
     reload: reloadReferences,
-  } = useReferenceData(view === "predictor")
+  } = useReferenceData(view === "predictor" || view === "atar")
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
   const [onboarding, setOnboarding] = useState(false)
@@ -192,7 +195,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
 
   const selectedSubject = chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
-  const globalView = ["calendar", "chat", "timetable", "predictor", "settings", "focus", "friends"].includes(view)
+  const globalView = ["calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
   const pageData = useMemo(() => subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data, [subjectScoped, workspace, data])
@@ -905,7 +908,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           })} /></Suspense> : null}
           {view === "sacs" ? <Suspense fallback={PAGE_LOADING}><SacPage records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
           {view === "library" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><ExamLibrary references={pageReferences} studies={pageStudies} attempts={pageData.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
-          {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onSaveAtarEstimate={saveAtarEstimate} onDeleteAtarEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
+          {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} /></Suspense>}</> : null}
+          {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><AtarEstimator data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} /></Suspense>}</> : null}
           {view === "friends" ? <Suspense fallback={PAGE_LOADING}><FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} onSignIn={() => setView("settings")} /></Suspense> : null}
           {view === "chat" ? <Suspense fallback={PAGE_LOADING}><ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /></Suspense> : null}

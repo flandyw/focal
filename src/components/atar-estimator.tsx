@@ -139,8 +139,8 @@ export function AtarEstimator({
                 const role = roles.get(row.id)
                 const name = reference?.studyName ?? "subject"
                 return (
-                  <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
-                    <div role="cell" className="max-md:col-span-2">
+                  <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
+                    <div role="cell" className="max-md:col-span-3">
                       <SubjectCombobox subjects={studies.map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
                     <div role="cell" className="flex items-center gap-1.5">
@@ -152,10 +152,9 @@ export function AtarEstimator({
                       <span className="text-sm tabular-nums text-muted-foreground md:hidden">{result ? `${result.scaledScore.toFixed(1)} scaled` : null}</span>
                       {role ? <Badge variant={role === "Not counted" ? "outline" : role === "10% increment" ? "secondary" : "default"}>{role}</Badge> : <span className="text-sm text-muted-foreground max-md:hidden">—</span>}
                     </div>
-                    <div role="cell" className="max-md:hidden">
+                    <div role="cell">
                       <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><Trash2 /></Button>
                     </div>
-                    <Button variant="ghost" size="sm" className="justify-self-start text-muted-foreground md:hidden" disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><Trash2 />Remove</Button>
                   </div>
                 )
               })}
@@ -164,8 +163,8 @@ export function AtarEstimator({
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:sticky lg:top-6">
-          <Card>
+        <div className="grid gap-6 max-lg:contents lg:sticky lg:top-6">
+          <Card className="max-lg:order-first">
             <CardHeader><CardDescription>Estimated ATAR</CardDescription></CardHeader>
             <CardContent className="grid gap-5">
               <div>
@@ -181,7 +180,7 @@ export function AtarEstimator({
                     {counted.map((item) => (
                       <li key={item.id} className="flex items-baseline gap-3">
                         <span className="min-w-0 flex-1 truncate">{item.studyName}</span>
-                        <span className="text-xs text-muted-foreground">{item.role === "Increment" ? "10%" : item.role === "English" ? "English" : ""}</span>
+                        <span className="text-xs text-muted-foreground">{item.role === "Increment" ? "10%" : ""}</span>
                         <span className="w-10 text-right font-medium tabular-nums">{item.contribution.toFixed(1)}</span>
                       </li>
                     ))}

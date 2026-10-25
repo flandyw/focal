@@ -59,6 +59,8 @@ bun run check               # Typecheck and lint shared frontend and scripts
 
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in root `.env.local` for either build. Never expose a service-role key to the frontend. Apply the existing Supabase migrations before running connected clients.
 
+Password resets start in **Settings > Account > Forgot password?** and finish in the browser. In Supabase **Authentication > URL Configuration**, set **Site URL** to the hosted Focal frontend (also used by desktop reset emails), and allow each web deployment's `/?reset-password=1` redirect URL, including `http://localhost:5173/?reset-password=1` for local development. Keep the reset email template's Supabase confirmation link so the SDK can establish the recovery session.
+
 Friends comparisons and cheers require migration `0031_friends_competition.sql`. Study activity is visible only to accepted friends; subject details and exam results follow each person's sharing settings. Cheers are private between the sender and recipient, with one cheer per friend every 24 hours.
 
 Friends usernames and private nicknames require `0037_friend_usernames.sql`. Apply it before deploying the updated frontend. Users can change their unique @username in Friends and set a nickname in a friend's details; nicknames are visible only to their owner. Existing friendships, sharing preferences and legacy friend codes are preserved.

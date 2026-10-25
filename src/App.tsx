@@ -148,6 +148,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const [focusPreset, setFocusPreset] = useState<{ subject?: string; intent: string } | undefined>()
   const [vcaaSelection, setVcaaSelection] = useState<(VcaaExplorerPreset & { key: string }) | null>(null)
   const sync = useSupabaseSync(data, setData)
+  useEffect(() => {
+    if (!sync.passwordRecovery) return
+    // Recovery links must reach Account regardless of the last saved view.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setSettingsSection("account")
+    setView("settings")
+  }, [sync.passwordRecovery])
   const notificationUserId = ["sign-in-required", "restoring"].includes(sync.status) ? undefined : sync.user?.id
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
@@ -944,7 +951,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         </Suspense>
       ) : null}
       {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
-      {onboarding ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
+      {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + 0.75rem)" }} />}
     </SidebarProvider>
   )

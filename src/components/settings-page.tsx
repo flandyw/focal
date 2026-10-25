@@ -61,7 +61,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const auth = useChatGPT()
   const [email, setEmail] = useState(sync.user?.email ?? "")
   const [password, setPassword] = useState("")
-  const [accountLoading, setAccountLoading] = useState<"sign-in" | "create" | null>(null)
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [resetRequested, setResetRequested] = useState(false)
+  const [accountLoading, setAccountLoading] = useState<"sign-in" | "create" | "reset" | "update" | null>(null)
   const [accountMessage, setAccountMessage] = useState<string | null>(null)
   const [accountError, setAccountError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -120,7 +122,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
     { id: "ai", label: "AI", icon: Sparkles },
     ...(AI_ENABLED ? [{ id: "updates", label: "Updates", icon: Download }] : []),
   ] as const
-  const active = sections.some((item) => item.id === section) ? section : "subjects"
+  const active = sync.passwordRecovery ? "account" : sections.some((item) => item.id === section) ? section : "subjects"
+  const recovering = sync.passwordRecovery === "ready"
+  const resetting = !recovering && (resetRequested || sync.passwordRecovery === "invalid")
 
   return (
     <div className="grid gap-6">
@@ -258,14 +262,16 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           {active === "account" ? (
             <Section
               title="Account"
-              description="Sign in to sync exams, SACs, and mistakes across devices."
+              description={recovering ? "Choose a new password for your account." : resetting ? "Enter your account email to receive a password reset link." : "Sign in to sync exams, SACs, and mistakes across devices."}
               action={sync.user ? <Badge variant="secondary"><Cloud />{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
                 : sync.status === "sign-in-required" ? "Sign in again" : sync.status === "reconnecting" || sync.status === "restoring" ? "Reconnecting"
                 : sync.status === "pending" ? sync.pendingCount ? `${sync.pendingCount} queued` : "Sync pending" : "Sync failed"}</Badge> : null}
             >
               {!sync.configured ? (
                 <p className="py-4 text-sm text-muted-foreground">Add the Supabase URL and publishable key to enable account sync.</p>
-              ) : sync.user && sync.status !== "sign-in-required" ? (
+              ) : sync.passwordRecovery === "checking" ? (
+                <p role="status" className="py-4 text-sm text-muted-foreground">Checking your password reset link…</p>
+              ) : sync.user && sync.status !== "sign-in-required" && !recovering && !resetting ? (
                 <Row title={sync.user.email ?? "Signed in"} description="Local changes continue saving if sync is temporarily unavailable.">
                   <Button variant="outline" onClick={() => { void sync.signOut().catch(() => setAccountError("Could not sign out. Try again.")) }}><LogOut />Sign out</Button>
                 </Row>
@@ -273,25 +279,37 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 <form aria-busy={Boolean(accountLoading)} className="grid max-w-md gap-4 py-4" onSubmit={async (event) => {
                   event.preventDefault()
                   if (accountLoading) return
-                  setAccountLoading("sign-in")
+                  setAccountLoading(recovering ? "update" : resetting ? "reset" : "sign-in")
                   setAccountMessage(null)
                   setAccountError(null)
                   try {
-                    await sync.signIn(email.trim(), password)
+                    if (recovering) {
+                      if (password !== confirmPassword) throw new Error("Passwords do not match.")
+                      await sync.updatePassword(password)
+                      setSection("account")
+                      setResetRequested(false)
+                      setConfirmPassword("")
+                      setAccountMessage("Password updated. You can use it to sign in on your other devices.")
+                    } else if (resetting) {
+                      await sync.resetPassword(email.trim())
+                      setAccountMessage("If an account exists for this email, you’ll receive a password reset link. Check your inbox and spam folder.")
+                    } else await sync.signIn(email.trim(), password)
                     setPassword("")
                   } catch (error) {
-                    setAccountError(error instanceof Error ? error.message : "Could not sign in. Try again.")
+                    setAccountError(error instanceof Error ? error.message : "Could not complete the request. Try again.")
                   } finally {
                     setAccountLoading(null)
                   }
                 }}>
-                  {sync.status === "sign-in-required" ? <p role="status" className="text-sm text-destructive">Your session ended. Sign in again to resume sync. Saved work and queued changes are kept on this device.</p>
-                    : sync.status === "restoring" || sync.status === "reconnecting" ? <p role="status" className="text-sm text-muted-foreground">Reconnecting to your saved account. Changes stay on this device.</p> : null}
-                  <Field><FieldLabel htmlFor="account-email">Email address</FieldLabel><Input id="account-email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></Field>
-                  <Field><FieldLabel htmlFor="account-password">Password</FieldLabel><div className="relative"><Input id="account-password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" className="pr-12" value={password} onChange={(event) => setPassword(event.target.value)} required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff /> : <Eye />}</Button></div></Field>
+                  {sync.passwordRecovery === "invalid" ? <p role="alert" className="text-sm text-destructive">This reset link is invalid or has expired. Request a new link below.</p> : null}
+                  {!recovering && !resetting && (sync.status === "sign-in-required" ? <p role="status" className="text-sm text-destructive">Your session ended. Sign in again to resume sync. Saved work and queued changes are kept on this device.</p>
+                    : sync.status === "restoring" || sync.status === "reconnecting" ? <p role="status" className="text-sm text-muted-foreground">Reconnecting to your saved account. Changes stay on this device.</p> : null)}
+                  {!recovering ? <Field><FieldLabel htmlFor="account-email">Email address</FieldLabel><Input id="account-email" name="email" type="email" autoComplete="username" autoCapitalize="none" spellCheck={false} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></Field> : null}
+                  {!resetting ? <Field><FieldLabel htmlFor="account-password">{recovering ? "New password" : "Password"}</FieldLabel><div className="relative"><Input id="account-password" name="password" type={showPassword ? "text" : "password"} autoComplete={recovering ? "new-password" : "current-password"} minLength={recovering ? 6 : undefined} className="pr-12" value={password} onChange={(event) => setPassword(event.target.value)} required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff /> : <Eye />}</Button></div>{recovering ? <FieldDescription>Use at least 6 characters.</FieldDescription> : null}</Field> : null}
+                  {recovering ? <Field><FieldLabel htmlFor="account-confirm-password">Confirm new password</FieldLabel><Input id="account-confirm-password" name="confirm-password" type={showPassword ? "text" : "password"} autoComplete="new-password" minLength={6} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required /></Field> : null}
                   <div className="flex flex-wrap gap-2">
-                    <Button type="submit" disabled={Boolean(accountLoading)}>{accountLoading === "sign-in" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <Cloud />}{accountLoading === "sign-in" ? "Signing in…" : "Sign in"}</Button>
-                    <Button type="button" variant="outline" disabled={Boolean(accountLoading)} onClick={async (event) => {
+                    <Button type="submit" disabled={Boolean(accountLoading)}>{accountLoading && accountLoading !== "create" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <Cloud />}{recovering ? accountLoading === "update" ? "Updating password…" : "Update password" : resetting ? accountLoading === "reset" ? "Sending link…" : "Send reset link" : accountLoading === "sign-in" ? "Signing in…" : "Sign in"}</Button>
+                    {!recovering && !resetting ? <Button type="button" variant="outline" disabled={Boolean(accountLoading)} onClick={async (event) => {
                       if (!event.currentTarget.form?.reportValidity()) return
                       if (accountLoading) return
                       setAccountLoading("create")
@@ -306,8 +324,22 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                       } finally {
                         setAccountLoading(null)
                       }
-                    }}>{accountLoading === "create" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : null}{accountLoading === "create" ? "Creating account…" : "Create account"}</Button>
+                    }}>{accountLoading === "create" ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : null}{accountLoading === "create" ? "Creating account…" : "Create account"}</Button> : <Button type="button" variant="outline" disabled={Boolean(accountLoading)} onClick={() => {
+                      sync.finishPasswordRecovery()
+                      setResetRequested(false)
+                      setPassword("")
+                      setConfirmPassword("")
+                      setAccountMessage(null)
+                      setAccountError(null)
+                    }}>Cancel</Button>}
                   </div>
+                  {!recovering && !resetting ? <Button type="button" variant="link" className="w-fit px-0" disabled={Boolean(accountLoading)} onClick={() => {
+                    setResetRequested(true)
+                    setPassword("")
+                    setShowPassword(false)
+                    setAccountMessage(null)
+                    setAccountError(null)
+                  }}>Forgot password?</Button> : null}
                 </form>
               )}
               {accountMessage ? <p role="status" className="pb-4 text-sm text-muted-foreground">{accountMessage}</p> : null}

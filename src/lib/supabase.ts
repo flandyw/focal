@@ -18,6 +18,11 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined
 /** Shared by the browser client and the desktop client; null when unset or insecure. */
 export const supabaseConfig = isSecureEndpoint(url) && key ? { url: url!, key } : null
 
+// Capture recovery intent before the SDK consumes the callback URL.
+const authHash = new URLSearchParams(typeof window === "undefined" ? "" : window.location.hash.slice(1))
+export const passwordRecoveryRequested = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).has("reset-password")
+  || authHash.get("type") === "recovery" || authHash.has("error")
+
 export let supabase = !import.meta.env.VITE_DESKTOP && supabaseConfig ? createClient(supabaseConfig.url, supabaseConfig.key) : null
 
 /** The desktop host supplies its client with secure session storage. */

@@ -141,7 +141,7 @@ export function parseCanonicalStudySession(value: unknown): CanonicalStudySessio
 }
 
 /** A timer is running while it has an open interval. */
-export const isRunning = (session: CanonicalStudySession) => session.segment_started_at !== null
+export const isRunning = (session: CanonicalStudySession) => session.segment_started_at !== null && session.cancelled_at === null
 /** Paused: started, stopped, and not finished. */
 export const isPaused = (session: CanonicalStudySession) =>
   session.segment_started_at === null && session.paused_at !== null && !session.completed && session.cancelled_at === null

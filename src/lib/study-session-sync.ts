@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { saveAppData } from "./storage"
 import { supabase, withSupabaseSession } from "./supabase"
 import type { ExamTimerSession, FocusTimerSession, SacTimerSession } from "./ongoing-timers"
-import { announce, backoffMs, classifyFailure, coalesced, onAnnounce, requestResult, transactionDone, withFlushLock } from "./outbox"
+import { announce, backoffMs, classifyFailure, coalesced, onAnnounce, openIndexedDb, requestResult, transactionDone, withFlushLock } from "./outbox"
 import type { PastStudyLog } from "./pastStudy"
 import { adoptRemoteFocusSession, loadFocusSession } from "./study-timer"
 import { sessionBlocks } from "./day-plan"
@@ -120,7 +120,6 @@ type TimerKind = "exam" | "sac" | "focus"
 type TimerSession = ExamTimerSession | SacTimerSession | FocusTimerSession
 
 let clockAnchor: ReturnType<typeof observeServerClock> = null
-let outboxDatabase: Promise<IDBDatabase> | null = null
 
 export function canonicalNow(): Date {
   const time = clockAnchor && typeof performance !== "undefined"
@@ -686,25 +685,9 @@ async function rememberCanonicalTiming(accountId: string, sessions: readonly Can
   return true
 }
 
-function openOutboxDatabase(): Promise<IDBDatabase> {
-  if (outboxDatabase) return outboxDatabase
-  outboxDatabase = new Promise((resolve, reject) => {
-    const request = indexedDB.open(OUTBOX_DB, 3)
-    request.onupgradeneeded = () => {
-      const database = request.result
-      if (!database.objectStoreNames.contains(META_STORE)) database.createObjectStore(META_STORE, { keyPath: "key" })
-      if (!database.objectStoreNames.contains(TIMING_STORE)) database.createObjectStore(TIMING_STORE, { keyPath: "key" })
-      if (!database.objectStoreNames.contains(SESSION_OUTBOX)) database.createObjectStore(SESSION_OUTBOX, { keyPath: "seq", autoIncrement: true })
-    }
-    // A newer tab upgrading the schema must not wait on this one forever.
-    request.onsuccess = () => {
-      request.result.onversionchange = () => { request.result.close(); outboxDatabase = null }
-      resolve(request.result)
-    }
-    request.onerror = () => reject(request.error ?? new Error("Could not open the local study-session outbox"))
-  })
-  return outboxDatabase
-}
+const openOutboxDatabase = () => openIndexedDb(OUTBOX_DB, 3, {
+  [META_STORE]: { keyPath: "key" }, [TIMING_STORE]: { keyPath: "key" }, [SESSION_OUTBOX]: { keyPath: "seq", autoIncrement: true },
+})
 
 /**
  * The sync feed only carries sittings *forward* from a cursor, so a cursor that was ever

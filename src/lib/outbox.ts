@@ -15,6 +15,37 @@ export function transactionDone(transaction: IDBTransaction): Promise<void> {
   })
 }
 
+const databases = new Map<string, Promise<IDBDatabase>>()
+
+/**
+ * One cached connection per database. A failed open, an abnormal close (iOS drops idle
+ * connections in the background) or a newer tab's upgrade forgets it, so the next call
+ * reconnects instead of failing every write until the page is reloaded.
+ */
+export function openIndexedDb(name: string, version: number, stores: Record<string, IDBObjectStoreParameters>): Promise<IDBDatabase> {
+  const cached = databases.get(name)
+  if (cached) return cached
+  const forget = () => { if (databases.get(name) === opening) databases.delete(name) }
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(name, version)
+    request.onupgradeneeded = () => {
+      for (const [store, options] of Object.entries(stores)) {
+        if (!request.result.objectStoreNames.contains(store)) request.result.createObjectStore(store, options)
+      }
+    }
+    request.onsuccess = () => {
+      const db = request.result
+      db.onclose = forget
+      db.onversionchange = () => { db.close(); forget() }
+      resolve(db)
+    }
+    request.onerror = () => reject(request.error ?? new Error(`Could not open the local database ${name}`))
+  })
+  databases.set(name, opening)
+  opening.catch(forget)
+  return opening
+}
+
 /**
  * What a failed RPC means for the queued write behind it.
  *  - retry:  the network or server is unwell. Keep the write, back off.

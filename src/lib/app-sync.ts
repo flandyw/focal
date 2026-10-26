@@ -5,7 +5,7 @@ import { isExamDifficultySettings } from "./exam-difficulty"
 import { isExamProgression } from "./exam-progression"
 import { mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
 import { migrateSacRecords } from "./sac"
-import { announce, classifyFailure, requestResult, transactionDone, withFlushLock } from "./outbox"
+import { announce, classifyFailure, openIndexedDb, requestResult, transactionDone, withFlushLock } from "./outbox"
 import { supabase, withSupabaseSession } from "./supabase"
 
 const DB_NAME = "examtrack-app-sync"
@@ -45,8 +45,6 @@ type VersionedChange = {
 export { diffAppData, sameValue } from "./app-rows"
 import { sameValue } from "./app-rows"
 
-let database: Promise<IDBDatabase> | null = null
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -61,21 +59,7 @@ function appSyncDeviceId(): string {
   return value
 }
 
-function openDatabase(): Promise<IDBDatabase> {
-  if (database) return database
-  database = new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains(OUTBOX)) db.createObjectStore(OUTBOX, { keyPath: "changeId" })
-      if (!db.objectStoreNames.contains(ROWS)) db.createObjectStore(ROWS, { keyPath: "key" })
-      if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" })
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error("Could not open the Focal sync database"))
-  })
-  return database
-}
+const openDatabase = () => openIndexedDb(DB_NAME, DB_VERSION, { [OUTBOX]: { keyPath: "changeId" }, [ROWS]: { keyPath: "key" }, [META]: { keyPath: "key" } })
 
 const accountMetaKey = (accountId: string) => `account:${accountId}`
 

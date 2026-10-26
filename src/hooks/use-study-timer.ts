@@ -223,8 +223,9 @@ export function useStudyTimer({
     let last = performance.now()
     const interval = window.setInterval(() => {
       const current = performance.now()
-      const seconds = Math.max(0, Math.round((current - last) / 1000))
-      last = current
+      // Keep the unspent fraction: late intervals would otherwise shave seconds off every block.
+      const seconds = Math.max(0, Math.floor((current - last) / 1000))
+      last += seconds * 1000
       if (seconds > 0) dispatch({ type: "TICK", settings: settingsRef.current, seconds })
     }, TICK_MS)
     return () => window.clearInterval(interval)

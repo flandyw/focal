@@ -449,6 +449,16 @@ async function deliver(accountId: string, scanned: Queued, soonest: (at: number)
       soonest(retryAt)
       return status !== 0
     }
+    // A sleeping device stops the monotonic clock and a drifting one skews the server-clock estimate, so
+    // the server can refuse a valid pause or finish over its timing alone. Dropping it would leave the
+    // session running there forever: resend with less timing, the monotonic delta first, then receipt time.
+    // The refused attempt rolled back without a receipt, so the retry is a new mutation.
+    if (error?.message.startsWith("timing_invalid") && (command.occurred_at != null || command.elapsed_since_previous_ms !== undefined)) {
+      const { occurred_at: occurredAt, elapsed_since_previous_ms: elapsed, ...untimed } = command
+      await writeEntry({ ...entry, sent: false, retryAt: 0, command: { ...untimed, mutation_id: crypto.randomUUID(),
+        ...(occurredAt != null && elapsed !== undefined ? { elapsed_since_previous_ms: elapsed } : {}) } })
+      return true
+    }
     // The server read the command and refused it for good (invalid blocks, bad timing...). Retrying cannot change that.
     console.error("The server refused a study-session command:", command, error)
     await deleteEntry(entry.seq!)
@@ -758,7 +768,6 @@ export function useStudySessionSync(
     setSessions([])
     signedInAccount = userId
     let cancelled = false
-    let pulling = false
     /** Server rows whose session has no unanswered local command become the local timer. */
     const adopt = async (rows: readonly CanonicalStudySession[]) => {
       if (cancelled) return
@@ -802,9 +811,9 @@ export function useStudySessionSync(
         if (sac?.id && !known.has(sac.id)) await saveTimerSessionChange(undefined, sac, "sac")
       } catch (error) { console.warn("Could not publish the running SAC to Focal:", error) }
     }
-    const pull = async () => {
-      if (pulling || cancelled) return
-      pulling = true
+    // A wakeup that lands mid-pull earns one more pass: the page in flight may predate its change.
+    const pull = coalesced(async () => {
+      if (cancelled) return
       try {
         let cursor = (await readSyncMeta(userId)).cursor
         for (;;) {
@@ -838,10 +847,8 @@ export function useStudySessionSync(
         }
       } catch (error) {
         if (!cancelled) console.error("Could not pull shared study sessions:", error)
-      } finally {
-        pulling = false
       }
-    }
+    })
 
     const start = async () => {
       const cached = (await readSyncMeta(userId)).sessions

@@ -135,7 +135,9 @@ reconnect, focus, visibility, token refresh, a realtime wakeup, a peer tab, and 
   A stale answer retries a lifecycle command against the server's row under a new `mutation_id` with
   timing dropped (up to five times), and the server judges whether the transition still holds. A
   stale edit of values (`blocks`, `completed`) is never laid over another device's change: it is
-  dropped and reported. Other refusals are reported and dropped. Server rows for a session with
+  dropped and reported. A lifecycle command refused only as `timing_invalid` (a sleeping device stops
+  the monotonic clock) is resent under a new `mutation_id` with `occurred_at` dropped, then with no timing,
+  so a pause or finish is never lost to a clock disagreement. Other refusals are reported and dropped. Server rows for a session with
   unanswered local commands are held back from the timers until the queue for it drains, then the
   newest row is adopted. The calendar list shows queued plan, log, edit and delete commands
   immediately.

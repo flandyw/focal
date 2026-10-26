@@ -1149,8 +1149,10 @@ async function applyCanonicalSessions(sessions: readonly CanonicalStudySession[]
  *  sessions this device never opened are somebody else's timer and are left alone. */
 function adoptRemoteFocusSessionChange(session: CanonicalStudySession, nowMs: number): void {
   const local = loadFocusSession()
-  if (local?.id !== session.id || (session.revision ?? 0) <= (local.revision ?? 0)) return
+  if (local?.id !== session.id) return
   const closed = session.completed || isDeleted(session)
+  // A deleted or finished session is terminal, so it closes the timer even when this device's optimistic revision is ahead.
+  if (!closed && (session.revision ?? 0) <= (local.revision ?? 0)) return
   const projected = closed ? undefined : projectTimerSession(session, local, "focus")
   adoptRemoteFocusSession(projected, nowMs)
   if (typeof window !== "undefined") {

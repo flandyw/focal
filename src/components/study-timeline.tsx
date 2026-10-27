@@ -739,7 +739,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
           </div>
 
           {/* Context lane: what the day already holds. */}
-          {context.some(shown) ? (
+          {context.length ? (
             <div className="relative border-b border-dashed border-border" style={{ height: contextRows.rows * 24 + 8 }}>
               {context.filter(shown).map((live) => {
                 const block = adjust?.key === live.key ? { ...live, ...adjust.range } : live
@@ -884,8 +884,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
         </div>
 
         {/* Blocks too narrow to label on the track, as one line of chips rather than a card each. */}
-        {cramped.length ? (
-          <ul aria-label="Short blocks" className="flex flex-wrap gap-1.5">
+        {blocks.length ? (
+          <ul aria-label="Short blocks" className="flex h-8 items-center gap-1.5 overflow-x-auto" tabIndex={cramped.length ? 0 : undefined}>
             {crampedGroups.map((group) => {
               const block = group[0]
               const start = Math.min(...group.map((item) => item.start))
@@ -893,12 +893,12 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               const minutes = group.reduce((sum, item) => sum + item.end - item.start, 0)
               const active = group.some(blockSelected)
               return (
-                <li className="min-w-0 max-w-full" key={block.key}>
+                <li className="shrink-0" key={block.key}>
                   <Button
                     variant="ghost"
                     aria-pressed={active}
                     disabled={selecting && (!block.session || block.session.kind !== "focus" || timing(block.session))}
-                    className={cn("h-auto max-w-full min-w-0 justify-start gap-2 rounded-md border-border bg-card px-2 py-1 text-left text-xs font-normal whitespace-normal hover:bg-muted/60", active && "border-primary/60 bg-primary/5")}
+                    className={cn("h-7 max-w-full min-w-0 justify-start gap-2 rounded-md border-border bg-card px-2 text-left text-xs font-normal hover:bg-muted/60", active && "border-primary/60 bg-primary/5")}
                     onClick={() => select(block)}
                   >
                     {swatch(block)}

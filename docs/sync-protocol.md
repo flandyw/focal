@@ -23,8 +23,8 @@ Clients render elapsed time as:
 accumulated_active_ms + max(0, estimated_server_now - segment_started_at)
 ```
 
-The shared DTO and validator live in `src/lib/sync/sessionContract.ts`. Root Focal and
-Focal Web import this exact module. Folio uses the same JSON field names and calls
+The shared web and desktop frontend uses the DTO and validator in
+`src/lib/sync/sessionContract.ts`. Folio uses the same JSON field names and calls
 `study_session_mutate`; it must not write `study_sessions` through `sync_apply_changes` or
 the `sync_changes` compatibility view.
 
@@ -165,9 +165,8 @@ expected sequences. Scheduling edits preserve remote question content and review
 unioned by stable ID. Folio's notebook practice attempts remain local. Custom subjects use
 the same cursor RPC. The web client no longer reads or writes whole tables.
 
-The portable command sequence in `src/lib/sync/vectors/session-command-sequence.json` is
-run by Focal Web's TypeScript test and copied into Folio's Android test resources. Both clients
-exercise the same start, pause and resume revisions with one stable device ID.
+The portable command sequence in `src/lib/sync/vectors/session-command-sequence.json` describes
+start, pause and resume revisions with one stable device ID.
 
 ## Security and migrations
 
@@ -231,5 +230,5 @@ This repo has no test suite (see `AGENTS.md`). Verify changes with:
 
 - `bun run check` — typecheck (`tsc --noEmit`) + lint (`oxlint`) for the root app.
 - `bun run typecheck` — the shared TypeScript contract and Focal client only.
-- `cd web && bun run lint && bun run build` — Focal Web production compilation.
-- `bunx --no-install vite build` — desktop bundle (needs `bun run check` first).
+- `bun run build` — browser production compilation.
+- `bun run build:desktop` — desktop frontend compilation.

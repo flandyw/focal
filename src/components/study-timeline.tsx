@@ -229,27 +229,35 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
   const [width, setWidth] = useState(800)
   const lane = useRef<HTMLDivElement>(null)
+  const track = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = lane.current
     if (!el) return
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
     observer.observe(el)
+    const surface = track.current!
     // Ctrl/⌘ + wheel (and trackpad pinch) zooms about the pointer; shift or sideways scroll pans.
     const onWheel = (event: WheelEvent) => {
       const window = winRef.current
       const rect = el.getBoundingClientRect()
       const size = window.end - window.start
+      const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? rect.width : 1
+      let next: Range | undefined
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault()
-        setView(zoomWindow(window, Math.min(2, Math.max(0.5, Math.exp(event.deltaY * 0.01))), window.start + (event.clientX - rect.left) / rect.width * size))
+        next = zoomWindow(window, Math.min(2, Math.max(0.5, Math.exp(event.deltaY * unit * 0.01))), window.start + Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) * size)
       } else if ((event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) && size < DAY) {
+        const delta = (event.deltaX || event.deltaY) * unit / rect.width * size
+        next = clampWindow({ start: window.start + delta, end: window.end + delta })
+      }
+      if (next && (next.start !== window.start || next.end !== window.end)) {
         event.preventDefault()
-        const delta = (event.deltaX || event.deltaY) / rect.width * size
-        setView(clampWindow({ start: window.start + delta, end: window.end + delta }))
+        winRef.current = next
+        setView(next)
       }
     }
-    el.addEventListener("wheel", onWheel, { passive: false })
-    return () => { observer.disconnect(); el.removeEventListener("wheel", onWheel) }
+    surface.addEventListener("wheel", onWheel, { passive: false })
+    return () => { observer.disconnect(); surface.removeEventListener("wheel", onWheel) }
   }, [])
 
   const left = (minute: number) => `${(Math.min(to, Math.max(from, minute)) - from) / span * 100}%`
@@ -708,7 +716,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
       {/* The track runs edge to edge: a ruler, the day's fixed points, then the study lane,
           all on one set of hour lines so a class and the study beside it line up by eye. */}
-      <div className="border-y border-border">
+      <div className="border-y border-border" ref={track}>
         <div className="relative select-none bg-muted/15">
           <div aria-hidden className="relative h-7 border-b border-border text-[0.6875rem] text-muted-foreground tabular-nums">
             {ticks.map((minute) => {
@@ -741,7 +749,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
                     variant="ghost"
                     aria-label={`${block.title}, ${clock(block.start)} to ${clock(block.end)}`}
                     aria-pressed={blockSelected(block)}
-                    className={cn("group/block absolute block h-5 min-w-0 touch-none rounded-sm border-0 text-left font-normal text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-3" : "px-0", selected === block.key && "z-10 min-w-6 ring-2 ring-foreground/60", grab && "cursor-grab active:cursor-grabbing")}
+                    className={cn("group/block absolute block h-5 min-w-0 touch-pan-y rounded-sm border-0 text-left font-normal text-[0.6875rem] leading-[1.125rem] outline-none focus-visible:ring-2 focus-visible:ring-ring", TONE[block.tone], pixels(block) >= 60 ? "px-3" : "px-0", selected === block.key && "z-10 min-w-6 ring-2 ring-foreground/60", grab && "cursor-grab active:cursor-grabbing")}
                     key={block.key}
                     onClick={() => select(block)}
                     onDoubleClick={() => zoomTo(block)}
@@ -764,9 +772,9 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
 
           {/* Study lane: the drag target. */}
           <div
-            aria-keyshortcuts="+ - 0 C V PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
+            aria-keyshortcuts="+ - 0 C V ArrowLeft ArrowRight PageUp PageDown" aria-label="Study timeline. Drag to select a time range."
             style={{ height: studyRows.rows * 56 + 16 }}
-            className="relative cursor-crosshair touch-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="relative cursor-crosshair touch-pan-y overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             tabIndex={0}
             onKeyDown={(event) => {
               if (busy || adjust) return
@@ -775,6 +783,11 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               else if (event.key === "+" || event.key === "=") zoomBy(0.5)
               else if (event.key === "-") zoomBy(2)
               else if (event.key === "0") setView(null)
+              else if (event.target === event.currentTarget && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+                event.preventDefault()
+                const delta = span * (event.key === "ArrowLeft" ? -0.2 : 0.2)
+                setView(clampWindow({ start: from + delta, end: to + delta }))
+              }
               else if (event.key === "PageUp" || event.key === "PageDown") onDateChange(shiftDate(date, event.key === "PageUp" ? -1 : 1))
             }}
             onPointerCancel={() => setDrag(null)}
@@ -843,9 +856,10 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
         {span < DAY ? (
           <div
             aria-label="Day overview. Drag to pan the timeline."
-            className="relative h-4 cursor-ew-resize touch-none overflow-hidden border-t border-border bg-muted/40"
-            onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); pan(event) }}
+            className="relative h-8 cursor-ew-resize touch-pan-y overflow-hidden sm:h-4 border-t border-border bg-muted/40"
+            onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); if (event.pointerType !== "touch") pan(event) }}
             onPointerMove={(event) => { if (event.buttons) pan(event) }}
+            onPointerUp={(event) => { if (event.pointerType === "touch") pan(event) }}
             role="group"
           >
             {blocks.map((block) => <span aria-hidden className={cn("absolute inset-y-1 rounded-xs opacity-60", block.tone === "class" || block.tone === "event" ? "bg-muted-foreground/30" : "bg-primary/70")} key={block.key} style={{ backgroundColor: block.color, left: `${block.start / DAY * 100}%`, width: `max(2px, ${(block.end - block.start) / DAY * 100}%)` }} />)}

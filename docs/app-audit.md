@@ -1,3 +1,7 @@
+# App audit (historical)
+
+This is a snapshot of an audit performed on 22 October 2026. Paths and verification results describe that point in time; consult the current code before acting on them.
+
 What this repo does: Focal is a VCE study app for exams, mistake revision, calendars, study timers and progress tracking. One React frontend serves the web and Tauri desktop builds, with Supabase account sync and a local ChatGPT sidecar. This audit assumes individual students using several tabs/devices and many accounts sharing a hosted backend.
 
 Audit date: 22 October 2026. All numbered findings below have code fixes in this working tree. They describe the original failure and the change made; they are not claims that every possible bug has been found.

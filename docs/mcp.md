@@ -2,7 +2,7 @@
 
 Lets an MCP client (Claude Code, Claude Desktop, ...) read and change a Focal account: exams,
 mistakes and reviews, SACs, calendar, study timer and sessions, stoplight, goals, tasks, timetable,
-settings, analytics, predictions, and the VCAA/VTAC reference data. 56 tools, grouped in
+settings, analytics, predictions, and the VCAA/VTAC reference data. Tools are grouped in
 `server/mcp/records.ts`, `study.ts` and `insights.ts`. Start a conversation with `get_overview`.
 
 It reuses the app's own logic from `src/lib` and writes through the same sync RPCs
@@ -28,9 +28,9 @@ at once.
 ## Run
 
 ```sh
-bun run mcp        # stdio, for Claude Desktop (no token needed)
+bun run mcp        # stdio, requires FOCAL_MCP_TOKEN
 bun run mcp:http   # HTTP on 127.0.0.1:4174/mcp (HOST and PORT override)
-bun start          # the built app; also serves /api/mcp
+bun run start      # the built app; also serves /api/mcp
 ```
 
 Hosting: run it on a VPS, not on Vercel. The Vercel Node runtime transpiles files one by one, and
@@ -98,8 +98,7 @@ before any backfill.
   re-run (cards left in `Other` are retried, so improving the rules and re-running picks them up). It does not
   touch `areaOfStudy`. Writes and reverts are logged as one JSON line each on stderr (journald under systemd).
 
-Tests: `bun test` (they use an in-memory account, never the live store). The synthetic account modelled on the
-failing case (53 papers, 102 cards, 83 labels, no question results) is `src/lib/fixtures/failing-case.ts`.
+Verify changes with `bun run check`, `bun run build`, and `bun run build:desktop`.
 
 ## Not covered
 

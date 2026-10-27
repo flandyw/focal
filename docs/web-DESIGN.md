@@ -1,24 +1,7 @@
-# Focal Design
+# Interface design
 
-## Direction
+Focal uses the same React interface on web and desktop. Its theme tokens, light and dark palettes, fonts, and surface variants live in `src/index.css`; users can customize appearance in Settings. Reuse components in `src/components/ui/` and follow the surrounding page's layout and interaction patterns.
 
-Use standard shadcn/ui components and neutral surfaces. A restrained blue accent marks primary actions, focus, and sidebar wayfinding in both themes; chart and semantic colors retain their own meanings.
+Favor clear study actions, readable data, and responsive layouts. Keep keyboard focus visible, provide text alongside color-coded status, respect reduced motion, and give charts useful labels or summaries. Test dense tables and calendars at narrow widths as well as on desktop.
 
-## Layout
-
-The page is fluid: no page-level max width anywhere. Extra viewport width is spent on more columns (`xl` and `2xl` grids), never on longer lines.
-
-- Shell: `p-4 sm:p-5 lg:p-6 2xl:p-8` gutters, `min-width: 0` on content regions, a desktop sidebar rail at `lg` and above, and a navigation sheet below `lg` so tablets keep the full width.
-- Reading order: every page opens with a lead band carrying the one next study action and its count, then evidence. Support follows — metrics, then tables and charts.
-- Rhythm: `gap-4` inside a group, `gap-6 lg:gap-8` between page bands. Whitespace separates groups; containers are reserved for genuinely bounded content.
-- Measure: running text (card and alert descriptions, section copy) is capped at `68ch`. The page is never capped.
-- Density: one column on phones with stacked rows that never truncate mid-word; two columns from `sm`; sidebar rail plus two- to three-column grids from `lg`; a third column at `2xl` where the content supports it.
-- Horizontal scrolling is allowed only for data tables, dense calendars, and the activity heatmap, always inside their own container.
-
-## Typography
-
-Use shadcn's default system sans stack. Use tabular numerals for marks and percentages. Apply shadcn Typeset only to rendered mistake notes.
-
-## Components
-
-Keep canonical shadcn states, spacing, radii, and focus treatments. Recharts visualizations use shadcn Chart wrappers and always include a textual summary.
+See [typography](TYPOGRAPHY.md) and [product context](web-PRODUCT.md).

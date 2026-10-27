@@ -15,6 +15,21 @@ import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predict
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
 
+function sacInputs(subject: string) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(`focal:study-score-sac:${subject}`) ?? "null")
+    return {
+      sacMode: saved?.sacMode === "percentile" ? "percentile" : "rank",
+      sacRank: typeof saved?.sacRank === "string" ? saved.sacRank : "",
+      sacCohort: typeof saved?.sacCohort === "string" ? saved.sacCohort : "",
+      schoolMedian: typeof saved?.schoolMedian === "string" ? saved.schoolMedian : "",
+      sacPercentile: typeof saved?.sacPercentile === "string" ? saved.sacPercentile : "",
+    }
+  } catch {
+    return { sacMode: "rank", sacRank: "", sacCohort: "", schoolMedian: "", sacPercentile: "" }
+  }
+}
+
 export function StudyScorePredictor({
   data,
   references,
@@ -32,22 +47,14 @@ export function StudyScorePredictor({
   const subject = subjects.includes(selectedSubject) ? selectedSubject : subjects[0] ?? ""
   const [savedInputs, setSavedInputs] = useState(() => ({
     subject,
-    sacMode: "rank",
-    sacRank: "",
-    sacCohort: "",
-    schoolMedian: "",
-    sacPercentile: "",
+    ...sacInputs(subject),
     examWeight: defaultExamWeight(subject),
     distributionYear: "automatic",
     scalingYear: "combined",
   }))
   const inputs = savedInputs.subject === subject ? savedInputs : {
     subject,
-    sacMode: "rank",
-    sacRank: "",
-    sacCohort: "",
-    schoolMedian: "",
-    sacPercentile: "",
+    ...sacInputs(subject),
     examWeight: defaultExamWeight(subject),
     distributionYear: "automatic",
     scalingYear: "combined",
@@ -55,6 +62,11 @@ export function StudyScorePredictor({
   if (selectedSubject !== subject) setSubject(subject)
   if (savedInputs.subject !== subject) setSavedInputs(inputs)
   const { sacMode, sacRank, sacCohort, schoolMedian, sacPercentile, examWeight, distributionYear, scalingYear } = inputs
+  function saveSac(patch: Partial<ReturnType<typeof sacInputs>>) {
+    const next = { sacMode, sacRank, sacCohort, schoolMedian, sacPercentile, ...patch }
+    setSavedInputs({ ...inputs, ...next })
+    try { localStorage.setItem(`focal:study-score-sac:${subject}`, JSON.stringify(next)) } catch { /* Inputs still work for this session. */ }
+  }
 
   const distributionYears = useMemo(
     () => [...new Set(references
@@ -140,7 +152,7 @@ export function StudyScorePredictor({
 
                 <Field>
                   <FieldLabel htmlFor="sac-mode">SAC results</FieldLabel>
-                  <Select value={sacMode} onValueChange={(value) => setSavedInputs({ ...inputs, sacMode: value ?? "rank" })}>
+                  <Select value={sacMode} onValueChange={(value) => saveSac({ sacMode: value ?? "rank" })}>
                     <SelectTrigger id="sac-mode" className="w-full">
                       <SelectValue>{sacMode === "rank" ? "School rank" : "Moderated percentile"}</SelectValue>
                     </SelectTrigger>
@@ -160,7 +172,7 @@ export function StudyScorePredictor({
                           inputMode="numeric"
                           placeholder="Rank"
                           value={sacRank}
-                          onChange={(event) => setSavedInputs({ ...inputs, sacRank: event.target.value })}
+                          onChange={(event) => saveSac({ sacRank: event.target.value })}
                         />
                         <Input
                           aria-label="Students in subject at your school"
@@ -170,7 +182,7 @@ export function StudyScorePredictor({
                           inputMode="numeric"
                           placeholder="Out of"
                           value={sacCohort}
-                          onChange={(event) => setSavedInputs({ ...inputs, sacCohort: event.target.value })}
+                          onChange={(event) => saveSac({ sacCohort: event.target.value })}
                         />
                       </div>
                       <Input
@@ -182,7 +194,7 @@ export function StudyScorePredictor({
                         inputMode="numeric"
                         placeholder="School median study score (optional, 30 is average)"
                         value={schoolMedian}
-                        onChange={(event) => setSavedInputs({ ...inputs, schoolMedian: event.target.value })}
+                        onChange={(event) => saveSac({ schoolMedian: event.target.value })}
                       />
                       <FieldDescription>
                         {parsedSac !== null
@@ -202,7 +214,7 @@ export function StudyScorePredictor({
                         inputMode="decimal"
                         placeholder="Optional"
                         value={sacPercentile}
-                        onChange={(event) => setSavedInputs({ ...inputs, sacPercentile: event.target.value })}
+                        onChange={(event) => saveSac({ sacPercentile: event.target.value })}
                       />
                       <FieldDescription>
                         Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile.

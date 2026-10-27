@@ -85,7 +85,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             <h2 className="mt-5 max-w-md font-heading text-4xl leading-tight sm:text-5xl">Your school rhythm,<br />all in one place.</h2>
             <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground">Bring in your existing timetable, or build a cycle from scratch. Your classes will also appear on the calendar, ready to plan study around.</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button onClick={() => { onChange(defaultClassTimetable()); addPeriod() }}><Plus />Build my timetable</Button>
+              <Button onClick={addPeriod}><Plus />Build my timetable</Button>
               <Button onClick={() => setImportOpen(true)} variant="ghost">Import instead<ArrowRight /></Button>
             </div>
           </div>
@@ -152,14 +152,15 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
       )}
       {importOpen ? <ImportDialog current={config ?? defaultClassTimetable()} onClose={() => setImportOpen(false)} onImport={(next) => { onChange(next); setSelectedDay(1); setImportOpen(false); toast("Timetable imported") }} /> : null}
       {settingsOpen && config ? <SettingsDialog config={config} onClose={() => setSettingsOpen(false)} onSave={(next) => { onChange(next); setSettingsOpen(false); toast("Cycle settings saved") }} /> : null}
-      {editor && config ? <PeriodDialog editor={editor} subjects={subjects} onClose={() => setEditor(null)} onSave={(period) => {
-        const current = dayPeriods(config, editor.day)
+      {editor ? <PeriodDialog editor={editor} subjects={subjects} onClose={() => setEditor(null)} onSave={(period) => {
+        const timetable = config ?? defaultClassTimetable()
+        const current = dayPeriods(timetable, editor.day)
         if (editor.original && !current.includes(editor.original)) { toast.error("This period has changed. Reopen it to edit the latest version."); setEditor(null); return }
         const next = editor.original && period.subject === periodSubjectName(editor.original) ? { ...period, subject: editor.original.subject } : period
-        onChange(withDay(config, editor.day, editor.original ? current.map((item) => item === editor.original ? next : item) : [...current, next]))
+        onChange(withDay(timetable, editor.day, editor.original ? current.map((item) => item === editor.original ? next : item) : [...current, next]))
         setEditor(null)
         toast(editor.original ? "Period updated" : "Period added")
-      }} onDelete={editor.original ? () => {
+      }} onDelete={editor.original && config ? () => {
         const original = editor.original!
         onChange(withDay(config, editor.day, dayPeriods(config, editor.day).filter((period) => period !== original)))
         setEditor(null)

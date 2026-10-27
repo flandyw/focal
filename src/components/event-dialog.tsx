@@ -36,7 +36,10 @@ function shiftDays(date: string, days: number) {
 
 function shift(date: string, repeat: string, step: number) {
   const [year, month, day] = date.split("-").map(Number)
-  if (repeat === "monthly") return localDate(new Date(year, month - 1 + step, day))
+  if (repeat === "monthly") {
+    const target = new Date(year, month - 1 + step, 1)
+    return localDate(new Date(target.getFullYear(), target.getMonth(), Math.min(day, new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate())))
+  }
   return shiftDays(date, step * (repeat === "weekly" ? 7 : 14))
 }
 
@@ -84,6 +87,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   function submit() {
     if (!title.trim()) return setError("Give the event a title.")
     if (!date) return setError("Choose a date.")
+    if (!startTime || !endTime) return setError("Choose a start and end time.")
     const finish = endDate || date
     if (finish < date || (finish === date && toMinutes(endTime) <= toMinutes(startTime))) {
       return setError(finish < date ? "The end date can't be before the start." : "The end time must be after the start time.")
@@ -185,7 +189,8 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               <Button
                 key={minutes}
                 aria-pressed={duration === minutes}
-                onClick={() => { setEndTime(fromMinutes(Math.min(toMinutes(startTime) + minutes, 1439))); setEndDate("") }}
+                onClick={() => { const end = toMinutes(startTime) + minutes; setEndTime(fromMinutes(end)); setEndDate(end >= 1440 ? shiftDays(date, 1) : "") }}
+                disabled={!startTime || !date}
                 size="sm"
                 type="button"
                 variant={duration === minutes ? "secondary" : "outline"}

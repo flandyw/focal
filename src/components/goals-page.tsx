@@ -19,8 +19,8 @@ import { getGoalProgress, localDate, type LearningWorkspace, type LearningWorksp
 
 function defaultDeadline() {
   const date = new Date()
-  date.setMonth(date.getMonth() + 3)
-  return localDate(date)
+  const target = new Date(date.getFullYear(), date.getMonth() + 3, 1)
+  return localDate(new Date(target.getFullYear(), target.getMonth(), Math.min(date.getDate(), new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate())))
 }
 
 function kindLabel(kind: StudyGoalKind) {
@@ -43,7 +43,7 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   onSave: (goal: StudyGoal) => void
 }) {
   const [kind, setKind] = useState(goal.kind)
-  const [subject, setSubject] = useState(goal.subject ?? data.subjects[0] ?? subjects[0] ?? "")
+  const [subject, setSubject] = useState(goal.subject ?? data.subjects[0] ?? "")
   const [target, setTarget] = useState(goal.target)
   const [deadline, setDeadline] = useState(goal.deadline)
   const [error, setError] = useState<string | null>(null)
@@ -98,7 +98,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
   onPlanGoal: (goal: StudyGoal) => void
 }) {
   const [kind, setKind] = useState<StudyGoalKind>("exam-percentage")
-  const [subject, setSubject] = useState(data.subjects[0] ?? subjects[0] ?? "")
+  const [subject, setSubject] = useState(data.subjects[0] ?? "")
   const [target, setTarget] = useState(80)
   const [deadline, setDeadline] = useState(defaultDeadline)
   const [editingGoal, setEditingGoal] = useState<StudyGoal | null>(null)
@@ -144,7 +144,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
         <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription className="max-lg:hidden">Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
         <CardContent><form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!subjectScoped ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
-          {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={setSubject} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}
+          {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}
           <Field className="xl:col-span-2" data-invalid={error ? true : undefined}><FieldLabel htmlFor="goal-target">Target</FieldLabel><Input id="goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={Number.isFinite(target) ? target : ""} required onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} /></Field>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" min={localDate(now)} value={deadline} required onChange={(event) => { setDeadline(event.target.value); setError(null) }} /></Field>
           <Button type="submit" className="w-full xl:col-span-2"><Plus />Add goal</Button>

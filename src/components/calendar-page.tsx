@@ -197,7 +197,7 @@ export function CalendarPage({
   function move(id: string, date: string) {
     if (!date) return
     commit((current) => moveTask(current, id, date))
-    setSelected(date)
+    selectDay(date)
   }
 
   async function importDrafts(drafts: TextEventDraft[]) {
@@ -227,13 +227,13 @@ export function CalendarPage({
         toast.error(e instanceof Error ? e.message : "Study sessions could not be saved.")
       }
     }
-    setSelected(drafts[0]?.date ?? selected)
+    if (drafts[0]) selectDay(drafts[0].date)
     toast(`${drafts.length} item${drafts.length === 1 ? "" : "s"} added to your calendar`)
   }
 
   function saveEvents(saved: CalendarEvent[], isNew: boolean) {
     onEventsChange((current) => isNew ? [...current, ...saved] : current.map((item) => saved.find((event) => event.id === item.id) ?? item))
-    setSelected(localDate(new Date(saved[0].startTime)))
+    selectDay(localDate(new Date(saved[0].startTime)))
     setEventDialog(null)
     toast(isNew ? (saved.length === 1 ? "Event added" : `${saved.length} events added`) : "Event updated")
   }
@@ -278,8 +278,8 @@ export function CalendarPage({
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title">{monthLabel}</h1>
             <div className="flex items-center gap-0.5">
-              <Button aria-label="Previous month" onClick={() => setMonth((current) => shiftMonth(current, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-              <Button aria-label="Next month" onClick={() => setMonth((current) => shiftMonth(current, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+              <Button aria-label="Previous month" onClick={() => selectDay(localDate(shiftMonth(month, -1)))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+              <Button aria-label="Next month" onClick={() => selectDay(localDate(shiftMonth(month, 1)))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground tabular-nums">

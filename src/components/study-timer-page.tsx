@@ -261,7 +261,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   }, [])
   const notificationsEnabled = settings.notificationsEnabled && permission === "granted"
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
-  const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} started.`
+  const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} ${state.running ? "started" : "paused"}.`
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing

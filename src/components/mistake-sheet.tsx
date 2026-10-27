@@ -73,7 +73,7 @@ type MistakeSheetProps = {
 
 // One textarea with its own Write/Preview switch, so a long answer can be proofread
 // without flipping every field in the form.
-function MarkdownField({ id, label, hint, value, rows, placeholder, onChange }: { id: string; label: string; hint?: string; value: string; rows: number; placeholder: string; onChange: (value: string) => void }) {
+function MarkdownField({ id, label, hint, value, rows, placeholder, onChange, required }: { id: string; label: string; hint?: string; value: string; rows: number; placeholder: string; onChange: (value: string) => void; required?: boolean }) {
   const [preview, setPreview] = useState(false)
   return (
     <Field>
@@ -86,7 +86,7 @@ function MarkdownField({ id, label, hint, value, rows, placeholder, onChange }: 
       </div>
       {preview ? (
         <div className="min-h-24 rounded-lg border bg-muted/20 p-3">{value.trim() ? <MarkdownPreview unframed>{value}</MarkdownPreview> : <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>}</div>
-      ) : <Textarea id={id} rows={rows} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />}
+      ) : <Textarea id={id} aria-required={required} rows={rows} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />}
       {hint ? <FieldDescription>{hint}</FieldDescription> : null}
     </Field>
   )
@@ -536,7 +536,7 @@ export function MistakeSheet({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="question">Item label</FieldLabel>
-                  <Input id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Section B, Question 4 or Essay 1" />
+                  <Input id="question" aria-required="true" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Section B, Question 4 or Essay 1" />
                 </Field>
               </div>
 
@@ -611,9 +611,9 @@ export function MistakeSheet({
 
               <div className="border-t pt-5"><h3 className="focal-section-title">02 · Organise</h3><p className="mt-1 text-sm text-muted-foreground">Add labels to find patterns and build focused practice sets.</p></div>
               <Field>
-                <FieldLabel>Category</FieldLabel>
+                <FieldLabel htmlFor="mistake-category">Category</FieldLabel>
                 <Select value={category} onValueChange={(value) => setCategory(value as MistakeCategory)}>
-                  <SelectTrigger className="w-full"><SelectValue>{category}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="mistake-category" className="w-full"><SelectValue>{category}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
                       <SelectLabel>All subjects</SelectLabel>
@@ -640,9 +640,9 @@ export function MistakeSheet({
               </div>
 
               <div className="border-t pt-5"><h3 className="focal-section-title">03 · The takeaway</h3><p className="mt-1 text-sm text-muted-foreground">Write the lesson you want to remember next time.</p></div>
-              <MarkdownField id="explanation" label="What went wrong?" rows={5} value={explanation} onChange={setExplanation} placeholder="Describe the gap: what was misunderstood, omitted, unsupported, unclear, or done inaccurately?" hint="Describe the error precisely enough to recognise it next time." />
+              <MarkdownField id="explanation" label="What went wrong?" required rows={5} value={explanation} onChange={setExplanation} placeholder="Describe the gap: what was misunderstood, omitted, unsupported, unclear, or done inaccurately?" hint="Describe the error precisely enough to recognise it next time." />
 
-              <MarkdownField id="correction" label="Improved response or method" rows={5} value={correction} onChange={setCorrection} placeholder="Write the correct idea, evidence, structure, process, or answer you should use next time." />
+              <MarkdownField id="correction" label="Improved response or method" required rows={5} value={correction} onChange={setCorrection} placeholder="Write the correct idea, evidence, structure, process, or answer you should use next time." />
             </FieldGroup>
           </form>
         )}

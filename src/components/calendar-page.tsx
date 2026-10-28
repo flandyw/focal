@@ -215,20 +215,15 @@ export function CalendarPage({
     }
     const sessions = drafts.filter((draft) => draft.kind === "session")
     const events = drafts.filter((draft) => draft.kind === "event").map(toEvent)
-    if (events.length) onEventsChange((current) => [...current, ...events])
     if (sessions.length) {
       const entries = sessions.map((draft) => {
         const event = toEvent(draft)
         return { title: draft.title, subjectId: event.subjectId, start: event.startTime, end: event.endTime!, description: draft.description, topics: draft.topics }
       })
-      try {
-        await onPlanSessions(entries)
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Study sessions could not be saved.")
-      }
+      await onPlanSessions(entries)
     }
+    if (events.length) onEventsChange((current) => [...current, ...events])
     if (drafts[0]) selectDay(drafts[0].date)
-    toast(`${drafts.length} item${drafts.length === 1 ? "" : "s"} added to your calendar`)
   }
 
   function saveEvents(saved: CalendarEvent[], isNew: boolean) {

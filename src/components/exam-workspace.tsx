@@ -48,6 +48,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   }
 
   function createCheckpoints() {
+    if (!Number.isInteger(checkpointCount) || checkpointCount < 1 || checkpointCount > 30) return setError("Choose between 1 and 30 checkpoints.")
     const count = Math.max(1, Math.min(30, Math.round(checkpointCount)))
     const halfMarkUnits = Math.round(totalMarks * 2)
     if (halfMarkUnits < count) return setError("Use fewer checkpoints for this mark total.")
@@ -108,12 +109,12 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
         <div className="flex flex-wrap items-center gap-2">
           {remainingMarks > 0 ? <>
             <Input className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
-            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="0.5" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="0.5" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
             <Button size="sm" variant="outline" onClick={add}><Plus />Add</Button>
           </> : null}
           {!items.length ? <>
             <span className="px-1 text-xs text-muted-foreground">or</span>
-            <Input className="h-8 w-16" aria-label="Number of equal checkpoints" type="number" min="1" max="30" value={checkpointCount} onChange={(event) => setCheckpointCount(event.target.valueAsNumber)} />
+            <Input className="h-8 w-16" aria-label="Number of equal checkpoints" type="number" min="1" max="30" value={Number.isFinite(checkpointCount) ? checkpointCount : ""} onChange={(event) => setCheckpointCount(event.target.valueAsNumber)} />
             <Button size="sm" variant="outline" onClick={createCheckpoints}><Split />Split into checkpoints</Button>
           </> : null}
         </div>

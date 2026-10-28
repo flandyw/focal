@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react"
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { Button } from "./ui/button"
 import { SubjectCombobox } from "./subject-combobox"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
@@ -13,6 +14,7 @@ import { getKnownExamMarks } from "../lib/exam-conditions"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
+import { localDate } from "../lib/learning-workspace"
 
 type ExamEntryProps = {
   references: AssessmentReference[]
@@ -22,8 +24,6 @@ type ExamEntryProps = {
   onOpenChange: (open: boolean) => void
   onSave: (attempt: ExamAttempt, logMistake: boolean) => void
 }
-
-const today = new Date().toISOString().slice(0, 10)
 
 export function ExamSheet({ references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
   const subjects = useMemo(
@@ -35,7 +35,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   const [provider, setProvider] = useState(initialAttempt?.provider ?? "VCAA")
   const [examYear, setExamYear] = useState(() => initialAttempt?.examYear ?? new Date().getFullYear())
   const [paper, setPaper] = useState(initialAttempt?.paper ?? "")
-  const [completedAt, setCompletedAt] = useState(initialAttempt?.completedAt ?? today)
+  const [completedAt, setCompletedAt] = useState(() => initialAttempt?.completedAt ?? localDate(new Date()))
   const [rawScore, setRawScore] = useState(initialAttempt?.rawScore ?? 0)
   const [rawMax, setRawMax] = useState(initialAttempt?.rawMax ?? 100)
   const [comment, setComment] = useState(initialAttempt?.comment ?? "")
@@ -78,7 +78,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
     setProvider("VCAA")
     setExamYear(new Date().getFullYear())
     setPaper("")
-    setCompletedAt(today)
+    setCompletedAt(localDate(new Date()))
     setRawScore(0)
     setRawMax(100)
     setComment("")
@@ -89,12 +89,14 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const logMistake = new FormData(event.currentTarget).get("next") === "mistake"
+    const logMistake = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "mistake"
     const scoreError = validateAttempt({ rawScore, rawMax })
     if (!subject.trim() || !paper.trim()) {
       setError("Subject and paper are required.")
       return
     }
+    if (!Number.isInteger(examYear) || examYear < 1990 || examYear > 2100) return setError("Enter a year between 1990 and 2100.")
+    if (!completedAt) return setError("Choose the date you completed the exam.")
     if (scoreError) {
       setError(scoreError)
       return
@@ -128,13 +130,15 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   const percent = rawMax > 0 && Number.isFinite(rawScore) ? Math.round((rawScore / rawMax) * 100) : null
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
-      <form id="exam-form" className="mx-auto grid max-w-3xl gap-8 p-4 sm:p-6 lg:py-10" onSubmit={submit}>
+    <DialogPrimitive.Root open onOpenChange={handleOpenChange}>
+      <DialogPrimitive.Portal>
+      <DialogPrimitive.Popup aria-labelledby="exam-editor-title" aria-describedby="exam-editor-description" className="fixed inset-0 z-50 overflow-y-auto bg-background outline-none">
+      <form id="exam-form" className="mx-auto grid max-w-3xl gap-8 p-4 sm:p-6 lg:py-10" onChange={() => setError(null)} onSubmit={submit}>
         <header className="grid gap-3">
           <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back to exams</Button>
           <div>
-            <h1 className="focal-page-title">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Two steps: which paper, then your mark. Everything else is optional.</p>
+            <h1 id="exam-editor-title" className="focal-page-title">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
+            <p id="exam-editor-description" className="mt-1 text-sm text-muted-foreground">Two steps: which paper, then your mark. Everything else is optional.</p>
           </div>
         </header>
 
@@ -144,11 +148,11 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="subject">Subject</FieldLabel>
-                <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="subject" allowCustom placeholder="Search or enter a subject" />
+                <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} id="subject" allowCustom required placeholder="Search or enter a subject" />
               </Field>
               <Field>
                 <FieldLabel htmlFor="paper">Paper</FieldLabel>
-                <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" />
+                <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" required />
                 <datalist id="exam-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
               </Field>
               <Field>
@@ -158,11 +162,11 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
               <div className="grid grid-cols-2 gap-5">
                 <Field>
                   <FieldLabel htmlFor="exam-year">Year</FieldLabel>
-                  <Input id="exam-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} />
+                  <Input id="exam-year" type="number" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="completed-at">Completed</FieldLabel>
-                  <Input id="completed-at" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} />
+                  <Input id="completed-at" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
                 </Field>
               </div>
             </div>
@@ -171,13 +175,13 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
           <section className="grid gap-5 border-t pt-8" aria-labelledby="exam-step-result">
             <h2 id="exam-step-result" className="focal-section-title">2. Result</h2>
             <div className="grid items-end gap-5 sm:grid-cols-[1fr_1fr_auto]">
-              <Field data-invalid={error ? true : undefined}>
+              <Field>
                 <FieldLabel htmlFor="raw-score">Mark</FieldLabel>
-                <Input id="raw-score" type="number" min="0" step="0.5" value={rawScore} onChange={(event) => setRawScore(event.target.valueAsNumber)} />
+                <Input id="raw-score" type="number" min="0" step="0.5" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} required />
               </Field>
-              <Field data-invalid={error ? true : undefined}>
+              <Field>
                 <FieldLabel htmlFor="raw-max">Out of</FieldLabel>
-                <Input id="raw-max" type="number" min="0.5" step="0.5" value={rawMax} onChange={(event) => setRawMax(event.target.valueAsNumber)} />
+                <Input id="raw-max" type="number" min="0.5" step="0.5" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
               </Field>
               <p className="pb-1.5 focal-stat-value tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
             </div>
@@ -186,7 +190,6 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
                 VCAA {comparisonYear} scaled mark: {scaled.scaledScore.toFixed(1)}/{reference.maxScore} ({formatReferenceName(reference.name)}).
               </FieldDescription>
             ) : null}
-            <FieldError>{error}</FieldError>
           </section>
 
           <section className="grid gap-2 border-t pt-8" aria-label="Optional details">
@@ -207,16 +210,19 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
         </FieldGroup>
 
         <footer className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          {error ? <FieldError className="w-full">{error}</FieldError> : null}
           <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
           <Button type="submit" name="next" value="mistake" variant="outline">Save & log mistake</Button>
           <Button type="submit">{initialAttempt ? "Save changes" : "Save exam"}</Button>
         </footer>
       </form>
+      </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
       <DiscardChangesDialog
         open={confirmingClose}
         onKeep={() => setConfirmingClose(false)}
         onDiscard={() => { setConfirmingClose(false); onOpenChange(false) }}
       />
-    </div>
+    </DialogPrimitive.Root>
   )
 }

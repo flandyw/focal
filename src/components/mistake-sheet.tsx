@@ -552,7 +552,7 @@ export function MistakeSheet({
                 </Field>
                 <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-marks-lost">Marks lost</FieldLabel>
-                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="0.5" value={marksLost} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
+                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="0.5" value={Number.isFinite(marksLost) ? marksLost : ""} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
                 </Field>
                 <Button type="button" variant="outline" disabled={!(totalMarks > 0)} onClick={() => setMarksLost(totalMarks)}>All marks</Button>
                 {marksError ? <FieldError className="sm:col-span-3">{marksError}</FieldError> : null}

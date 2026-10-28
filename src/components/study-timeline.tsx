@@ -18,7 +18,7 @@ import type { CanonicalStudySession, StudySessionEdit } from "../lib/sync/sessio
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
 
-const SNAP = 5
+const SNAP = 1
 const LAST_MINUTE = 24 * 60 - 1
 const QUICK_LOGS = [25, 45, 60, 90]
 
@@ -37,7 +37,7 @@ type Range = { start: number; end: number }
 
 const DAY = 24 * 60
 const MIN_SPAN = 30
-const TICK_STEPS = [5, 10, 15, 30, 60, 120, 180, 360]
+const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360]
 
 const TONE: Record<Tone, string> = {
   class: "border border-border bg-muted text-muted-foreground",
@@ -302,7 +302,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     if (busy) return
     setSelecting(false)
     setSelectedSessions([])
-    const next = { start: clamp(range.start), end: clamp(Math.max(range.end, range.start + 5)) }
+    const next = { start: clamp(range.start), end: clamp(Math.max(range.end, range.start + SNAP)) }
     setDraft(next)
     reveal(next)
     setSelected(null)
@@ -455,7 +455,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     }
   }
 
-  /** Arrow keys move a focused block by 5 minutes (15 with Shift); Alt resizes its end instead. */
+  /** Arrow keys move a focused block by 1 minute (15 with Shift); Alt resizes its end instead. */
   function nudge(event: ReactKeyboardEvent<HTMLElement>, block: Block) {
     const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
     if (!direction || adjust || busy || selecting || !movable(block)) return
@@ -517,7 +517,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
   async function split(block: Block, cut: number) {
     const session = block.session
     if (!session?.subject_id || !splittable(block) || busy) return
-    if (cut - block.start < SNAP || block.end - cut < SNAP) return void toast.error(`Cut at least ${SNAP} minutes from either end.`)
+    if (cut - block.start < SNAP || block.end - cut < SNAP) return void toast.error(`Cut at least ${SNAP} minute from either end.`)
     const rest = { title: session.title, ...copiedSubjects(block, isoAt(date, cut), isoAt(date, block.end)), start: isoAt(date, cut), end: isoAt(date, block.end) }
     let created = false
     setBusy(true)

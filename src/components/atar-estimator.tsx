@@ -48,13 +48,9 @@ export function AtarEstimator({
     const order = new Map(prioritiseSubjects(available.map((study) => study.studyName), data.subjects).map((subject, index) => [subject, index]))
     return available.toSorted((first, second) => (order.get(first.studyName) ?? 0) - (order.get(second.studyName) ?? 0))
   }, [data.subjects, scalingReferences, year])
-  const [rows, setRows] = useState<Row[]>(() => [newRow()])
   const firstStudyName = firstPreferredSubject(studies.map((study) => study.studyName), data.subjects)
   const firstStudyCode = studies.find((study) => study.studyName === firstStudyName)?.code ?? ""
-
-  if (firstStudyCode && rows.some((row) => !row.code)) {
-    setRows(rows.map((row) => row.code ? row : { ...row, code: firstStudyCode }))
-  }
+  const [rows, setRows] = useState<Row[]>(() => [newRow(firstStudyCode)])
 
   const predictions = useMemo(() => {
     const map = new Map<string, number>()
@@ -136,6 +132,7 @@ export function AtarEstimator({
                 const prediction = reference ? predictions.get(normaliseScalingStudyName(reference.studyName)) : undefined
                 const result = results.find((item) => item.id === row.id)
                 const usePrediction = row.usePrediction && prediction !== undefined
+                const invalidScore = !usePrediction && row.raw !== "" && (!Number.isInteger(Number(row.raw)) || Number(row.raw) < 20 || Number(row.raw) > 50)
                 const role = roles.get(row.id)
                 const name = reference?.studyName ?? "subject"
                 return (
@@ -144,7 +141,7 @@ export function AtarEstimator({
                       <SubjectCombobox subjects={studies.map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
                     <div role="cell" className="flex items-center gap-1.5">
-                      <Input aria-label={`Raw score for ${name}`} className="w-16 tabular-nums" type="number" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
+                      <Input aria-label={`Raw score for ${name}`} aria-invalid={invalidScore || undefined} aria-describedby={invalidScore ? `score-error-${row.id}` : undefined} className="w-16 tabular-nums" type="number" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
                       {prediction !== undefined ? <Toggle variant="outline" size="sm" pressed={usePrediction} onPressedChange={(pressed) => updateRow(row.id, { usePrediction: pressed })} aria-label={`Use Focal prediction for ${name}`}>Focal</Toggle> : null}
                     </div>
                     <div role="cell" className="text-right text-sm tabular-nums max-md:hidden">{result ? result.scaledScore.toFixed(1) : "—"}</div>
@@ -155,11 +152,12 @@ export function AtarEstimator({
                     <div role="cell">
                       <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><Trash2 /></Button>
                     </div>
+                    {invalidScore ? <p id={`score-error-${row.id}`} className="col-span-full text-xs text-destructive">Enter a whole score from 20 to 50.</p> : null}
                   </div>
                 )
               })}
             </div>
-            <Button variant="outline" className="justify-self-start" onClick={() => setRows((current) => [...current, newRow(firstStudyCode)])}><Plus />Add study</Button>
+            <Button variant="outline" className="justify-self-start" onClick={() => setRows((current) => [...current, newRow()])}><Plus />Add study</Button>
           </CardContent>
         </Card>
 

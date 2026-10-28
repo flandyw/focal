@@ -1,4 +1,5 @@
 import { isPerformanceContext, type PerformanceContext } from "./performance-context.js"
+import { localDate } from "./learning-workspace"
 
 export const SAC_UNITS = [1, 2, 3, 4] as const
 
@@ -155,13 +156,13 @@ export function getSacTimerState(nowMs: number, startedAtMs: number, durationMin
   }
 }
 
-export function getUpcomingSacs(records: SacRecord[], today = new Date().toISOString().slice(0, 10)): SacRecord[] {
+export function getUpcomingSacs(records: SacRecord[], today = localDate(new Date())): SacRecord[] {
   return records
     .filter((record) => !isCompletedSac(record) && record.scheduledAt >= today)
     .toSorted((first, second) => first.scheduledAt.localeCompare(second.scheduledAt))
 }
 
-export function computeSacStats(records: SacRecord[], today = new Date().toISOString().slice(0, 10)): SacStats {
+export function computeSacStats(records: SacRecord[], today = localDate(new Date())): SacStats {
   const completed = records.filter(isCompletedSac)
   const percentages = completed.map((record) => sacPercentage(record)!)
   const totalWeight = completed.reduce((total, record) => total + (record.weighting ?? 1), 0)
@@ -181,7 +182,7 @@ export function computeSacStats(records: SacRecord[], today = new Date().toISOSt
   }
 }
 
-export function buildSacSubjectStats(records: SacRecord[], today = new Date().toISOString().slice(0, 10)): SacSubjectStats[] {
+export function buildSacSubjectStats(records: SacRecord[], today = localDate(new Date())): SacSubjectStats[] {
   const subjects = new Map<string, SacRecord[]>()
   for (const record of records) {
     const bucket = subjects.get(record.subject) ?? []

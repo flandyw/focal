@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import { Textarea } from "./ui/textarea"
 import { SubjectCombobox } from "./subject-combobox"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { buildStoplightPrompt, groupBy, parseStoplightResponse, type ImportedItem } from "../lib/stoplight"
 
 /** Chatbot round trip: copy a prompt, attach the study design, paste the JSON reply back. Re-import to add the rest of a long reply. */
@@ -23,7 +24,13 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   const [items, setItems] = useState<ImportedItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
   const groups = items ? groupBy(items, (item) => item.group) : null
+
+  function close() {
+    if (text.trim()) setConfirmingClose(true)
+    else onOpenChange(false)
+  }
 
   async function copyPrompt() {
     if (!subject.trim()) return setError("Choose a subject first.")
@@ -37,6 +44,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   }
 
   function review() {
+    if (!subject.trim()) return setError("Choose a subject first.")
     try {
       const parsed = parseStoplightResponse(text)
       if (!parsed.length) throw new Error("none")
@@ -57,7 +65,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import a checklist</DialogTitle>
@@ -76,7 +84,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               </Button>
             </div>
           </Field>
-          <Field data-invalid={error ? true : undefined}>
+          <Field>
             <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply</FieldLabel>
             <Textarea
               id="stoplight-import-json"
@@ -85,7 +93,6 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               placeholder='{"groups":[{"group":"Unit 3 AOS 1","items":[{"name":"...","check":"..."}]}]}'
               value={text}
               onChange={(event) => { setText(event.target.value); setItems(null); setError(null) }}
-              aria-invalid={error ? true : undefined}
             />
             {error ? <FieldError>{error}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
           </Field>
@@ -101,12 +108,13 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
           ) : null}
         </FieldGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           {items
             ? <Button type="button" disabled={!subject.trim()} onClick={add}><Check />Add {items.length} item{items.length === 1 ? "" : "s"}</Button>
             : <Button type="button" disabled={!text.trim()} onClick={review}>Review items</Button>}
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); onOpenChange(false) }} />
     </Dialog>
   )
 }

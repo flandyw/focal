@@ -34,6 +34,7 @@ import { hasPerformanceContext, type PerformanceContext } from "../lib/performan
 import { cn } from "../lib/utils"
 import type { VcaaStudyResources } from "../lib/vcaa-resources"
 import { pauseExamSession, resumeExamSession, skipExamReading, type ExamTimerSession } from "../lib/ongoing-timers"
+import { localDate } from "../lib/learning-workspace"
 
 export type ExamTimerPreset = Pick<ExamTimerSession, "subject" | "provider" | "examYear" | "paper" | "marks"> & Partial<Pick<ExamTimerSession, "readingMinutes" | "writingMinutes">>
 
@@ -51,7 +52,7 @@ export type ExamTimerModeProps = ExamProgressionProps & {
   onSave: (attempt: ExamAttempt) => void
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => localDate(new Date())
 const clockTime = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
 const minutes = (value: number) => `${value} min`
 
@@ -315,22 +316,22 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-year">Year</FieldLabel>
-                    <Input id="exam-mode-year" type="number" min="1990" max="2100" value={examYear} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-year" type="number" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 border-t pt-5">
                   <Field>
                     <FieldLabel htmlFor="exam-mode-reading">Reading (min)</FieldLabel>
-                    <Input id="exam-mode-reading" type="number" min="0" max="180" value={readingMinutes} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-reading" type="number" min="0" max="180" value={Number.isFinite(readingMinutes) ? readingMinutes : ""} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-writing">Writing (min)</FieldLabel>
-                    <Input id="exam-mode-writing" type="number" min="1" max="360" value={writingMinutes} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-writing" type="number" min="1" max="360" value={Number.isFinite(writingMinutes) ? writingMinutes : ""} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-marks">Marks</FieldLabel>
-                    <Input id="exam-mode-marks" type="number" min="1" max="500" value={marks} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-marks" type="number" min="1" max="500" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
                   </Field>
                 </div>
 
@@ -478,11 +479,11 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
               <div className="grid grid-cols-3 gap-4">
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-score">Mark</FieldLabel>
-                  <Input id="timer-score" type="number" min="0" step="0.5" value={rawScore} onChange={(event) => setRawScore(event.target.valueAsNumber)} autoFocus required />
+                  <Input id="timer-score" type="number" min="0" step="0.5" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} autoFocus required />
                 </Field>
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-maximum">Out of</FieldLabel>
-                  <Input id="timer-maximum" type="number" min="0.5" step="0.5" value={rawMax} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
+                  <Input id="timer-maximum" type="number" min="0.5" step="0.5" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="timer-completed">Completed</FieldLabel>

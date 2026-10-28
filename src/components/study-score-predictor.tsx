@@ -3,7 +3,8 @@ import { Calculator, Info, Link2, TrendingUp } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Button } from "./ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -34,10 +35,14 @@ export function StudyScorePredictor({
   data,
   references,
   scalingReferences,
+  onLogExam,
+  onOpenAtar,
 }: {
   data: AppData
   references: AssessmentReference[]
   scalingReferences: ScalingReference[]
+  onLogExam: () => void
+  onOpenAtar: () => void
 }) {
   const subjects = useMemo(
     () => prioritiseSubjects(data.attempts.map((attempt) => attempt.subject), data.subjects),
@@ -135,6 +140,7 @@ export function StudyScorePredictor({
             <EmptyTitle>Log a practice exam first</EmptyTitle>
             <EmptyDescription>The study-score predictor needs at least one recorded result. You can still enter raw study scores manually on the ATAR page.</EmptyDescription>
           </EmptyHeader>
+          <EmptyContent className="flex flex-wrap justify-center gap-2"><Button onClick={onLogExam}>Log exam</Button><Button variant="outline" onClick={onOpenAtar}>Open ATAR</Button></EmptyContent>
         </Empty>
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">

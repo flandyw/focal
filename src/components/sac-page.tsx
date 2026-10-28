@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { buildSacSubjectStats, computeSacStats, getUpcomingSacs, isCompletedSac, sacPercentage, type SacRecord } from "../lib/sac"
 import type { SacTimerSession } from "../lib/ongoing-timers"
+import { useTickingNow } from "../hooks/use-ticking-now"
+import { localDate } from "../lib/learning-workspace"
 
 type SacPageProps = {
   records: SacRecord[]
@@ -43,8 +45,8 @@ function daysUntil(value: string) {
   return Math.round((new Date(`${value}T00:00:00`).getTime() - today.getTime()) / 86_400_000)
 }
 
-function SacStatsRow({ records }: { records: SacRecord[] }) {
-  const stats = useMemo(() => computeSacStats(records), [records])
+function SacStatsRow({ records, today }: { records: SacRecord[]; today: string }) {
+  const stats = useMemo(() => computeSacStats(records, today), [records, today])
   return (
     <div className="grid grid-cols-2 gap-y-6 rounded-lg border bg-card px-5 py-5 lg:grid-cols-4 lg:gap-y-0">
       <div className="min-w-0 space-y-1.5 pr-4 sm:pr-6"><p className="text-sm text-muted-foreground">Completed SACs</p><p className="text-3xl font-semibold tabular-nums">{stats.completed}</p><p className="text-xs text-muted-foreground">{stats.upcoming} upcoming · {stats.total} tracked</p></div>
@@ -103,8 +105,9 @@ export function SacPage({ records, subjects, preferredSubjects, activeTimer, onT
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<SacRecord | null>(null)
   const [timerRecord, setTimerRecord] = useState<SacRecord | null>(null)
-  const upcoming = useMemo(() => getUpcomingSacs(records), [records])
-  const subjectStats = useMemo(() => buildSacSubjectStats(records), [records])
+  const today = localDate(useTickingNow())
+  const upcoming = useMemo(() => getUpcomingSacs(records, today), [records, today])
+  const subjectStats = useMemo(() => buildSacSubjectStats(records, today), [records, today])
   const allSubjects = useMemo(() => [...new Set([...subjects, ...records.map((record) => record.subject)])], [records, subjects])
 
   function startTimer(record?: SacRecord) {
@@ -128,7 +131,7 @@ export function SacPage({ records, subjects, preferredSubjects, activeTimer, onT
         <TabsContent value="overview" className="mt-4 grid gap-6">
           {records.length ? <>
             {upcoming.length ? <Card><CardHeader><CardTitle>Upcoming SACs</CardTitle><CardDescription>Your next assessments, ordered by date.</CardDescription></CardHeader><CardContent><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.slice(0, 6).map((record) => { const remaining = daysUntil(record.scheduledAt); return <div key={record.id} className="grid gap-3 rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{record.title}</p><p className="text-sm text-muted-foreground">{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · Unit {record.unit}</p></div><Badge variant={remaining <= 7 ? "secondary" : "outline"}>{remaining === 0 ? "Today" : remaining === 1 ? "Tomorrow" : `${remaining} days`}</Badge></div><p className="text-xs text-muted-foreground">{formatDate(record.scheduledAt)} · {record.durationMinutes} min{record.areaOfStudy ? ` · ${record.areaOfStudy}` : ""}</p><Button variant="outline" size="sm" onClick={() => startTimer(record)}><Play />Start timer</Button></div> })}</div></CardContent></Card> : null}
-            <SacStatsRow records={records} />
+            <SacStatsRow records={records} today={today} />
             <div className="grid gap-6 lg:grid-cols-3"><div className="min-w-0 lg:col-span-2"><SacTrend records={records} /></div><Card><CardHeader><CardTitle>Subjects</CardTitle><CardDescription>Completed and upcoming SAC evidence.</CardDescription></CardHeader><CardContent><ul className="divide-y rounded-lg border">{subjectStats.map((entry) => <li key={entry.subject} className="flex items-center gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{entry.subject}</p><p className="text-xs text-muted-foreground">{entry.completed} completed · {entry.upcoming} upcoming</p></div><span className="text-sm font-semibold tabular-nums">{entry.average === null ? "—" : `${entry.average.toFixed(1)}%`}</span></li>)}</ul></CardContent></Card></div>
             <section aria-labelledby="all-sacs-title" className="grid gap-4"><div><h2 id="all-sacs-title" className="text-lg font-semibold">All SACs</h2><p className="text-sm text-muted-foreground">Upcoming plans and completed results in one place.</p></div><div className="overflow-x-auto rounded-lg border"><Table><TableHeader><TableRow><TableHead>SAC</TableHead><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead>Result</TableHead><TableHead>Timing</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader><TableBody>{records.toSorted((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)).map((record) => { const percentage = sacPercentage(record); return <TableRow key={record.id}><TableCell><div className="font-medium">{record.title}</div><div className="text-xs text-muted-foreground">{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · Unit {record.unit}{record.areaOfStudy ? ` · ${record.areaOfStudy}` : ""}</div></TableCell><TableCell className="whitespace-nowrap">{formatDate(record.scheduledAt)}</TableCell><TableCell><Badge variant={isCompletedSac(record) ? "secondary" : "outline"}>{isCompletedSac(record) ? "Completed" : "Upcoming"}</Badge></TableCell><TableCell className="tabular-nums">{percentage === null ? "—" : <><div>{percentage.toFixed(1)}%</div><div className="text-xs text-muted-foreground">{record.score}/{record.maxScore}</div></>}</TableCell><TableCell className="whitespace-nowrap text-sm tabular-nums">{record.timing ? <><div>{formatDuration(record.timing.actualSeconds)}</div>{record.timing.overtimeSeconds ? <div className="text-xs text-destructive">+{formatDuration(record.timing.overtimeSeconds)}</div> : null}</> : `${record.durationMinutes} min planned`}</TableCell><TableCell><DropdownMenu><DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}><MoreHorizontal /><span className="sr-only">SAC actions</span></DropdownMenuTrigger><DropdownMenuContent align="end">{!isCompletedSac(record) ? <DropdownMenuItem onClick={() => startTimer(record)}><Play />Start timer</DropdownMenuItem> : null}<DropdownMenuItem onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Edit SAC</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onClick={() => onDelete(record)}><Trash2 />Delete SAC</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow> })}</TableBody></Table></div></section>
           </> : <Empty className="min-h-[24rem] border"><EmptyHeader><EmptyMedia variant="icon"><CalendarClock /></EmptyMedia><EmptyTitle>Track your first SAC</EmptyTitle><EmptyDescription>Plan an upcoming assessment or log a completed result to begin building subject statistics.</EmptyDescription></EmptyHeader><EmptyContent><div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={() => startTimer()}><Clock3 />Start timer</Button><Button onClick={() => setSheetOpen(true)}><Plus />Plan or log SAC</Button></div></EmptyContent></Empty>}

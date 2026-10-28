@@ -26,7 +26,7 @@ const today = () => localDate(new Date())
 
 export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onOpenChange, onSave }: SacSheetProps) {
   const options = useMemo(() => prioritiseSubjects(subjects, preferredSubjects), [preferredSubjects, subjects])
-  const [subject, setSubject] = useState(initialRecord?.subject ?? preferredSubjects[0] ?? options[0] ?? "")
+  const [subject, setSubject] = useState(initialRecord?.subject ?? preferredSubjects[0] ?? "")
   const [provider, setProvider] = useState(initialRecord?.provider ?? "")
   const [title, setTitle] = useState(initialRecord?.title ?? "")
   const [sacNumber, setSacNumber] = useState(initialRecord?.sacNumber ?? "")
@@ -106,7 +106,7 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
           <SheetTitle>{initialRecord ? "Edit SAC" : "Plan or log SAC"}</SheetTitle>
           <SheetDescription>Add an upcoming SAC now, then enter the result when it is marked.</SheetDescription>
         </SheetHeader>
-        <form id="sac-form" className="px-4 pb-4" onSubmit={submit}>
+        <form id="sac-form" className="px-4 pb-4" onChange={() => setError(null)} onSubmit={submit}>
           <FieldGroup>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
@@ -131,7 +131,7 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="sac-unit">Unit</FieldLabel>
-                <Select items={SAC_UNITS.map((option) => ({ value: String(option), label: `Unit ${option}` }))} value={unit === null ? null : String(unit)} onValueChange={(value) => setUnit(value === null ? null : Number(value) as SacUnit)}>
+                <Select items={SAC_UNITS.map((option) => ({ value: String(option), label: `Unit ${option}` }))} value={unit === null ? null : String(unit)} onValueChange={(value) => { setUnit(value === null ? null : Number(value) as SacUnit); setError(null) }}>
                   <SelectTrigger id="sac-unit" className="w-full"><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>{SAC_UNITS.map((option) => <SelectItem key={option} value={String(option)}>Unit {option}</SelectItem>)}</SelectContent>
                 </Select>
@@ -149,17 +149,17 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-duration">Time allowed (min)</FieldLabel>
-                <Input id="sac-duration" type="number" min="1" max="360" value={durationMinutes} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
+                <Input id="sac-duration" type="number" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
               </Field>
             </div>
             <div className="border-t pt-5">
               <p className="mb-4 text-sm font-medium">Result</p>
               <div className="grid gap-5 sm:grid-cols-3">
-                <Field data-invalid={error ? true : undefined}>
+                <Field>
                   <FieldLabel htmlFor="sac-score">Mark</FieldLabel>
                   <Input id="sac-score" type="number" min="0" step="0.5" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" />
                 </Field>
-                <Field data-invalid={error ? true : undefined}>
+                <Field>
                   <FieldLabel htmlFor="sac-maximum">Out of</FieldLabel>
                   <Input id="sac-maximum" type="number" min="0.5" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" />
                 </Field>

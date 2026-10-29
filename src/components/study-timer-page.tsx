@@ -353,7 +353,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   return (
     <div className="grid gap-6 lg:gap-8">
       <Card className="min-w-0 gap-0 py-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-surface-tint px-4 py-3 sm:px-6">
           <div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:w-auto" aria-label="Study mode" role="group">
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
@@ -420,7 +420,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           </p> : null}
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
-        <div className="grid grid-cols-3 divide-x border-t text-center">
+        <div className="grid grid-cols-3 divide-x border-t bg-surface-tint text-center">
           <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
           <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
           <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>

@@ -41,6 +41,11 @@
   --accent: #e6ebe1;
   --accent-foreground: #315647;
   --destructive: #ae4035;
+  --success: #286647;
+  --warning: #865a13;
+  --info: #285174;
+  --assessment: #80402a;
+  --overlay: #16251c;
   --border: #dedfd3;
   --input: #84907b;
   --ring: #638773;
@@ -52,9 +57,9 @@
   --chart-6: #b0577a;
   --chart-7: #4f8a86;
   --chart-8: #8a8a52;
-  --stoplight-red: #b54b45;
+  --stoplight-red: var(--destructive);
   --stoplight-amber: #c48a24;
-  --stoplight-green: #398062;
+  --stoplight-green: var(--success);
   --chart-mean: var(--chart-3);
   --chart-median: var(--chart-2);
   --chart-deviation: var(--chart-5);
@@ -99,6 +104,17 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: #30230f;
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-assessment: var(--assessment);
+  --color-surface-tint: var(--surface-tint);
+  --color-surface-heading: var(--surface-heading);
+  --color-overlay: var(--overlay);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -140,6 +156,11 @@
   --accent: #354332;
   --accent-foreground: #d8e6d0;
   --destructive: #ed9c8b;
+  --success: #8ec3a5;
+  --warning: #e2b45a;
+  --info: #9bc6e4;
+  --assessment: #e8ad8c;
+  --overlay: #000000;
   --border: #3e4840;
   --input: #788779;
   --ring: #a2bd97;
@@ -151,9 +172,9 @@
   --chart-6: #d98ba9;
   --chart-7: #7fc2bc;
   --chart-8: #c2c283;
-  --stoplight-red: #e88f86;
+  --stoplight-red: var(--destructive);
   --stoplight-amber: #e2b45a;
-  --stoplight-green: #8ec3a5;
+  --stoplight-green: var(--success);
   --sidebar: #161c18;
   --sidebar-foreground: #b8c2b6;
   --sidebar-primary: var(--primary);
@@ -378,9 +399,37 @@ html { -webkit-tap-highlight-color: transparent; }
 [data-sidebar-resizing="true"] .group\/sidebar-wrapper * { transition-duration: 0ms !important; user-select: none; }
 .workspace-split[data-split="true"] .calendar-day-pane { position: absolute; inset: 0; margin-left: calc(var(--spacing) * 3); }
 .workspace-split[data-split="true"] .calendar-day-card { position: absolute; inset: 0; overflow-y: auto; }
-.tt-block { background-color: oklch(0.94 0.04 var(--tt-h)); color: oklch(0.38 0.11 var(--tt-h)); }
-.dark .tt-block { background-color: oklch(0.36 0.07 var(--tt-h)); color: oklch(0.92 0.06 var(--tt-h)); }
-span.tt-block { background-color: oklch(0.62 0.14 var(--tt-h)); }
-.dark span.tt-block { background-color: oklch(0.74 0.12 var(--tt-h)); }
+.tt-block { background-color: color-mix(in srgb, var(--tt-color) 13%, var(--card)); color: var(--tt-color); }
+.dark .tt-block { background-color: color-mix(in srgb, var(--tt-color) 16%, var(--card)); }
+span.tt-block, .dark span.tt-block { background-color: var(--tt-color); }
 .tt-break { background-color: color-mix(in oklch, var(--foreground) 6%, var(--card)); color: var(--muted-foreground); }
 span.tt-break { background-color: var(--border); }
+
+/* Shared roles follow the chosen accent and surface, including custom colours. */
+:root {
+  --success-soft: color-mix(in srgb, var(--success) 12%, var(--card));
+  --warning-soft: color-mix(in srgb, var(--warning) 12%, var(--card));
+  --info-soft: color-mix(in srgb, var(--info) 12%, var(--card));
+  --surface-heading: var(--primary);
+  --surface-tint: color-mix(in srgb, var(--surface-heading) 9%, var(--card));
+}
+#main-content:is([data-view="exams"], [data-view="sacs"], [data-view="library"]) { --surface-heading: var(--assessment); }
+#main-content:is([data-view="progress"], [data-view="goals"], [data-view="predictor"], [data-view="atar"], [data-view="vcaa"]) { --surface-heading: var(--info); }
+#main-content { --surface-tint: color-mix(in srgb, var(--surface-heading) 9%, var(--card)); }
+.focal-page-title, .focal-section-title { color: var(--surface-heading); }
+.focal-navigation [data-nav-group="Study"] { --nav-color: var(--primary); }
+.focal-navigation [data-nav-group="Assessments"] { --nav-color: var(--assessment); }
+.focal-navigation [data-nav-group="Analysis"] { --nav-color: var(--info); }
+.focal-navigation [data-nav-group] [data-sidebar="menu-button"] > svg { color: var(--nav-color); opacity: 1; }
+.focal-navigation [data-nav-group] [data-sidebar="menu-button"][data-active="true"] {
+  background: color-mix(in srgb, var(--nav-color) 17%, var(--sidebar));
+  color: var(--nav-color);
+}
+.toaster {
+  --success-bg: var(--success-soft); --success-text: var(--success); --success-border: var(--success);
+  --warning-bg: var(--warning-soft); --warning-text: var(--warning); --warning-border: var(--warning);
+  --info-bg: var(--info-soft); --info-text: var(--info); --info-border: var(--info);
+  --error-bg: color-mix(in srgb, var(--destructive) 10%, var(--popover)); --error-text: var(--destructive); --error-border: var(--destructive);
+}
+
+.focal-navigation [data-nav-group] [data-tour="nav-exams"] { --nav-color: var(--assessment); }

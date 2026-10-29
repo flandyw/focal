@@ -61,7 +61,7 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
   // The active tab grows into a labelled pill; the rest stay icon-only with the label kept for screen readers.
   const tab = (key: string, label: string, Icon: typeof Menu, active: boolean, onClick: () => void, badge = 0) => (
     <button key={key} type="button" aria-current={active ? "page" : undefined} onClick={onClick}
-      className={`relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-[background-color,padding,color] duration-200 ease-(--ease-spring) ${active ? "shrink-0 bg-accent px-4 font-semibold text-foreground" : "flex-1 text-muted-foreground"}`}>
+      className={`relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-[background-color,padding,color] duration-200 ease-(--ease-spring) ${active ? "shrink-0 bg-accent px-4 font-semibold text-accent-foreground" : "flex-1 text-muted-foreground"}`}>
       <Icon aria-hidden className="size-5 shrink-0" strokeWidth={active ? 2 : 1.5} />
       <span className={active ? "whitespace-nowrap" : "sr-only"}>{label}</span>
       {badge > 0 ? <span aria-label={`${badge} due`} className={`absolute top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "left-7 ring-accent" : "left-1/2 ml-1 ring-card"}`}>{badge > 99 ? "99+" : badge}</span> : null}
@@ -150,9 +150,9 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
       aria-label={SYNC_LABELS[status]}
       className={cn(
         "size-2 shrink-0 rounded-full bg-muted-foreground/40",
-        status === "synced" && "bg-primary",
+        status === "synced" && "bg-success",
         (status === "error" || status === "sign-in-required") && "bg-destructive",
-        (status === "syncing" || status === "pending" || status === "restoring" || status === "reconnecting") && "animate-pulse bg-primary",
+        (status === "syncing" || status === "pending" || status === "restoring" || status === "reconnecting") && "animate-pulse bg-warning",
       )}
     />
   )
@@ -262,7 +262,7 @@ export function AppSidebar({
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
           if (!items.length) return null
-          return <SidebarGroup className="p-0" key={group.label}>
+          return <SidebarGroup className="p-0" data-nav-group={group.label} key={group.label}>
           {appearance.sidebarLabels ? <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3">{group.label}</SidebarGroupLabel> : null}
           <SidebarGroupContent>
             <SidebarMenu>

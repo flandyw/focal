@@ -32,7 +32,7 @@ type Filter = keyof typeof FILTERS
 // Selected state always carries the label too, so colour is never the only signal.
 const SELECTED: Record<StoplightRating, string> = {
   red: "border-stoplight-red bg-stoplight-red text-white hover:border-stoplight-red hover:bg-stoplight-red hover:text-white dark:text-background dark:hover:text-background",
-  amber: "border-stoplight-amber bg-stoplight-amber text-[#30230f] hover:border-stoplight-amber hover:bg-stoplight-amber/90 hover:text-[#30230f]",
+  amber: "border-stoplight-amber bg-stoplight-amber text-warning-foreground hover:border-stoplight-amber hover:bg-stoplight-amber/90 hover:text-warning-foreground",
   green: "border-stoplight-green bg-stoplight-green text-white hover:border-stoplight-green hover:bg-stoplight-green hover:text-white dark:text-background dark:hover:text-background",
 }
 const SEGMENT: Record<StoplightRating, string> = { red: "bg-stoplight-red", amber: "bg-stoplight-amber", green: "bg-stoplight-green" }

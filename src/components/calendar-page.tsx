@@ -333,7 +333,7 @@ export function CalendarPage({
 
       <WorkspaceSplit id="calendar" primary={
         <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
-          <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
+          <div className={cn(WEEK_GRID, "border-b border-border bg-accent text-[0.6875rem] font-medium tracking-wide text-accent-foreground uppercase")}>
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
             <div className="hidden px-2 py-2 text-right sm:block">Week</div>
           </div>
@@ -512,7 +512,7 @@ function DayCell({ day, active, weekend, onSelect }: {
         "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset sm:min-h-32 sm:p-1",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
-        active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
+        active && "z-10 bg-accent ring-2 ring-primary ring-inset hover:bg-accent",
       )}
       onClick={() => onSelect(day.date)}
     >

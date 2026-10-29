@@ -27,8 +27,8 @@ export function subjectColor(subjectId: string | null | undefined, subjects: rea
   if (!subjectId) return undefined
   const id = studySubjectId(subjectId, subjects)
   const known = subjects.find((subject) => subject.id === id)
-  if (known) return known.color
   let hash = 0
   for (const char of id.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return `hsl(${hash % 360} 65% 42%)`
+  const colour = known?.color ?? `hsl(${hash % 360} 65% 42%)`
+  return `light-dark(oklch(from ${colour} 0.48 0.12 h), oklch(from ${colour} 0.78 0.10 h))`
 }

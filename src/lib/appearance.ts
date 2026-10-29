@@ -91,7 +91,7 @@ function readAppearance(): Appearance {
 let appearance = readAppearance()
 let accent = loadAccentTheme()
 
-// Custom accents keep readable buttons and text in both modes, including very pale colours.
+// Leave contrast headroom for tinted selections, including very pale custom accents.
 function luminance(hex: string) {
   const channels = hex.slice(1).match(/../g)!.map((part) => parseInt(part, 16) / 255).map((n) => n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4)
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
@@ -101,7 +101,7 @@ function readableAccent(hex: string, dark: boolean) {
   let colour = hex
   for (let i = 0; i < 30; i++) {
     const light = luminance(colour)
-    if (dark ? (light + 0.05) / (luminance("#354332") + 0.05) >= 4.5 : (luminance("#e9e1d2") + 0.05) / (light + 0.05) >= 4.5) break
+    if (dark ? (light + 0.05) / (luminance("#354332") + 0.05) >= 4.5 : (luminance("#e9e1d2") + 0.05) / (light + 0.05) >= 7) break
     channels = channels.map((n) => Math.round(n * 0.85 + (dark ? 255 : 0) * 0.15))
     colour = `#${channels.map((n) => n.toString(16).padStart(2, "0")).join("")}`
   }
@@ -130,11 +130,11 @@ export function applyAppearance() {
   root.style.setProperty("--primary", `light-dark(${light}, ${dark})`)
   root.style.setProperty("--primary-foreground", "light-dark(#ffffff, #141815)")
   root.style.setProperty("--ring", "var(--primary)")
-  root.style.setProperty("--accent", `color-mix(in srgb, var(--primary) 12%, var(--background))`)
+  root.style.setProperty("--accent", `color-mix(in srgb, var(--primary) 16%, var(--background))`)
   root.style.setProperty("--accent-foreground", "var(--primary)")
   root.style.setProperty("--secondary", "var(--accent)")
   root.style.setProperty("--secondary-foreground", "var(--primary)")
-  root.style.setProperty("--sidebar-accent", "color-mix(in srgb, var(--primary) 14%, var(--sidebar))")
+  root.style.setProperty("--sidebar-accent", "color-mix(in srgb, var(--primary) 20%, var(--sidebar))")
   root.style.setProperty("--sidebar-accent-foreground", "var(--primary)")
   if (a.sidebarTint) {
     root.style.setProperty("--sidebar", `light-dark(color-mix(in srgb, ${a.sidebarTint} 12%, #ffffff), color-mix(in srgb, ${a.sidebarTint} 14%, #16191c))`)

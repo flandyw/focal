@@ -36,7 +36,7 @@ type Person = {
   studying_kind: string | null
   total_ms: number
   daily: Record<string, number> | null
-  today_blocks: [string, string | null][] | null
+  today_blocks: [string, string | null, string?][] | null
   subjects: Record<string, number> | null
   exams: SharedExam[] | null
 }
@@ -90,21 +90,31 @@ function PersonAvatar({ person, className }: { person: Person; className?: strin
   )
 }
 
-const personColor = (index: number) => `var(--chart-${index % 5 + 1})`
+const personColor = (index: number) => `var(--chart-${index % 8 + 1})`
 const timeOfDay = (iso: string) => format(new Date(iso), "h:mmaaa")
 
-/** One 24-hour track; blocks are today's study, the open one runs to now. */
+/** One 24-hour track; blocks are today's study, the open one runs to now. Hover or focus a block for its time, duration and subject. */
 function DayTrack({ blocks, now, className, color }: { blocks: Person["today_blocks"]; now: Date; className?: string; color?: string }) {
+  const [hover, setHover] = useState<number | null>(null)
   const start = new Date(now).setHours(0, 0, 0, 0)
   const end = new Date(now).setHours(24, 0, 0, 0)
   const at = (iso: string | null) => Math.min(100, Math.max(0, ((iso ? new Date(iso).getTime() : now.getTime()) - start) / (end - start) * 100))
+  const tip = hover === null ? null : (blocks ?? [])[hover]
+  const center = tip ? Math.min(85, Math.max(15, (at(tip[0]) + at(tip[1])) / 2)) : 0
   return (
-    <div className={cn("relative h-3 overflow-hidden rounded-sm bg-muted", className)}>
-      {[25, 50, 75].map((left) => <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />)}
-      {(blocks ?? []).map(([from, to], index) => (
-        <span key={index} title={`${timeOfDay(from)} – ${to ? timeOfDay(to) : "now"} · ${duration((to ? new Date(to).getTime() : now.getTime()) - new Date(from).getTime())}`} className={cn("absolute inset-y-0 rounded-[2px] bg-primary transition-[filter] hover:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(3px, ${at(to) - at(from)}%)`, background: color }} />
-      ))}
-      <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${at(null)}%` }} />
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <div className={cn("relative h-3 overflow-hidden rounded-sm bg-muted", className)}>
+        {[25, 50, 75].map((left) => <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />)}
+        {(blocks ?? []).map(([from, to], index) => (
+          <span key={index} tabIndex={0} onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} onBlur={() => setHover(null)} className={cn("absolute inset-y-0 rounded-[2px] bg-primary outline-none transition-[filter] hover:brightness-125 focus-visible:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(5px, ${at(to) - at(from)}%)`, background: color }} />
+        ))}
+        <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${at(null)}%` }} />
+      </div>
+      {tip ? <div role="tooltip" className="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md" style={{ left: `${center}%` }}>
+        <span className="font-medium tabular-nums">{duration((tip[1] ? new Date(tip[1]).getTime() : now.getTime()) - new Date(tip[0]).getTime())}</span>
+        {tip[2] != null ? <> · {subjectName(tip[2] || null)}</> : null}
+        <span className="block text-muted-foreground tabular-nums">{timeOfDay(tip[0])} – {tip[1] ? timeOfDay(tip[1]) : "now"}</span>
+      </div> : null}
     </div>
   )
 }
@@ -245,11 +255,10 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       cache.profile = data
       setProfile(data)
       setDraft({ name: data.display_name, username: data.username, status: data.status_message })
-      await load()
     } catch {
       setProfileError(true)
     }
-  }, [load])
+  }, [])
 
   useEffect(() => {
     if (!signedIn) return

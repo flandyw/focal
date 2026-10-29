@@ -49,6 +49,9 @@
   --chart-3: #597d92;
   --chart-4: #a18538;
   --chart-5: #91739b;
+  --chart-6: #b0577a;
+  --chart-7: #4f8a86;
+  --chart-8: #8a8a52;
   --stoplight-red: #b54b45;
   --stoplight-amber: #c48a24;
   --stoplight-green: #398062;
@@ -79,6 +82,9 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
   --color-chart-mean: var(--chart-mean);
   --color-chart-median: var(--chart-median);
   --color-chart-deviation: var(--chart-deviation);
@@ -142,6 +148,9 @@
   --chart-3: #8db5c9;
   --chart-4: #cbb365;
   --chart-5: #b39ebd;
+  --chart-6: #d98ba9;
+  --chart-7: #7fc2bc;
+  --chart-8: #c2c283;
   --stoplight-red: #e88f86;
   --stoplight-amber: #e2b45a;
   --stoplight-green: #8ec3a5;

@@ -90,8 +90,11 @@ function PersonAvatar({ person, className }: { person: Person; className?: strin
   )
 }
 
+const personColor = (index: number) => `var(--chart-${index % 5 + 1})`
+const timeOfDay = (iso: string) => format(new Date(iso), "h:mmaaa")
+
 /** One 24-hour track; blocks are today's study, the open one runs to now. */
-function DayTrack({ blocks, now, className }: { blocks: Person["today_blocks"]; now: Date; className?: string }) {
+function DayTrack({ blocks, now, className, color }: { blocks: Person["today_blocks"]; now: Date; className?: string; color?: string }) {
   const start = new Date(now).setHours(0, 0, 0, 0)
   const end = new Date(now).setHours(24, 0, 0, 0)
   const at = (iso: string | null) => Math.min(100, Math.max(0, ((iso ? new Date(iso).getTime() : now.getTime()) - start) / (end - start) * 100))
@@ -99,8 +102,9 @@ function DayTrack({ blocks, now, className }: { blocks: Person["today_blocks"]; 
     <div className={cn("relative h-3 overflow-hidden rounded-sm bg-muted", className)}>
       {[25, 50, 75].map((left) => <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />)}
       {(blocks ?? []).map(([from, to], index) => (
-        <span key={index} className={cn("absolute inset-y-0 rounded-[2px] bg-primary", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(2px, ${at(to) - at(from)}%)` }} />
+        <span key={index} title={`${timeOfDay(from)} – ${to ? timeOfDay(to) : "now"} · ${duration((to ? new Date(to).getTime() : now.getTime()) - new Date(from).getTime())}`} className={cn("absolute inset-y-0 rounded-[2px] bg-primary transition-[filter] hover:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(3px, ${at(to) - at(from)}%)`, background: color }} />
       ))}
+      <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${at(null)}%` }} />
     </div>
   )
 }
@@ -115,26 +119,40 @@ function WeekBars({ day }: { day: (offset: number) => number }) {
   )
 }
 
-/** Paired bars (you, then them) for the last 30 days, or one series alone; oldest day on the left. */
-function DailyChart({ series, now }: { series: { name: string; day: (offset: number) => number; className: string }[]; now: Date }) {
+type ChartSeries = { name: string; day: (offset: number) => number; className: string; color?: string }
+
+/** Paired (or `stacked`) bars for the last 30 days; oldest day on the left. Hover or focus a day to read it. */
+function DailyChart({ series, now, stacked }: { series: ChartSeries[]; now: Date; stacked?: boolean }) {
+  const [hover, setHover] = useState<number | null>(null)
   const days = Array.from({ length: 30 }, (_, index) => 29 - index)
-  const max = Math.max(...series.flatMap((s) => days.map(s.day)), 3_600_000)
+  const total = (offset: number) => series.reduce((sum, s) => sum + s.day(offset), 0)
+  const max = Math.max(...days.map((offset) => stacked ? total(offset) : Math.max(...series.map((s) => s.day(offset)))), 3_600_000)
+  const average = days.reduce((sum, offset) => sum + total(offset), 0) / days.length
+  const active = hover ?? 0
   return (
-    <div className="grid gap-1.5">
-      <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
-        {days.map((offset) => (
-          <div key={offset} className="flex h-full flex-1 items-end gap-px" title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
-            {series.map((s) => <span key={s.name} className={cn("w-full rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 4 : 0, s.day(offset) / max * 100)}%` }} />)}
-          </div>
-        ))}
+    <div className="grid gap-1.5" onMouseLeave={() => setHover(null)}>
+      <div className="flex min-h-5 flex-wrap items-center gap-x-3 text-xs text-muted-foreground" aria-live="polite">
+        <span className="font-medium text-foreground">{hover === null ? "Daily average" : format(subDays(now, active), "EEE d MMM")}</span>
+        {series.length > 1 || hover !== null ? <span className="tabular-nums">{duration(hover === null ? average : total(active))}{stacked ? " total" : ""}</span> : <span className="tabular-nums">{duration(average)}</span>}
+        {hover !== null ? series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} style={{ background: s.color }} />{s.name} <span className="tabular-nums text-foreground">{duration(s.day(active))}</span></span>) : null}
       </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground"><span>30 days ago</span><span className="flex gap-3">{series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} />{s.name}</span>)}</span><span>Today</span></div>
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-foreground/30" style={{ bottom: `${average / max * 100}%` }} />
+        <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
+          {days.map((offset) => (
+            <div key={offset} tabIndex={0} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
+              {series.map((s) => <span key={s.name} className={cn("w-full", stacked ? "first:rounded-b-[2px] last:rounded-t-[2px]" : "self-end rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%`, background: s.color }} />)}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>30 days ago</span><span className="flex flex-wrap justify-center gap-x-3">{series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} style={{ background: s.color }} />{s.name}</span>)}</span><span>Today</span></div>
     </div>
   )
 }
 
 /** Average study per weekday over the last 12 weeks, Monday first. */
-function WeekdayChart({ series, now }: { series: { name: string; day: (offset: number) => number; className: string }[]; now: Date }) {
+function WeekdayChart({ series, now }: { series: ChartSeries[]; now: Date }) {
   const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
   const today = (now.getDay() + 6) % 7
   const averages = (day: (offset: number) => number) => names.map((_, weekday) => {
@@ -442,7 +460,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {visibleBoard.map(({ person, stats }) => (
                 <div key={person.user_id} className="grid grid-cols-[minmax(0,4rem)_minmax(0,1fr)_3.5rem] items-center gap-2 text-sm sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3.5rem] sm:gap-3">
                   <span className="truncate">{person.status === "me" ? "You" : personName(person)}</span>
-                  <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} /></div>
+                  <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={personColor(board.findIndex((entry) => entry.person.user_id === person.user_id))} /></div>
                   <span className="text-right tabular-nums text-muted-foreground">{duration(stats.period.today)}</span>
                 </div>
               ))}
@@ -454,8 +472,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
 
           {board.length > 1 ? <>
             <Card>
-              <CardHeader><CardTitle>Group study</CardTitle><CardDescription>Combined daily study for everyone, last 30 days.</CardDescription></CardHeader>
-              <CardContent><DailyChart now={now} series={[{ name: "Group", day: (offset) => board.reduce((sum, { stats }) => sum + stats.day(offset), 0), className: "bg-primary" }]} /></CardContent>
+              <CardHeader><CardTitle>Group study</CardTitle><CardDescription>Daily study stacked by person, last 30 days. Hover a day for the breakdown.</CardDescription></CardHeader>
+              <CardContent><DailyChart now={now} stacked series={board.map(({ person, stats }, index) => ({ name: person.status === "me" ? "You" : personName(person), day: stats.day, className: "", color: personColor(index) }))} /></CardContent>
             </Card>
 
             <Card>

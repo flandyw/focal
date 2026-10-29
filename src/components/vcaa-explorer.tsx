@@ -160,7 +160,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
         <Card>
           <CardHeader>
             <CardTitle>Coverage</CardTitle>
-            <CardDescription>Distribution coverage and the latest matching official material.</CardDescription>
+            
           </CardHeader>
           <CardContent className="grid gap-5">
             <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 text-sm">
@@ -183,7 +183,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
       </div>
 
       <Card className="min-w-0">
-        <CardHeader><CardTitle>Year-by-year detail</CardTitle><CardDescription>Compare cohort size, thresholds, and your estimated result.</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Year-by-year detail</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader><TableRow><TableHead>Year</TableHead><TableHead>Cohort</TableHead><TableHead>A+ cutoff</TableHead><TableHead>Est. mean</TableHead><TableHead>Est. median</TableHead><TableHead>Your result</TableHead><TableHead className="text-right">Source</TableHead></TableRow></TableHeader>

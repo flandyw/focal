@@ -459,7 +459,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
             </Card>
 
             <Card>
-              <CardHeader><CardTitle>Comparison</CardTitle><CardDescription>Everyone side by side. Best in each column is highlighted.</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Comparison</CardTitle></CardHeader>
               <CardContent className="px-2 sm:px-4">
                 <Table className="[&_td]:px-2 [&_th]:px-2">
                   <TableHeader><TableRow><TableHead>Name</TableHead><TableHead className="text-right">Today</TableHead><TableHead className="text-right">7 days</TableHead><TableHead className="text-right">30 days</TableHead><TableHead className="text-right">Active</TableHead><TableHead className="text-right">Streak</TableHead></TableRow></TableHeader>
@@ -503,7 +503,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
 
         <div className="grid content-start gap-6">
           <Card>
-            <CardHeader><CardTitle>Cheers</CardTitle><CardDescription>A little encouragement goes a long way. Cheer each friend once every 24 hours.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Cheers</CardTitle><CardDescription>Cheer each friend once every 24 hours.</CardDescription></CardHeader>
             <CardContent className="grid gap-3">
               {cheersError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Cheers are unavailable. Try refreshing them.</p><Button variant="outline" size="sm" onClick={() => void loadCheers()}>Retry cheers</Button></div>
                 : !cheersLoaded ? <Skeleton className="h-12 motion-reduce:animate-none" />

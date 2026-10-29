@@ -419,7 +419,7 @@ function ImprovementSignals({ data }: { data: AppData }) {
     <Card className="min-w-0">
       <CardHeader>
         <CardTitle>Performance signals</CardTitle>
-        <CardDescription>Leading indicators that show whether your study process is turning into stronger exam performance.</CardDescription>
+        
       </CardHeader>
       <CardContent>
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -531,7 +531,7 @@ function RecentExams({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <CardTitle>Recent exams</CardTitle>
-            <CardDescription>Your latest five recorded attempts.</CardDescription>
+            
           </div>
           <Button nativeButton={false} variant="outline" size="sm" render={<a href="#all-exams" />}>
             View all

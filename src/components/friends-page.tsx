@@ -432,11 +432,11 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
               <PersonAvatar person={person} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{personName(person)}{person.status === "me" ? " (you)" : ""}</span>
-                <span className="block truncate text-xs text-muted-foreground">{person.studying_kind === "exam" ? "Exam" : person.studying_subject ? subjectName(person.studying_subject) : "Studying"} · {duration(stats.period.today)} today</span>
+                <span className="line-clamp-2 text-xs text-muted-foreground">{person.studying_kind === "exam" ? "Exam" : person.studying_subject ? subjectName(person.studying_subject) : "Studying"} · {duration(stats.period.today)} today</span>
               </span>
               <span className="font-mono text-lg tabular-nums text-primary">{clock(stats.session)}</span>
             </Button>
-            {person.status === "friend" ? <Button variant="outline" className="h-auto" onClick={onJoin} title="Open the study timer and study alongside them">Join</Button> : null}
+            {person.status === "friend" ? <Button variant="outline" className="h-auto rounded-xl border-primary/40 bg-primary/5 px-4 text-primary hover:bg-primary/10" onClick={onJoin} title="Open the study timer and study alongside them">Join</Button> : null}
             </div>
           ))}
         </section>
@@ -651,14 +651,14 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
 
           {countdowns.some((entry) => people.some((person) => person.user_id === entry.user_id)) ? <Card>
             <CardHeader><CardTitle>Upcoming exams</CardTitle><CardDescription>Yours and friends who share exams.</CardDescription></CardHeader>
-            <CardContent className="grid gap-2">
+            <CardContent className="grid min-w-0 gap-2.5">
               {countdowns.filter((entry) => people.some((person) => person.user_id === entry.user_id)).slice(0, 8).map((entry, index) => {
                 const person = people.find((candidate) => candidate.user_id === entry.user_id)
                 const days = Math.max(0, Math.ceil((new Date(entry.starts).getTime() - now.getTime()) / 86_400_000))
-                return <div key={index} className="flex items-center gap-2 text-sm">
-                  <span className="size-2 shrink-0 rounded-full" style={{ background: colorOf(entry.user_id) }} />
-                  <span className="min-w-0 flex-1 truncate">{person?.status === "me" ? "You" : person ? personName(person) : ""} · {entry.title}</span>
-                  <span className="tabular-nums text-muted-foreground" title={format(new Date(entry.starts), "EEE d MMM, h:mmaaa")}>{days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}</span>
+                return <div key={index} className="flex min-w-0 items-start gap-2 text-sm">
+                  <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: colorOf(entry.user_id) }} />
+                  <span className="min-w-0 flex-1 break-words"><span className="font-medium">{person?.status === "me" ? "You" : person ? personName(person) : ""}</span> · {entry.title}</span>
+                  <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground" title={format(new Date(entry.starts), "EEE d MMM, h:mmaaa")}>{days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}</span>
                 </div>
               })}
             </CardContent>

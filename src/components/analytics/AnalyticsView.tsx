@@ -42,6 +42,7 @@ import { TimeOfDayChart } from"./TimeOfDayChart"
 import { EmptyAnalytics } from"./EmptyAnalytics"
 import { ExamPerformanceChart } from "./ExamPerformanceChart"
 import { WeekdayStudyChart } from "./WeekdayStudyChart"
+import { MonthlyTrends } from "./MonthlyTrends"
 
 interface AnalyticsViewProps {
  subject?: string
@@ -254,6 +255,11 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  : data.timeTrends,
  [data.timeTrends, activeSet, isFilterActive],
  )
+ // Month-to-month trends always look back over full history, independent of the range toggle.
+ const monthlyPoints = useMemo(() => {
+ const points = getAnalyticsData(sessions, projects, 0, periodEnd).timeTrends
+ return isFilterActive ? points.filter((p) => activeSet.has(p.subjectId ??"_unassigned")) : points
+ }, [sessions, projects, periodEnd, activeSet, isFilterActive])
  const filteredConsistency = useMemo(
  () => isFilterActive
  ? getConsistencyForTimeTrends(data.consistency.days, filteredTimeTrends)
@@ -420,6 +426,9 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  <motion.div variants={staggerItem} className="min-[900px]:col-span-2">
  <ExamPerformanceChart attempts={filteredAttempts} range={periodDays} periodEnd={periodEnd} onLogExam={onLogExam} />
  </motion.div>
+ <motion.div variants={staggerItem} className="min-[900px]:col-span-2">
+ <MonthlyTrends points={monthlyPoints} attempts={filteredAttempts} periodEnd={periodEnd} />
+ </motion.div>
  {data.hasData ? <>
  <motion.div
  variants={staggerItem}
@@ -541,7 +550,7 @@ function KpiStrip({
  reduceMotion: boolean
 }) {
  return (
- <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-y border-border/60 sm:grid-cols-4 sm:divide-y-0">
+ <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-b border-border/60 sm:grid-cols-4 sm:divide-y-0">
  <KpiCard
  label="Total time"
  value={formatMinutesShort(totalMinutes)}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Check, Copy, Flame, HeartHandshake, RefreshCw, Search, Trophy, UserPlus } from "lucide-react"
+import { Check, Copy, Flame, HeartHandshake, Link2, Pencil, Plus, RefreshCw, Search, Trash2, Trophy, UserPlus } from "lucide-react"
 import { format, formatDistanceToNow, subDays } from "date-fns"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
@@ -43,7 +43,13 @@ type Person = {
 type Profile = { username: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
 type Period = "today" | "week" | "month"
 type Ranking = "time" | "days"
-type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string }
+type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string; message?: string | null }
+type Group = { id: string; name: string; goal_minutes: number; owner_id: string; members: string[] }
+type Countdown = { user_id: string; title: string; starts: string }
+type DayBlock = { user_id: string; started: string; ended: string; subject_id: string | null }
+type GroupDraft = { id: string | null; name: string; hours: string; members: string[] }
+const CHEER_MESSAGES = ["Good luck!", "Keep going!", "Join me?", "Nice work!"]
+const INVITE_BASE = import.meta.env.VITE_DESKTOP ? "https://focal.flandolf.me" : location.origin
 type StudyStats = ReturnType<typeof activity>
 
 const PERIOD_LABEL: Record<Period, string> = { today: "Today", week: "7 days", month: "30 days" }
@@ -132,7 +138,7 @@ function WeekBars({ day }: { day: (offset: number) => number }) {
 type ChartSeries = { name: string; day: (offset: number) => number; className: string; color?: string }
 
 /** Paired (or `stacked`) bars for the last 30 days; oldest day on the left. Hover or focus a day to read it. */
-function DailyChart({ series, now, stacked }: { series: ChartSeries[]; now: Date; stacked?: boolean }) {
+function DailyChart({ series, now, stacked, selected, onSelect }: { series: ChartSeries[]; now: Date; stacked?: boolean; selected?: number | null; onSelect?: (offset: number) => void }) {
   const [hover, setHover] = useState<number | null>(null)
   const days = Array.from({ length: 30 }, (_, index) => 29 - index)
   const total = (offset: number) => series.reduce((sum, s) => sum + s.day(offset), 0)
@@ -150,7 +156,7 @@ function DailyChart({ series, now, stacked }: { series: ChartSeries[]; now: Date
         <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-foreground/30" style={{ bottom: `${average / max * 100}%` }} />
         <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
           {days.map((offset) => (
-            <div key={offset} tabIndex={0} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
+            <div key={offset} tabIndex={0} role={onSelect ? "button" : undefined} aria-pressed={onSelect ? selected === offset : undefined} onClick={() => onSelect?.(offset)} onKeyDown={(event) => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(offset) } }} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60", onSelect && "cursor-pointer", selected === offset && "ring-1 ring-primary")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
               {series.map((s) => <span key={s.name} className={cn("w-full", stacked ? "first:rounded-b-[2px] last:rounded-t-[2px]" : "self-end rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%`, background: s.color }} />)}
             </div>
           ))}
@@ -191,15 +197,22 @@ const emptyCache = (userId?: string): FriendsCache => ({ userId, profile: null, 
 let cache = emptyCache()
 supabase?.auth.onAuthStateChange((_event, session) => { if (session?.user.id !== cache.userId) cache = emptyCache(session?.user.id) })
 
-export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignIn: () => void }) {
+export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean; onSignIn: () => void; onJoin: () => void }) {
   const [profile, setProfile] = useState(cache.profile)
   const [draft, setDraft] = useState({ name: cache.profile?.display_name ?? "", username: cache.profile?.username ?? "", status: cache.profile?.status_message ?? "" })
   const [people, setPeople] = useState(cache.people)
   const [fetchedAt, setFetchedAt] = useState(cache.fetchedAt)
-  const [friendUsername, setFriendUsername] = useState("")
+  const [friendUsername, setFriendUsername] = useState(() => (new URLSearchParams(location.search).get("add") ?? "").replace(/^@/, "").toLowerCase().slice(0, 24))
   const [period, setPeriod] = useState<Period>("today")
   const [ranking, setRanking] = useState<Ranking>("time")
   const [cheers, setCheers] = useState(cache.cheers ?? [])
+  const [groups, setGroups] = useState<Group[]>([])
+  const [groupId, setGroupId] = useState("all")
+  const [editing, setEditing] = useState<GroupDraft | null>(null)
+  const [countdowns, setCountdowns] = useState<Countdown[]>([])
+  const [cheerMessage, setCheerMessage] = useState(CHEER_MESSAGES[1])
+  const [drill, setDrill] = useState<number | null>(null)
+  const [drillData, setDrillData] = useState<{ key: string; blocks: DayBlock[] } | null>(null)
   const [cheersError, setCheersError] = useState(false)
   const [cheersLoaded, setCheersLoaded] = useState(cache.cheers !== null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -226,6 +239,13 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
     } catch {
       setCheersError(true)
     }
+  }, [])
+
+  // Groups, exam countdowns: optional extras, so a failure just leaves them empty.
+  const loadExtras = useCallback(async () => {
+    const [g, c] = await Promise.all([supabase!.rpc("friends_groups"), supabase!.rpc("friends_countdowns")])
+    if (!g.error) setGroups((g.data ?? []) as Group[])
+    if (!c.error) setCountdowns((c.data ?? []) as Countdown[])
   }, [])
 
   const load = useCallback(async () => {
@@ -267,7 +287,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   }, [signedIn, loadProfile])
   // shortcut: data refreshes on a 30 s poll (and when the tab returns), not realtime; timers tick locally in between.
   // oxlint-disable-next-line react/set-state-in-effect
-  useEffect(() => { void load(); if (signedIn) void loadCheers() }, [load, loadCheers, signedIn, poll])
+  useEffect(() => { void load(); if (signedIn) { void loadCheers(); void loadExtras() } }, [load, loadCheers, loadExtras, signedIn, poll])
 
   async function call(fn: string, args: Record<string, unknown>, failure: string) {
     if (actionInFlight.current) return false
@@ -278,6 +298,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       if (error) { toast.error(error.message || failure); return false }
       await load()
       await loadCheers()
+      await loadExtras()
       return true
     } catch {
       toast.error(failure)
@@ -297,8 +318,11 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
     }
   }
 
+  const group = groups.find((entry) => entry.id === groupId)
+  // Stable per person (not per rank or group filter), so a colour keeps meaning everywhere.
+  const colorOf = (id: string) => personColor(Math.max(0, people.findIndex((person) => person.user_id === id)))
   const board = useMemo(() => {
-    const rows = people.filter((person) => person.status === "me" || person.status === "friend").map((person) => {
+    const rows = people.filter((person) => (person.status === "me" || person.status === "friend") && (!group || group.members.includes(person.user_id))).map((person) => {
       const stats = activity(person, now, fetchedAt)
       return { person, stats, score: ranking === "time" ? Math.floor(stats.period[period] / 60_000) : stats.activeDays(PERIOD_DAYS[period]), rank: 0 }
     }).sort((a, b) => b.score - a.score || personName(a.person).localeCompare(personName(b.person)) || a.person.user_id.localeCompare(b.person.user_id))
@@ -307,7 +331,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       rows[index].rank = previous?.score === rows[index].score ? previous.rank : index + 1
     }
     return rows
-  }, [people, now, fetchedAt, period, ranking])
+  }, [people, group, now, fetchedAt, period, ranking])
 
   if (!signedIn) {
     return (
@@ -337,8 +361,21 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
   const cheered = (id: string) => cheers.some((cheer) => cheer.sender_id === me?.person.user_id && cheer.recipient_id === id && now.getTime() - new Date(cheer.created_at).getTime() < 86_400_000)
   const cheerFriend = async (person: Person) => {
     if (person.status !== "friend" || cheered(person.user_id)) return
-    if (await call("friends_cheer", { p_user_id: person.user_id }, "Could not send your cheer. Try again.")) toast.success(`Cheer sent to ${personName(person)}`)
+    if (await call("friends_cheer", { p_user_id: person.user_id, p_message: cheerMessage === "none" ? null : cheerMessage }, "Could not send your cheer. Try again.")) toast.success(`Cheer sent to ${personName(person)}`)
   }
+  const openDay = async (offset: number) => {
+    if (drill === offset) { setDrill(null); return }
+    setDrill(offset)
+    const key = dayKey(subDays(now, offset))
+    const { data, error } = await supabase!.rpc("friends_day", { p_day: key, p_tz: TIME_ZONE })
+    if (!error) setDrillData({ key, blocks: (data ?? []) as DayBlock[] })
+  }
+  const saveGroup = async () => {
+    if (!editing) return
+    const ok = await call("friends_group_save", { p_id: editing.id, p_name: editing.name, p_goal_minutes: Math.round((Number(editing.hours) || 0) * 60), p_members: editing.members }, "Could not save the group.")
+    if (ok) { setEditing(null); toast.success("Group saved") }
+  }
+  const weekOf = (id: string) => { const person = people.find((entry) => entry.user_id === id); return person ? activity(person, now, fetchedAt).period.week : 0 }
   const gapLabel = (score: number) => ranking === "time" ? duration(score * 60_000) : `${score} active ${score === 1 ? "day" : "days"}`
   const copyUsername = async () => {
     if (!profile) return
@@ -390,7 +427,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       {studying.length ? (
         <section aria-label="Studying now" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {studying.map(({ person, stats }) => (
-            <Button key={person.user_id} variant="ghost" onClick={() => setSelectedId(person.user_id)} className="h-auto min-w-0 justify-start gap-3 rounded-xl border-primary/40 bg-primary/5 p-3 text-left font-normal whitespace-normal hover:bg-primary/10">
+            <div key={person.user_id} className="flex min-w-0 items-stretch gap-1">
+            <Button variant="ghost" onClick={() => setSelectedId(person.user_id)} className="h-auto min-w-0 flex-1 justify-start gap-3 rounded-xl border-primary/40 bg-primary/5 p-3 text-left font-normal whitespace-normal hover:bg-primary/10">
               <PersonAvatar person={person} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{personName(person)}{person.status === "me" ? " (you)" : ""}</span>
@@ -398,6 +436,8 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               </span>
               <span className="font-mono text-lg tabular-nums text-primary">{clock(stats.session)}</span>
             </Button>
+            {person.status === "friend" ? <Button variant="outline" className="h-auto" onClick={onJoin} title="Open the study timer and study alongside them">Join</Button> : null}
+            </div>
           ))}
         </section>
       ) : null}
@@ -433,6 +473,10 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                   <SelectTrigger aria-label="Rank friends by"><SelectValue>{ranking === "time" ? "Study time" : "Active days"}</SelectValue></SelectTrigger>
                   <SelectContent><SelectItem value="time">Study time</SelectItem><SelectItem value="days">Active days</SelectItem></SelectContent>
                 </Select>
+                {groups.length ? <Select value={group?.id ?? "all"} onValueChange={(value) => { if (value) setGroupId(value) }}>
+                  <SelectTrigger aria-label="Filter by group"><SelectValue>{group?.name ?? "Everyone"}</SelectValue></SelectTrigger>
+                  <SelectContent><SelectItem value="all">Everyone</SelectItem>{groups.map((entry) => <SelectItem key={entry.id} value={entry.id}>{entry.name}</SelectItem>)}</SelectContent>
+                </Select> : null}
                 <Button variant={liveOnly ? "secondary" : "outline"} aria-pressed={liveOnly} onClick={() => setLiveOnly(!liveOnly)}>Studying now</Button>
               </div>
               {loading ? <div role="status" className="grid gap-3 px-2"><span className="sr-only">Loading friends</span>{[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 motion-reduce:animate-none" />)}</div> : null}
@@ -469,7 +513,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
               {visibleBoard.map(({ person, stats }) => (
                 <div key={person.user_id} className="grid grid-cols-[minmax(0,4rem)_minmax(0,1fr)_3.5rem] items-center gap-2 text-sm sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)_3.5rem] sm:gap-3">
                   <span className="truncate">{person.status === "me" ? "You" : personName(person)}</span>
-                  <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={personColor(board.findIndex((entry) => entry.person.user_id === person.user_id))} /></div>
+                  <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={colorOf(person.user_id)} /></div>
                   <span className="text-right tabular-nums text-muted-foreground">{duration(stats.period.today)}</span>
                 </div>
               ))}
@@ -481,8 +525,37 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
 
           {board.length > 1 ? <>
             <Card>
-              <CardHeader><CardTitle>Group study</CardTitle><CardDescription>Daily study stacked by person, last 30 days. Hover a day for the breakdown.</CardDescription></CardHeader>
-              <CardContent><DailyChart now={now} stacked series={board.map(({ person, stats }, index) => ({ name: person.status === "me" ? "You" : personName(person), day: stats.day, className: "", color: personColor(index) }))} /></CardContent>
+              <CardHeader><CardTitle>Group study</CardTitle><CardDescription>Daily study stacked by person, last 30 days. Hover a day for the breakdown, click it for the sessions.</CardDescription></CardHeader>
+              <CardContent><DailyChart now={now} stacked series={board.map(({ person, stats }) => ({ name: person.status === "me" ? "You" : personName(person), day: stats.day, className: "", color: colorOf(person.user_id) }))} selected={drill} onSelect={(offset) => void openDay(offset)} />
+                {drill !== null ? <div className="mt-3 grid gap-1.5 border-t pt-3 text-sm">
+                  <h3 className="font-medium">{format(subDays(now, drill), "EEEE d MMMM")}</h3>
+                  {drillData?.key !== dayKey(subDays(now, drill)) ? <Skeleton className="h-10 motion-reduce:animate-none" /> : (() => {
+                    const blocks = drillData.blocks.filter((block) => board.some(({ person }) => person.user_id === block.user_id))
+                    return blocks.length ? blocks.map((block, index) => <div key={index} className="flex items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full" style={{ background: colorOf(block.user_id) }} />
+                      <span className="min-w-0 flex-1 truncate">{(() => { const person = people.find((entry) => entry.user_id === block.user_id); return person?.status === "me" ? "You" : person ? personName(person) : "" })()}{block.subject_id != null ? ` · ${subjectName(block.subject_id || null)}` : ""}</span>
+                      <span className="tabular-nums text-muted-foreground">{timeOfDay(block.started)} – {timeOfDay(block.ended)} · {duration(new Date(block.ended).getTime() - new Date(block.started).getTime())}</span>
+                    </div>) : <p className="text-muted-foreground">No sessions that day.</p>
+                  })()}
+                </div> : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle>Weekly recap</CardTitle><CardDescription>The last 7 days compared with the 7 before.</CardDescription></CardHeader>
+              <CardContent className="grid gap-2">
+                {[...board.map(({ person, stats }) => ({ key: person.user_id, name: person.status === "me" ? "You" : personName(person), color: colorOf(person.user_id), day: stats.day })), { key: "group", name: "Group", color: undefined, day: (offset: number) => board.reduce((sum, { stats }) => sum + stats.day(offset), 0) }].map((row) => {
+                  const sumDays = (from: number) => Array.from({ length: 7 }, (_, index) => row.day(from + index)).reduce((a, b) => a + b, 0)
+                  const [thisWeek, lastWeek] = [sumDays(0), sumDays(7)]
+                  const diff = thisWeek - lastWeek
+                  return <div key={row.key} className={cn("flex items-center gap-2", row.key === "group" && "border-t pt-2 font-medium")}>
+                    <span className="size-2 shrink-0 rounded-full bg-foreground/40" style={{ background: row.color }} />
+                    <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                    <span className="tabular-nums">{duration(thisWeek)}</span>
+                    <span className={cn("w-24 text-right text-xs tabular-nums", diff > 0 ? "text-primary" : "text-muted-foreground")}>{diff === 0 ? "no change" : `${diff > 0 ? "▲" : "▼"} ${duration(Math.abs(diff))}`}</span>
+                  </div>
+                })}
+              </CardContent>
             </Card>
 
             <Card>
@@ -530,18 +603,66 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
 
         <div className="grid content-start gap-6">
           <Card>
-            <CardHeader><CardTitle>Cheers</CardTitle><CardDescription>Cheer each friend once every 24 hours.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Cheers</CardTitle><CardDescription>Cheer each friend once every 24 hours.</CardDescription>
+              <Select value={cheerMessage} onValueChange={(value) => { if (value) setCheerMessage(value) }}>
+                <SelectTrigger aria-label="Cheer message" className="mt-2 w-full"><SelectValue>{cheerMessage === "none" ? "No message" : cheerMessage}</SelectValue></SelectTrigger>
+                <SelectContent>{CHEER_MESSAGES.map((message) => <SelectItem key={message} value={message}>{message}</SelectItem>)}<SelectItem value="none">No message</SelectItem></SelectContent>
+              </Select>
+            </CardHeader>
             <CardContent className="grid gap-3">
               {cheersError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Cheers are unavailable. Try refreshing them.</p><Button variant="outline" size="sm" onClick={() => void loadCheers()}>Retry cheers</Button></div>
                 : !cheersLoaded ? <Skeleton className="h-12 motion-reduce:animate-none" />
                 : receivedCheers.length ? receivedCheers.map((cheer) => <div key={cheer.sender_id} className="flex min-w-0 items-center gap-3 text-sm">
                   <HeartHandshake className="size-5 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "PPp")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
+                  <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on{cheer.message ? <>: “{cheer.message}”</> : null}</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "PPp")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
                   <Button variant="outline" size="sm" disabled={!!pending || cheered(cheer.sender_id)} onClick={() => { const friend = people.find((person) => person.user_id === cheer.sender_id); if (friend) void cheerFriend(friend) }}>{cheered(cheer.sender_id) ? "Cheered" : "Cheer back"}</Button>
                 </div>) : <p className="text-sm text-muted-foreground">No cheers in the last 7 days. Send one from the leaderboard to encourage a friend.</p>}
               {receivedCheers.length ? <p className="text-xs text-muted-foreground">Latest cheer from each friend in the last 7 days.</p> : null}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between gap-2">
+              <div><CardTitle>Groups</CardTitle><CardDescription>Study with a subset of friends, with an optional weekly goal.</CardDescription></div>
+              <Button size="sm" variant="outline" disabled={!me} onClick={() => setEditing({ id: null, name: "", hours: "", members: [] })}><Plus />New</Button>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {groups.length ? groups.map((entry) => {
+                const members = entry.members.filter((id) => people.some((person) => person.user_id === id && (person.status === "me" || person.status === "friend")))
+                const total = members.reduce((sum, id) => sum + weekOf(id), 0)
+                const goal = entry.goal_minutes * 60_000
+                const owned = entry.owner_id === me?.person.user_id
+                return <div key={entry.id} className="grid gap-1.5 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" aria-pressed={group?.id === entry.id} className="min-w-0 flex-1 justify-start truncate px-1 font-medium" onClick={() => setGroupId(group?.id === entry.id ? "all" : entry.id)} title="Show only this group across the page">{entry.name}{group?.id === entry.id ? " · filtering" : ""}</Button>
+                    {owned ? <>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Edit ${entry.name}`} onClick={() => setEditing({ id: entry.id, name: entry.name, hours: entry.goal_minutes ? String(entry.goal_minutes / 60) : "", members: entry.members.filter((id) => id !== entry.owner_id) })}><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Delete ${entry.name}`} disabled={!!pending} onClick={() => void call("friends_group_delete", { p_id: entry.id }, "Could not delete the group.").then((ok) => { if (ok) toast.success("Group deleted") })}><Trash2 /></Button>
+                    </> : null}
+                  </div>
+                  <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${entry.name}: ${duration(total)}${goal ? ` of ${duration(goal)} goal` : ""} in the last 7 days`}>
+                    {members.map((id) => <span key={id} title={`${(() => { const person = people.find((entry) => entry.user_id === id); return person?.status === "me" ? "You" : person ? personName(person) : "" })()}: ${duration(weekOf(id))}`} style={{ width: `${weekOf(id) / Math.max(goal, total, 1) * 100}%`, background: colorOf(id) }} />)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{members.length} {members.length === 1 ? "member" : "members"} · {duration(total)}{goal ? ` of ${duration(goal)}` : ""} in 7 days{goal && total >= goal ? " · goal reached 🎉" : ""}</p>
+                </div>
+              }) : <p className="text-sm text-muted-foreground">No groups yet. Create one for your class or study squad.</p>}
+            </CardContent>
+          </Card>
+
+          {countdowns.some((entry) => people.some((person) => person.user_id === entry.user_id)) ? <Card>
+            <CardHeader><CardTitle>Upcoming exams</CardTitle><CardDescription>Yours and friends who share exams.</CardDescription></CardHeader>
+            <CardContent className="grid gap-2">
+              {countdowns.filter((entry) => people.some((person) => person.user_id === entry.user_id)).slice(0, 8).map((entry, index) => {
+                const person = people.find((candidate) => candidate.user_id === entry.user_id)
+                const days = Math.max(0, Math.ceil((new Date(entry.starts).getTime() - now.getTime()) / 86_400_000))
+                return <div key={index} className="flex items-center gap-2 text-sm">
+                  <span className="size-2 shrink-0 rounded-full" style={{ background: colorOf(entry.user_id) }} />
+                  <span className="min-w-0 flex-1 truncate">{person?.status === "me" ? "You" : person ? personName(person) : ""} · {entry.title}</span>
+                  <span className="tabular-nums text-muted-foreground" title={format(new Date(entry.starts), "EEE d MMM, h:mmaaa")}>{days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}</span>
+                </div>
+              })}
+            </CardContent>
+          </Card> : null}
 
           <Card>
             <CardHeader><CardTitle>Add a friend</CardTitle><CardDescription>Connect using @usernames. Study activity is shared once you are friends.</CardDescription></CardHeader>
@@ -550,6 +671,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                 <span className="text-sm text-muted-foreground">Your username</span>
                 <span className="min-w-0 select-all break-all">{profile ? `@${profile.username}` : "—"}</span>
               </div>
+              <Button variant="outline" disabled={!profile} onClick={() => { void navigator.clipboard.writeText(`${INVITE_BASE}/?view=friends&add=${profile?.username}`).then(() => toast.success("Invite link copied"), () => toast.error("Could not copy the invite link.")) }}><Link2 />Copy invite link</Button>
               <form className="grid gap-2" onSubmit={(event) => {
                 event.preventDefault()
                 const username = friendUsername.trim().replace(/^@/, "").toLowerCase()
@@ -590,7 +712,7 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
                 </Label>
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={profile?.share_exams ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, share_exams: checked }) }} />
-                  Share recent exam scores and paper titles
+                  Share recent exam scores, paper titles and upcoming exam dates
                 </Label>
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox checked={profile?.require_requests ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, require_requests: checked }) }} />
@@ -604,6 +726,25 @@ export function FriendsPage({ signedIn, onSignIn }: { signedIn: boolean; onSignI
       </div>
 
       {selected ? <FriendSheet key={selected.person.user_id} person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} pending={pending} onSaveNickname={(nickname) => call("friends_set_nickname", { p_user_id: selected.person.user_id, p_nickname: nickname }, "Could not save this nickname.")} cheerDisabled={!!pending || !cheersLoaded || cheersError} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!pending && !open) setEditing(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editing?.id ? "Edit group" : "New group"}</DialogTitle><DialogDescription>Pick friends and, optionally, a weekly goal for the whole group.</DialogDescription></DialogHeader>
+          {editing ? <form id="group-form" className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void saveGroup() }}>
+            <Label className="grid gap-2 text-sm font-medium">Name<Input value={editing.name} maxLength={40} onChange={(event) => setEditing({ ...editing, name: event.target.value })} placeholder="e.g. Methods squad" /></Label>
+            <Label className="grid gap-2 text-sm font-medium">Weekly goal in hours (optional)<Input type="number" min={0} max={168} step={0.5} value={editing.hours} onChange={(event) => setEditing({ ...editing, hours: event.target.value })} placeholder="e.g. 20" /></Label>
+            <fieldset className="grid max-h-48 gap-2 overflow-y-auto">
+              <legend className="mb-1 text-sm font-medium">Friends</legend>
+              {people.filter((person) => person.status === "friend").map((person) => <Label key={person.user_id} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={editing.members.includes(person.user_id)} onCheckedChange={(checked) => setEditing({ ...editing, members: checked ? [...editing.members, person.user_id] : editing.members.filter((id) => id !== person.user_id) })} />
+                {personName(person)}
+              </Label>)}
+              {!people.some((person) => person.status === "friend") ? <p className="text-sm text-muted-foreground">Add a friend first.</p> : null}
+            </fieldset>
+          </form> : null}
+          <DialogFooter><Button type="submit" form="group-form" disabled={!!pending || !editing?.name.trim()}>{pending === "friends_group_save" ? "Saving…" : "Save group"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={removing && !!selected} onOpenChange={(open) => { if (!pending) setRemoving(open) }}>
         <DialogContent showCloseButton={!pending}>
           <DialogHeader>

@@ -23,7 +23,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "group/card-header @container/card-header bg-surface-tint py-3 text-surface-heading grid auto-rows-min items-start gap-2 px-(--card-spacing) [.border-b]:pb-(--card-spacing)",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-2 px-(--card-spacing) [.border-b]:pb-(--card-spacing)",
         className
       )}
       {...props}
@@ -77,7 +77,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex items-center border-t bg-surface-tint p-(--card-spacing)",
+        "flex items-center border-t bg-muted/35 p-(--card-spacing)",
         className
       )}
       {...props}

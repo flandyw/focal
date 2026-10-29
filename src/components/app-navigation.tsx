@@ -152,7 +152,7 @@ function SyncIndicator({ status }: { status: SyncStatus }) {
         "size-2 shrink-0 rounded-full bg-muted-foreground/40",
         status === "synced" && "bg-success",
         (status === "error" || status === "sign-in-required") && "bg-destructive",
-        (status === "syncing" || status === "pending" || status === "restoring" || status === "reconnecting") && "animate-pulse bg-warning",
+        (status === "syncing" || status === "pending" || status === "restoring" || status === "reconnecting") && "animate-pulse bg-primary",
       )}
     />
   )
@@ -262,7 +262,7 @@ export function AppSidebar({
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
           if (!items.length) return null
-          return <SidebarGroup className="p-0" data-nav-group={group.label} key={group.label}>
+          return <SidebarGroup className="p-0" key={group.label}>
           {appearance.sidebarLabels ? <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3">{group.label}</SidebarGroupLabel> : null}
           <SidebarGroupContent>
             <SidebarMenu>

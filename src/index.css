@@ -43,8 +43,6 @@
   --destructive: #ae4035;
   --success: #286647;
   --warning: #865a13;
-  --info: #285174;
-  --assessment: #80402a;
   --overlay: #16251c;
   --border: #dedfd3;
   --input: #84907b;
@@ -109,11 +107,6 @@
   --color-warning: var(--warning);
   --color-warning-foreground: #30230f;
   --color-warning-soft: var(--warning-soft);
-  --color-info: var(--info);
-  --color-info-soft: var(--info-soft);
-  --color-assessment: var(--assessment);
-  --color-surface-tint: var(--surface-tint);
-  --color-surface-heading: var(--surface-heading);
   --color-overlay: var(--overlay);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -158,8 +151,6 @@
   --destructive: #ed9c8b;
   --success: #8ec3a5;
   --warning: #e2b45a;
-  --info: #9bc6e4;
-  --assessment: #e8ad8c;
   --overlay: #000000;
   --border: #3e4840;
   --input: #788779;
@@ -405,31 +396,14 @@ span.tt-block, .dark span.tt-block { background-color: var(--tt-color); }
 .tt-break { background-color: color-mix(in oklch, var(--foreground) 6%, var(--card)); color: var(--muted-foreground); }
 span.tt-break { background-color: var(--border); }
 
-/* Shared roles follow the chosen accent and surface, including custom colours. */
+/* Status tints follow the current surface, including custom accents. */
 :root {
   --success-soft: color-mix(in srgb, var(--success) 12%, var(--card));
   --warning-soft: color-mix(in srgb, var(--warning) 12%, var(--card));
-  --info-soft: color-mix(in srgb, var(--info) 12%, var(--card));
-  --surface-heading: var(--primary);
-  --surface-tint: color-mix(in srgb, var(--surface-heading) 9%, var(--card));
-}
-#main-content:is([data-view="exams"], [data-view="sacs"], [data-view="library"]) { --surface-heading: var(--assessment); }
-#main-content:is([data-view="progress"], [data-view="goals"], [data-view="predictor"], [data-view="atar"], [data-view="vcaa"]) { --surface-heading: var(--info); }
-#main-content { --surface-tint: color-mix(in srgb, var(--surface-heading) 9%, var(--card)); }
-.focal-page-title, .focal-section-title { color: var(--surface-heading); }
-.focal-navigation [data-nav-group="Study"] { --nav-color: var(--primary); }
-.focal-navigation [data-nav-group="Assessments"] { --nav-color: var(--assessment); }
-.focal-navigation [data-nav-group="Analysis"] { --nav-color: var(--info); }
-.focal-navigation [data-nav-group] [data-sidebar="menu-button"] > svg { color: var(--nav-color); opacity: 1; }
-.focal-navigation [data-nav-group] [data-sidebar="menu-button"][data-active="true"] {
-  background: color-mix(in srgb, var(--nav-color) 17%, var(--sidebar));
-  color: var(--nav-color);
 }
 .toaster {
-  --success-bg: var(--success-soft); --success-text: var(--success); --success-border: var(--success);
-  --warning-bg: var(--warning-soft); --warning-text: var(--warning); --warning-border: var(--warning);
-  --info-bg: var(--info-soft); --info-text: var(--info); --info-border: var(--info);
-  --error-bg: color-mix(in srgb, var(--destructive) 10%, var(--popover)); --error-text: var(--destructive); --error-border: var(--destructive);
+  --success-bg: var(--success-soft); --success-text: var(--success); --success-border: color-mix(in srgb, var(--success) 30%, var(--popover));
+  --warning-bg: var(--warning-soft); --warning-text: var(--warning); --warning-border: color-mix(in srgb, var(--warning) 30%, var(--popover));
+  --info-bg: var(--popover); --info-text: var(--popover-foreground); --info-border: var(--border);
+  --error-bg: color-mix(in srgb, var(--destructive) 10%, var(--popover)); --error-text: var(--destructive); --error-border: color-mix(in srgb, var(--destructive) 30%, var(--popover));
 }
-
-.focal-navigation [data-nav-group] [data-tour="nav-exams"] { --nav-color: var(--assessment); }

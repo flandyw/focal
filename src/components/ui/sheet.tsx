@@ -136,7 +136,7 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
       className={cn(
-        "text-primary font-heading text-3xl font-normal tracking-tight text-foreground",
+        "font-heading text-3xl font-normal tracking-tight text-foreground",
         className
       )}
       {...props}

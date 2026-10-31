@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -41,6 +41,8 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
   const [fields, setFields] = useState<Set<MistakeEditField>>(new Set(["questionText"]))
   const [instruction, setInstruction] = useState("")
   const [running, setRunning] = useState(false)
+  const runningRef = useRef(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
   const [edits, setEdits] = useState<MistakeEdit[] | null>(null)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
@@ -62,6 +64,10 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
   }
 
   async function run() {
+    if (runningRef.current || !targets.length || !fieldList.length || !instruction.trim()) return
+    runningRef.current = true
+    setFailure(null)
+    setProgress(null)
     setRunning(true)
     setEdits([])
     setSkipped(new Set())
@@ -69,15 +75,19 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
       const { editMistakesWithInstruction } = await import("../lib/mistake-ai")
       await editMistakesWithInstruction(targets, attempts, fieldList, instruction.trim(), setProgress, (batch) => setEdits((value) => [...(value ?? []), ...batch]))
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not edit these mistakes.")
+      setFailure(error instanceof Error ? error.message : "Could not edit these mistakes. Go back and try again.")
     } finally {
+      runningRef.current = false
       setRunning(false)
     }
   }
 
   function apply() {
     // Only the reviewed fields are sent, so a field ChatGPT touched but the student never selected can't slip in.
-    onApply(accepted.map(({ edit, list }) => ({ id: edit.id, ...Object.fromEntries(list.map(({ field, after }) => [field, after])) })))
+    try { onApply(accepted.map(({ edit, list }) => ({ id: edit.id, ...Object.fromEntries(list.map(({ field, after }) => [field, after])) }))) } catch (error) {
+      setFailure(error instanceof Error ? error.message : "Could not save. Your preview is still here; try again.")
+      return
+    }
     toast.success(`Updated ${accepted.length} ${accepted.length === 1 ? "mistake" : "mistakes"}`)
     onOpenChange(false)
   }
@@ -113,7 +123,8 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
           </FieldGroup>
         ) : (
           <div className="grid gap-3" aria-live="polite">
-            {running && progress ? <p role="status" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
+            {running ? <p role="status" className="text-sm text-muted-foreground tabular-nums">{progress ? formatChatGPTProgress(progress) : "Preparing edit preview…"}</p> : null}
+            {failure ? <p role="alert" className="text-sm text-destructive">{failure}</p> : null}
             <p className="text-sm text-muted-foreground tabular-nums">{changes.length} of {targets.length} mistakes would change{running ? " so far" : ""}. Untick any you want to keep as they are.</p>
             <div className="max-h-96 overflow-y-auto rounded-lg border">
               {changes.map(({ mistake, list }) => (
@@ -127,7 +138,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
                   ))}
                 </div>
               ))}
-              {!changes.length && !running ? <p className="p-3 text-sm text-muted-foreground">ChatGPT found nothing to change.</p> : null}
+              {!changes.length && !running && !failure ? <p className="p-3 text-sm text-muted-foreground">ChatGPT found nothing to change.</p> : null}
             </div>
           </div>
         )}
@@ -137,7 +148,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <Button type="button" disabled={!targets.length || !fields.size || !instruction.trim()} onClick={() => void run()}><Sparkles />Preview edits for {targets.length}</Button>
           ) : (
             <>
-              <Button type="button" variant="outline" disabled={running} onClick={() => setEdits(null)}>Back</Button>
+              <Button type="button" variant="outline" disabled={running} onClick={() => { setEdits(null); setFailure(null) }}>Change instruction</Button>
               <Button type="button" disabled={running || !accepted.length} onClick={apply}>Apply {accepted.length} {accepted.length === 1 ? "edit" : "edits"}</Button>
             </>
           )}

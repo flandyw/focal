@@ -62,13 +62,16 @@ export function AppCommandMenu({
         <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
         <CommandPrimitive.Input
           ref={input}
-          aria-label="Search anything"
-          placeholder="Search"
+          aria-label="Search pages and actions"
+          placeholder="Search pages and actions"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={query}
           onValueChange={setQuery}
           onFocus={() => onOpenChange(true)}
           onBlur={() => onOpenChange(false)}
-          onKeyDown={(event) => { if (event.key === "Escape") onOpenChange(false) }}
+          onKeyDown={(event) => { if (event.key === "Escape") { onOpenChange(false); input.current?.blur() } }}
           className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none placeholder:text-sidebar-foreground/70"
         />
         <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
@@ -76,7 +79,7 @@ export function AppCommandMenu({
       {open && rect && (
         <div
           onMouseDown={(event) => event.preventDefault()}
-          style={{ top: rect.bottom + 6, left: Math.min(rect.left, window.innerWidth - 288), width: Math.min(Math.max(rect.width, 272), window.innerWidth - 32) }}
+          style={{ top: rect.bottom + 6, left: Math.max(16, Math.min(rect.left, window.innerWidth - Math.min(Math.max(rect.width, 272), window.innerWidth - 32) - 16)), width: Math.min(Math.max(rect.width, 272), window.innerWidth - 32) }}
           className="fixed z-50 rounded-sm border border-sidebar-border bg-popover p-1.5 shadow-lg"
         >
           <CommandList className="max-h-[min(24rem,60dvh)] overflow-y-auto overscroll-contain outline-none" style={{ maxHeight: Math.max(44, window.innerHeight - rect.bottom - 24) }}>

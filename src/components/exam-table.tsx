@@ -66,9 +66,9 @@ export function ExamTable({
     return { attempt, reference, analysis: analyseAttempt(attempt, reference) }
   }), [attempts, references, comparisonYear])
   const rows = useMemo(() => {
-    const needle = deferredQuery.trim().toLowerCase()
+    const terms = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return analysedRows
-      .filter(({ attempt }) => !needle || `${attempt.title} ${attempt.subject} ${attempt.provider} ${attempt.paper}`.toLowerCase().includes(needle))
+      .filter(({ attempt }) => terms.every((term) => `${attempt.title} ${attempt.subject} ${attempt.provider} ${attempt.paper} ${attempt.examYear} ${attempt.completedAt}`.toLowerCase().includes(term)))
       .toSorted((left, right) => compareExamRows(left, right, sort.key, sort.direction))
   },
   [analysedRows, deferredQuery, sort])
@@ -170,7 +170,7 @@ export function ExamTable({
             </Table>
           </div>
         ) : (
-          <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a different subject, provider, or paper.</AlertDescription>{query ? <Button size="sm" variant="outline" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
+          <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
         )}
         {rows.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {shownRows.length} of {rows.length} exams</p>{shownRows.length < rows.length ? <Button size="sm" variant="outline" onClick={() => setVisibleCount(shownRows.length + 60)}>Show more exams</Button> : null}</div> : null}
       </section>

@@ -1,7 +1,8 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -42,6 +43,15 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
+  function close() {
+    if (jsonText.trim()) setConfirmingClose(true)
+    else onOpenChange(false)
+  }
+  function reset() {
+    setJsonText(""); setDrafts(null); setExam(null); setError(null); setAttemptId(initialAttemptId ?? "")
+  }
   const prompt = buildMistakeImportPrompt()
   const attemptOptions = [{ value: "", label: "Uncategorised (no exam)" }, ...attempts.toSorted((first, second) => second.completedAt.localeCompare(first.completedAt)).map((attempt) => ({
     value: attempt.id,
@@ -74,12 +84,17 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
 
   function importMistakes() {
     if (!drafts || (!drafts.length && !exam)) return
-    onSaveMistakes(createMistakesFromImport(drafts, exam?.id ?? attemptId), exam ?? undefined)
-    onOpenChange(false)
+    try {
+      onSaveMistakes(createMistakesFromImport(drafts, exam?.id ?? attemptId), exam ?? undefined)
+      reset()
+      onOpenChange(false)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Could not import. Your JSON is still here; try again.")
+    }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import mistakes from any chatbot</DialogTitle>
@@ -102,6 +117,8 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
           <Field>
             <FieldLabel htmlFor="mistake-import-json">2. Paste the chatbot's JSON response</FieldLabel>
             <Textarea
+              autoFocus
+              aria-invalid={error ? true : undefined}
               id="mistake-import-json"
               rows={6}
               className="font-mono text-xs"
@@ -168,6 +185,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
           <FieldError>{error}</FieldError>
         </FieldGroup>
         <DialogFooter>
+          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           <Button
             type="button"
             disabled={!drafts || (!drafts.length && !exam)}
@@ -178,6 +196,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
           </Button>
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); reset(); onOpenChange(false) }} />
     </Dialog>
   )
 }

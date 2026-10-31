@@ -58,7 +58,10 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
 
   function add() {
     if (!items || !subject.trim()) return
-    onImport(subject.trim(), items)
+    try { onImport(subject.trim(), items) } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Could not save the checklist. Your reply is still here; try again.")
+      return
+    }
     setText("")
     setItems(null)
     onOpenChange(false)
@@ -74,7 +77,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="stoplight-import-subject">1. Subject</FieldLabel>
-            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required />
+            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setItems(null); setError(null) }} allowCustom required />
           </Field>
           <Field>
             <div className="flex items-center justify-between gap-3">
@@ -111,10 +114,10 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
           <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           {items
             ? <Button type="button" disabled={!subject.trim()} onClick={add}><Check />Add {items.length} item{items.length === 1 ? "" : "s"}</Button>
-            : <Button type="button" disabled={!text.trim()} onClick={review}>Review items</Button>}
+            : <Button type="button" disabled={!text.trim() || !subject.trim()} onClick={review}>Review items</Button>}
         </DialogFooter>
       </DialogContent>
-      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); onOpenChange(false) }} />
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setItems(null); setError(null); onOpenChange(false) }} />
     </Dialog>
   )
 }

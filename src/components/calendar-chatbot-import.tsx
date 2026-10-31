@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
@@ -24,9 +24,12 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const [showPrompt, setShowPrompt] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [imported, setImported] = useState<Set<number>>(new Set())
   const importSubjects = subjects.map((name) => ({ id: name, name, shortCode: name }))
+  const prompt = buildChatbotImportPrompt(importSubjects, [])
   const chosen = drafts?.map((draft, index) => ({ draft, index })).filter(({ index }) => !skipped.has(index) && !imported.has(index)) ?? []
 
   function close() {
@@ -37,11 +40,12 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
 
   async function copyPrompt() {
     try {
-      await navigator.clipboard.writeText(buildChatbotImportPrompt(importSubjects, []))
+      await navigator.clipboard.writeText(prompt)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("Could not copy the prompt. Check clipboard permission and try again.")
+      setShowPrompt(true)
+      toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
   }
 
@@ -60,6 +64,8 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   }
 
   async function add() {
+    if (savingRef.current || !chosen.length) return
+    savingRef.current = true
     setSaving(true)
     setError(null)
     try {
@@ -75,6 +81,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
     } catch (error) {
       setError(`${error instanceof Error ? error.message : "Could not save an item."} Items marked Added won't be added again.`)
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -95,6 +102,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
               </Button>
             </div>
           </Field>
+          {showPrompt ? <pre tabIndex={0} aria-label="Prompt to copy manually" className="max-h-64 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap select-all">{prompt}</pre> : null}
           <Field data-invalid={error && !drafts ? true : undefined}>
             <FieldLabel htmlFor="calendar-import-json">2. Paste the chatbot's reply</FieldLabel>
             <Textarea
@@ -113,13 +121,13 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
             <ul className="divide-y rounded-lg border" aria-label="Items to import">
               {drafts.map((draft, index) => (
                 <li key={index}>
-                  <Label className="cursor-pointer gap-3 px-3 py-2 font-normal">
+                  <Label className="flex flex-wrap cursor-pointer gap-3 px-3 py-2 font-normal">
                     <Checkbox
                       checked={imported.has(index) || !skipped.has(index)}
                       disabled={saving || imported.has(index)}
                       onCheckedChange={() => setSkipped((current) => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next })}
                     />
-                    <span className="min-w-0 flex-1 truncate font-medium">{draft.title}</span>
+                    <span className="min-w-0 flex-1 basis-32 break-words font-medium">{draft.title}{draft.subjectId ? <span className="block text-xs font-normal text-muted-foreground">{draft.subjectId}</span> : null}</span>
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{imported.has(index) ? "Added" : `${draft.date} · ${draft.startTime} · ${draft.durationMinutes}m`}</span>
                   </Label>
                 </li>

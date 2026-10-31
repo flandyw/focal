@@ -89,12 +89,12 @@ export function ExamLibrary({
   const isCompleted = (exam: VcaaExamResource) => completedUrls.has(exam.url)
   const filtered = useMemo(() => {
     const priorities = new Map(preferredSubjects.map((item, index) => [normaliseComparisonName(item), index]))
-    const needle = deferredQuery.trim().toLowerCase()
+    const terms = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return exams.filter((exam) => {
       const done = completedUrls.has(exam.url)
       return (subject === "all" || exam.studyName === subject) &&
         (completion === "all" || (completion === "completed" ? done : !done)) &&
-        (!needle || `${exam.studyName} ${exam.year} ${exam.label}`.toLowerCase().includes(needle))
+        terms.every((term) => `${exam.studyName} ${exam.year ?? ""} ${exam.label} ${getVcaaExamPaper(exam)} ${getVcaaExamProvider(exam)}`.toLowerCase().includes(term))
     }).toSorted((first, second) =>
       (priorities.get(normaliseComparisonName(first.studyName)) ?? Infinity) - (priorities.get(normaliseComparisonName(second.studyName)) ?? Infinity) ||
       (second.year ?? 0) - (first.year ?? 0) || paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
@@ -160,12 +160,13 @@ export function ExamLibrary({
       ) : null}
 
       <div className="flex flex-wrap gap-3">
-        <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setVisibleCount(40) }} includeAll className="w-full sm:w-72" placeholder="Search subjects" />
+        <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value || "all"); setVisibleCount(40) }} includeAll className="w-full sm:w-72" placeholder="Search subjects" />
         <Input type="search" className="w-full sm:max-w-sm" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(40) }} placeholder="Search subject, year or paper" aria-label="Search exam library" />
         <Select value={completion} onValueChange={(value) => { setCompletion((value ?? "all") as CompletionFilter); setVisibleCount(40) }}>
           <SelectTrigger className="w-full sm:w-44" aria-label="Filter by completion"><SelectValue>{completion === "todo" ? "Not completed" : completion === "completed" ? "Completed" : "All papers"}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
         </Select>
+        {(query || subject !== "all" || completion !== "all") ? <Button variant="ghost" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button> : null}
         <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{filtered.length} exams · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -200,7 +201,7 @@ export function ExamLibrary({
                 {companion.reports.map((report) => <Button nativeButton={false} key={report.url} variant="outline" render={<a href={report.url} target="_blank" rel="noreferrer" />}><FileCheck2 />{resourceLabel(report)}</Button>)}
                 {companion.specification ? <Button nativeButton={false} variant="ghost" render={<a href={companion.specification.url} target="_blank" rel="noreferrer" />}><ExternalLink />Specifications</Button> : null}
                 {reference ? <Button nativeButton={false} variant="ghost" render={<a href={reference.sourceUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Distribution</Button> : null}
-                {!loggedAttempt ? <Button variant="ghost" onClick={() => onToggleCompleted(exam.url)}><Check />{manuallyCompleted ? "Mark not done" : "Mark done"}</Button> : null}
+                {!loggedAttempt ? <Button variant="ghost" aria-pressed={manuallyCompleted} aria-label={`${manuallyCompleted ? "Mark not done" : "Mark done"}: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}><Check />{manuallyCompleted ? "Mark not done" : "Mark done"}</Button> : null}
               </div>
             </CardContent>
           </Card>

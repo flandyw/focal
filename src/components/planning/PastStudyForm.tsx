@@ -29,7 +29,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
     preview = `${minutes} minutes of study · Finished ${new Date(blocks[blocks.length - 1].end).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
   } catch { /* Validation is shown on submit, not while typing. */ }
 
-  return <form className="grid gap-5" onSubmit={async (event) => {
+  return <form className="grid gap-5" onChange={() => setError("")} onSubmit={async (event) => {
     event.preventDefault()
     if (saving.current) return
     setError("")
@@ -48,6 +48,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
     }
   }}>
     <fieldset disabled={busy} className="grid min-w-0 gap-5">
+      {!subjects.length ? <p role="status" className="text-sm text-muted-foreground">Add a subject in Settings before logging study.</p> : null}
       <Field>
         <FieldLabel htmlFor={`${id}-subject`}>Subject</FieldLabel>
         <NativeSelect autoFocus id={`${id}-subject`} className="w-full" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} required>
@@ -90,7 +91,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     <div className="flex justify-end gap-2">
       <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>Cancel</Button>
-      <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Log study"}</Button>
+      <Button type="submit" disabled={busy || !subjects.length}>{busy ? "Saving…" : "Log study"}</Button>
     </div>
   </form>
 }

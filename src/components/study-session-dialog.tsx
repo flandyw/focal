@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import { CalendarPlus, Copy, Play, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldError, FieldGroup, FieldLabel } from "./ui/field"
@@ -48,12 +49,27 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const [initial] = useState(() => JSON.stringify({ title, notes, topics, blocks, eventType, location }))
+  const dirty = initial !== JSON.stringify({ title, notes, topics, blocks, eventType, location })
+  function close() {
+    if (busyRef.current) return
+    if (dirty) setConfirmingClose(true)
+    else onClose()
+  }
   const options = studySubjectOptions([...subjects, ...blocks.map((block) => block.subject)])
   const lastSubject = blocks.at(-1)?.subject ?? ""
   const totalMinutes = blocks.reduce((sum, block) => sum + Math.max(0, (Date.parse(block.end) - Date.parse(block.start)) / 60_000 || 0), 0)
 
   function updateBlock(id: string, patch: Partial<{ start: string; end: string; subject: string }>) {
-    setBlocks((current) => current.map((block) => block.id === id ? { ...block, ...patch } : block))
+    setBlocks((current) => current.map((block) => {
+      if (block.id !== id) return block
+      if (session.started_at === null && patch.start && Number.isFinite(Date.parse(patch.start))) {
+        const duration = Date.parse(block.end) - Date.parse(block.start)
+        if (duration > 0) return { ...block, ...patch, end: localTime(new Date(Date.parse(patch.start) + duration).toISOString()) }
+      }
+      return { ...block, ...patch }
+    }))
     setError(null)
   }
 
@@ -145,7 +161,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose() }}>
+    <Dialog open onOpenChange={(open) => { if (!open) close() }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{converting ? "Convert study to event" : creating ? "Plan study session" : "Edit study session"}</DialogTitle>
@@ -179,7 +195,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
                     </Select>
                   </Field>
                   <div className="flex flex-wrap gap-1" role="group" aria-label={`Block ${index + 1} duration`}>
-                    {[15, 25, 30, 45, 60, 90, 120, 180].map((minutes) => <Button key={minutes} size="xs" variant="outline" disabled={!Number.isFinite(Date.parse(block.start))} onClick={() => updateBlock(block.id, { end: localTime(new Date(Date.parse(block.start) + minutes * 60_000).toISOString()) })}>{minutes}m</Button>)}
+                    {[15, 25, 30, 45, 60, 90, 120, 180].map((minutes) => <Button key={minutes} size="xs" aria-pressed={Date.parse(block.end) - Date.parse(block.start) === minutes * 60_000} variant={Date.parse(block.end) - Date.parse(block.start) === minutes * 60_000 ? "secondary" : "outline"} disabled={!Number.isFinite(Date.parse(block.start))} onClick={() => updateBlock(block.id, { end: localTime(new Date(Date.parse(block.start) + minutes * 60_000).toISOString()) })}>{minutes}m</Button>)}
                   </div>
                 </div>
               ))}
@@ -201,17 +217,19 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
           <div className="flex flex-wrap gap-1.5">
             {creating ? null : converting ? <Button disabled={busy} variant="outline" onClick={() => setConverting(false)}>Back to study</Button> : <>
               <Button disabled={busy} variant={confirmDelete ? "destructive" : "outline"} onClick={() => confirmDelete ? void submit("delete") : setConfirmDelete(true)}><Trash2 />{confirmDelete ? "Delete for good?" : "Delete"}</Button>
+              {confirmDelete ? <Button disabled={busy} variant="ghost" onClick={() => setConfirmDelete(false)}>Keep session</Button> : null}
               <Button disabled={busy} variant="outline" onClick={() => submit("duplicate")}><Copy />Duplicate</Button>
-              {onContinue && continuableToday(session) ? <Button disabled={busy} variant="outline" onClick={() => onContinue(session)}><Play />Continue</Button> : null}
+              {onContinue && continuableToday(session) ? <Button disabled={busy} variant="outline" onClick={() => dirty ? setError("Save your changes before continuing this session.") : onContinue(session)}><Play />Continue</Button> : null}
               {allowConvert && !session.completed && session.started_at === null ? <Button disabled={busy} variant="outline" onClick={() => { setConverting(true); setConfirmDelete(false) }}><CalendarPlus />Convert to event</Button> : null}
             </>}
           </div>
           <div className="flex gap-1.5">
-            <Button disabled={busy} variant="outline" onClick={onClose}>Cancel</Button>
+            <Button disabled={busy} variant="outline" onClick={close}>Cancel</Button>
             <Button disabled={busy} onClick={() => submit(converting ? "convert" : "save")}>{busy ? "Saving…" : converting ? "Convert to event" : creating ? "Plan session" : "Save changes"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
     </Dialog>
   )
 }

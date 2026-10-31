@@ -36,8 +36,8 @@ export function SubjectCombobox({
 }) {
   const items = useMemo(() => [
     ...(includeAll ? [ALL_SUBJECTS] : []),
-    ...prioritiseSubjects(subjects, preferredSubjects),
-  ], [includeAll, preferredSubjects, subjects])
+    ...prioritiseSubjects([...subjects, ...(!allowCustom && value && value !== "all" ? [value] : [])], preferredSubjects),
+  ], [allowCustom, includeAll, preferredSubjects, subjects, value])
   const displayValue = includeAll && value === "all" ? ALL_SUBJECTS : value
 
   return (
@@ -45,13 +45,13 @@ export function SubjectCombobox({
       items={items}
       value={items.includes(displayValue) ? displayValue : null}
       inputValue={allowCustom ? displayValue : undefined}
-      onInputValueChange={allowCustom ? (next) => onValueChange(next === ALL_SUBJECTS ? "all" : next) : undefined}
-      onValueChange={(next) => onValueChange(next === ALL_SUBJECTS ? "all" : (next ?? ""))}
+      onInputValueChange={allowCustom ? (next) => onValueChange(includeAll && next === ALL_SUBJECTS ? "all" : next) : undefined}
+      onValueChange={(next) => onValueChange(includeAll && next === ALL_SUBJECTS ? "all" : (next ?? ""))}
       autoHighlight
     >
       <ComboboxInput id={id} aria-label={id ? undefined : placeholder} className={className} placeholder={placeholder} showClear={allowCustom} required={required} />
       <ComboboxContent>
-        <ComboboxEmpty>No matching subjects.</ComboboxEmpty>
+        <ComboboxEmpty>{allowCustom ? "Use the subject you typed, or choose a suggestion." : "No matching subjects."}</ComboboxEmpty>
         <ComboboxList>
           {(item) => (
             <ComboboxItem

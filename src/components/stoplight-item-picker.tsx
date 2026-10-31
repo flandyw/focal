@@ -3,6 +3,7 @@ import { X } from "lucide-react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "./ui/select"
+import { sameStudySubject } from "../lib/studySubjects"
 import { groupBy, itemGroup } from "../lib/stoplight"
 import type { CurriculumArea } from "../lib/learning-workspace"
 
@@ -14,7 +15,7 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
   value: string[]
   onChange: (value: string[]) => void
 }) {
-  const options = items.filter((item) => item.group && (!subject || item.subject.toLowerCase() === subject.toLowerCase()) && !value.includes(item.id))
+  const options = items.filter((item) => item.group && (!subject || sameStudySubject(item.subject, subject)) && !value.includes(item.id))
   const groups = groupBy(options, (item) => `${subject ? "" : `${item.subject} · `}${itemGroup(item)}`)
   const chosen = value.flatMap((itemId) => items.find((item) => item.id === itemId) ?? [])
   return (
@@ -22,9 +23,10 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
       {chosen.length ? <div className="flex flex-wrap gap-1.5">{chosen.map((item) => (
         <Badge key={item.id} variant="secondary" className="gap-1">
           {item.name}
-          <Button variant="ghost" size="icon-xs" className="size-4" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X /></Button>
+          <Button type="button" variant="ghost" size="icon-xs" className="size-4" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X /></Button>
         </Badge>
       ))}</div> : null}
+      {value.length >= 3 ? <p className="text-xs text-muted-foreground">Three items linked. Remove one to choose another.</p> : !options.length ? <p className="text-xs text-muted-foreground">{chosen.length ? "All available items are linked." : "No stoplight items for this subject. Add them in Stoplight first."}</p> : null}
       {value.length < 3 && options.length ? (
         <Select value="" onValueChange={(next) => next && onChange([...value, next])}>
           <SelectTrigger id={id} className="w-full"><SelectValue>Add a stoplight item</SelectValue></SelectTrigger>

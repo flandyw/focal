@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
@@ -27,6 +28,12 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const [copied, setCopied] = useState(false)
   const [worksheet, setWorksheet] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [promptItems, setPromptItems] = useState<CurriculumArea[] | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  function close() {
+    if (text.trim()) setConfirmingClose(true)
+    else onOpenChange(false)
+  }
   const groups = groupBy(items, itemGroup)
   const selected = items.filter((item) => !skipped.has(itemGroup(item)))
 
@@ -38,6 +45,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   async function copyPrompt() {
     try {
       await navigator.clipboard.writeText(buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined))
+      setPromptItems(selected)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {
@@ -47,15 +55,19 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
 
   function apply() {
     let ratings = new Map<string, StoplightRating>()
-    try { ratings = parseRatingsResponse(text, selected) } catch { /* reported below */ }
+    try { ratings = parseRatingsResponse(text, promptItems ?? selected) } catch { /* reported below */ }
     if (!ratings.size) return setError("Couldn't find any ratings. Paste the chatbot's JSON reply after telling it you're done.")
-    onApply(ratings)
+    try { onApply(ratings) } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Could not save ratings. Your reply is still here; try again.")
+      return
+    }
+    toast.success(`Updated ${ratings.size} item${ratings.size === 1 ? "" : "s"}`)
     setText("")
     onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Revise {subject} with a chatbot</DialogTitle>
@@ -71,7 +83,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
               {[...groups].map(([group, groupItems]) => (
                 <li key={group}>
                   <Label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                    <Checkbox checked={!skipped.has(group)} onCheckedChange={() => toggle(group)} />
+                    <Checkbox disabled={!!text.trim()} checked={!skipped.has(group)} onCheckedChange={() => toggle(group)} />
                     <span className="min-w-0 flex-1 truncate font-medium">{group}</span>
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{groupItems.length} item{groupItems.length === 1 ? "" : "s"}</span>
                   </Label>
@@ -82,24 +94,26 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <Field>
             <div className="flex items-center justify-between gap-3">
               <FieldLabel>2. Copy the prompt and paste it into a chatbot that can run code</FieldLabel>
-              <Button type="button" size="sm" variant="outline" disabled={!selected.length} onClick={() => void copyPrompt()}>
+              <Button type="button" size="sm" variant="outline" disabled={!selected.length || !!text.trim()} onClick={() => void copyPrompt()}>
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
+            {promptItems ? <p role="status" className="text-xs text-muted-foreground">Pasted ratings use the {promptItems.length} items in your last copied prompt.</p> : null}
             <FieldDescription>Includes {selected.length} items with your current ratings, open mistakes and marks{worksheet ? ", plus the worksheet template" : ""}.</FieldDescription>
           </Field>
           <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="stoplight-revise-json">{worksheet ? "3. Upload your completed worksheet, then paste the marking reply" : `3. Say "done", then paste the chatbot's reply`}</FieldLabel>
             <Textarea id="stoplight-revise-json" rows={4} className="font-mono text-xs" placeholder='{"ratings":[{"n":1,"rating":"amber","marks":"2/3"}]}'
               value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only the items it rated change.</FieldDescription>}
+            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only the items it rated change. Clear this reply before choosing new groups or copying another prompt.</FieldDescription>}
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" disabled={!text.trim()} onClick={apply}><Check />Apply ratings</Button>
+          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+          <Button type="button" disabled={!text.trim() || !(promptItems ?? selected).length} onClick={apply}><Check />Apply ratings</Button>
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setError(null); onOpenChange(false) }} />
     </Dialog>
   )
 }

@@ -3,13 +3,13 @@ import { Button } from "./ui/button"
 import { downloadAppData, loadAppData } from "../lib/storage"
 
 type ErrorBoundaryProps = { children: ReactNode }
-type ErrorBoundaryState = { error: Error | null }
+type ErrorBoundaryState = { error: Error | null; backupError: string | null }
 
 export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null }
+  state: ErrorBoundaryState = { error: null, backupError: null }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { error }
+    return { error, backupError: null }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -19,8 +19,10 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
   private exportBackup = () => {
     try {
       downloadAppData(loadAppData())
+      this.setState({ backupError: null })
     } catch (exportError) {
       console.error(exportError)
+      this.setState({ backupError: "Could not export your backup. Try again before reloading." })
     }
   }
 
@@ -42,7 +44,9 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
           </p>
           {!loadError ? <pre className="max-w-md overflow-auto rounded-md bg-muted p-3 text-left text-xs text-muted-foreground">{this.state.error.message}</pre> : null}
         </div>
-        <div className="flex justify-center gap-2">
+        {this.state.backupError ? <p role="alert" className="text-sm text-destructive">{this.state.backupError}</p> : null}
+        <div className="flex flex-wrap justify-center gap-2">
+          {!loadError ? <Button variant="outline" onClick={() => this.setState({ error: null })}>Try again</Button> : null}
           <Button variant="outline" onClick={this.exportBackup}>Export backup</Button>
           <Button onClick={this.reload}>Reload</Button>
         </div>

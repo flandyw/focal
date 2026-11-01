@@ -179,14 +179,13 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
   // The latest possible Date makes every active card due, keeping the earliest-due-first order.
   const active = getDueMistakes(mistakes, new Date(8.64e15))
   const queue = scope === "all" ? active : due
-  const round = scope === "all" ? queue : queue.slice(0, settings.practiceTarget)
   const mistakeMap = new Map(allMistakes.map((mistake) => [mistake.id, mistake]))
   const remaining = session?.ids.filter((id) => mistakeMap.has(id) && !mistakeMap.get(id)!.suspended) ?? []
   const current = remaining.length ? mistakeMap.get(remaining[0]) : undefined
   const completed = session?.ratings.length ?? 0
   const nextDue = mistakes.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
 
-  function start(cards = round, weekly = false) {
+  function start(cards = queue, weekly = false) {
     if (!cards.length) return
     setSession({ ids: cards.map((mistake) => mistake.id), ratings: [], weekly, week: progress.week, size: weekly ? progress.weeklyTarget : cards.length, initialXP: progress.xp })
     setFeedback("")
@@ -220,7 +219,7 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
         <div className="grid gap-2"><span id="review-cards-label" className="text-sm font-medium">Cards</span><div role="group" aria-labelledby="review-cards-label" className="flex gap-1">{([["due", REVIEW_FILTER_LABELS.due, due.length], ["all", REVIEW_FILTER_LABELS.all, active.length]] as const).map(([value, label, count]) => <Button key={value} variant={scope === value ? "secondary" : "outline"} aria-pressed={scope === value} onClick={() => setScope(value)}>{label} <span className="tabular-nums opacity-70">{count}</span></Button>)}</div></div>
         {conditions}
       </div>
-      <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!round.length}><Play />{session ? "Another round" : `Start ${round.length} cards`}</Button>{!session && <Button variant="outline" disabled={!queue.length} onClick={() => start(queue.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!queue.length}><Play />Start {queue.length} {queue.length === 1 ? "card" : "cards"}</Button>{queue.length > settings.practiceTarget! && <Button variant="outline" onClick={() => start(queue.slice(0, settings.practiceTarget))}>Start {settings.practiceTarget} {settings.practiceTarget === 1 ? "card" : "cards"}</Button>}{!session && queue.length > 1 && <Button variant="outline" onClick={() => start(queue.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
       {!session && <p className="text-xs text-muted-foreground">{queue.length ? scope === "all" ? `${queue.length} active ${queue.length === 1 ? "card" : "cards"}, earliest due first. Reviewing early reschedules a card.` : `${queue.length} due. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : mistakes.length ? "No cards match these conditions." : "Add a mistake to start practising."}</p>}
     </section>
     <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />

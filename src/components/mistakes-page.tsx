@@ -1,5 +1,5 @@
 import { WorkspaceSplit } from "./workspace-layout"
-import { sameStudySubject, studySubjectOptions } from "../lib/studySubjects"
+import { sameStudySubject } from "../lib/studySubjects"
 import { isTwoPaperMathematics } from "../lib/study-score"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ArrowRight, BookOpenCheck, ChevronDown, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
@@ -49,7 +49,7 @@ import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
 import { exportMistakes, type ExportFormat } from "../lib/mistake-export"
 import { MistakeRoundTripDialog } from "./mistake-roundtrip-dialog"
-import { getAttemptMathsPaper, isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
+import { matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import {
   getMistakeFieldValues,
@@ -75,6 +75,8 @@ type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
 
 type MistakesPageProps = {
   workspaceSubject?: string
+  subjects: string[]
+  onSubjectChange: (subject: string) => void
   onSaveReviewPreferences: (preferences: MistakeReviewPreferences) => void
   onReduceReviews: (days: number, target: number) => void
   data: AppData
@@ -163,7 +165,7 @@ function AnswerPanel({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function StudyQueue({ allMistakes, preferences, mistakes, paperFiltered, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; paperFiltered: boolean; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
+function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
   const tick = useTickingNow(30_000)
   const [latestReviewAt, setLatestReviewAt] = useState(0)
   const now = new Date(Math.max(tick.getTime(), latestReviewAt))
@@ -173,28 +175,16 @@ function StudyQueue({ allMistakes, preferences, mistakes, paperFiltered, attempt
   const [feedback, setFeedback] = useState("")
   const [celebration, setCelebration] = useState(0)
   const [scope, setScope] = useState<"due" | "all">("due")
-  const [subject, setSubject] = useState("all")
-  const [paper, setPaper] = useState<MathsExamFilter>("all")
-  const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
-  const subjectOf = (mistake: Mistake) => attemptMap.get(mistake.attemptId)?.subject ?? mistake.subject
-  const subjectOptions = studySubjectOptions(mistakes.flatMap((mistake) => subjectOf(mistake) ?? [])).toSorted((first, second) => first.name.localeCompare(second.name))
-  const paperSubject = subject !== "all" ? subject : subjectOptions.length === 1 ? subjectOptions[0].name : null
-  // The page-level maths filter already narrows `mistakes`, so a second paper picker would only repeat it.
-  const showPaper = !paperFiltered && paperSubject !== null && isTwoPaperMathematics(paperSubject)
-  const activePaper = showPaper ? paper : "all"
-  const pool = mistakes.filter((mistake) => {
-    const attempt = attemptMap.get(mistake.attemptId)
-    return (subject === "all" || sameStudySubject(subjectOf(mistake), subject))
-      && (activePaper === "all" || (attempt !== undefined && getAttemptMathsPaper(attempt) === (activePaper === "exam-1" ? 1 : 2)))
-  })
+  const due = getDueMistakes(mistakes, now)
   // The latest possible Date makes every active card due, keeping the earliest-due-first order.
-  const queue = getDueMistakes(pool, scope === "all" ? new Date(8.64e15) : now)
+  const active = getDueMistakes(mistakes, new Date(8.64e15))
+  const queue = scope === "all" ? active : due
   const round = scope === "all" ? queue : queue.slice(0, settings.practiceTarget)
   const mistakeMap = new Map(allMistakes.map((mistake) => [mistake.id, mistake]))
   const remaining = session?.ids.filter((id) => mistakeMap.has(id) && !mistakeMap.get(id)!.suspended) ?? []
   const current = remaining.length ? mistakeMap.get(remaining[0]) : undefined
   const completed = session?.ratings.length ?? 0
-  const nextDue = pool.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
+  const nextDue = mistakes.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
 
   function start(cards = round, weekly = false) {
     if (!cards.length) return
@@ -226,15 +216,14 @@ function StudyQueue({ allMistakes, preferences, mistakes, paperFiltered, attempt
       <div className="grid gap-2"><BookOpenCheck className="size-7 text-primary" /><h2 className="text-2xl font-semibold">{session ? "Session complete" : "Make the next attempt count"}</h2><p className="text-muted-foreground">{session ? `${completed} ${completed === 1 ? "mistake" : "mistakes"} reviewed · +${Math.max(0, progress.xp - session.initialXP)} XP` : "Recall your approach, compare it with the correction, then rate your recall."}</p></div>
       {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
       {session && <dl className="grid grid-cols-4 gap-3 border-y py-4">{RATING_OPTIONS.map(({ rating, label }) => <div key={rating}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-xl font-semibold">{session.ratings.filter((value) => value === rating).length}</dd></div>)}</dl>}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Review conditions">
-        <Select value={scope} onValueChange={(value) => setScope((value ?? "due") as "due" | "all")}><SelectTrigger aria-label="Cards to review"><SelectValue>{REVIEW_FILTER_LABELS[scope]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="due">{REVIEW_FILTER_LABELS.due}</SelectItem><SelectItem value="all">{REVIEW_FILTER_LABELS.all}</SelectItem></SelectContent></Select>
-        {subjectOptions.length > 1 ? <Select value={subject} onValueChange={(value) => setSubject(value ?? "all")}><SelectTrigger aria-label="Subject to review"><SelectValue>{subject === "all" ? "All subjects" : subject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjectOptions.map((option) => <SelectItem key={option.id} value={option.name}>{option.name}</SelectItem>)}</SelectContent></Select> : null}
-        {showPaper ? <Select value={paper} onValueChange={(value) => setPaper((value ?? "all") as MathsExamFilter)}><SelectTrigger aria-label="Paper to review"><SelectValue>{paper === "all" ? "All papers" : paper === "exam-1" ? "Exam 1" : "Exam 2"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="exam-1">Exam 1</SelectItem><SelectItem value="exam-2">Exam 2</SelectItem></SelectContent></Select> : null}
+      <div className="flex flex-wrap items-end gap-3 border-y py-4" role="group" aria-label="Review conditions">
+        <div className="grid gap-2"><span id="review-cards-label" className="text-sm font-medium">Cards</span><div role="group" aria-labelledby="review-cards-label" className="flex gap-1">{([["due", REVIEW_FILTER_LABELS.due, due.length], ["all", REVIEW_FILTER_LABELS.all, active.length]] as const).map(([value, label, count]) => <Button key={value} variant={scope === value ? "secondary" : "outline"} aria-pressed={scope === value} onClick={() => setScope(value)}>{label} <span className="tabular-nums opacity-70">{count}</span></Button>)}</div></div>
+        {conditions}
       </div>
       <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!round.length}><Play />{session ? "Another round" : `Start ${round.length} cards`}</Button>{!session && <Button variant="outline" disabled={!queue.length} onClick={() => start(queue.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
       {!session && <p className="text-xs text-muted-foreground">{queue.length ? scope === "all" ? `${queue.length} active ${queue.length === 1 ? "card" : "cards"}, earliest due first. Reviewing early reschedules a card.` : `${queue.length} due. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : mistakes.length ? "No cards match these conditions." : "Add a mistake to start practising."}</p>}
     </section>
-    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={pool} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
+    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
   </div>
 
   return <div className="relative mx-auto grid w-full max-w-4xl gap-5">
@@ -457,7 +446,7 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>("browse")
@@ -487,11 +476,10 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   const [autofilling, setAutofilling] = useState(false)
   const [autofillProgress, setAutofillProgress] = useState<ChatGPTProgress | null>(null)
   const attemptMap = useMemo(() => new Map(data.attempts.map((attempt) => [attempt.id, attempt])), [data.attempts])
-  const subjects = useMemo(() => [...new Set([...data.subjects, ...data.attempts.map((attempt) => attempt.subject), ...data.mistakes.flatMap((mistake) => mistake.subject ? [mistake.subject] : [])])].toSorted(), [data.attempts, data.mistakes, data.subjects])
-  // The app-wide subject filter (header on mobile, workspace bar on desktop) scopes this page.
+  // App scopes `data` to the subject picked here, so every tab, dialog and save follows it.
   const activeSubject = workspaceSubject ?? "all"
   const mathsSubject = activeSubject !== "all" ? activeSubject : subjects.length === 1 ? subjects[0] : null
-  const showMathsExamFilter = mathsSubject !== null && isTechSplitMathsSubject(mathsSubject)
+  const showMathsExamFilter = mathsSubject !== null && isTwoPaperMathematics(mathsSubject)
   const activeMathsExamFilter = showMathsExamFilter ? mathsExamFilter : "all"
   const visibleMistakes = useMemo(() => data.mistakes.filter((mistake) => {
     const attempt = attemptMap.get(mistake.attemptId)
@@ -533,7 +521,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   ]
   const topicOptions = [{ value: "all", label: "All topics" }, ...topics.map((item) => ({ value: item, label: item }))]
   const activeFilters = [
-    ...(activeMathsExamFilter !== "all" ? [{ key: "paper", label: activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active", clear: () => setMathsExamFilter("all") }] : []),
+    ...(activeMathsExamFilter !== "all" ? [{ key: "paper", label: activeMathsExamFilter === "exam-1" ? "Exam 1" : "Exam 2", clear: () => setMathsExamFilter("all") }] : []),
     ...(search.trim() ? [{ key: "search", label: `Search: ${search.trim()}`, clear: () => setSearch("") }] : []),
     ...(examId !== "all" ? [{ key: "exam", label: `Exam: ${examOptions.find((item) => item.value === examId)?.label ?? "Deleted exam"}`, clear: () => setExamId("all") }] : []),
     ...(provider !== "all" ? [{ key: "provider", label: `Provider: ${provider}`, clear: () => setProvider("all") }] : []),
@@ -544,7 +532,17 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
   ]
   function clearSelection() { setSelected(new Set()); setActiveId(null); setPage(0) }
   function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setExamId("all"); setProvider("all"); setResolution("all"); clearSelection() }
-  function clearAllFilters() { setMathsExamFilter("all"); resetFilters() }
+  function clearAllFilters() { onSubjectChange("all"); setMathsExamFilter("all"); resetFilters() }
+  const conditions = <>
+    <Field className="w-full sm:w-56">
+      <FieldLabel htmlFor="mistakes-subject">Subject</FieldLabel>
+      <Select value={activeSubject} onValueChange={(value) => { onSubjectChange(value ?? "all"); resetFilters() }}><SelectTrigger id="mistakes-subject" className="w-full min-w-0 [&>span]:truncate"><SelectValue>{activeSubject === "all" ? "All subjects" : activeSubject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjects.map((subject) => <SelectItem key={subject} value={subject}>{subject}</SelectItem>)}</SelectContent></Select>
+    </Field>
+    {showMathsExamFilter ? <Field className="w-full sm:w-40">
+      <FieldLabel htmlFor="mistakes-paper">Paper</FieldLabel>
+      <Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger id="mistakes-paper" className="w-full"><SelectValue>{activeMathsExamFilter === "all" ? "All papers" : activeMathsExamFilter === "exam-1" ? "Exam 1" : "Exam 2"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="exam-1">Exam 1</SelectItem><SelectItem value="exam-2">Exam 2</SelectItem></SelectContent></Select>
+    </Field> : null}
+  </>
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
     const startOfToday = new Date(now)
@@ -617,11 +615,10 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
         </DropdownMenu>
       </PageHeader>
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
-      <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      {tab !== "study" ? <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You're caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryProgress.matureCards} mature</p></div></div>
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
-      </section>
-      {showMathsExamFilter ? <div className="flex flex-wrap items-center gap-2"><Select value={activeMathsExamFilter} onValueChange={(value) => { setMathsExamFilter((value ?? "all") as MathsExamFilter); resetFilters() }}><SelectTrigger aria-label="Filter maths mistake cards by exam"><SelectValue>{activeMathsExamFilter === "all" ? "All exams" : activeMathsExamFilter === "exam-1" ? "Exam 1 · Tech-free" : "Exam 2 · Tech-active"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All exams</SelectItem><SelectItem value="exam-1">Exam 1 · Tech-free</SelectItem><SelectItem value="exam-2">Exam 2 · Tech-active</SelectItem></SelectContent></Select></div> : null}
+      </section> : null}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>
@@ -630,11 +627,12 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
           {AI_ENABLED ? <TabsTrigger value="alternative">Alternatives{alternativeCount ? ` (${alternativeCount})` : ""}</TabsTrigger> : null}
           <TabsTrigger value="insights">{AI_ENABLED ? "Insights" : "Progress"}</TabsTrigger>
         </TabsList>
+        {tab !== "study" ? <div className="mt-4 flex flex-wrap items-end gap-3" role="group" aria-label="Mistake conditions">{conditions}</div> : null}
         <TabsContent value="insights" className="mt-4 grid gap-4">
           <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} paperFiltered={showMathsExamFilter} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
           <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (

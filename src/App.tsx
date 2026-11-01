@@ -201,9 +201,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const referenceLoadFailed = [referencesStatus, studiesStatus, scalingStatus].includes("error")
   const referencesLoading = referencesStatus === "loading" || studiesStatus === "loading"
 
-  const selectedSubject = chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
+  // Mistakes picks its own subject on the page, so it runs through the same scoping without touching the global choice.
+  const [mistakesSubject, setMistakesSubject] = useState("all")
+  const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
   const globalView = ["calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
+  const showSubjectMenu = !globalView && view !== "mistakes"
+  const mistakeSubjects = useMemo(() => {
+    const attemptSubjects = new Map(data.attempts.map((attempt) => [attempt.id, attempt.subject]))
+    return studySubjectOptions(data.mistakes.flatMap((mistake) => attemptSubjects.get(mistake.attemptId) ?? mistake.subject ?? [])).map((subject) => subject.name).toSorted()
+  }, [data.attempts, data.mistakes])
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
   const pageData = useMemo(() => subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data, [subjectScoped, workspace, data])
   const pageReferences = useMemo(() => subjectScoped ? references.filter((reference) => sameStudySubject(reference.studyName, selectedSubject)) : references, [subjectScoped, references, selectedSubject])
@@ -812,7 +819,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             and being sticky at the top edge makes iOS Safari tint the status bar from it instead of blurring it. */}
         {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
           <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
-          {!globalView && subjectMenu}
+          {showSubjectMenu && subjectMenu}
           <Button variant="ghost" size="icon" aria-label="Friends" aria-current={view === "friends" ? "page" : undefined} className={`ml-auto ${view === "friends" ? "text-foreground" : "text-muted-foreground"}`} onClick={() => setView("friends")}><UsersRound aria-hidden /></Button>
           <Button variant="ghost" size="icon" aria-label="Search" className="text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
@@ -821,7 +828,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
-          {!globalView && <div className="-ml-2.5 mb-1 max-lg:hidden">{subjectMenu}</div>}
+          {showSubjectMenu && <div className="-ml-2.5 mb-1 max-lg:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
             <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>
@@ -866,7 +873,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               <Button size="sm" variant="outline" onClick={reloadReferences}>Retry</Button>
             </Alert>
           ) : null}
-          <div key={`${view}:${subjectScoped ? selectedSubject : "all"}`} className={`page-enter ${view === "chat" ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+          <div key={`${view}:${subjectScoped && view !== "mistakes" ? selectedSubject : "all"}`} className={`page-enter ${view === "chat" ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           {view === "exams" ? (
             <Suspense fallback={PAGE_LOADING}>
               <ExamsPage
@@ -902,7 +909,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "focus" ? <Suspense fallback={PAGE_LOADING}><StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /></Suspense> : null}
           {view === "stoplight" ? <Suspense fallback={PAGE_LOADING}><StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /></Suspense> : null}
           {view === "goals" ? <Suspense fallback={PAGE_LOADING}><GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /></Suspense> : null}
-          {view === "mistakes" ? <Suspense fallback={PAGE_LOADING}><MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
+          {view === "mistakes" ? <Suspense fallback={PAGE_LOADING}><MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={setMistakesSubject} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
             setData((current) => {
               const now = Date.now()
               const changes = reduceMistakeReviews(subjectScoped ? subjectWorkspace(current, selectedSubject).mistakes : current.mistakes, days, target, now)

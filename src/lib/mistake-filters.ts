@@ -25,7 +25,7 @@ export function getMathsExamPaper(paper: string): 1 | 2 | null {
 
 export function matchesMathsExamFilter(attempt: ExamAttempt | undefined, filter: MathsExamFilter) {
   if (filter === "all") return true
-  if (!attempt || !isTechSplitMathsSubject(attempt.subject)) return false
+  if (!attempt) return false
 
   const paperNumber = getAttemptMathsPaper(attempt)
   return paperNumber === (filter === "exam-1" ? 1 : 2)

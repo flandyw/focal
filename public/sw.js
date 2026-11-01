@@ -22,16 +22,28 @@ function fetchAndCache(event, key) {
   return network
 }
 
+// A shell that can't boot the app must never open: its page can't run the update check that would replace it.
+const bootable = (html) => html.includes('id="root"')
+
 // Swaps in a new shell only after its entry chunks are cached, so a deploy never opens on a blank screen while they download.
 async function refreshShell() {
   const response = await fetch("/", { cache: "no-store" })
   if (!response.ok) return response
   const copy = response.clone()
   const html = await response.clone().text()
+  if (!bootable(html)) return response
   const assets = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1]))]
   await (await caches.open(CACHE)).addAll(assets)
   await put("/", copy)
   return response
+}
+
+// Cache first so launch never waits on the network; the worker refreshes the shell itself so a broken launch still heals.
+async function openShell(event) {
+  const refreshed = refreshShell()
+  event.waitUntil(refreshed.catch(() => undefined))
+  const cached = await caches.match("/")
+  return cached && bootable(await cached.clone().text()) ? cached : refreshed
 }
 
 self.addEventListener("fetch", (event) => {
@@ -40,9 +52,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== self.location.origin) return
   // API calls stay live; Vite dev modules must never be served stale.
   if (["/api/", "/src/", "/node_modules/", "/@"].some((prefix) => url.pathname.startsWith(prefix))) return
-  // Cache first so launch never waits on the network; the page's update check refreshes the shell for the next launch.
   if (request.mode === "navigate") {
-    event.respondWith(caches.match("/").then((cached) => cached ?? refreshShell()).catch(() => Response.error()))
+    event.respondWith(openShell(event).catch(() => Response.error()))
     return
   }
   if (url.pathname === "/") {

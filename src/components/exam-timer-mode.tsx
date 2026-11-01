@@ -1,3 +1,4 @@
+import { isTwoPaperMathematics } from "../lib/study-score"
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Check, ExternalLink, LogOut, MoreHorizontal, Pause, Play, SkipForward, SlidersHorizontal, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -181,6 +182,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
       .map((item) => formatReferenceName(item.name)))].toSorted(),
     [references, subject],
   )
+  const showPaper = isTwoPaperMathematics(subject) || paperOptions.length === 0 || paperOptions.some((option) => /\b(?:exam|paper)\s*[12]\b/i.test(option))
   const clock = session ? getExamClock(session, now.getTime()) : null
   const paused = session?.pausedAt !== undefined
 
@@ -201,7 +203,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
   function start(event: FormEvent) {
     event.preventDefault()
     onSessionChange({
-      subject: subject.trim(), provider: provider.trim(), title: formatExamTitle(provider, examYear, subject), examYear, paper: paper.trim(),
+      subject: subject.trim(), provider: provider.trim(), title: formatExamTitle(provider, examYear, subject), examYear, paper: showPaper ? paper.trim() : "Exam",
       id: crypto.randomUUID(), phase: readingMinutes > 0 ? "reading" : "writing",
       readingMinutes, writingMinutes, marks, startedAt: now.getTime(), pausedSeconds: 0, workspaceItems: [],
     })
@@ -305,11 +307,11 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                     <FieldLabel htmlFor="exam-mode-subject">Subject</FieldLabel>
                     <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} id="exam-mode-subject" allowCustom required placeholder="Search or enter a subject" />
                   </Field>
-                  <Field>
+                  {showPaper && <Field>
                     <FieldLabel htmlFor="exam-mode-paper">Paper</FieldLabel>
                     <Input id="exam-mode-paper" list="exam-mode-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="e.g. Exam 1" />
                     <datalist id="exam-mode-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
-                  </Field>
+                  </Field>}
                   <Field>
                     <FieldLabel htmlFor="exam-mode-provider">Provider</FieldLabel>
                     <Input id="exam-mode-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />

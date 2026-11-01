@@ -1,3 +1,4 @@
+import { isTwoPaperMathematics } from "../lib/study-score"
 import { useMemo, useState, type FormEvent } from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { Button } from "./ui/button"
@@ -65,6 +66,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
       .map((item) => formatReferenceName(item.name)))].toSorted(),
     [references, subject],
   )
+  const showPaper = isTwoPaperMathematics(subject) || paperOptions.length === 0 || paperOptions.some((option) => /\b(?:exam|paper)\s*[12]\b/i.test(option))
   const reference = findAttemptReferenceForYear({ subject, paper }, references, comparisonYear)
   const scaled = reference && rawMax > 0 ? analyseAttempt({ rawScore, rawMax }, reference) : null
   function changePaper(next: string) {
@@ -91,7 +93,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
     event.preventDefault()
     const logMistake = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") === "mistake"
     const scoreError = validateAttempt({ rawScore, rawMax })
-    if (!subject.trim() || !paper.trim()) {
+    if (!subject.trim() || (showPaper && !paper.trim())) {
       setError("Subject and paper are required.")
       return
     }
@@ -111,7 +113,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
       provider: provider.trim() || "Other",
       title: formatExamTitle(provider, examYear, subject),
       examYear,
-      paper: paper.trim(),
+      paper: showPaper ? paper.trim() : (initialAttempt?.subject === subject ? initialAttempt.paper : "Exam"),
       completedAt,
       rawScore,
       rawMax,
@@ -150,11 +152,11 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
                 <FieldLabel htmlFor="subject">Subject</FieldLabel>
                 <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} id="subject" allowCustom required placeholder="Search or enter a subject" />
               </Field>
-              <Field>
+              {showPaper && <Field>
                 <FieldLabel htmlFor="paper">Paper</FieldLabel>
                 <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" required />
                 <datalist id="exam-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
-              </Field>
+              </Field>}
               <Field>
                 <FieldLabel htmlFor="provider">Provider</FieldLabel>
                 <Input id="provider" value={provider} onChange={(event) => setProvider(event.target.value)} />

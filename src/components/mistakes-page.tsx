@@ -1,5 +1,6 @@
 import { WorkspaceSplit } from "./workspace-layout"
-import { sameStudySubject } from "../lib/studySubjects"
+import { sameStudySubject, studySubjectOptions } from "../lib/studySubjects"
+import { isTwoPaperMathematics } from "../lib/study-score"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ArrowRight, BookOpenCheck, ChevronDown, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
@@ -48,7 +49,7 @@ import { MistakeBulkEditDialog } from "./mistake-bulk-edit-dialog"
 import { MistakeExportDialog } from "./mistake-export-dialog"
 import { exportMistakes, type ExportFormat } from "../lib/mistake-export"
 import { MistakeRoundTripDialog } from "./mistake-roundtrip-dialog"
-import { isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
+import { getAttemptMathsPaper, isTechSplitMathsSubject, matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
 import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import {
   getMistakeFieldValues,
@@ -162,7 +163,7 @@ function AnswerPanel({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
+function StudyQueue({ allMistakes, preferences, mistakes, paperFiltered, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; paperFiltered: boolean; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
   const tick = useTickingNow(30_000)
   const [latestReviewAt, setLatestReviewAt] = useState(0)
   const now = new Date(Math.max(tick.getTime(), latestReviewAt))
@@ -171,14 +172,31 @@ function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onR
   const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[]; weekly: boolean; week: string; size: number; initialXP: number } | null>(null)
   const [feedback, setFeedback] = useState("")
   const [celebration, setCelebration] = useState(0)
-  const due = getDueMistakes(mistakes, now)
+  const [scope, setScope] = useState<"due" | "all">("due")
+  const [subject, setSubject] = useState("all")
+  const [paper, setPaper] = useState<MathsExamFilter>("all")
+  const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
+  const subjectOf = (mistake: Mistake) => attemptMap.get(mistake.attemptId)?.subject ?? mistake.subject
+  const subjectOptions = studySubjectOptions(mistakes.flatMap((mistake) => subjectOf(mistake) ?? [])).toSorted((first, second) => first.name.localeCompare(second.name))
+  const paperSubject = subject !== "all" ? subject : subjectOptions.length === 1 ? subjectOptions[0].name : null
+  // The page-level maths filter already narrows `mistakes`, so a second paper picker would only repeat it.
+  const showPaper = !paperFiltered && paperSubject !== null && isTwoPaperMathematics(paperSubject)
+  const activePaper = showPaper ? paper : "all"
+  const pool = mistakes.filter((mistake) => {
+    const attempt = attemptMap.get(mistake.attemptId)
+    return (subject === "all" || sameStudySubject(subjectOf(mistake), subject))
+      && (activePaper === "all" || (attempt !== undefined && getAttemptMathsPaper(attempt) === (activePaper === "exam-1" ? 1 : 2)))
+  })
+  // The latest possible Date makes every active card due, keeping the earliest-due-first order.
+  const queue = getDueMistakes(pool, scope === "all" ? new Date(8.64e15) : now)
+  const round = scope === "all" ? queue : queue.slice(0, settings.practiceTarget)
   const mistakeMap = new Map(allMistakes.map((mistake) => [mistake.id, mistake]))
   const remaining = session?.ids.filter((id) => mistakeMap.has(id) && !mistakeMap.get(id)!.suspended) ?? []
   const current = remaining.length ? mistakeMap.get(remaining[0]) : undefined
   const completed = session?.ratings.length ?? 0
-  const nextDue = mistakes.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
+  const nextDue = pool.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
 
-  function start(cards = due.slice(0, settings.practiceTarget), weekly = false) {
+  function start(cards = round, weekly = false) {
     if (!cards.length) return
     setSession({ ids: cards.map((mistake) => mistake.id), ratings: [], weekly, week: progress.week, size: weekly ? progress.weeklyTarget : cards.length, initialXP: progress.xp })
     setFeedback("")
@@ -208,10 +226,15 @@ function StudyQueue({ allMistakes, preferences, mistakes, attempts, studies, onR
       <div className="grid gap-2"><BookOpenCheck className="size-7 text-primary" /><h2 className="text-2xl font-semibold">{session ? "Session complete" : "Make the next attempt count"}</h2><p className="text-muted-foreground">{session ? `${completed} ${completed === 1 ? "mistake" : "mistakes"} reviewed · +${Math.max(0, progress.xp - session.initialXP)} XP` : "Recall your approach, compare it with the correction, then rate your recall."}</p></div>
       {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
       {session && <dl className="grid grid-cols-4 gap-3 border-y py-4">{RATING_OPTIONS.map(({ rating, label }) => <div key={rating}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-xl font-semibold">{session.ratings.filter((value) => value === rating).length}</dd></div>)}</dl>}
-      <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!due.length}><Play />{session ? "Another round" : `Start ${Math.min(due.length, settings.practiceTarget!)} cards`}</Button>{!session && <Button variant="outline" disabled={!due.length} onClick={() => start(due.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
-      {!session && <p className="text-xs text-muted-foreground">{due.length ? `${due.length} due in your library. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : "Add a mistake to start practising."}</p>}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Review conditions">
+        <Select value={scope} onValueChange={(value) => setScope((value ?? "due") as "due" | "all")}><SelectTrigger aria-label="Cards to review"><SelectValue>{REVIEW_FILTER_LABELS[scope]}</SelectValue></SelectTrigger><SelectContent><SelectItem value="due">{REVIEW_FILTER_LABELS.due}</SelectItem><SelectItem value="all">{REVIEW_FILTER_LABELS.all}</SelectItem></SelectContent></Select>
+        {subjectOptions.length > 1 ? <Select value={subject} onValueChange={(value) => setSubject(value ?? "all")}><SelectTrigger aria-label="Subject to review"><SelectValue>{subject === "all" ? "All subjects" : subject}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All subjects</SelectItem>{subjectOptions.map((option) => <SelectItem key={option.id} value={option.name}>{option.name}</SelectItem>)}</SelectContent></Select> : null}
+        {showPaper ? <Select value={paper} onValueChange={(value) => setPaper((value ?? "all") as MathsExamFilter)}><SelectTrigger aria-label="Paper to review"><SelectValue>{paper === "all" ? "All papers" : paper === "exam-1" ? "Exam 1" : "Exam 2"}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="exam-1">Exam 1</SelectItem><SelectItem value="exam-2">Exam 2</SelectItem></SelectContent></Select> : null}
+      </div>
+      <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!round.length}><Play />{session ? "Another round" : `Start ${round.length} cards`}</Button>{!session && <Button variant="outline" disabled={!queue.length} onClick={() => start(queue.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
+      {!session && <p className="text-xs text-muted-foreground">{queue.length ? scope === "all" ? `${queue.length} active ${queue.length === 1 ? "card" : "cards"}, earliest due first. Reviewing early reschedules a card.` : `${queue.length} due. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : mistakes.length ? "No cards match these conditions." : "Add a mistake to start practising."}</p>}
     </section>
-    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
+    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={pool} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
   </div>
 
   return <div className="relative mx-auto grid w-full max-w-4xl gap-5">
@@ -611,7 +634,7 @@ export function MistakesPage({ workspaceSubject, onSaveReviewPreferences, onRedu
           <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} key={`${activeSubject}:${activeMathsExamFilter}`} mistakes={visibleMistakes} paperFiltered={showMathsExamFilter} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
           <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (

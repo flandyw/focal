@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { count } from "../lib/utils"
 import { ArrowLeft, ArrowRight, RotateCcw, Shuffle } from "lucide-react"
 import { MarkdownPreview } from "./markdown-preview"
 import { MistakeAttachments } from "./mistake-attachments"
@@ -22,7 +23,7 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         <DialogDescription>Explore answers at your own pace. Practice does not change your review schedule.</DialogDescription>
       </DialogHeader>
       {finished ? <div className="grid justify-items-center gap-5 py-10 text-center">
-        <p className="font-heading text-3xl font-normal">{cards.length} cards explored</p>
+        <p className="font-heading text-3xl font-normal">{count(cards.length, "card")} explored</p>
         <p className="text-muted-foreground">Come back to these whenever you need a refresher.</p>
         <div className="flex gap-2"><Button variant="outline" onClick={() => { go(0); setFinished(false) }}><RotateCcw />Start again</Button><Button onClick={onClose}>Back to library</Button></div>
       </div> : card ? <div className="grid gap-5">

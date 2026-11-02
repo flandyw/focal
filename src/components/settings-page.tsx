@@ -2,7 +2,8 @@ import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { canPromptInstall, onInstallChange, promptInstall } from "../lib/pwa"
 import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
 import { GatewaySettings } from "./gateway-settings"
@@ -58,6 +59,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   onReplayOnboarding: () => void
   onStartTour: () => void
 }) {
+  const canInstall = useSyncExternalStore(onInstallChange, canPromptInstall)
   const auth = useChatGPT()
   const [email, setEmail] = useState(sync.user?.email ?? "")
   const [password, setPassword] = useState("")
@@ -370,7 +372,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   <h3 className="font-medium">Install Focal</h3>
                   <p className="text-muted-foreground"><strong className="text-foreground">iPhone or iPad:</strong> open the Share menu, choose Add to Home Screen, then Add. Open Focal from its new icon. If offered, keep Open as Web App enabled.</p>
                   <p className="text-muted-foreground"><strong className="text-foreground">Android:</strong> open your browser’s menu and choose Install app or Add to Home screen.</p>
-                  <p className="text-muted-foreground">An internet connection is needed to load Focal. Your existing saved study data stays in this browser; sign in to sync it across devices or app installations.</p>
+                  {canInstall ? <Button onClick={() => void promptInstall()}><Download />Install Focal</Button> : null}
+                  <p className="text-muted-foreground">Once opened, Focal starts without an internet connection, and changes sync when you’re back online. Your existing saved study data stays in this browser; sign in to sync it across devices or app installations.</p>
                 </div>
                 <div className="space-y-2 border-t pt-5">
                   <h3 className="font-medium">Study reminders</h3>

@@ -71,7 +71,7 @@ function CellDetails({ subject, area, cell }: { subject: string; area: string; c
   const responsible = cell.questions.filter((question) => question.missedMarks > 0 || question.mistakeCategories.length > 0)
   const blindSpots = responsible.filter((question) => question.confidence === "high" && question.missedMarks > 0).length
   return (
-    <DialogContent className="max-h-[min(52rem,calc(100vh-2rem))] overflow-y-auto sm:max-w-2xl">
+    <DialogContent className="max-h-[min(52rem,calc(100dvh-2rem))] overflow-y-auto sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>{area} · Exam {cell.paper}</DialogTitle>
         <DialogDescription>{subject} · {fromMistakes ? `${formatNumber(cell.missedMarks)} marks lost across ${cell.mistakeCount} logged mistake${cell.mistakeCount === 1 ? "" : "s"}` : `${formatMastery(cell.mastery)} mastery from ${cell.questionCount} marked question${cell.questionCount === 1 ? "" : "s"}`}</DialogDescription>

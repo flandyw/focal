@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS = {
   longBreakEvery: 4,
   soundEnabled: true,
   notificationsEnabled: true,
+  keepScreenOn: true,
   autoStartBreak: true,
   autoStartFocus: false,
   dailyGoal: 4,
@@ -51,6 +52,7 @@ export interface TimerSettings {
   longBreakEvery: number
   soundEnabled: boolean
   notificationsEnabled: boolean
+  keepScreenOn: boolean
   autoStartBreak: boolean
   autoStartFocus: boolean
   dailyGoal: number
@@ -187,6 +189,7 @@ function parseSettings(value: unknown): TimerSettings {
     longBreakEvery: clampLongBreakInterval(parsed.longBreakEvery),
     soundEnabled: booleanOr(parsed.soundEnabled, DEFAULT_SETTINGS.soundEnabled),
     notificationsEnabled: booleanOr(parsed.notificationsEnabled, DEFAULT_SETTINGS.notificationsEnabled),
+    keepScreenOn: booleanOr(parsed.keepScreenOn, DEFAULT_SETTINGS.keepScreenOn),
     autoStartBreak: booleanOr(parsed.autoStartBreak, DEFAULT_SETTINGS.autoStartBreak),
     autoStartFocus: booleanOr(parsed.autoStartFocus, DEFAULT_SETTINGS.autoStartFocus),
     dailyGoal: clampDailyGoal(parsed.dailyGoal ?? DEFAULT_SETTINGS.dailyGoal),

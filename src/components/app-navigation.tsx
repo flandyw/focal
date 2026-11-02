@@ -34,6 +34,7 @@ import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "../lib/navigation"
 import type { useStudySessionSync } from "../lib/study-session-sync"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import type { SyncStatus } from "../lib/sync"
+import { buzz } from "../lib/mobile"
 import { cn } from "../lib/utils"
 import { useAppearance } from "../lib/appearance"
 
@@ -64,15 +65,20 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
       className={`relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-[background-color,padding,color] duration-200 ease-(--ease-spring) ${active ? "shrink-0 bg-accent px-4 font-semibold text-accent-foreground" : "flex-1 text-muted-foreground"}`}>
       <Icon aria-hidden className="size-5 shrink-0" strokeWidth={active ? 2 : 1.5} />
       <span className={active ? "whitespace-nowrap" : "sr-only"}>{label}</span>
-      {badge > 0 ? <span aria-label={`${badge} due`} className={`absolute top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "left-7 ring-accent" : "left-1/2 ml-1 ring-card"}`}>{badge > 99 ? "99+" : badge}</span> : null}
+      {badge > 0 ? <span className={`absolute ${active ? "" : "top-1"} min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "right-1 -top-1 ring-card" : "left-1/2 ml-1 ring-card"}`}><span aria-hidden>{badge > 99 ? "99+" : badge}</span><span className="sr-only">{badge} due</span></span> : null}
     </button>
   )
   return (
     <nav aria-label="Main" className="mobile-tabbar pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-[max(1rem,env(safe-area-inset-left))] lg:hidden">
       <div className="pointer-events-auto flex w-full max-w-sm items-center gap-1 rounded-full border border-border bg-card p-1.5 shadow-lg shadow-black/10 dark:shadow-black/40">
-      {MOBILE_TABS.map((item) => tab(item.id, item.label, NAVIGATION_ICONS[item.id], !openMobile && view === item.id, () => { setOpenMobile(false); onViewChange(item.id) },
+      {MOBILE_TABS.map((item) => tab(item.id, item.label, NAVIGATION_ICONS[item.id], !openMobile && view === item.id, () => {
+        setOpenMobile(false)
+        // Tapping the current tab goes back to its top, as every phone app does.
+        if (view === item.id) window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+        else { buzz(); onViewChange(item.id) }
+      },
         item.id === "mistakes" ? dueMistakes : item.id === "calendar" ? plannedTasks : 0))}
-      {tab("more", "More", Menu, openMobile || !inTabs, () => setOpenMobile(!openMobile))}
+      {tab("more", "More", Menu, openMobile || !inTabs, () => { buzz(); setOpenMobile(!openMobile) })}
       </div>
     </nav>
   )

@@ -1,6 +1,9 @@
 const CACHE = "focal-v1"
 
-self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()))
+self.addEventListener("install", (event) => event.waitUntil((async () => {
+  await (await caches.open(CACHE)).addAll(["/icon-192.png", "/badge-96.png"]).catch(() => undefined)
+  await self.skipWaiting()
+})()))
 self.addEventListener("activate", (event) => event.waitUntil((async () => {
   for (const key of await caches.keys()) if (key !== CACHE) await caches.delete(key)
   await self.clients.claim()
@@ -21,6 +24,9 @@ function fetchAndCache(event, key) {
   event.waitUntil(network.then((response) => put(key, response.clone())).catch(() => undefined))
   return network
 }
+
+// Only reachable before the shell's first successful download.
+const OFFLINE_PAGE = `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Focal</title><body style="display:grid;place-content:center;min-height:90vh;margin:0;padding:1.5rem;font:1rem system-ui;text-align:center;color:#555;background:#f6f4ee"><p>Focal needs a connection the first time it opens.</p><button onclick="location.reload()" style="font:inherit;padding:.75rem 1.25rem">Try again</button>`
 
 // A shell that can't boot the app must never open: its page can't run the update check that would replace it.
 const bootable = (html) => html.includes('id="root"')
@@ -53,7 +59,7 @@ self.addEventListener("fetch", (event) => {
   // API calls stay live; Vite dev modules must never be served stale.
   if (["/api/", "/src/", "/node_modules/", "/@"].some((prefix) => url.pathname.startsWith(prefix))) return
   if (request.mode === "navigate") {
-    event.respondWith(openShell(event).catch(() => Response.error()))
+    event.respondWith(openShell(event).catch(() => new Response(OFFLINE_PAGE, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } })))
     return
   }
   if (url.pathname === "/") {
@@ -70,30 +76,39 @@ self.addEventListener("fetch", (event) => {
   }))
 })
 
+const PATHS = ["/", "/?timer=calendar", "/?view=friends", "/?timer=sac", "/?timer=focus", "/?timer=exam"]
+
 self.addEventListener("push", (event) => {
   let message
   try { message = event.data?.json() } catch { /* Show a fallback notification for malformed push data. */ }
-  const path = ["/?timer=calendar", "/?view=friends", "/?timer=sac", "/?timer=focus", "/?timer=exam"].includes(message?.path) ? message.path : "/"
-  event.waitUntil(self.registration.showNotification("Focal", {
+  event.waitUntil(self.registration.showNotification(typeof message?.title === "string" ? message.title.slice(0, 80) : "Focal", {
     body: typeof message?.body === "string" ? message.body.slice(0, 200) : "You have a study update.",
     tag: typeof message?.tag === "string" ? message.tag : "focal-update",
-    icon: "/icon-192.png", badge: "/icon-192.png", data: { path },
+    icon: "/icon-192.png", badge: "/badge-96.png", vibrate: [200, 100, 200], timestamp: Date.now(),
+    data: { path: PATHS.includes(message?.path) ? message.path : "/" },
   }))
 })
+
+// The browser rotated this device's subscription; an open app re-registers it, a closed one does on its next launch.
+self.addEventListener("pushsubscriptionchange", (event) => event.waitUntil((async () => {
+  for (const client of await self.clients.matchAll({ type: "window", includeUncontrolled: true })) client.postMessage({ type: "focal:push-changed" })
+})()))
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close()
   const requested = event.notification.data?.path
-  const path = ["/", "/?timer=calendar", "/?view=friends", "/?timer=sac", "/?timer=focus", "/?timer=exam"].includes(requested) ? requested : "/?timer=focus"
+  const path = PATHS.includes(requested) ? requested : "/"
   const url = new URL(path, self.location.origin).href
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true })
     const ours = windows.filter((client) => new URL(client.url).origin === self.location.origin)
     const existing = ours.find((client) => client.focused) ?? ours[0]
-    if (existing) {
+    try {
+      if (!existing) throw new Error("No open window")
       existing.postMessage({ type: "focal:notification-click", path })
       await existing.focus()
-    } else {
+    } catch {
+      // No window, or iOS refused to focus a suspended one: a fresh launch still lands on the right page.
       await self.clients.openWindow(url)
     }
   })())

@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react"
+import { count } from "../lib/utils"
 import { BarChart3, Check, ExternalLink, FileCheck2, Play, Search } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
@@ -167,7 +168,7 @@ export function ExamLibrary({
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
         </Select>
         {(query || subject !== "all" || completion !== "all") ? <Button variant="ghost" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button> : null}
-        <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{filtered.length} exams · {formatReferenceFreshness(generatedAt)}</span>
+        <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{count(filtered.length, "exam")} · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         {filtered.slice(0, visibleCount).map((exam) => {

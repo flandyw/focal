@@ -3,6 +3,7 @@ import type { GroupImperativeHandle } from "react-resizable-panels"
 import { savePaneSize, useAppearance } from "../../lib/appearance"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
+import { useBackClose } from "../../lib/mobile"
 import { cn } from "../../lib/utils"
 import { Button } from "./button"
 import { useIsMobile } from "../../hooks/use-mobile"
@@ -40,6 +41,11 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   )
 }
 
+function SheetBack({ close }: { close: React.RefObject<HTMLButtonElement | null> }) {
+  useBackClose(close)
+  return <SheetPrimitive.Close ref={close} hidden aria-hidden tabIndex={-1} />
+}
+
 function SheetContent({
   className,
   children,
@@ -56,6 +62,7 @@ function SheetContent({
   const { editorPane } = useAppearance()
   const group = React.useRef<GroupImperativeHandle>(null)
   const canResize = resizable && side === "right" && !isMobile
+  const close = React.useRef<HTMLButtonElement>(null)
 
   React.useEffect(() => {
     if (canResize) group.current?.setLayout({ "sheet-content": editorPane, "sheet-space": 100 - editorPane })
@@ -66,6 +73,7 @@ function SheetContent({
       <SheetOverlay />
       <SheetPrimitive.Popup
         data-side={side}
+        data-slot="sheet-content"
         className={cn(
           "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-3/4 data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-3/4 data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem] data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
           canResize && "pointer-events-none gap-0 border-0 bg-transparent shadow-none data-[side=right]:w-full data-[side=right]:border-l-0 data-[side=right]:sm:max-w-none",
@@ -74,6 +82,7 @@ function SheetContent({
         )}
         {...props}
       >
+        <SheetBack close={close} />
         {canResize ? (
           <React.Suspense fallback={<div role="status" className="pointer-events-auto ml-auto h-full w-full max-w-lg bg-popover p-6"><SheetPrimitive.Title>Loading editor…</SheetPrimitive.Title></div>}>
           <ResizablePanelGroup groupRef={group} orientation="horizontal" className="h-full" defaultLayout={{ "sheet-content": editorPane, "sheet-space": 100 - editorPane }} onLayoutChanged={(layout, meta) => {
@@ -99,7 +108,7 @@ function SheetContent({
             render={
               <Button
                 variant="ghost"
-                className={cn("absolute top-3 right-3", canResize && "pointer-events-auto")}
+                className={cn("absolute top-[calc(0.75rem+env(safe-area-inset-top))] right-3", canResize && "pointer-events-auto")}
                 size="icon-sm"
               />
             }
@@ -117,7 +126,7 @@ function SheetContent({
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex shrink-0 flex-col gap-2 border-b bg-muted/30 p-6 pr-12", className)}
+      className={cn("flex shrink-0 flex-col gap-2 border-b bg-muted/30 p-6 pt-[max(1.5rem,calc(0.75rem+env(safe-area-inset-top)))] pr-12 max-sm:p-4 max-sm:pt-[max(1rem,calc(0.5rem+env(safe-area-inset-top)))] max-sm:pr-12", className)}
       {...props}
     />
   )
@@ -126,7 +135,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
 function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-2 border-t bg-popover p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]", className)}
+      className={cn("sticky bottom-0 z-10 mt-auto flex shrink-0 flex-col gap-2 border-t bg-popover p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:flex-row max-sm:flex-wrap max-sm:p-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:*:flex-1", className)}
       {...props}
     />
   )
@@ -150,7 +159,7 @@ function SheetDescription({
 }: SheetPrimitive.Description.Props) {
   return (
     <SheetPrimitive.Description
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("max-sm:sr-only text-sm text-muted-foreground", className)}
       {...props}
     />
   )

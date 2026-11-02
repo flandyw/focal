@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { count } from "../lib/utils"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
@@ -98,8 +99,8 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
-            {promptItems ? <p role="status" className="text-xs text-muted-foreground">Pasted ratings use the {promptItems.length} items in your last copied prompt.</p> : null}
-            <FieldDescription>Includes {selected.length} items with your current ratings, open mistakes and marks{worksheet ? ", plus the worksheet template" : ""}.</FieldDescription>
+            {promptItems ? <p role="status" className="text-xs text-muted-foreground">Pasted ratings use the {count(promptItems.length, "item")} in your last copied prompt.</p> : null}
+            <FieldDescription>Includes {count(selected.length, "item")} with your current ratings, open mistakes and marks{worksheet ? ", plus the worksheet template" : ""}.</FieldDescription>
           </Field>
           <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="stoplight-revise-json">{worksheet ? "3. Upload your completed worksheet, then paste the marking reply" : `3. Say "done", then paste the chatbot's reply`}</FieldLabel>

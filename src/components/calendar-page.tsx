@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
+import { swipe } from "../lib/mobile"
 import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
@@ -365,7 +366,7 @@ export function CalendarPage({
           <KindLegend />
         </section>
         } secondary={
-        <aside className="calendar-day-pane min-w-0">
+        <aside className="calendar-day-pane min-w-0" {...swipe(() => selectDay(shiftDay(selected, -1)), () => selectDay(shiftDay(selected, 1)))}>
           <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] calendar-day-card">
             <CardHeader className="shrink-0 gap-2 pb-1">
               <div className="flex items-start justify-between gap-2">

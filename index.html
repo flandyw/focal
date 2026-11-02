@@ -1,21 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#f6f4ee" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Focal" />
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Track VCE practice exams, VCAA comparisons, and revision mistakes." />
-    <link rel="preload" href="/vcaa-grade-distributions.json" as="fetch" type="application/json" crossorigin="anonymous" fetchpriority="high" />
     <link rel="preload" href="/fonts/newsreader-latin.woff2" as="font" type="font/woff2" crossorigin />
     <title>Focal</title>
+    <style>
+      html { background: #f6f4ee; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+      .boot { position: fixed; inset: 0; display: grid; place-items: center; color: #8a8a8a; font: 500 2.75rem/1 Georgia, serif; letter-spacing: -.06em; animation: boot-in .2s .25s both; }
+      @keyframes boot-in { from { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .boot { animation: none; } }
+    </style>
+    <!-- main.tsx records the resolved background, so a dark launch never flashes the light default. -->
+    <script>
+      try {
+        var bootBackground = localStorage.getItem("focal:boot-background")
+        if (bootBackground) {
+          document.documentElement.style.background = bootBackground
+          document.querySelector('meta[name="theme-color"]').content = bootBackground
+        }
+      } catch (error) { /* Storage may be unavailable; the default background still paints. */ }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot" aria-hidden="true">focal.</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

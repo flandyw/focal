@@ -18,6 +18,17 @@ export const MISTAKES_PDF_ENDPOINT = CHATGPT_BASE_PATH.replace(/\/chatgpt$/, "/m
 export async function downloadExamFile(blob: Blob, name: string) {
   try {
     if (examHost.download) return await examHost.download(blob, name)
+    // `<a download>` does nothing in an installed iPhone app; the share sheet reaches Files, Mail and AirDrop on any phone.
+    const file = new File([blob], name, { type: blob.type })
+    if (matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] })
+        return true
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return false
+        // Sharing lost its user activation to slow file generation; the plain download below still works there.
+      }
+    }
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url

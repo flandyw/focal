@@ -1,4 +1,6 @@
 import { WorkspaceSplit } from "./workspace-layout"
+import { buzz } from "../lib/mobile"
+import { count } from "../lib/utils"
 import { sameStudySubject } from "../lib/studySubjects"
 import { isTwoPaperMathematics } from "../lib/study-score"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
@@ -245,6 +247,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
   function rate(rating: ReviewRating) {
     if (!revealed || submitting.current) return
     submitting.current = true
+    buzz()
     try { onRate(rating, { confidence }) } catch (error) {
       submitting.current = false
       toast.error(error instanceof Error ? error.message : "Could not save your review. Try again.")
@@ -265,7 +268,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
     <article className="grid min-w-0 gap-5">
       <div className="overflow-hidden rounded-xl border bg-card">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
-          <div className="flex flex-wrap gap-2"><Badge variant="secondary">{mistake.category}</Badge><Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
+          <div className="flex flex-wrap gap-2"><Badge variant="secondary">{mistake.category}</Badge>{mistake.difficulty === undefined ? null : <Badge variant="outline">Difficulty {mistake.difficulty}/5</Badge>}{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
           <DropdownMenu><DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label="Review card actions" />}><MoreHorizontal /></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => onEdit(mistake)}><Pencil />Edit mistake</DropdownMenuItem><DropdownMenuItem onClick={() => onReimport(mistake)}><FileUp />Reimport with changes</DropdownMenuItem><DropdownMenuItem onClick={() => onToggleSuspend(mistake)}>Pause reviews</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
         </header>
         <div className="grid gap-5 p-5 sm:p-8">
@@ -277,8 +280,8 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
         </div>
       </div>
       {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
-      <footer className="sticky bottom-0 z-10 grid gap-2 rounded-xl border bg-background/95 p-3 backdrop-blur">
-        {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70">Space</kbd></Button>}
+      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-background/95 p-3 backdrop-blur">
+        {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-2 sm:py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70">Space</kbd></Button>}
       </footer>
     </article>
   )
@@ -306,7 +309,7 @@ function MistakeDetail({ mistake, attempt, studies, onEdit, onReimport, onToggle
         </div>
         <h2 className="text-xl leading-snug font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></h2>
         <ExamContext mistake={mistake} attempt={attempt} studies={studies} />
-        <div className="flex flex-wrap gap-2"><Badge variant="outline">{mistake.category}</Badge><Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
+        <div className="flex flex-wrap gap-2"><Badge variant="outline">{mistake.category}</Badge>{mistake.difficulty === undefined ? null : <Badge variant="outline">Difficulty {mistake.difficulty}/5</Badge>}{mistake.areaOfStudy ? <Badge variant="outline">{mistake.areaOfStudy}</Badge> : null}</div>
       </header>
       {mistake.questionText?.trim() ? <ProseField label="Question" value={mistake.questionText} /> : null}
       <MistakeAttachments attachments={mistake.attachments} />
@@ -333,8 +336,8 @@ function BrowseRow({ mistake, active, selected, now, onOpen, onSelect, onReimpor
       <Checkbox className="mt-1" checked={selected} onCheckedChange={() => onSelect()} aria-label={"Select " + mistake.question} />
       <Button variant="ghost" onClick={onOpen} aria-current={active ? "true" : undefined} className="grid h-auto min-w-0 grid-cols-1 justify-items-stretch gap-2 rounded p-0 text-left font-normal whitespace-normal hover:bg-transparent">
         <span className="line-clamp-2 break-words text-sm font-semibold"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>
-        <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy, mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`].filter(Boolean).join(" · ")}</span>
-        <span className={"text-xs tabular-nums " + (isDue ? "font-medium text-warning" : "text-muted-foreground")}>{mistake.suspended ? "Reviews paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}{mistake.marksLost !== undefined ? ` · ${mistake.marksLost} marks lost` : ""}</span>
+        <span className="text-xs text-muted-foreground">{[mistake.category, mistake.areaOfStudy, mistake.difficulty === undefined ? "" : `Difficulty ${mistake.difficulty}/5`].filter(Boolean).join(" · ")}</span>
+        <span className={"text-xs tabular-nums " + (isDue ? "font-medium text-warning" : "text-muted-foreground")}>{mistake.suspended ? "Reviews paused" : isDue ? "Due now" : `Due ${formatDueDate(schedule.dueAt)}`}{mistake.marksLost !== undefined ? ` · ${count(mistake.marksLost, "mark")} lost` : ""}</span>
       </Button>
       <Button size="icon-sm" variant="ghost" onClick={onReimport} aria-label={`Reimport with changes for ${mistake.question}`} title="Reimport with changes"><FileUp /></Button>
     </li>
@@ -668,7 +671,7 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
                                 {attempt?.title ? <span className="break-words text-xs text-muted-foreground">{attempt.title}</span> : null}
                               </span>
                               <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end justify-between gap-3 xl:col-auto xl:row-auto xl:flex-row xl:items-center xl:justify-end">
-                                <Badge variant="outline">{mistake.difficulty === undefined ? "Difficulty unrated" : `Difficulty ${mistake.difficulty}/5`}</Badge>
+                                {mistake.difficulty === undefined ? null : <Badge variant="outline">Difficulty {mistake.difficulty}/5</Badge>}
                                 <Badge variant="secondary">{stateLabel(schedule.state, schedule.resolved)}</Badge>
                                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                               </span>
@@ -831,7 +834,7 @@ function ReviewPacing({ data, onSave, onReduce }: { data: AppData; onSave: (pref
         {preferences.lighterUntil && Date.parse(preferences.lighterUntil) > now ? <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Lighter schedule until {new Date(preferences.lighterUntil).toLocaleDateString()}</p><Button variant="outline" onClick={() => onSave({ ...preferences, lighterUntil: undefined })}>End lighter period</Button></div> : null}
         <h3 className="font-medium">Reduce upcoming reviews</h3>
         <div className="grid gap-4 sm:grid-cols-2"><Label className="grid gap-2 text-sm">Next {days} days<Slider min={1} max={90} step={1} value={days} onValueChange={(value) => setDays(Number(value))} /></Label><Label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${target} scheduled questions per day`}<Slider min={0} max={50} step={1} value={target} onValueChange={(value) => setTarget(Number(value))} /></Label></div>
-        <p className="text-sm text-muted-foreground">{changes.size} questions will move to later dates. Overflow is spread beyond this period around existing reviews. A break resumes at up to 10 questions a day. Review history stays intact; you can still practise early. New reviews also respect this target during the period.</p>
+        <p className="text-sm text-muted-foreground">{count(changes.size, "question")} will move to later dates. Overflow is spread beyond this period around existing reviews. A break resumes at up to 10 questions a day. Review history stays intact; you can still practise early. New reviews also respect this target during the period.</p>
         <Button className="w-fit" variant="outline" onClick={() => onReduce(days, target)}>Start lighter period · move {changes.size} dates</Button>
       </div>
     </CardContent>

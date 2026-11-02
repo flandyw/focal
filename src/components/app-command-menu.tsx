@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { History, Plus, Search, Settings2, Timer, X, type LucideIcon } from "lucide-react"
 import type { AppView } from "../lib/app-view"
+import { useBackClose } from "../lib/mobile"
 import { ALL_NAVIGATION } from "../lib/navigation"
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "./ui/command"
 import { Button } from "./ui/button"
@@ -116,6 +117,12 @@ const mobileItemClass = "min-h-12 gap-3 rounded-sm px-3 py-2 text-[15px] data-se
 const mobileHeadingClass = "focal-eyebrow px-3 pt-4 pb-1.5 text-muted-foreground"
 
 /** Full-screen search for phones and tablets, where the sidebar input would sit inside the drawer. */
+function MobileSearchBack() {
+  const close = useRef<HTMLButtonElement>(null)
+  useBackClose(close)
+  return <DialogPrimitive.Close ref={close} hidden aria-hidden tabIndex={-1} />
+}
+
 export function MobileSearch({
   open,
   onOpenChange,
@@ -156,8 +163,9 @@ export function MobileSearch({
         <DialogPrimitive.Popup
           initialFocus={input}
           aria-label="Search"
-          className="fixed inset-0 z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)] text-foreground outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0"
+          className="fixed inset-x-0 top-0 bottom-(--keyboard-inset) z-50 flex flex-col bg-background pt-[env(safe-area-inset-top)] text-foreground outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4 data-closed:animate-out data-closed:fade-out-0"
         >
+          <MobileSearchBack />
           <Command className="min-h-0 flex-1 rounded-none! bg-transparent p-0">
             <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
               <Label className="h-11 min-w-0 flex-1 gap-2 rounded-sm bg-muted px-3 font-normal">

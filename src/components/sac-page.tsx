@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { CalendarClock, Clock3, MoreHorizontal, Pencil, Play, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { SacSheet } from "./sac-sheet"
@@ -18,6 +18,7 @@ import { useTickingNow } from "../hooks/use-ticking-now"
 import { localDate } from "../lib/learning-workspace"
 
 type SacPageProps = {
+  openTimerRequest?: number
   records: SacRecord[]
   subjects: string[]
   preferredSubjects: string[]
@@ -95,13 +96,14 @@ function SacTrend({ records }: { records: SacRecord[] }) {
   )
 }
 
-export function SacPage({ records, subjects, preferredSubjects, activeTimer, onTimerChange, onSave, onDelete }: SacPageProps) {
+export function SacPage({ openTimerRequest = 0, records, subjects, preferredSubjects, activeTimer, onTimerChange, onSave, onDelete }: SacPageProps) {
   const [tab, setTab] = useState<"overview" | "timer">(() =>
-    activeTimer || typeof sessionStorage !== "undefined" && (
-      sessionStorage.getItem("examtrack.sac-timer") ||
-      new URLSearchParams(location.search).get("timer") === "sac"
-    ) ? "timer" : "overview"
+    activeTimer || openTimerRequest || typeof sessionStorage !== "undefined" && sessionStorage.getItem("examtrack.sac-timer") ? "timer" : "overview"
   )
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- an alert for the running timer was tapped while this page was open
+    if (openTimerRequest) setTab("timer")
+  }, [openTimerRequest])
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<SacRecord | null>(null)
   const [timerRecord, setTimerRecord] = useState<SacRecord | null>(null)

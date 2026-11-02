@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { count } from "../lib/utils"
 import { Check, FileDown, FileUp } from "lucide-react"
 
 import type { Mistake } from "../lib/exam-data"
@@ -78,7 +79,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
           {result ? (
             <div className="grid gap-3" aria-live="polite">
               <p className="text-sm text-muted-foreground tabular-nums">
-                {changes.length} of {result.edits.length} records would change something.{result.unmatched ? ` ${result.unmatched} had no matching id and were ignored.` : ""} Untick any you want to keep as they are.
+                {changes.length} of {count(result.edits.length, "record")} would change something.{result.unmatched ? ` ${result.unmatched} had no matching id and were ignored.` : ""} Untick any you want to keep as they are.
               </p>
               {changes.length ? (
                 <div className="max-h-96 overflow-y-auto rounded-lg border">

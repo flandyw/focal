@@ -1,11 +1,37 @@
 import { toast } from "sonner"
 import { supabase } from "./supabase"
-import { DESKTOP_NOTIFICATIONS_SINCE_KEY, NOTIFICATION_PREFERENCES_CHANGED, PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY, inQuietHours, loadNotificationPreferences } from "./notification-preferences"
+import { DESKTOP_NOTIFICATIONS_SINCE_KEY, NOTIFICATION_PREFERENCES_CHANGED, PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY, inQuietHours, loadNotificationPreferences, saveNotificationPreferences } from "./notification-preferences"
 
 export { PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY } from "./notification-preferences"
 
+const PUSH_CHECKED_KEY = "focal:push-checked:v1"
+const PUSH_CHECK_MS = 6 * 3600_000
+
 let registration: Promise<ServiceWorkerRegistration | null> | undefined
 let accountCleanup = Promise.resolve()
+
+type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
+let installPrompt: InstallPrompt | null = null
+const installListeners = new Set<() => void>()
+const announceInstall = () => installListeners.forEach((listener) => listener())
+// Chrome fires this once, early, and only keeps it if the page holds on to it.
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); installPrompt = event as InstallPrompt; announceInstall() })
+  window.addEventListener("appinstalled", () => { installPrompt = null; announceInstall() })
+}
+export const canPromptInstall = () => installPrompt !== null
+export function onInstallChange(listener: () => void) {
+  installListeners.add(listener)
+  return () => { installListeners.delete(listener) }
+}
+export async function promptInstall() {
+  const prompt = installPrompt
+  if (!prompt) return
+  await prompt.prompt()
+  await prompt.userChoice
+  installPrompt = null
+  announceInstall()
+}
 
 export function clearPushForOtherAccount(userId?: string) {
   accountCleanup = accountCleanup.then(async () => {
@@ -27,7 +53,9 @@ export function clearPushForOtherAccount(userId?: string) {
 }
 
 // Browsers rotate or expire push subscriptions silently; re-register so reminders don't quietly stop.
-async function resyncPush() {
+// Runs on every focus, so the network check is rationed unless the worker reports a rotation.
+export async function resyncPush(force = false) {
+  if (!force && Date.now() - Number(localStorage.getItem(PUSH_CHECKED_KEY)) < PUSH_CHECK_MS) return
   const worker = await registerPwa()
   const { data } = await supabase?.auth.getSession() ?? { data: null }
   if (!worker || !data?.session || Notification.permission !== "granted") return
@@ -35,7 +63,19 @@ async function resyncPush() {
   let subscription = await worker.pushManager.getSubscription()
   if (subscription) {
     const known = await fetch("/api/push", { method: "POST", headers, body: JSON.stringify({ endpoint: subscription.endpoint }) })
-    if (!known.ok || await known.json()) return
+    if (!known.ok) return
+    const remote = await known.json()
+    if (remote) {
+      localStorage.setItem(PUSH_CHECKED_KEY, String(Date.now()))
+      // Quiet hours and daily reminders follow the phone when it changes time zone.
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (remote.timezone !== timezone) {
+        const preferences = { ...loadNotificationPreferences(), timezone }
+        await fetch("/api/push", { method: "PUT", headers, body: JSON.stringify({ ...subscription.toJSON(), ...preferences }) })
+        saveNotificationPreferences(preferences)
+      }
+      return
+    }
     await subscription.unsubscribe()
   }
   const { publicKey } = await (await fetch("/api/push")).json()
@@ -44,6 +84,7 @@ async function resyncPush() {
   const preferences = loadNotificationPreferences()
   const response = await fetch("/api/push", { method: "PUT", headers, body: JSON.stringify({ ...subscription.toJSON(), ...preferences }) })
   if (!response.ok) throw new Error("Could not restore push reminders.")
+  localStorage.setItem(PUSH_CHECKED_KEY, String(Date.now()))
 }
 
 export function registerPwa() {
@@ -54,13 +95,16 @@ export function registerPwa() {
   return registration
 }
 
-// The shell opens from cache, so check on launch, on resume, and every 30 min; the service worker caches a new version before this reports it.
+// The shell opens from cache, so check after launch, on resume, and every 30 min, at most every 5 min so app-switching
+// doesn't refetch the shell; the service worker caches a new version before this reports it.
 export function watchForUpdates() {
   if (!import.meta.env.PROD || import.meta.env.VITE_DESKTOP) return
   const current = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.getAttribute("src")
   let notified = false
+  let checkedAt = 0
   const check = async () => {
-    if (notified || document.visibilityState !== "visible" || !navigator.onLine) return
+    if (notified || document.visibilityState !== "visible" || !navigator.onLine || Date.now() - checkedAt < 5 * 60_000) return
+    checkedAt = Date.now()
     void registerPwa().then((worker) => worker?.update()).catch(() => undefined)
     try {
       const html = await (await fetch("/", { cache: "no-store" })).text()
@@ -72,7 +116,8 @@ export function watchForUpdates() {
       // Offline or a flaky network; the next resume tries again.
     }
   }
-  void check()
+  // The worker already refreshes the shell at launch; don't compete with first paint for the same file.
+  setTimeout(() => void check(), 10_000)
   document.addEventListener("visibilitychange", () => void check())
   setInterval(() => void check(), 30 * 60_000)
 }
@@ -84,7 +129,7 @@ export function timerNotificationHelp() {
   if (ios && !installed) return "On iPhone or iPad, add Focal to your Home Screen from the Share menu, open it there, then enable notifications. Requires iOS 16.4 or later."
   if (!window.isSecureContext || typeof Notification === "undefined") return "Notifications are unavailable in this browser. Use a supported browser over HTTPS."
   if (Notification.permission === "denied") return "Notifications are blocked. Allow them in your browser or device settings, then return here."
-  return "Alerts when a focus block or break ends. Allow notifications when prompted. Keep Focal open; alerts may be delayed while your phone is locked or the app is in the background."
+  return "Alerts when a focus block or break ends. Allow notifications when prompted, then enable reminders so timers can reach you while your phone is locked."
 }
 
 export async function notificationPermission(): Promise<NotificationPermission | "unsupported"> {
@@ -105,20 +150,59 @@ export async function showNotification(title: string, body: string, tag: string,
     return
   }
   const worker = await registerPwa()
-  const options = { body, tag, renotify: true, icon: "/icon-192.png", badge: "/icon-192.png", data: { path } } as NotificationOptions
+  const options = { body, tag, renotify: true, icon: "/icon-192.png", badge: "/badge-96.png", vibrate: [200, 100, 200], data: { path } } as NotificationOptions
   if (worker) await worker.showNotification(title, options)
   else new Notification(title, options)
 }
 
-export async function notifyTimer(title: string, body: string, type: "focus" | "breaks" | "reading" | "writing" | "sac", path = "/?timer=focus") {
+type TimerAlertType = "focus" | "breaks" | "reading" | "writing" | "sac"
+export type TimerAlert = { at: number; title: string; body: string; type: TimerAlertType; path: string }
+const alertKey = (scope: string, alert: Pick<TimerAlert, "at" | "title">) => `${scope}:${alert.title}:${alert.at}`
+
+export async function notifyTimer(scope: string, alert: TimerAlert) {
+  const key = alertKey(scope, alert)
   try {
+    // A frozen page wakes long after the moment passed: an alert now would only repeat what the user can already see.
+    if (Date.now() - alert.at > 2 * 60_000) return
+    // The page beat the server to it, so the queued push would only repeat this.
+    if (!import.meta.env.VITE_DESKTOP && localStorage.getItem(PUSH_OWNER_KEY)) void supabase?.from("push_timer_alerts").delete().eq("key", key).then(() => undefined, () => undefined)
     const preferences = loadNotificationPreferences()
-    if (!preferences[type] || inQuietHours(preferences)) return
-    // ponytail: alerts depend on the running page; use server push for reliable closed-app reminders.
-    await showNotification(title, body, `focal-timer-${type}`, path)
+    if (!preferences[alert.type] || inQuietHours(preferences)) return
+    const worker = import.meta.env.VITE_DESKTOP ? null : await registerPwa()
+    // A suspended phone wakes to late timers; the push has usually landed by then under this same tag.
+    if ((await worker?.getNotifications({ tag: `timer:${key}` }))?.length) return
+    await showNotification(alert.title, alert.body, `timer:${key}`, alert.path)
   } catch {
     // An unavailable notification must never interrupt the timer or saving study time.
   }
+}
+
+/**
+ * Hands the next timer boundaries to the server so they arrive while the phone is locked and this page is frozen.
+ * shortcut: only runs on devices that enabled push, and a failure (offline) falls back to the page's own alert.
+ */
+export async function scheduleTimerAlerts(scope: "focus" | "exam" | "sac", alerts: TimerAlert[]) {
+  if (import.meta.env.VITE_DESKTOP || !supabase || !localStorage.getItem(PUSH_OWNER_KEY)) return
+  try {
+    const { data } = await supabase.auth.getSession()
+    const userId = data.session?.user.id
+    if (!userId) return
+    await supabase.from("push_timer_alerts").delete().eq("user_id", userId).like("key", `${scope}:%`)
+    if (!alerts.length) return
+    await supabase.from("push_timer_alerts").insert(alerts.map((alert) => ({
+      user_id: userId, key: alertKey(scope, alert), fire_at: new Date(alert.at).toISOString(), kind: alert.type, body: alert.body, path: alert.path,
+    })))
+  } catch {
+    // Offline or migration not applied yet: the open page still alerts.
+  }
+}
+
+/** Opening the app answers its notifications; leaving them makes the shade feel stale. */
+export async function clearDeliveredNotifications() {
+  try {
+    const worker = await registerPwa()
+    for (const notification of await worker?.getNotifications() ?? []) notification.close()
+  } catch { /* Nothing to clear. */ }
 }
 
 export async function requestTimerNotifications() {

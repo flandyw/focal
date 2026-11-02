@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react"
+import { shrinkPhoto } from "../lib/mobile"
 import { useChatGPT } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
@@ -487,10 +488,11 @@ export function MistakeSheet({
                       accept="image/*"
                       multiple
                       disabled={analysing || batchDrafts.length > 0}
-                      onChange={(event) => {
-                        const added = Array.from(event.target.files ?? [])
-                        setImages((current) => [...current, ...added])
+                      onChange={async (event) => {
+                        const picked = Array.from(event.target.files ?? [])
                         event.target.value = ""
+                        const added = await Promise.all(picked.map((file) => shrinkPhoto(file)))
+                        setImages((current) => [...current, ...added])
                         setBatchDrafts([])
                         setActiveBatchIndex(null)
                         setProgress(null)
@@ -575,9 +577,10 @@ export function MistakeSheet({
               {!isEditingBatchDraft ? <Field>
                 <FieldLabel htmlFor="question-images">Question images</FieldLabel>
                 <FieldDescription>Add diagrams, screenshots, or multiple pages as part of this question. Up to 5 images, 5 MB each, 20 MB total including saved and retained AI images. Text above is optional when the question is in images.</FieldDescription>
-                <Input id="question-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={!storageUserId || saving || analysing || importMode === "batch"} onChange={(event) => {
-                  const added = Array.from(event.target.files ?? [])
+                <Input id="question-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={!storageUserId || saving || analysing || importMode === "batch"} onChange={async (event) => {
+                  const picked = Array.from(event.target.files ?? [])
                   event.target.value = ""
+                  const added = await Promise.all(picked.map((file) => shrinkPhoto(file)))
                   const next = [...questionImages, ...added]
                   const validation = validateSavedMistakeImages([...next, ...(saveImages ? images : [])], savedAttachments.length, savedAttachments.reduce((total, attachment) => total + attachment.size, 0))
                   if (validation) { setError(validation); return }

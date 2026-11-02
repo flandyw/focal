@@ -30,9 +30,11 @@ import {
 import { canonicalNow } from "../lib/study-session-sync"
 import { withSubjectSwitch } from "../lib/sync/sessionContract"
 import type { FocusTimerSession } from "../lib/ongoing-timers"
-import { notifyTimer } from "../lib/pwa"
+import { buzz } from "../lib/mobile"
+import { notifyTimer, scheduleTimerAlerts } from "../lib/pwa"
 
 const TICK_MS = 1000
+const focusAlertBody = (mode: string, workMinutes: number) => mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${workMinutes} minutes of focus.`
 
 /** Server-anchored epoch ms. Immune to a device clock that is minutes out,
  *  which is what makes a logged block's duration trustworthy. */
@@ -220,9 +222,10 @@ export function useStudyTimer({
 
   useEffect(() => {
     if (!enabled || !state.running) return
-    let last = performance.now()
+    // Wall clock on purpose: performance.now() stops while a phone sleeps, which would silently lose that time.
+    let last = Date.now()
     const interval = window.setInterval(() => {
-      const current = performance.now()
+      const current = Date.now()
       // Keep the unspent fraction: late intervals would otherwise shave seconds off every block.
       const seconds = Math.max(0, Math.floor((current - last) / 1000))
       last += seconds * 1000
@@ -281,9 +284,29 @@ export function useStudyTimer({
     const label = state.mode === "work" ? "Focus block complete" : "Break over"
     if (settingsRef.current.soundEnabled) playChime()
     if (settingsRef.current.notificationsEnabled) {
-      void notifyTimer(label, state.mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${settingsRef.current.workMinutes} minutes of focus.`, state.mode === "work" ? "focus" : "breaks")
+      void notifyTimer("focus", { at: endsAtRef.current, title: label, body: focusAlertBody(state.mode, settingsRef.current.workMinutes), type: state.mode === "work" ? "focus" : "breaks", path: "/?timer=focus" })
     }
+    buzz([200, 100, 200])
   }, [enabled, state.mode, state.cycles, state.secondsLeft, state.studyOvertime])
+
+  // Tell the server when this block ends, so the alert still arrives once the phone locks and this page freezes.
+  const endsAtRef = useRef(0)
+  const alertQueued = useRef(false)
+  const pomodoroRunning = enabled && state.running && !state.studyOvertime && state.mode !== "free"
+  useEffect(() => {
+    if (!pomodoroRunning) {
+      // Only retract our own alert: opening Focal here must not cancel a timer running on another device.
+      if (alertQueued.current) void scheduleTimerAlerts("focus", [])
+      alertQueued.current = false
+      return
+    }
+    endsAtRef.current = Date.now() + state.secondsLeft * 1000
+    if (!settingsRef.current.notificationsEnabled) return
+    alertQueued.current = true
+    void scheduleTimerAlerts("focus", [{ at: endsAtRef.current, title: state.mode === "work" ? "Focus block complete" : "Break over", body: focusAlertBody(state.mode, settingsRef.current.workMinutes), type: state.mode === "work" ? "focus" : "breaks", path: "/?timer=focus" }])
+    // Ticks don't move the end time; a new block, pause, resume or changed duration does.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [pomodoroRunning, state.mode, state.cycles, state.totalSeconds])
 
   useEffect(() => {
     saveSettings(settings)

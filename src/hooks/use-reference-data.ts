@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { AssessmentReference } from "../lib/exam-data"
 import type { ScalingReference } from "../lib/scaling"
@@ -56,7 +56,7 @@ async function loadTimetableWithStatus(signal: AbortSignal): Promise<Timetable |
     .then((value: unknown) => (isTimetable(value) ? value : null))
 }
 
-export function useReferenceData(needScaling = false) {
+export function useReferenceData(needScaling = false, needNow = true) {
   const [reloadToken, setReloadToken] = useState(0)
   const [scalingRequested, setScalingRequested] = useState(needScaling)
   const [references, setReferences] = useState<AssessmentReference[]>([])
@@ -69,6 +69,8 @@ export function useReferenceData(needScaling = false) {
   const [scalingStatus, setScalingStatus] = useState<ResourceStatus>("loading")
   const [timetable, setTimetable] = useState<Timetable | null>(null)
   const [timetableStatus, setTimetableStatus] = useState<ResourceStatus>("loading")
+  const needNowRef = useRef(needNow)
+  useEffect(() => { needNowRef.current = needNow }, [needNow])
   // Latch the first visit so leaving the predictor never aborts or repeats its request.
   if (needScaling && !scalingRequested) setScalingRequested(true)
 
@@ -88,17 +90,22 @@ export function useReferenceData(needScaling = false) {
       }
     }
 
-    void fetchJson<{ generatedAt?: string; assessments?: AssessmentReference[] }>(
-      "/vcaa-grade-distributions.json",
-      controller.signal,
-    ).then((result) => {
+    const fetchReferences = () => {
       if (!active) return
-      setReferences(usableReferences(result.assessments))
-      setReferencesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
-      setReferencesStatus("ready")
-    }).catch(() => {
-      if (active) setReferencesStatus("error")
-    })
+      void fetchJson<{ generatedAt?: string; assessments?: AssessmentReference[] }>(
+        "/vcaa-grade-distributions.json",
+        controller.signal,
+      ).then((result) => {
+        if (!active) return
+        setReferences(usableReferences(result.assessments))
+        setReferencesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
+        setReferencesStatus("ready")
+      }).catch(() => {
+        if (active) setReferencesStatus("error")
+      })
+    }
+    if (needNowRef.current) fetchReferences()
+    else fetchDeferred(fetchReferences)
 
     fetchDeferred(() => {
       if (!active) return

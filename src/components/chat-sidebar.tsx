@@ -49,7 +49,7 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
             <span className="truncate">{chat.title}</span>
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" className="mr-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 aria-expanded:opacity-100" disabled={disabled} />} aria-label={`Options for ${chat.title}`}><MoreHorizontal aria-hidden /></DropdownMenuTrigger>
+            <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" className="mr-1 shrink-0 pointer-fine:sm:opacity-0 pointer-fine:sm:group-hover:opacity-100 pointer-fine:sm:group-focus-within:opacity-100 aria-expanded:opacity-100" disabled={disabled} />} aria-label={`Options for ${chat.title}`}><MoreHorizontal aria-hidden /></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => { setEditing(chat); setTitle(chat.title); setError("") }}><Pencil aria-hidden />Rename</DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => { setDeleting(chat); setError("") }}><Trash2 aria-hidden />Delete</DropdownMenuItem>

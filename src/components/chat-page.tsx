@@ -259,7 +259,7 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
         {stopped ? <p role="status" className="text-xs text-muted-foreground">Response interrupted. Changes may have saved; check your records before continuing.</p> : null}
         <form onSubmit={(event) => { event.preventDefault(); send() }}>
           <InputGroup className="rounded-lg">
-            <InputGroupTextarea autoFocus aria-label="Message Focal" placeholder="Ask about your study…" className="max-h-48 min-h-14 px-3.5 pt-3" value={input} onChange={(event) => setInput(event.target.value)} disabled={!available} maxLength={12000} onKeyDown={(event) => {
+            <InputGroupTextarea autoFocus enterKeyHint="send" aria-label="Message Focal" placeholder="Ask about your study…" className="max-h-48 min-h-14 px-3.5 pt-3" value={input} onChange={(event) => setInput(event.target.value)} disabled={!available} maxLength={12000} onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send() }
             }} />
             <InputGroupAddon align="block-end" className="gap-1 pr-2">

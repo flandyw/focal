@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
+import { useWakeLock } from "../lib/mobile"
 import {
   Bell,
   CalendarPlus,
@@ -260,6 +261,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     }
   }, [])
   const notificationsEnabled = settings.notificationsEnabled && permission === "granted"
+  // The moment a timer starts is the one time an alert prompt makes sense; browsers ignore repeats of an answered prompt.
+  const askForAlerts = () => {
+    if (permission === "default" && settings.notificationsEnabled) void requestTimerNotifications().then(() => notificationPermission()).then(setNotificationPermission)
+  }
+  useWakeLock(state.running && settings.keepScreenOn)
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
   const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} ${state.running ? "started" : "paused"}.`
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
@@ -387,7 +393,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {/* A lifecycle command is one transaction with the server: its button
                   stays down until the server has answered for the boundary. */}
-              <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={actions.toggle} size="lg">
+              <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={() => { askForAlerts(); actions.toggle() }} size="lg">
                 {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
               </Button>
               {isFreeStudy ? (
@@ -661,6 +667,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               onToggle={() => void toggleNotifications()}
               pressed={notificationsEnabled}
             />
+            {"wakeLock" in navigator ? <ToggleRow
+              description="Keep the screen awake while the timer runs."
+              label="Keep screen on"
+              onToggle={() => updateSettings({ keepScreenOn: !settings.keepScreenOn })}
+              pressed={settings.keepScreenOn}
+            /> : null}
             <ToggleRow
               description="Roll straight into the break when a focus block ends."
               label="Auto-start breaks"

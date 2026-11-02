@@ -1,5 +1,6 @@
 import * as React from "react"
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
+import { useBackClose } from "../../lib/mobile"
 import { cn } from "../../lib/utils"
 
 import { Button } from "@/components/ui/button"
@@ -36,9 +37,16 @@ function AlertDialogOverlay({
   )
 }
 
+function AlertDialogBack() {
+  const close = React.useRef<HTMLButtonElement>(null)
+  useBackClose(close)
+  return <AlertDialogPrimitive.Close ref={close} hidden aria-hidden tabIndex={-1} />
+}
+
 function AlertDialogContent({
   className,
   size = "default",
+  children,
   ...props
 }: AlertDialogPrimitive.Popup.Props & {
   size?: "default" | "sm"
@@ -54,7 +62,10 @@ function AlertDialogContent({
           className
         )}
         {...props}
-      />
+      >
+        <AlertDialogBack />
+        {children}
+      </AlertDialogPrimitive.Popup>
     </AlertDialogPortal>
   )
 }

@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import webpush from "web-push"
 import { timingSafeEqual } from "node:crypto"
 import { readRequestText } from "./request.js"
-import { notificationPreferencesSchema } from "../src/lib/notification-preferences.js"
+import { parseNotificationPreferences } from "../src/lib/notification-preferences.js"
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } })
 type PushJob = { subscription_id: string; endpoint: string; p256dh: string; auth: string; event_key: string; body: string; path: string }
@@ -18,6 +18,9 @@ function validEndpoint(value: unknown): value is string {
   } catch { return false }
 }
 
+// Stored timer alerts carry their title in the key's `timer:<scope>:<title>:<at>` slot.
+const titleFor = (tag: string) => tag.startsWith("timer:") ? tag.split(":")[2] || "Focal" : "Focal"
+
 export async function handlePush(request: Request): Promise<Response> {
   const url = process.env.VITE_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -31,8 +34,10 @@ export async function handlePush(request: Request): Promise<Response> {
   const db = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false } })
   const send = (target: { endpoint: string; p256dh: string; auth: string }, body: string, tag: string, path: string) =>
     webpush.sendNotification({ endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
-      JSON.stringify({ title: "Focal", body, tag, path }), {
-        vapidDetails: { subject: subject!, publicKey: publicKey!, privateKey: privateKey! }, TTL: 900, timeout: 8_000,
+      JSON.stringify({ title: titleFor(tag), body, tag, path }), {
+        vapidDetails: { subject: subject!, publicKey: publicKey!, privateKey: privateKey! }, TTL: tag.startsWith("timer:") ? 180 : 900, timeout: 8_000,
+        // Every Focal push is user-visible and time-bound; without this, Android's Doze holds it until the next wake.
+        urgency: "high",
       })
   try {
     if (dispatch) {
@@ -113,8 +118,8 @@ export async function handlePush(request: Request): Promise<Response> {
     const { data: existing, error: existingError } = await db.from("push_subscriptions").select("preferences,enabled_at")
       .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()
     if (existingError) throw existingError
-    const preferences = notificationPreferencesSchema.safeParse({ cheers: input.friends, ...existing?.preferences, ...input })
-    if (!preferences.success) return json({ error: "Invalid notification preferences. Check the times and timezone." }, 400)
+    const preferences = parseNotificationPreferences({ cheers: input.friends, ...existing?.preferences, ...input })
+    if (!preferences) return json({ error: "Invalid notification preferences. Check the times and timezone." }, 400)
     const { count, error: countError } = await db.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", user.id)
     if (countError) throw countError
     if ((count ?? 0) >= 20) {
@@ -123,7 +128,7 @@ export async function handlePush(request: Request): Promise<Response> {
     }
     await db.from("push_subscriptions").upsert({ user_id: user.id, endpoint: input.endpoint,
       p256dh: keys.p256dh, auth: keys.auth, planned: input.planned, friends: input.friends,
-      preferences: preferences.data, enabled_at: existing?.enabled_at ?? new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
+      preferences, enabled_at: existing?.enabled_at ?? new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
     return json({ ok: true })
   } catch {
     return json({ error: "Push reminders are temporarily unavailable. Try again later." }, 503)

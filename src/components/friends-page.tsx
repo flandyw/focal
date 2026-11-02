@@ -112,7 +112,7 @@ function DayTrack({ blocks, now, className, color }: { blocks: Person["today_blo
       <div className={cn("relative h-3 overflow-hidden rounded-sm bg-muted", className)}>
         {[25, 50, 75].map((left) => <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />)}
         {(blocks ?? []).map(([from, to], index) => (
-          <span key={index} tabIndex={0} onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} onBlur={() => setHover(null)} className={cn("absolute inset-y-0 rounded-[2px] bg-primary outline-none transition-[filter] hover:brightness-125 focus-visible:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(5px, ${at(to) - at(from)}%)`, background: color }} />
+          <span key={index} tabIndex={0} onClick={() => setHover(index)} onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} onBlur={() => setHover(null)} className={cn("absolute inset-y-0 rounded-[2px] bg-primary outline-none transition-[filter] hover:brightness-125 focus-visible:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(5px, ${at(to) - at(from)}%)`, background: color }} />
         ))}
         <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${at(null)}%` }} />
       </div>
@@ -156,7 +156,7 @@ function DailyChart({ series, now, stacked, selected, onSelect }: { series: Char
         <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-foreground/30" style={{ bottom: `${average / max * 100}%` }} />
         <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
           {days.map((offset) => (
-            <div key={offset} tabIndex={0} role={onSelect ? "button" : undefined} aria-pressed={onSelect ? selected === offset : undefined} onClick={() => onSelect?.(offset)} onKeyDown={(event) => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(offset) } }} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60", onSelect && "cursor-pointer", selected === offset && "ring-1 ring-primary")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
+            <div key={offset} tabIndex={0} role={onSelect ? "button" : undefined} aria-pressed={onSelect ? selected === offset : undefined} onClick={() => { setHover(offset); onSelect?.(offset) }} onKeyDown={(event) => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(offset) } }} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60", onSelect && "cursor-pointer", selected === offset && "ring-1 ring-primary")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
               {series.map((s) => <span key={s.name} className={cn("w-full", stacked ? "first:rounded-b-[2px] last:rounded-t-[2px]" : "self-end rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%`, background: s.color }} />)}
             </div>
           ))}
@@ -337,7 +337,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
     return (
       <WorkspacePage>
         <PageHeader title="Friends" />
-        <div><Button onClick={onSignIn}>Sign in to add friends</Button></div>
+        <div className="grid max-w-md justify-items-start gap-3"><p className="text-sm text-muted-foreground">See who’s studying now, cheer each other on, and compare study time. Friends need an account, so nothing leaves this device until you sign in.</p><Button onClick={onSignIn}>Sign in to add friends</Button></div>
       </WorkspacePage>
     )
   }
@@ -671,7 +671,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
                 <span className="text-sm text-muted-foreground">Your username</span>
                 <span className="min-w-0 select-all break-all">{profile ? `@${profile.username}` : "—"}</span>
               </div>
-              <Button variant="outline" disabled={!profile} onClick={() => { void navigator.clipboard.writeText(`${INVITE_BASE}/?view=friends&add=${profile?.username}`).then(() => toast.success("Invite link copied"), () => toast.error("Could not copy the invite link.")) }}><Link2 />Copy invite link</Button>
+              <Button variant="outline" disabled={!profile} onClick={() => { const url = `${INVITE_BASE}/?view=friends&add=${profile?.username}`; if (matchMedia("(pointer: coarse)").matches && navigator.share) { void navigator.share({ title: "Study with me on Focal", url }).catch(() => undefined); return } void navigator.clipboard.writeText(url).then(() => toast.success("Invite link copied"), () => toast.error("Could not copy the invite link.")) }}><Link2 />Copy invite link</Button>
               <form className="grid gap-2" onSubmit={(event) => {
                 event.preventDefault()
                 const username = friendUsername.trim().replace(/^@/, "").toLowerCase()

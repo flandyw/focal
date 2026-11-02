@@ -1,7 +1,7 @@
 import { isPaused, isRunning, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
+import { lazy, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { AlertCircle, ChevronDown, CloudOff, Search, UsersRound, X } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -47,7 +47,9 @@ import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/a
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
-import { clearPushForOtherAccount, notifyTimer, watchDesktopNotifications } from "./lib/pwa"
+import { canPromptInstall, clearDeliveredNotifications, clearPushForOtherAccount, notifyTimer, onInstallChange, promptInstall, resyncPush, scheduleTimerAlerts, watchDesktopNotifications, type TimerAlert } from "./lib/pwa"
+import { handleBack, isStandalone, setAppBadge, useWakeLock } from "./lib/mobile"
+import { loadNotificationPreferences } from "./lib/notification-preferences"
 import { useReferenceData } from "./hooks/use-reference-data"
 
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
@@ -59,7 +61,7 @@ import type { OnboardingFinish } from "./components/onboarding-dialog"
 
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
 const ChatPage = lazy(() => import("./components/chat-page").then((module) => ({ default: module.ChatPage })))
-const PAGE_LOADING = <div className="grid min-h-[50dvh] place-items-center text-muted-foreground"><CircleAccretionDiskLoader dotSize={6} gap={5} /></div>
+const PAGE_LOADING = <div className="page-loading grid min-h-[50dvh] place-items-center text-muted-foreground"><CircleAccretionDiskLoader dotSize={6} gap={5} /></div>
 
 const ExamPicker = lazy(() => import("./components/exam-picker").then((module) => ({ default: module.ExamPicker })))
 
@@ -119,11 +121,57 @@ const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
 
+/** Phones hide the sidebar's sync status, so going offline would otherwise be invisible until something fails. */
+function OfflineChip({ status }: { status: string }) {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine)
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine)
+    window.addEventListener("online", update)
+    window.addEventListener("offline", update)
+    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update) }
+  }, [])
+  if (online && status !== "reconnecting") return null
+  return <span role="status" title="Changes stay on this device and sync when you reconnect" className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><CloudOff aria-hidden className="size-3.5" />Offline</span>
+}
+
+const INSTALL_NUDGE_KEY = "focal:install-nudge:v1"
+
+/** Reminders and a full-screen window both need the Home Screen app, and iOS never suggests it. Asks once, from the second launch. */
+function InstallNudge() {
+  const [, refresh] = useState(0)
+  const [hidden, setHidden] = useState(() => {
+    if (import.meta.env.VITE_DESKTOP || typeof localStorage === "undefined" || !matchMedia("(pointer: coarse) and (max-width: 1023px)").matches || isStandalone()) return true
+    try {
+      const seen = Number(localStorage.getItem(INSTALL_NUDGE_KEY) ?? 0)
+      if (seen >= 0) localStorage.setItem(INSTALL_NUDGE_KEY, String(seen + 1))
+      return seen < 1
+    } catch { return true }
+  })
+  useEffect(() => onInstallChange(() => refresh((value) => value + 1)), [])
+  if (hidden) return null
+  const dismiss = () => { setHidden(true); try { localStorage.setItem(INSTALL_NUDGE_KEY, "-1") } catch { /* Shows again next launch. */ } }
+  return (
+    <div className="mb-3 flex items-center gap-3 rounded-md border bg-card p-3 text-sm">
+      <p className="min-w-0 flex-1 text-muted-foreground">{canPromptInstall() ? "Install Focal for reminders and a full-screen app." : "Add Focal to your Home Screen from the Share menu for reminders and a full-screen app."}</p>
+      {canPromptInstall() ? <Button size="sm" onClick={() => void promptInstall().then(dismiss)}>Install</Button> : null}
+      <Button size="icon-sm" variant="ghost" aria-label="Dismiss install suggestion" onClick={dismiss}><X aria-hidden /></Button>
+    </div>
+  )
+}
+
 export default function App({ embedded = false }: { embedded?: boolean } = {}) {
-  const [view, setView] = useState<AppView>(() => embedded ? "exams" : loadAppView(
+  const [view, commitView] = useState<AppView>(() => embedded ? "exams" : loadAppView(
     typeof localStorage === "undefined" ? null : localStorage,
     typeof location === "undefined" ? "" : location.search,
   ))
+  // The tab bar answers the tap at once; the page swaps in a transition, so a slow page or chunk never freezes the tap.
+  const [navView, setNavView] = useState(view)
+  function setView(next: AppView) {
+    setNavView(next)
+    startTransition(() => commitView(next))
+  }
+  const fromBack = useRef(false)
+  const scrollByView = useRef(new Map<AppView, number>())
   const [data, setData] = useState<AppData>(() => (typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
   const [chosenSubject, setChosenSubject] = useState<string | null>(() => {
     try { return localStorage.getItem("examtrack:subject:v1") } catch { return null }
@@ -137,6 +185,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       : "focus")
   const [comparisonYear, setComparisonYear] = useState(2025)
   const [settingsSection, setSettingsSection] = useState<"ai" | "account">()
+  // A SAC alert opens the running timer, whether it launches Focal or lands in an open app.
+  const [sacTimerRequest, setSacTimerRequest] = useState(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("timer") === "sac" ? 1 : 0)
   const [examOpen, setExamOpen] = useState(false)
   const [editingAttempt, setEditingAttempt] = useState<ExamAttempt | null>(null)
   const [mistakeOpen, setMistakeOpen] = useState(false)
@@ -180,7 +230,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     studiesStatus,
     scalingStatus,
     reload: reloadReferences,
-  } = useReferenceData(view === "predictor" || view === "atar")
+  } = useReferenceData(view === "predictor" || view === "atar", !["calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view))
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
   const [onboarding, setOnboarding] = useState(false)
@@ -287,10 +337,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       event.preventDefault()
       window.location.reload()
     }
+    // iOS can kill a backgrounded app without pagehide; going hidden is the last dependable moment to save.
+    const saveWhenHidden = () => { if (document.visibilityState === "hidden") save() }
     window.addEventListener("pagehide", save)
+    document.addEventListener("visibilitychange", saveWhenHidden)
     window.addEventListener("vite:preloadError", recover)
     return () => {
       window.removeEventListener("pagehide", save)
+      document.removeEventListener("visibilitychange", saveWhenHidden)
       window.removeEventListener("vite:preloadError", recover)
     }
   }, [])
@@ -313,24 +367,68 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     return () => window.clearTimeout(id)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- re-arms whenever the session changes, which refreshes the closure
   }, [data.activeExamTimer])
+  const timerRunning = Boolean(data.activeExamTimer && data.activeExamTimer.pausedAt === undefined || data.activeSacTimer && data.activeSacTimer.pausedAt === undefined)
+  useWakeLock(timerRunning)
   useEffect(() => {
     const now = canonicalNow().getTime()
     const exam = data.activeExamTimer
     const sac = data.activeSacTimer
-    const alerts: { at: number; title: string; body: string; type: "reading" | "writing" | "sac"; path: string }[] = []
+    const alerts: (TimerAlert & { scope: "exam" | "sac" })[] = []
     if (exam && exam.pausedAt === undefined) {
       const clock = getExamClock(exam, now)
-      if (clock.phase === "reading") alerts.push({ at: clock.endsAt.reading, title: "Reading time over", body: "You can start writing now.", type: "reading", path: "/?timer=exam" })
-      if (clock.phase !== "overtime") alerts.push({ at: clock.endsAt.writing, title: "Writing time over", body: "Your timed paper has reached the end of writing time.", type: "writing", path: "/?timer=exam" })
+      if (clock.phase === "reading") alerts.push({ scope: "exam", at: clock.endsAt.reading, title: "Reading time over", body: "You can start writing now.", type: "reading", path: "/?timer=exam" })
+      if (clock.phase !== "overtime") alerts.push({ scope: "exam", at: clock.endsAt.writing, title: "Writing time over", body: "Your timed paper has reached the end of writing time.", type: "writing", path: "/?timer=exam" })
     }
-    if (sac && sac.pausedAt === undefined) alerts.push({ at: sac.startedAt + sac.durationMinutes * 60_000, title: "SAC time over", body: "Your SAC has reached the end of its allotted time.", type: "sac", path: "/?timer=sac" })
-    const timers = alerts.filter((alert) => alert.at > now).map((alert) => window.setTimeout(() => {
-      void notifyTimer(alert.title, alert.body, alert.type, alert.path)
-    }, alert.at - now))
+    if (sac && sac.pausedAt === undefined) alerts.push({ scope: "sac", at: sac.startedAt + sac.durationMinutes * 60_000, title: "SAC time over", body: "Your SAC has reached the end of its allotted time.", type: "sac", path: "/?timer=sac" })
+    const upcoming = alerts.filter((alert) => alert.at > now)
+    const timers = upcoming.map((alert) => window.setTimeout(() => void notifyTimer(alert.scope, alert), alert.at - now))
+    for (const scope of ["exam", "sac"] as const) void scheduleTimerAlerts(scope, upcoming.filter((alert) => alert.scope === scope))
     return () => timers.forEach(window.clearTimeout)
   }, [data.activeExamTimer, data.activeSacTimer])
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
+  // Each page remembers its own scroll; without this a new tab opens part-way down.
+  useLayoutEffect(() => { window.scrollTo(0, scrollByView.current.get(view) ?? 0) }, [view])
+  useEffect(() => {
+    const remember = () => { scrollByView.current.set(view, window.scrollY) }
+    window.addEventListener("scroll", remember, { passive: true })
+    return () => window.removeEventListener("scroll", remember)
+  }, [view])
+  // Without history entries, Android's back button quits the installed app from any page.
+  useEffect(() => {
+    if (embedded || import.meta.env.VITE_DESKTOP) return
+    return handleBack<AppView>((next) => { fromBack.current = true; setView(next) })
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- setView only touches stable state setters
+  }, [embedded])
+  useEffect(() => {
+    if (embedded || import.meta.env.VITE_DESKTOP) return
+    if (fromBack.current) { fromBack.current = false; return }
+    if (!history.state?.view) history.replaceState({ ...history.state, view }, "")
+    else if (history.state.view !== view) history.pushState({ view }, "")
+  }, [view, embedded])
+  // Consume one-shot launch links, so a reload lands on the saved page rather than replaying the link.
+  const launchAction = useRef(typeof location === "undefined" ? null : new URLSearchParams(location.search).get("action"))
+  useEffect(() => {
+    const url = new URL(location.href)
+    for (const name of ["timer", "view", "action"]) url.searchParams.delete(name)
+    if (url.href !== location.href) history.replaceState(history.state, "", url)
+  }, [])
   useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
+  // The tab badges follow the chosen subject; the Home Screen icon counts everything waiting.
+  const appBadge = useMemo(() => getDueMistakes(data.mistakes).length, [data.mistakes]) + dueStudyTaskCount
+  useEffect(() => {
+    if (import.meta.env.VITE_DESKTOP) return
+    const update = () => setAppBadge(loadNotificationPreferences().badge ? appBadge : 0)
+    update()
+    window.addEventListener("focal:notification-preferences-changed", update)
+    return () => window.removeEventListener("focal:notification-preferences-changed", update)
+  }, [appBadge])
+  useEffect(() => {
+    if (import.meta.env.VITE_DESKTOP) return
+    const clear = () => { if (document.visibilityState === "visible") void clearDeliveredNotifications() }
+    clear()
+    document.addEventListener("visibilitychange", clear)
+    return () => document.removeEventListener("visibilitychange", clear)
+  }, [])
   useEffect(() => {
     if (sync.status === "restoring" || sync.status === "reconnecting") return
     const refresh = () => void clearPushForOtherAccount(sync.status === "sign-in-required" ? undefined : sync.user?.id)
@@ -346,15 +444,17 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   useEffect(() => {
     if (import.meta.env.VITE_DESKTOP || !("serviceWorker" in navigator)) return
     const openNotification = (event: MessageEvent) => {
-      if (event.data?.type !== "focal:notification-click") return
+      if (event.data?.type === "focal:push-changed") void resyncPush(true).catch(() => undefined)
+      if (event.data?.type !== "focal:notification-click" || event.data.path === "/") return
       if (event.data.path === "/?view=friends") setView("friends")
       else if (event.data.path === "/?timer=calendar") setView("calendar")
-      else if (event.data.path === "/?timer=sac") setView("sacs")
+      else if (event.data.path === "/?timer=sac") { setSacTimerRequest((request) => request + 1); setView("sacs") }
       else if (event.data.path === "/?timer=exam") { setTimerMode("exam"); setView("focus") }
       else { setTimerMode("focus"); setView("focus") }
     }
     navigator.serviceWorker.addEventListener("message", openNotification)
     return () => navigator.serviceWorker.removeEventListener("message", openNotification)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- setView only touches stable state setters
   }, [])
   useEffect(() => {
     if (embedded) return
@@ -659,6 +759,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setMistakeOpen(true)
   }
 
+  useEffect(() => {
+    if (launchAction.current !== "log-mistake") return
+    launchAction.current = null
+    // oxlint-disable-next-line react/set-state-in-effect -- a Home Screen shortcut asked for this sheet
+    setMistakeOpen(true)
+  }, [])
+
   function deleteAttempt(attempt: ExamAttempt) {
     const related = data.mistakes.filter((mistake) => mistake.attemptId === attempt.id)
     // Local first, so it is gone on the next paint. The sync effect then pushes the delete
@@ -797,7 +904,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     <SidebarProvider keyboardShortcut={!embedded} className={embedded ? "min-h-0" : undefined} defaultOpen={loadSidebarOpen(typeof document === "undefined" ? null : document.cookie)}>
       <a href="#main-content" className="fixed left-2 top-2 z-50 -translate-y-20 rounded-md bg-background px-3 py-2 text-sm shadow focus:translate-y-0">Skip to content</a>
       {!embedded && <AppSidebar
-        view={view}
+        view={navView}
         dueMistakes={dueMistakeCount}
         plannedTasks={dueStudyTaskCount}
         user={sync.user}
@@ -818,16 +925,17 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         {/* Mobile: one compact row that scrolls away; the negative sticky top keeps only its safe-area padding pinned,
             and being sticky at the top edge makes iOS Safari tint the status bar from it instead of blurring it. */}
         {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
-          <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</span>
+          <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === navView)?.label}</span>
           {showSubjectMenu && subjectMenu}
-          <Button variant="ghost" size="icon" aria-label="Friends" aria-current={view === "friends" ? "page" : undefined} className={`ml-auto ${view === "friends" ? "text-foreground" : "text-muted-foreground"}`} onClick={() => setView("friends")}><UsersRound aria-hidden /></Button>
+          <OfflineChip status={sync.status} />
+          <Button variant="ghost" size="icon" aria-label="Friends" aria-current={navView === "friends" ? "page" : undefined} className={`ml-auto ${navView === "friends" ? "text-foreground" : "text-muted-foreground"}`} onClick={() => setView("friends")}><UsersRound aria-hidden /></Button>
           <Button variant="ghost" size="icon" aria-label="Search" className="text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
           {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+        <main id="main-content" data-view={view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar)-var(--keyboard-inset))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
           {showSubjectMenu && <div className="-ml-2.5 mb-1 max-lg:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
@@ -856,6 +964,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             </DialogContent>
           </Dialog>
           
+          {!embedded && <InstallNudge />}
           {data.activeExamTimer && view !== "focus" ? (
             <Alert className="mb-6">
               <AlertTitle>{data.activeExamTimer.pausedAt !== undefined ? "Saved exam" : "Exam in progress"} · {data.activeExamTimer.title}</AlertTitle>
@@ -920,7 +1029,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             const scopedIds = new Set(pageData.mistakes.map((mistake) => mistake.id))
             return { ...current, alternativeMistakeDeck: { ...deck, cards: [...(subjectScoped ? current.alternativeMistakeDeck?.cards ?? [] : []).filter((card) => !scopedIds.has(card.sourceMistakeId)), ...deck.cards] } }
           })} /></Suspense> : null}
-          {view === "sacs" ? <Suspense fallback={PAGE_LOADING}><SacPage records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
+          {view === "sacs" ? <Suspense fallback={PAGE_LOADING}><SacPage openTimerRequest={sacTimerRequest} records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /></Suspense> : null}
           {view === "library" ? <>{referencesLoading ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><ExamLibrary references={pageReferences} studies={pageStudies} attempts={pageData.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} /></Suspense>}</> : null}
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onLogExam={openNewExam} onOpenAtar={() => setView("atar")} /></Suspense>}</> : null}
           {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <Suspense fallback={PAGE_LOADING}><AtarEstimator data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} /></Suspense>}</> : null}
@@ -930,7 +1039,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "settings" ? <Suspense fallback={PAGE_LOADING}><SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => downloadAppData(data)} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} /></Suspense> : null}
           </div>
         </main>
-        {!embedded && <MobileTabBar view={view} dueMistakes={dueMistakeCount} plannedTasks={dueStudyTaskCount} onViewChange={setView} />}
+        {!embedded && <MobileTabBar view={navView} dueMistakes={dueMistakeCount} plannedTasks={dueStudyTaskCount} onViewChange={setView} />}
       </SidebarInset>
       {examOpen ? (
         <Suspense fallback={null}>
@@ -959,7 +1068,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       ) : null}
       {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
       {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
-      {!embedded && <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + 0.75rem)" }} />}
+      {!embedded && <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 0.75rem)" }} />}
     </SidebarProvider>
   )
 }

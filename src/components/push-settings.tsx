@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { Bell, BellOff, Send } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { clearPushForOtherAccount, notificationPermission, registerPwa, requestTimerNotifications, showNotification, timerNotificationHelp } from "../lib/pwa"
-import { DESKTOP_NOTIFICATIONS_SINCE_KEY, PUSH_OWNER_KEY, loadNotificationPreferences, notificationPreferencesSchema, saveNotificationPreferences, type NotificationPreferences } from "../lib/notification-preferences"
+import { DESKTOP_NOTIFICATIONS_SINCE_KEY, PUSH_OWNER_KEY, loadNotificationPreferences, parseNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from "../lib/notification-preferences"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
@@ -30,7 +30,7 @@ export function PushSettings({ userId }: { userId?: string }) {
   const [notice, setNotice] = useState<string | null>(null)
   const supported = desktop || window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && typeof Notification !== "undefined"
   const dirty = JSON.stringify(preferences) !== saved
-  const valid = notificationPreferencesSchema.safeParse(preferences).success
+  const valid = parseNotificationPreferences(preferences) !== null
 
   async function api(method: string, input: unknown, query = "") {
     if (!supabase || !userId) throw new Error("Sign in again to manage reminders.")
@@ -68,7 +68,7 @@ export function PushSettings({ userId }: { userId?: string }) {
           setConfig(nextConfig)
           setEnabled(!!remote)
           if (remote) {
-            next = notificationPreferencesSchema.parse({ ...next, ...remote })
+            next = parseNotificationPreferences({ ...next, ...remote }) ?? next
             saveNotificationPreferences(next)
           }
         }
@@ -94,7 +94,8 @@ export function PushSettings({ userId }: { userId?: string }) {
     setError(null)
     setNotice(null)
     try {
-      const next = notificationPreferencesSchema.parse(preferences)
+      const next = parseNotificationPreferences(preferences)
+      if (!next) throw new Error("Check the reminder times and try again.")
       if (enabled && !desktop && subscription) await api("PUT", { ...subscription.toJSON(), ...next })
       saveNotificationPreferences(next)
       setSaved(JSON.stringify(next))
@@ -152,7 +153,8 @@ export function PushSettings({ userId }: { userId?: string }) {
       const granted = await requestTimerNotifications()
       setPermission(await notificationPermission())
       if (!granted) throw new Error(timerNotificationHelp())
-      const next = notificationPreferencesSchema.parse(preferences)
+      const next = parseNotificationPreferences(preferences)
+      if (!next) throw new Error("Check the reminder times and try again.")
       if (!desktop) {
         const worker = await registerPwa()
         if (!worker || !config?.publicKey) throw new Error("Could not start reminders. Reopen Focal and try again.")
@@ -185,7 +187,7 @@ export function PushSettings({ userId }: { userId?: string }) {
     <div className="space-y-8 py-5 text-sm" aria-busy={busy}>
       <div className="space-y-3">
         <p role="status" className="font-medium">{permission === "granted" ? "Notifications allowed on this device" : permission === "denied" ? "Notifications blocked" : "Allow notifications on this device"}</p>
-        <p className="max-w-[65ch] text-muted-foreground">{desktop ? "Native alerts while Focal is running or minimized. Study and friend reminders use your synced account and need an internet connection." : "Study and friend reminders use push, even when Focal is closed. Timer alerts need Focal open and can be delayed in the background."}</p>
+        <p className="max-w-[65ch] text-muted-foreground">{desktop ? "Native alerts while Focal is running or minimized. Study and friend reminders use your synced account and need an internet connection." : "Reminders use push, even when Focal is closed. With reminders enabled, timers also reach you while your phone is locked."}</p>
         {permission !== "granted" ? <p className="max-w-[65ch] text-muted-foreground">{timerNotificationHelp()}</p> : null}
         <div className="flex flex-wrap gap-2">
           {permission !== "granted" ? <Button variant="outline" disabled={busy || permission === "unsupported" || permission === "denied"} onClick={() => void allowNotifications()}><Bell />Allow notifications</Button> : null}
@@ -227,9 +229,16 @@ export function PushSettings({ userId }: { userId?: string }) {
           <p className="text-muted-foreground">Reminders and timer notifications during quiet hours are skipped. Matching start and end times mute all day. Timer sounds follow the Study timer’s Sound switch.</p>
         </fieldset>
 
+        {!desktop && "setAppBadge" in navigator ? (
+          <div className="flex min-h-14 items-center justify-between gap-6 border-b py-3">
+            <div><Label htmlFor="notify-badge">App icon badge</Label><p id="notify-badge-description" className="mt-1 text-muted-foreground">Show mistakes and planned tasks due today on the Home Screen icon.</p></div>
+            <Switch id="notify-badge" disabled={busy} aria-describedby="notify-badge-description" checked={preferences.badge} onCheckedChange={(checked) => update({ badge: checked })} />
+          </div>
+        ) : null}
+
         <fieldset disabled={busy} className="min-w-0">
           <legend className="mb-2 font-medium">Timer alerts</legend>
-          <p className="mb-2 text-muted-foreground">Keep Study timer open for focus and break alerts, and turn on Notifications under Pomodoro settings → Alerts and flow. Timed paper and SAC alerts work on any page while Focal is open.</p>
+          <p className="mb-2 text-muted-foreground">{desktop ? "Keep Study timer open for focus and break alerts, and turn on Notifications under Pomodoro settings → Alerts and flow. Timed paper and SAC alerts work on any page while Focal is open." : "Enable reminders above and timers reach this device while it’s locked. Otherwise keep Focal open. Focus and break alerts also need Notifications on under Pomodoro settings → Alerts and flow."}</p>
           {([{ key: "focus", label: "Focus block complete" }, { key: "breaks", label: "Break over" }, { key: "reading", label: "Exam reading time over" }, { key: "writing", label: "Exam writing time over" }, { key: "sac", label: "SAC time over" }] as const).map(({ key, label }) => <div key={key} className="flex min-h-14 items-center justify-between gap-6 border-b py-3"><Label htmlFor={`notify-${key}`}>{label}</Label><Switch id={`notify-${key}`} checked={preferences[key]} onCheckedChange={(checked) => update({ [key]: checked })} /></div>)}
         </fieldset>
         <div className="flex flex-wrap items-center gap-3"><Button type="submit" disabled={busy || !dirty || !valid}>Save preferences</Button>{dirty ? <span className="text-muted-foreground">Unsaved changes</span> : null}</div>

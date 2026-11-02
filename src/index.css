@@ -316,7 +316,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 :root { --app-font-body: "Instrument Sans Variable", sans-serif; --app-font-heading: "Newsreader", Georgia, serif; }
 @theme inline { --font-sans: var(--app-font-body); --font-heading: var(--app-font-heading); }
 
-:root { --mobile-tabbar: 0px; }
+:root { --mobile-tabbar: 0px; --keyboard-inset: 0px; }
 
 @media (max-width: 1023px) {
   :root {
@@ -337,7 +337,17 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   }
   .mobile-app-header, .mobile-tabbar { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   .mobile-tabbar button { touch-action: manipulation; }
-  .mobile-tabbar button:active { opacity: 0.6; }
+  .mobile-tabbar button:active { opacity: 0.6; scale: 0.94; }
+  .mobile-tabbar button { transition-property: background-color, padding, color, opacity, scale; }
+  /* Insets are only non-zero in landscape, which is wider than a phone breakpoint: keep content clear of the notch. */
+  [data-slot="sidebar-inset"] {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* The keyboard replaces the tab bar: it would otherwise float on top of what's being typed, or hide behind it. */
+  :root[data-keyboard] { --mobile-tabbar: 0px; }
+  [data-keyboard] .mobile-tabbar { display: none; }
+  [data-keyboard] [data-slot="sheet-content"] { height: auto; bottom: var(--keyboard-inset); }
   .focal-page-title { font-size: 1.75rem; }
   .focal-section-title { font-size: 1.25rem; }
   .focal-stat-value { font-size: 1.75rem; }
@@ -354,13 +364,24 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
     height: calc(2.75rem + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
   }
-  [data-slot="sidebar-inset"] {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
 }
 
-html { -webkit-tap-highlight-color: transparent; }
+/* Landscape phone: the height is what's scarce, so the bars shrink and pages start at the top. */
+@media (max-width: 1023px) and (max-height: 500px) {
+  :root { --mobile-tabbar: calc(2.75rem + 2px + var(--mobile-tabbar-gap)); }
+  .mobile-tabbar > div { max-width: 20rem; padding: 0.125rem; margin-left: auto; }
+  .mobile-tabbar button { height: 2.5rem; }
+  #main-content:not([data-view="chat"]) { padding-top: 0.25rem; }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  /* Stops sideways chart and table scrolling from triggering browser back, and keeps focused fields clear of the bars. */
+  overscroll-behavior-x: none;
+  scroll-padding-top: 3.5rem;
+  scroll-padding-bottom: calc(var(--mobile-tabbar) + 1rem);
+}
+.page-loading { animation: page-in 150ms 200ms ease-out both; }
 /* Installed app: no rubber-band reveal or pull-to-refresh behind the fixed bars. */
 @media (display-mode: standalone) { html, body { overscroll-behavior-y: none; } }
 
@@ -371,7 +392,24 @@ html { -webkit-tap-highlight-color: transparent; }
   [role="option"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"] {
     min-height: 2.75rem;
   }
-  [data-slot="button"][data-size^="icon"] { min-width: 2.75rem; }
+  [data-slot="button"] { min-width: 2.75rem; }
+  kbd { display: none; }
+  textarea { resize: none; }
+  input[type="search"] { -webkit-appearance: none; appearance: none; }
+  /* Swiping across a chart scrolls the page; a tap on one shows its tooltip without a focus box. */
+  .recharts-wrapper { touch-action: pan-y; }
+  .recharts-wrapper :focus { outline: none; }
+  /* A long press on a control should press it, not start selecting its label. */
+  button, [role="button"], [role="tab"], [role="switch"] { -webkit-user-select: none; user-select: none; }
+  [data-slot="collapsible-trigger"], [data-slot="accordion-trigger"], summary { min-height: 2.75rem; }
+  a[href]:not(p a, li a, td a, [data-slot="button"]) { display: inline-flex; align-items: center; min-height: 2.75rem; }
+  /* Checkboxes and switches keep their size but take a thumb-sized touch area. */
+  [role="checkbox"], [role="switch"], [role="radio"] { position: relative; }
+  [role="checkbox"]::after, [role="switch"]::after, [role="radio"]::after { content: ""; position: absolute; inset: 50% auto auto 50%; width: max(100%, 2.75rem); height: 2.75rem; translate: -50% -50%; }
+  /* iOS sizes date and time fields to their own content, past the end of the form, and centres their value. */
+  input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"] { min-width: 0; max-width: 100%; -webkit-appearance: none; appearance: none; }
+  input::-webkit-date-and-time-value { text-align: left; }
+  [role="tablist"] { scrollbar-width: none; }
   input:not([type="checkbox"], [type="radio"], [type="range"]), select { min-height: 2.75rem; }
   input, textarea, select { font-size: max(1rem, 16px); }
   [data-density] .focal-navigation [data-sidebar="menu-button"] { min-height: 2.75rem; }

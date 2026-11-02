@@ -7,8 +7,9 @@ for per-device reminder controls on web and desktop.
 On iPhone/iPad, install Focal with **Share > Add to Home Screen**, launch its icon,
 then enable reminders (iOS/iPadOS 16.4+). Android browsers offer **Install app** or
 **Add to Home screen** in their menu. Installation requires HTTPS, except localhost
-for development. The service worker handles notifications; it does not cache the
-app for offline loading.
+for development. The service worker handles notifications and caches the app, so
+once opened it starts without a connection. Android and desktop Chrome also get an
+**Install** button in Settings and a one-time suggestion from the second launch.
 
 Signed-in users can opt into planned study, calendar deadlines and SACs, a daily
 study nudge, friends starting study, and received cheers. Each type has its own
@@ -22,9 +23,18 @@ Quiet hours use the saved device timezone and skip alerts rather than queueing
 them; identical start and end times mute the whole day. New deadline and daily
 reminders default off. Focus, break, exam reading, exam writing and SAC time-up
 alerts have separate controls. Focus and break alerts also follow **Study timer >
-Pomodoro settings > Alerts and flow > Notifications** and need the Study timer page
-open. Timed-paper and SAC alerts work on any page. All timer alerts need the app
-running and may be delayed by browser background suspension.
+Pomodoro settings > Alerts and flow > Notifications**.
+
+With reminders enabled on the device, each timer's next boundary is queued in
+`push_timer_alerts` and delivered through normal push, so it arrives on a locked
+phone within the one-minute dispatch tick. Pausing or stopping retracts it. A page
+still running shows the alert itself and removes the queued row; both use the tag
+`timer:<key>`, so a device never shows the same alert twice. Without reminders
+enabled, timer alerts need the app running and may be delayed by the browser.
+
+The daily reminder is skipped once a study session has started that day. The Home
+Screen icon shows mistakes and planned tasks due (**App icon badge** in Notifications).
+Opening the app clears its delivered notifications.
 
 ## Desktop notifications
 
@@ -40,8 +50,8 @@ Windows and Linux builds.
 To activate closed-app push:
 
 1. Apply the Supabase migrations in order, including `0033_web_push.sql`,
-   `0034_web_push_wakeup.sql` and `0036_notification_preferences.sql`, before deploying
-   the updated push server. Existing subscription choices are preserved.
+   `0034_web_push_wakeup.sql`, `0036_notification_preferences.sql` and
+   `0042_timer_push_alerts.sql`, before deploying the updated push server. Existing subscription choices are preserved.
 2. Generate a persistent VAPID pair with `bunx web-push generate-vapid-keys --json`.
    Set `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT` on the
    server, together with the existing Supabase URL and service-role key.

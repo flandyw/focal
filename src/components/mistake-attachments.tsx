@@ -24,7 +24,7 @@ function MistakeImage({ attachment, url }: { attachment: MistakeAttachment; url:
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/30" style={{ width: `${width}%` }}>
       <a href={url} target="_blank" rel="noopener noreferrer" className="block" title={attachment.name}>
-        <img ref={image} src={url} alt={attachment.name || "Question image"} draggable={false} className="block h-auto w-full" />
+        <img ref={image} src={url} loading="lazy" decoding="async" alt={attachment.name || "Question image"} draggable={false} className="block h-auto w-full" />
       </a>
       <button
         type="button"

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react"
+import { useEffect, useRef, useState, type CSSProperties } from "react"
 import { subjectColor } from "../lib/studySubjects"
 import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, Clock3, Pencil, Plus, Settings2, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
@@ -181,12 +181,15 @@ function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
   const end = validPeriods.length ? Math.ceil(Math.max(...validPeriods.map((period) => minutes(period.endTime))) / 60) * 60 : 15 * 60
   const height = Math.max(end - start, 240)
   const hours = Array.from({ length: Math.ceil(height / 60) }, (_, i) => start + i * 60)
+  // The cycle is wider than a phone: open on today, once, without fighting later scrolling.
+  const grid = useRef<HTMLDivElement>(null)
+  useEffect(() => { grid.current?.querySelector("[data-today]")?.scrollIntoView({ inline: "center", block: "nearest" }) }, [])
 
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card">
+    <div ref={grid} className="snap-x overflow-x-auto overscroll-x-contain rounded-lg border bg-card">
       <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` }}>
         <div className="border-b" />
-        {columns.map(({ day, periods }) => <Button variant="ghost" aria-pressed={selected === day} className={`h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
+        {columns.map(({ day, periods }) => <Button data-today={today === day ? "" : undefined} variant="ghost" aria-pressed={selected === day} className={`snap-center h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
           <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Day</span>
           <span className={`flex size-10 items-center justify-center rounded-md text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
           <span className="text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span>

@@ -6,6 +6,7 @@ import { AppErrorBoundary } from './components/error-boundary.tsx'
 import { applyAppearance } from './lib/appearance.ts'
 import App from './App.tsx'
 import { registerPwa, watchForUpdates } from './lib/pwa.ts'
+import { trackKeyboard } from './lib/mobile.ts'
 
 // A chunk from a previous deploy is gone; refresh the cached shell and reload, at most once a minute to avoid a loop.
 window.addEventListener('vite:preloadError', () => {
@@ -21,11 +22,22 @@ if (import.meta.env.VITE_DESKTOP) await import("./lib/desktop")
 else {
   void registerPwa()
   watchForUpdates()
+  trackKeyboard()
+}
+
+// Reach the database a round trip sooner on the first sync after launch.
+if (import.meta.env.VITE_SUPABASE_URL) {
+  document.head.append(Object.assign(document.createElement('link'), { rel: 'preconnect', href: import.meta.env.VITE_SUPABASE_URL, crossOrigin: 'anonymous' }))
 }
 
 // Match the phone's status bar to the current surface and light/dark theme.
 const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-const syncThemeColor = () => { if (themeColor) themeColor.content = getComputedStyle(document.documentElement).getPropertyValue('--background').trim() }
+const syncThemeColor = () => {
+  const background = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+  if (themeColor) themeColor.content = background
+  document.documentElement.style.background = background
+  try { localStorage.setItem('focal:boot-background', background) } catch { /* The next launch uses the default. */ }
+}
 syncThemeColor()
 new MutationObserver(syncThemeColor).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-surface'] })
 
@@ -40,9 +52,14 @@ createRoot(document.getElementById('root')!).render(
 )
 
 // Warm the page chunks once the app has settled, so the first visit to each tab doesn't wait on the network.
-if (!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData) {
-  setTimeout(() => {
-    const pages = import.meta.glob(['./components/*-page.tsx', './components/{exam,mistake}-sheet.tsx', '!./components/chat-page.tsx'])
-    for (const load of Object.values(pages)) void load().catch(() => undefined)
-  }, 3000)
+// One at a time, in idle gaps, and never on slow or metered connections: a phone must not pay for pages it may not open.
+const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
+if (!connection?.saveData && !/2g|3g/.test(connection?.effectiveType ?? '')) {
+  const pages = Object.values(import.meta.glob(['./components/{calendar,mistakes,exams,study-timer}-page.tsx', './components/{exam,mistake}-sheet.tsx']))
+  const idle = (next: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(next, { timeout: 2000 }) : setTimeout(next, 200)
+  const warm = () => {
+    const load = pages.shift()
+    if (load) void load().catch(() => undefined).finally(() => idle(warm))
+  }
+  setTimeout(warm, 3000)
 }

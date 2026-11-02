@@ -1,5 +1,6 @@
 import { isTwoPaperMathematics } from "../lib/study-score"
-import { useMemo, useState, type FormEvent } from "react"
+import { useBackClose } from "../lib/mobile"
+import { useMemo, useRef, useState, type FormEvent } from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { Button } from "./ui/button"
 import { SubjectCombobox } from "./subject-combobox"
@@ -24,6 +25,12 @@ type ExamEntryProps = {
   initialAttempt?: ExamAttempt | null
   onOpenChange: (open: boolean) => void
   onSave: (attempt: ExamAttempt, logMistake: boolean) => void
+}
+
+function ExamSheetBack() {
+  const close = useRef<HTMLButtonElement>(null)
+  useBackClose(close)
+  return <DialogPrimitive.Close ref={close} hidden aria-hidden tabIndex={-1} />
 }
 
 export function ExamSheet({ references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
@@ -134,7 +141,8 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   return (
     <DialogPrimitive.Root open onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
-      <DialogPrimitive.Popup aria-labelledby="exam-editor-title" aria-describedby="exam-editor-description" className="fixed inset-0 z-50 overflow-y-auto bg-background outline-none">
+      <DialogPrimitive.Popup aria-labelledby="exam-editor-title" aria-describedby="exam-editor-description" className="fixed inset-x-0 top-0 bottom-(--keyboard-inset) z-50 overflow-y-auto overscroll-contain bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] outline-none">
+      <ExamSheetBack />
       <form id="exam-form" className="mx-auto grid max-w-3xl gap-8 p-4 sm:p-6 lg:py-10" onChange={() => setError(null)} onSubmit={submit}>
         <header className="grid gap-3">
           <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back to exams</Button>

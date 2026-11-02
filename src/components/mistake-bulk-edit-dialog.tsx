@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react"
+import { count } from "../lib/utils"
 import { Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -125,7 +126,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
           <div className="grid gap-3" aria-live="polite">
             {running ? <p role="status" className="text-sm text-muted-foreground tabular-nums">{progress ? formatChatGPTProgress(progress) : "Preparing edit preview…"}</p> : null}
             {failure ? <p role="alert" className="text-sm text-destructive">{failure}</p> : null}
-            <p className="text-sm text-muted-foreground tabular-nums">{changes.length} of {targets.length} mistakes would change{running ? " so far" : ""}. Untick any you want to keep as they are.</p>
+            <p className="text-sm text-muted-foreground tabular-nums">{changes.length} of {count(targets.length, "mistake")} would change{running ? " so far" : ""}. Untick any you want to keep as they are.</p>
             <div className="max-h-96 overflow-y-auto rounded-lg border">
               {changes.map(({ mistake, list }) => (
                 <div key={mistake.id} className="grid gap-2 border-b p-3 text-sm last:border-b-0">

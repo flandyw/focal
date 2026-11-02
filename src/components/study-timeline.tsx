@@ -12,7 +12,7 @@ import { subjectNameFor } from "../lib/class-timetable"
 import { localDate } from "../lib/learning-workspace"
 import { studySubjectId, studySubjectOptions, subjectColor } from "../lib/studySubjects"
 import { VCE_SUBJECTS, type CalendarEvent, type TimetablePeriod } from "../lib/types"
-import { cn } from "../lib/utils"
+import { cn, count } from "../lib/utils"
 import type { PastStudyLog } from "../lib/pastStudy"
 import type { CanonicalStudySession, StudySessionEdit } from "../lib/sync/sessionContract"
 import { Checkbox } from "./ui/checkbox"
@@ -623,7 +623,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
     setBusy(true)
     try {
       await onMerge(mergeSessions)
-      toast.success(`Merged ${mergeSessions.length} sessions`)
+      toast.success(`Merged ${count(mergeSessions.length, "session")}`)
       selectionMode(false)
     } catch (failure) {
       toast.error(failure instanceof Error ? failure.message : "Could not merge those sessions.")

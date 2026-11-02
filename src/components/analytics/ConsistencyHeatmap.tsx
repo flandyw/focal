@@ -250,7 +250,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
                         role="gridcell"
                         tabIndex={isFocused ? 0 : -1}
                         aria-label={ariaLabel}
-                        onClick={() => setFocusOverride({ weekIdx: wi, dayIdx: di })}
+                        onClick={(e) => { setFocusOverride({ weekIdx: wi, dayIdx: di }); handleCellEnter(e, day) }}
                         onMouseEnter={(e) => handleCellEnter(e, day)}
                         onMouseMove={(e) => handleCellMove(e, day)}
                         onMouseLeave={handleCellLeave}

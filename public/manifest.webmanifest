@@ -3,18 +3,25 @@
   "name": "Focal",
   "short_name": "Focal",
   "description": "Plan your study, track practice exams, and focus.",
+  "lang": "en-AU",
+  "dir": "ltr",
+  "categories": ["education", "productivity"],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#f6f4ee",
   "theme_color": "#f6f4ee",
   "shortcuts": [
-    { "name": "Study timer", "url": "/?timer=focus" },
-    { "name": "Calendar", "url": "/?timer=calendar" },
-    { "name": "Friends", "url": "/?view=friends" }
+    { "name": "Study timer", "url": "/?timer=focus", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Review mistakes", "url": "/?view=mistakes", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Log a mistake", "url": "/?action=log-mistake", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Calendar", "url": "/?timer=calendar", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

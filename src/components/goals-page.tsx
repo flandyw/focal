@@ -159,12 +159,39 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
         </form></CardContent>
       </Card>
 
-      {progress.length ? <div className="grid gap-4 lg:grid-cols-2 max-lg:order-first">{progress.map(({ goal, progress: item }) => {
+      {progress.length ? <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 max-lg:order-first">{progress.map(({ goal, progress: item }) => {
         const achieved = item.current !== null && item.current >= goal.target
         const expired = !achieved && goal.deadline < localDate(now)
-        return <Card key={goal.id}>
-          <CardHeader><div className="flex items-start justify-between gap-3"><div className="min-w-0"><CardTitle className="text-pretty">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</CardTitle><CardDescription>Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</CardDescription></div><Badge className="shrink-0" variant={expired ? "destructive" : achieved ? "success" : "outline"}>{expired ? "Expired" : achieved ? "Reached" : item.gap === null ? "Needs baseline" : `${item.gap.toFixed(goal.kind === "atar" ? 2 : 1)} to go`}</Badge></div></CardHeader>
-          <CardContent className="grid gap-4"><div><div className="mb-2 flex justify-between gap-3 text-sm"><span className="min-w-0 text-muted-foreground">{item.label}</span><strong className="tabular-nums">{item.current === null ? "—" : item.current.toFixed(goal.kind === "atar" ? 2 : 1)} / {goal.target}</strong></div><Progress aria-label={`${goal.subject ? `${goal.subject} ` : ""}${kindLabel(goal.kind)} progress to ${goal.target}`} value={item.progress} /></div><p className="text-sm text-muted-foreground">{item.evidence}</p><p className="text-sm">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button><Button size="sm" variant="ghost" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button><Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button></div></CardContent>
+        const digits = goal.kind === "atar" ? 2 : 1
+        const daysLeft = Math.round((new Date(`${goal.deadline}T00:00:00`).getTime() - new Date(`${localDate(now)}T00:00:00`).getTime()) / 86_400_000)
+        const status = expired ? "Expired" : achieved ? "Reached" : item.gap === null ? "Needs baseline" : `${item.gap.toFixed(digits)} to go`
+        return <Card key={goal.id} className="gap-5">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-muted-foreground">{kindLabel(goal.kind)}</p>
+                <CardTitle className="mt-0.5 text-pretty">{goal.subject ?? "Overall ATAR"}</CardTitle>
+              </div>
+              <Badge className="shrink-0" variant={expired ? "destructive" : achieved ? "success" : "outline"}>{status}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            {/* The number is the point of the card: current against target, with the clock beside it. */}
+            <div className="flex items-end justify-between gap-4">
+              <p className="tabular-nums"><span className="focal-stat-value">{item.current === null ? "—" : item.current.toFixed(digits)}</span><span className="ml-1.5 text-sm text-muted-foreground">/ {goal.target}</span></p>
+              <p className={`text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{expired ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
+            </div>
+            <div className="grid gap-1.5">
+              <Progress aria-label={`${goal.subject ? `${goal.subject} ` : ""}${kindLabel(goal.kind)} progress to ${goal.target}`} value={item.progress} />
+              <p className="text-xs text-muted-foreground">{item.label} · {item.evidence}</p>
+            </div>
+            <p className="text-sm text-pretty">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p>
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button>
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button>
+              <Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button>
+            </div>
+          </CardContent>
         </Card>
       })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see your current baseline and the gap to close.</EmptyDescription></EmptyHeader></Empty>}
       {archivedGoals.length ? <Card><CardHeader><CardTitle>Archived goals</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 rounded-md border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</p><p className="text-xs text-muted-foreground tabular-nums">Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p></div><Button size="sm" variant="outline" onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</CardContent></Card> : null}

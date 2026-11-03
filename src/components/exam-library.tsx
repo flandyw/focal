@@ -183,27 +183,37 @@ export function ExamLibrary({
           const analysis = loggedAttempt ? analyseAttempt(loggedAttempt, reference) : null
           const provider = getVcaaExamProvider(exam)
           return (
-          <Card key={exam.url} className="min-w-0 [contain-intrinsic-size:auto_14rem] [content-visibility:auto]">
+          <Card key={exam.url} className={`min-w-0 gap-4 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${completed ? "bg-muted/20" : ""}`}>
             <CardHeader>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0"><CardTitle>{exam.studyName}</CardTitle><CardDescription>{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)}{provider === "VCAA NHT" ? " · Northern Hemisphere" : ""}</CardDescription></div>
-                <div className="flex shrink-0 flex-wrap gap-2">{completed ? <Badge><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}{reference ? <Badge variant="outline">Official distribution</Badge> : <Badge variant="secondary">Archive · no distribution</Badge>}</div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground tabular-nums">{exam.year ?? "Unknown year"}{provider === "VCAA NHT" ? " · Northern Hemisphere" : ""}</p>
+                  <CardTitle className="mt-0.5 text-pretty">{getVcaaExamPaper(exam)}</CardTitle>
+                  <CardDescription className="truncate">{exam.studyName}</CardDescription>
+                </div>
+                {completed ? <Badge className="shrink-0" variant={loggedAttempt ? "success" : "secondary"}><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
               {analysis && loggedAttempt ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/60 p-3">
-                  <div><p className="text-sm font-medium tabular-nums">Your result · {analysis.percentage.toFixed(1)}%</p><p className="text-xs text-muted-foreground">{analysis.grade ? `Estimated VCAA ${analysis.grade}${analysis.percentile !== null ? ` · ${formatOrdinal(analysis.percentile)} percentile` : ""}` : "No grade-band comparison for this paper"}</p></div>
-                  {reference ? <Button size="sm" variant="outline" onClick={() => onCompare(loggedAttempt)}><BarChart3 />Compare years</Button> : null}
+                <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">
+                  <div className="flex min-w-0 items-baseline gap-3">
+                    <span className="focal-stat-value tabular-nums">{analysis.percentage.toFixed(1)}%</span>
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">{analysis.grade ? `Est. ${analysis.grade}${analysis.percentile !== null ? ` · ${formatOrdinal(analysis.percentile)} percentile` : ""}` : "No grade-band comparison"}</span>
+                  </div>
+                  {reference ? <Button size="sm" variant="ghost" className="shrink-0" onClick={() => onCompare(loggedAttempt)}><BarChart3 />Compare</Button> : null}
                 </div>
               ) : null}
-              <div className="flex flex-wrap gap-2">
-                {preset ? <Button onClick={() => onStart(preset)}><Play />{loggedAttempt ? "Sit again" : "Start timed attempt"}</Button> : null}
-                <Button nativeButton={false} variant="outline" render={<a href={exam.url} target="_blank" rel="noreferrer" />}><ExternalLink />Exam paper</Button>
-                {companion.reports.map((report) => <Button nativeButton={false} key={report.url} variant="outline" render={<a href={report.url} target="_blank" rel="noreferrer" />}><FileCheck2 />{resourceLabel(report)}</Button>)}
-                {companion.specification ? <Button nativeButton={false} variant="ghost" render={<a href={companion.specification.url} target="_blank" rel="noreferrer" />}><ExternalLink />Specifications</Button> : null}
-                {reference ? <Button nativeButton={false} variant="ghost" render={<a href={reference.sourceUrl} target="_blank" rel="noreferrer" />}><ExternalLink />Distribution</Button> : null}
-                {!loggedAttempt ? <Button variant="ghost" aria-pressed={manuallyCompleted} aria-label={`${manuallyCompleted ? "Mark not done" : "Mark done"}: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}><Check />{manuallyCompleted ? "Mark not done" : "Mark done"}</Button> : null}
+              <div className="flex flex-wrap items-center gap-2 max-sm:[&>*]:flex-1">
+                {preset ? <Button variant={completed ? "outline" : "default"} onClick={() => onStart(preset)}><Play />{loggedAttempt ? "Sit again" : "Start timed"}</Button> : null}
+                <Button nativeButton={false} variant="outline" render={<a href={exam.url} target="_blank" rel="noreferrer" />}><ExternalLink />Open paper</Button>
+                {!loggedAttempt ? <Button variant="ghost" className="sm:ml-auto" aria-pressed={manuallyCompleted} aria-label={`${manuallyCompleted ? "Mark not done" : "Mark done"}: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}><Check />{manuallyCompleted ? "Undo done" : "Mark done"}</Button> : null}
+              </div>
+              {/* Supporting documents are secondary: quiet links, so the paper and the timer stay the obvious next step. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs">
+                {companion.reports.map((report) => <a key={report.url} className="inline-flex items-center gap-1 font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={report.url} target="_blank" rel="noreferrer"><FileCheck2 aria-hidden className="size-3.5" />{resourceLabel(report)}</a>)}
+                {companion.specification ? <a className="inline-flex items-center gap-1 font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={companion.specification.url} target="_blank" rel="noreferrer"><ExternalLink aria-hidden className="size-3.5" />Specifications</a> : null}
+                {reference ? <a className="inline-flex items-center gap-1 font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={reference.sourceUrl} target="_blank" rel="noreferrer"><BarChart3 aria-hidden className="size-3.5" />Grade distribution</a> : <span className="text-muted-foreground">No official distribution</span>}
               </div>
             </CardContent>
           </Card>

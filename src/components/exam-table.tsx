@@ -13,6 +13,9 @@ import { compareExamRows, type ExamSortKey, type SortDirection } from "../lib/ex
 import { getExamIdFromHash, getExamTarget } from "../lib/exam-target"
 import { formatTimer } from "../lib/exam-timer"
 import { count } from "../lib/utils"
+import { useMinWidth } from "../hooks/use-mobile"
+
+const SORT_LABELS: Record<ExamSortKey, string> = { completedAt: "Date completed", examYear: "Exam year", mark: "Mark", result: "Result", comparison: "VCAA comparison" }
 
 const AttemptDistributionChart = lazy(() =>
   import("./attempt-distribution-chart").then((module) => ({ default: module.AttemptDistributionChart })),
@@ -79,6 +82,38 @@ export function ExamTable({
     key,
     direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
   }))
+  const wide = useMinWidth(768)
+  const toggle = (id: string) => setExpandedId(expandedId === id ? null : id)
+  const formatDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+  const rowMenu = (attempt: ExamAttempt) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}><MoreHorizontal /><span className="sr-only">Actions for {attempt.title}</span></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onEdit(attempt)}>Edit exam</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAddMistake(attempt.id)}>Log mistake</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => onDelete(attempt)}>Delete exam</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+  const details = (attempt: ExamAttempt) => (
+    <div className="grid gap-5">
+      {attempt.timing ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span className="tabular-nums"><span className="text-muted-foreground">Writing</span> {formatTimer(attempt.timing.actualWritingSeconds)}</span><span className={`tabular-nums ${attempt.timing.overtimeSeconds ? "text-destructive" : ""}`}><span className="text-muted-foreground">Overtime</span> {formatTimer(attempt.timing.overtimeSeconds)}</span><span className="tabular-nums"><span className="text-muted-foreground">Paused</span> {formatTimer(attempt.timing.pausedSeconds)}</span></div> : null}
+                        {attempt.questionResults?.length ? <div className="overflow-x-auto rounded-lg border bg-card"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Topic</TableHead><TableHead>Confidence</TableHead><TableHead className="text-right">Mark</TableHead></TableRow></TableHeader><TableBody>{attempt.questionResults.map((result) => <TableRow key={result.id}><TableCell className="font-medium">{result.label}</TableCell><TableCell><div>{result.areaOfStudy || "—"}</div>{result.examinerNote ? <div className="max-w-2xl text-xs text-muted-foreground">{result.examinerNote}</div> : null}</TableCell><TableCell className="capitalize">{result.confidence || "—"}</TableCell><TableCell className="text-right tabular-nums">{result.marksAwarded}/{result.maxMarks}</TableCell></TableRow>)}</TableBody></Table></div> : null}
+                        <Suspense fallback={<Skeleton className="h-64 w-full" />}><AttemptDistributionChart attempt={attempt} references={references} comparisonYear={comparisonYear} /></Suspense>
+    </div>
+  )
+  const yearSelect = (
+    <Select value={String(comparisonYear)} onValueChange={(value) => onComparisonYearChange(Number(value))}>
+      <SelectTrigger size="sm" className="w-auto border-0 bg-transparent px-1.5 py-0 text-xs font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted" aria-label="VCAA comparison year">
+        <SelectValue>{comparisonYear}</SelectValue>
+      </SelectTrigger>
+      <SelectContent className="min-w-24">
+        {comparisonYears.map((year) => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  )
+
   useEffect(() => {
     const revealTarget = () => {
       const id = getExamIdFromHash(window.location.hash)
@@ -100,11 +135,45 @@ export function ExamTable({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="all-exams-title" className="focal-section-title">All exams</h2>
-            <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Click an exam to see its VCAA distribution. Use the menu at the end of a row to edit it or log a mistake.</p>
+            <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">{wide ? "Click" : "Tap"} an exam to see its VCAA distribution. Use the menu at the end of a row to edit it or log a mistake.</p>
           </div>
           <Input type="search" className="w-full sm:w-80" aria-label="Search exams" placeholder="Search exams…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(60) }} />
         </div>
-        {rows.length ? (
+        {rows.length && !wide ? (
+          <div className="grid gap-3">
+            <div className="flex items-center gap-2">
+              <Select value={sort.key} onValueChange={(value) => setSort((current) => ({ ...current, key: (value ?? "completedAt") as ExamSortKey }))}>
+                <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="Sort exams"><SelectValue>{SORT_LABELS[sort.key]}</SelectValue></SelectTrigger>
+                <SelectContent>{(Object.keys(SORT_LABELS) as ExamSortKey[]).map((key) => <SelectItem key={key} value={key}>{SORT_LABELS[key]}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button size="icon-sm" variant="outline" aria-label={sort.direction === "asc" ? "Sorted ascending, switch to descending" : "Sorted descending, switch to ascending"} onClick={() => setSort((current) => ({ ...current, direction: current.direction === "asc" ? "desc" : "asc" }))}>{sort.direction === "asc" ? <ChevronUp /> : <ChevronDown />}</Button>
+              <span className="flex shrink-0 items-center text-xs text-muted-foreground">VCAA {yearSelect}</span>
+            </div>
+            <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+              {shownRows.map(({ attempt, reference, analysis }) => {
+                const expanded = expandedId === attempt.id
+                return (
+                  <li key={attempt.id} id={getExamTarget(attempt.id)} className={`scroll-mt-20 target:bg-accent/60 ${expanded ? "bg-muted/40" : ""}`}>
+                    <div className="flex items-start gap-1 py-1 pr-1">
+                      <button type="button" className="grid min-w-0 flex-1 gap-1 rounded-md px-3 py-2 text-left" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} onClick={() => toggle(attempt.id)}>
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 font-medium text-pretty">{attempt.title}</span>
+                          <span className="shrink-0 text-lg font-semibold tabular-nums">{analysis.percentage.toFixed(1)}%</span>
+                        </span>
+                        <span className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                          <span className="min-w-0 truncate tabular-nums">{attempt.provider} · {attempt.paper} · {formatDate(attempt.completedAt)}</span>
+                          <span className="flex shrink-0 items-center gap-1.5 tabular-nums">{reference && analysis.grade ? <Badge variant="secondary">{analysis.grade}</Badge> : null}{attempt.rawScore}/{attempt.rawMax}</span>
+                        </span>
+                      </button>
+                      {rowMenu(attempt)}
+                    </div>
+                    {expanded ? <div id={`distribution-${attempt.id}`} className="border-t p-3">{details(attempt)}</div> : null}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : rows.length ? (
           <div className="w-full overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
@@ -120,14 +189,7 @@ export function ExamTable({
                         VCAA comparison
                         {sort.key === "comparison" ? (sort.direction === "asc" ? <ChevronUp /> : <ChevronDown />) : <ChevronsUpDown />}
                       </Button>
-                      <Select value={String(comparisonYear)} onValueChange={(value) => onComparisonYearChange(Number(value))}>
-                        <SelectTrigger size="sm" className="w-auto border-0 bg-transparent px-1.5 py-0 text-xs font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted" aria-label="VCAA comparison year">
-                          <SelectValue>{comparisonYear}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="min-w-24">
-                          {comparisonYears.map((year) => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      {yearSelect}
                     </div>
                   </TableHead>
                   <TableHead className="w-12"><span className="sr-only">Actions</span></TableHead>
@@ -140,32 +202,18 @@ export function ExamTable({
                     <Fragment key={attempt.id}>
                       <TableRow id={getExamTarget(attempt.id)} data-state={expanded ? "selected" : undefined} className="scroll-mt-20 transition-colors target:bg-accent/60">
                         <TableCell className="py-2">
-                          <Button variant="ghost" size="icon-sm" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} aria-label={`${expanded ? "Hide" : "Show"} distribution for ${attempt.title}`} onClick={() => setExpandedId(expanded ? null : attempt.id)}>
+                          <Button variant="ghost" size="icon-sm" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} aria-label={`${expanded ? "Hide" : "Show"} distribution for ${attempt.title}`} onClick={() => toggle(attempt.id)}>
                             {expanded ? <ChevronUp /> : <ChevronDown />}
                           </Button>
                         </TableCell>
-                        <TableCell className="cursor-pointer" onClick={() => setExpandedId(expanded ? null : attempt.id)}><div className="font-medium text-pretty">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
-                        <TableCell className="whitespace-nowrap tabular-nums">{new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => toggle(attempt.id)}><div className="font-medium text-pretty">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">{formatDate(attempt.completedAt)}</TableCell>
                         <TableCell className="tabular-nums">{reference ? <><div>{analysis.scaledScore.toFixed(1)}/{reference.maxScore}</div><div className="text-xs text-muted-foreground">{attempt.rawScore}/{attempt.rawMax} raw</div></> : `${attempt.rawScore}/${attempt.rawMax}`}</TableCell>
                         <TableCell className="tabular-nums">{analysis.percentage.toFixed(1)}%</TableCell>
                         <TableCell>{reference && analysis.grade ? <div className="flex items-center gap-2 whitespace-nowrap"><Badge variant="secondary">{analysis.grade}</Badge><span className="text-xs text-muted-foreground">{analysis.percentile === null ? "est." : `est. ${formatOrdinal(analysis.percentile)}`}</span></div> : <span className="text-xs text-muted-foreground">Unavailable in {comparisonYear}</span>}</TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}><MoreHorizontal /><span className="sr-only">Actions for {attempt.title}</span></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => onEdit(attempt)}>Edit exam</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => onAddMistake(attempt.id)}>Log mistake</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem variant="destructive" onClick={() => onDelete(attempt)}>Delete exam</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
+                        <TableCell>{rowMenu(attempt)}</TableCell>
                       </TableRow>
-                      {expanded ? <TableRow id={`distribution-${attempt.id}`} className="bg-muted/30 hover:bg-muted/30"><TableCell colSpan={7} className="p-4 whitespace-normal"><div className="grid gap-5">
-                        {attempt.timing ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span className="tabular-nums"><span className="text-muted-foreground">Writing</span> {formatTimer(attempt.timing.actualWritingSeconds)}</span><span className={`tabular-nums ${attempt.timing.overtimeSeconds ? "text-destructive" : ""}`}><span className="text-muted-foreground">Overtime</span> {formatTimer(attempt.timing.overtimeSeconds)}</span><span className="tabular-nums"><span className="text-muted-foreground">Paused</span> {formatTimer(attempt.timing.pausedSeconds)}</span></div> : null}
-                        {attempt.questionResults?.length ? <div className="overflow-x-auto rounded-lg border bg-background"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Topic</TableHead><TableHead>Confidence</TableHead><TableHead className="text-right">Mark</TableHead></TableRow></TableHeader><TableBody>{attempt.questionResults.map((result) => <TableRow key={result.id}><TableCell className="font-medium">{result.label}</TableCell><TableCell><div>{result.areaOfStudy || "—"}</div>{result.examinerNote ? <div className="max-w-2xl text-xs text-muted-foreground">{result.examinerNote}</div> : null}</TableCell><TableCell className="capitalize">{result.confidence || "—"}</TableCell><TableCell className="text-right tabular-nums">{result.marksAwarded}/{result.maxMarks}</TableCell></TableRow>)}</TableBody></Table></div> : null}
-                        <Suspense fallback={<Skeleton className="h-64 w-full" />}><AttemptDistributionChart attempt={attempt} references={references} comparisonYear={comparisonYear} /></Suspense>
-                      </div></TableCell></TableRow> : null}
+                      {expanded ? <TableRow id={`distribution-${attempt.id}`} className="bg-muted/30 hover:bg-muted/30"><TableCell colSpan={7} className="p-4 whitespace-normal">{details(attempt)}</TableCell></TableRow> : null}
                     </Fragment>
                   )
                 })}

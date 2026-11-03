@@ -7,7 +7,6 @@ import { Button } from "./ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { MarkdownPreview } from "./markdown-preview"
 import { PageHeader } from "./page-header"
@@ -138,13 +137,26 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
             <MetricCard label="Re-check due" value={rechecks}><span>Greens fade after 21 days, ambers after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-prose basis-full text-sm text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
-            <Input type="search" className="min-w-0 flex-1 sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
-            <Select value={filter} onValueChange={(value) => setFilter((value ?? "all") as Filter)}>
-              <SelectTrigger className="w-40" aria-label="Filter items"><SelectValue>{FILTERS[filter]}</SelectValue></SelectTrigger>
-              <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}{id === "all" ? null : <span className="ml-auto text-muted-foreground tabular-nums">{subjectItems.filter((item) => id === "unrated" ? !item.rating : id === "recheck" ? isRecheckDue(item, now) : item.rating === id).length}</span>}</SelectItem>)}</SelectContent>
-            </Select>
+          <div className="grid gap-3">
+            {/* Subject at a glance: one bar for the whole checklist, so the filters below read as slices of it. */}
+            {subjectItems.length ? <div className="grid gap-2">
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${subject}: ${reds} red, ${subjectItems.filter((item) => item.rating === "amber").length} amber, ${green} green, ${subjectItems.filter((item) => !item.rating).length} unrated`}>
+                {RATINGS.map(({ id }) => { const n = subjectItems.filter((item) => item.rating === id).length; return n ? <div key={id} className={SEGMENT[id]} style={{ width: `${n / subjectItems.length * 100}%` }} /> : null })}
+              </div>
+              <p className="max-w-prose text-xs text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
+            </div> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Input type="search" className="min-w-0 flex-1 sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
+              <div role="group" aria-label="Filter items" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 py-0.5">
+                {(Object.keys(FILTERS) as Filter[]).map((id) => {
+                  const total = id === "all" ? subjectItems.length : subjectItems.filter((item) => id === "unrated" ? !item.rating : id === "recheck" ? isRecheckDue(item, now) : item.rating === id).length
+                  return <Button key={id} size="sm" variant={filter === id ? "secondary" : "ghost"} aria-pressed={filter === id} disabled={!total && filter !== id} className="shrink-0" onClick={() => setFilter(id)}>
+                    {id in SEGMENT ? <span aria-hidden className={cn("size-2 rounded-full", SEGMENT[id as StoplightRating])} /> : null}
+                    {id === "all" ? "All" : FILTERS[id]}<span className="text-muted-foreground tabular-nums">{total}</span>
+                  </Button>
+                })}
+              </div>
+            </div>
           </div>
           {groups.size ? [...groups].map(([group, groupItems]) => (
             <Collapsible key={group} defaultOpen className="rounded-xl border">

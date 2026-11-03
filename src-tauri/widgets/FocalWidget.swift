@@ -24,7 +24,8 @@ private struct FocalProvider: TimelineProvider {
             if let midnight = Calendar.current.date(byAdding: .day, value: offset, to: Calendar.current.startOfDay(for: now)) { dates.append(midnight) }
         }
         let entries = Set(dates.filter { $0 >= now && $0 <= horizon }).sorted().prefix(96).map { FocalEntry(date: $0, snapshot: snapshot) }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(900))))
+        // Without data, retry soon: a reload request from the app can be throttled by WidgetKit.
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(snapshot == nil ? 120 : 900))))
     }
 }
 private extension Color {
@@ -74,7 +75,7 @@ private struct FocalWidgetView: View {
             }.font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 6)
             if entry.snapshot == nil {
-                message("Sign in to Focal", detail: "Open Focal and sign in to fill this widget.")
+                message("Open Focal", detail: "Click to open Focal. This widget fills in once you're signed in.")
             } else {
                 switch style {
                 case .next: nextContent

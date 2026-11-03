@@ -89,9 +89,11 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
   }, [])
   useEffect(() => {
     if (!macDesktop()) return
-    if (owner.current !== accountId || ["signed-out", "sign-in-required", "unconfigured"].includes(status)) publish(null)
+    // Only clear on a real account change; the first render has no user yet while the session restores.
+    if ((owner.current && owner.current !== accountId) || ["signed-out", "sign-in-required", "unconfigured"].includes(status)) publish(null)
     owner.current = accountId
-    if (!accountId || status !== "synced") return
+    // Local data is still the account's own while offline or with unpushed changes.
+    if (!accountId || !["synced", "pending", "error"].includes(status)) return
     const update = () => publish(snapshot(data, sessions, timetable))
     const timer = window.setTimeout(update, 1200)
     const interval = window.setInterval(update, 60_000)

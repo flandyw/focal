@@ -62,7 +62,7 @@ export interface StudyTimerEngine {
   returnToBreak: () => void
 }
 
-function playChime() {
+export function playChime() {
   if (typeof window === "undefined" || typeof AudioContext === "undefined") return
   try {
     const context = new AudioContext()

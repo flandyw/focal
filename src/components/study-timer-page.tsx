@@ -1,6 +1,6 @@
 import { toast } from "sonner"
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
-import { useWakeLock } from "../lib/mobile"
+import { buzz, useWakeLock } from "../lib/mobile"
 import {
   Bell,
   CalendarPlus,
@@ -32,8 +32,8 @@ import { SectionHeading, WorkspacePage } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
 import { PageHeader } from "./page-header"
 import { TimerReadout } from "./timer-readout"
-import { useStudyTimer } from "../hooks/use-study-timer"
-import { notificationPermission, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
+import { playChime, useStudyTimer } from "../hooks/use-study-timer"
+import { notificationPermission, notifyTimer, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
 import type { useStudySessionSync } from "../lib/study-session-sync"
 import { StudySessionDialog } from "./study-session-dialog"
 import type { StudySessionEdit, SubjectSwitch } from "../lib/sync/sessionContract"
@@ -249,7 +249,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     running: isRunning(sharedSession), secondsLeft: 0, totalSeconds: 0, cycles: 0,
     overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 1000),
   } : local.state
-  const progress = sharedSession ? 0 : local.progress
+  // A planned session counts down its planned time. Pauses don't use it up, and it keeps
+  // recording past zero (as overtime) until you finish, the way Folio does.
+  const planSeconds = sharedSession ? Math.round(studySessionPlan(sharedSession).milliseconds / 1000) : 0
+  const countdown = planSeconds > 0
+  const remainingSeconds = planSeconds - state.overtimeSeconds
+  const pastPlan = countdown && remainingSeconds < 0
+  const progress = countdown ? Math.min(100, state.overtimeSeconds / planSeconds * 100) : sharedSession ? 0 : local.progress
   // Blocks only reach the record when they finish, so a reset throws this time away.
   const unsavedTime = !sharedSession && (local.state.mode === "free" || local.state.studyOvertime
     ? local.state.overtimeSeconds >= 60
@@ -263,9 +269,22 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     selectMode: () => {},
   } : local
 
+  const planAlertRef = useRef("")
+  useEffect(() => {
+    if (!sharedSession || !countdown || !state.running || remainingSeconds > 0) return
+    const key = `${sharedSession.id}:${planSeconds}`
+    if (planAlertRef.current === key) return
+    planAlertRef.current = key
+    // Opening an already-overrun session shouldn't chime; only the moment it crosses zero does.
+    if (remainingSeconds < -5) return
+    if (settings.soundEnabled) playChime()
+    if (settings.notificationsEnabled) void notifyTimer("focus", { at: Date.now(), title: "Planned time reached", body: `${sharedSession.title || "Your study session"} has reached its planned ${Math.round(planSeconds / 60)} minutes.`, type: "focus", path: "/?timer=focus" })
+    buzz([200, 100, 200])
+  }, [sharedSession, countdown, state.running, remainingSeconds, planSeconds, settings.soundEnabled, settings.notificationsEnabled])
+
   const requestReset = () => { if (sharedSession || unsavedTime) setConfirmingDiscard(true); else actions.reset() }
   const isFreeStudy = state.mode === "free"
-  const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
+  const displayMode = countdown ? (pastPlan ? "Overtime" : "Planned session") : isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
   const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
   const [permission, setNotificationPermission] = useState<string>("default")
   useEffect(() => {
@@ -308,12 +327,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} ${state.running ? "started" : "paused"}.`
   // The browser tab is where you glance from another window, and a running countdown belongs there.
   const tabTitle = state.running ? displayMode : ""
-  const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
+  const readout = countdown ? (pastPlan ? `+${formatTimer(-remainingSeconds)}` : formatTimer(remainingSeconds)) : isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
   // to start until one is chosen.
   const subjectChosen = !!sharedSession || subject.trim() !== ""
-  const statusLabel = isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"
+  const statusLabel = countdown ? (state.running ? (pastPlan ? "Past planned time" : "Running") : "Paused") : isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {
@@ -392,7 +411,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     document.title = `${readout} · ${tabTitle}`
     return () => { document.title = previous }
   }, [readout, tabTitle])
-  const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
+  const caption = countdown ? (pastPlan ? "Planned time is up. Keep going if you're on a roll, or finish to save this session." : "Counting down your planned time. Pause when you need to; paused time doesn't count.") : isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
     ? "Break time is being logged as study time."
     : onBreak
       ? "Rest properly. The next focus block starts itself if you left auto-start on."
@@ -423,12 +442,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           <TimerReadout
             animationKey={`${displayMode}:${state.cycles}`}
             caption={caption}
-            countUp={isFreeStudy}
+            countUp={isFreeStudy && !countdown}
             display={readout}
             marks={isFreeStudy ? undefined : { total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
             mode={displayMode}
             onCaption={announcement}
-            overtime={state.studyOvertime && !state.freeStudy}
+            overtime={countdown ? pastPlan : state.studyOvertime && !state.freeStudy}
             progress={progress}
             status={statusLabel}
           >
@@ -464,7 +483,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           </TimerReadout>
           {sharedSession && studySessionPlan(sharedSession).milliseconds > 0 ? <p className="mt-4 text-center text-sm text-muted-foreground">
             {Math.round(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 60_000)} of {Math.round(studySessionPlan(sharedSession).milliseconds / 60_000)} planned minutes worked
-            {studySessionActiveMilliseconds(sharedSession, now.getTime()) >= studySessionPlan(sharedSession).milliseconds ? " · Goal reached; finish when you’re ready." : ""}
           </p> : null}
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
@@ -518,8 +536,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       </section>
       {eclair ? <EclairHome
         display={readout} mode={displayMode} status={statusLabel} running={state.running}
-        seconds={isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
-        totalSeconds={isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
+        seconds={countdown ? Math.abs(remainingSeconds) : isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
+        totalSeconds={countdown ? (pastPlan ? null : planSeconds) : isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
         onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
         locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
         subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}

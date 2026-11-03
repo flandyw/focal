@@ -252,11 +252,13 @@ export function AppSidebar({
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <Button
             variant="ghost"
-            className="h-auto min-w-0 flex-1 justify-start gap-2 rounded-sm p-0 text-left hover:bg-transparent group-data-[collapsible=icon]:hidden"
+            className="h-auto min-w-0 flex-1 justify-start gap-2.5 rounded-sm p-0 text-left hover:bg-transparent group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
-            <span className="font-heading text-[2.75rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal<span className="text-chart-1">.</span></span>
+            <img alt="" src="/focal-mark-light.svg" className="size-10 shrink-0 dark:hidden" />
+            <img alt="" src="/focal-icon.svg" className="hidden size-10 shrink-0 dark:block" />
+            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal</span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />
         </div>

@@ -1,5 +1,5 @@
 export const ACCENT_THEMES = [
-  { id: "sage", label: "Sage", swatch: "#315647" },
+  { id: "sage", label: "Sage", swatch: "#0b4c37" },
   { id: "blue", label: "Blue", swatch: "#2f5d8c" },
   { id: "clay", label: "Clay", swatch: "#9a4f32" },
   { id: "violet", label: "Violet", swatch: "#7753a6" },

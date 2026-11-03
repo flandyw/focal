@@ -99,7 +99,7 @@ export function AppearanceSettings() {
         </div>
         <Setting title="Accent colour" description="For actions, selected items, and focus indicators."><AccentPicker /></Setting>
         <ColourSetting title="Custom accent" description="Choose any colour. Focal adjusts its contrast for readable text in both modes." value={appearance.customAccent} fallback={accentColour} onChange={(customAccent) => updateAppearance({ customAccent })} />
-        <ColourSetting title="Sidebar tint" description="Give the sidebar its own colour, independent of your accent." value={appearance.sidebarTint} fallback="#315647" onChange={(sidebarTint) => updateAppearance({ sidebarTint })} />
+        <ColourSetting title="Sidebar tint" description="Give the sidebar its own colour, independent of your accent." value={appearance.sidebarTint} fallback="#0b4c37" onChange={(sidebarTint) => updateAppearance({ sidebarTint })} />
       </TabsContent>
       <TabsContent value="type">
         {([['bodyFont', 'Interface font', 'The font used for navigation, controls, and body text.'], ['headingFont', 'Heading font', 'Choose a separate voice for page titles and headings.']] as const).map(([field, title, description]) => <Setting key={field} title={title} description={description}>

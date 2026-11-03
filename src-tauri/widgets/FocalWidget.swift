@@ -30,7 +30,7 @@ private struct FocalProvider: TimelineProvider {
 }
 private extension Color {
     // Mirrors --primary and --card in src/index.css so widgets match the app in both themes.
-    static let focal = adaptive(light: (0x31, 0x56, 0x47), dark: (0xaf, 0xc7, 0xa6))
+    static let focal = adaptive(light: (0x0b, 0x4c, 0x37), dark: (0xa9, 0xcb, 0xb6))
     static let focalCard = adaptive(light: (0xfd, 0xfc, 0xf8), dark: (0x22, 0x29, 0x25))
     static func adaptive(light: (Int, Int, Int), dark: (Int, Int, Int)) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

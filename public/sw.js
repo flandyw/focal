@@ -1,4 +1,4 @@
-const CACHE = "focal-v1"
+const CACHE = "focal-v2"
 
 self.addEventListener("install", (event) => event.waitUntil((async () => {
   await (await caches.open(CACHE)).addAll(["/icon-192.png", "/badge-96.png"]).catch(() => undefined)

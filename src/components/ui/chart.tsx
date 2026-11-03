@@ -72,6 +72,8 @@ function ChartContainer({
         <ChartStyle id={chartId} config={config} />
         <RechartsPrimitive.ResponsiveContainer
           initialDimension={initialDimension}
+          // Sidebar and window resizes fire per frame; re-laying every chart on each one is what janks.
+          debounce={120}
         >
           {children}
         </RechartsPrimitive.ResponsiveContainer>

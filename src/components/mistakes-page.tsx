@@ -170,22 +170,23 @@ function AnswerPanel({ label, value }: { label: string; value?: string }) {
 function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
   const tick = useTickingNow(30_000)
   const [latestReviewAt, setLatestReviewAt] = useState(0)
-  const now = new Date(Math.max(tick.getTime(), latestReviewAt))
+  const nowMs = Math.max(tick.getTime(), latestReviewAt)
+  const now = useMemo(() => new Date(nowMs), [nowMs])
   const settings = normalizeMistakeReviewPreferences(preferences)
-  const progress = getPracticeProgress(allMistakes, now)
+  const progress = useMemo(() => getPracticeProgress(allMistakes, now), [allMistakes, now])
   const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[]; weekly: boolean; week: string; size: number; initialXP: number } | null>(null)
   const [feedback, setFeedback] = useState("")
   const [celebration, setCelebration] = useState(0)
   const [scope, setScope] = useState<"due" | "all">("due")
-  const due = getDueMistakes(mistakes, now)
+  const due = useMemo(() => getDueMistakes(mistakes, now), [mistakes, now])
   // The latest possible Date makes every active card due, keeping the earliest-due-first order.
-  const active = getDueMistakes(mistakes, new Date(8.64e15))
+  const active = useMemo(() => getDueMistakes(mistakes, new Date(8.64e15)), [mistakes])
   const queue = scope === "all" ? active : due
-  const mistakeMap = new Map(allMistakes.map((mistake) => [mistake.id, mistake]))
+  const mistakeMap = useMemo(() => new Map(allMistakes.map((mistake) => [mistake.id, mistake])), [allMistakes])
   const remaining = session?.ids.filter((id) => mistakeMap.has(id) && !mistakeMap.get(id)!.suspended) ?? []
   const current = remaining.length ? mistakeMap.get(remaining[0]) : undefined
   const completed = session?.ratings.length ?? 0
-  const nextDue = mistakes.filter((mistake) => !mistake.suspended).map((mistake) => getMistakeSchedule(mistake).dueAt).toSorted()[0]
+  const nextDue = active[0] && getMistakeSchedule(active[0]).dueAt
 
   function start(cards = queue, weekly = false) {
     if (!cards.length) return
@@ -241,8 +242,12 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
   const submitting = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const [reviewTime] = useState(() => new Date())
-  const previews = RATING_OPTIONS.map((option) => ({ ...option, dueAt: previewMistakeReview(mistake, option.rating, reviewTime.toISOString(), preferences, mistakes).dueAt }))
+  // Memoised: the scratch textarea re-renders this card on every keystroke, and each preview walks the whole deck.
+  const previews = useMemo(() => RATING_OPTIONS.map((option) => ({ ...option, dueAt: previewMistakeReview(mistake, option.rating, reviewTime.toISOString(), preferences, mistakes).dueAt })), [mistake, reviewTime, preferences, mistakes])
+  const answer = useRef<HTMLDivElement>(null)
   useEffect(() => { heading.current?.focus() }, [])
+  // The reveal button disappears, so focus would fall to the page and a phone would still be looking at the question.
+  useEffect(() => { if (revealed) answer.current?.focus() }, [revealed])
 
   function rate(rating: ReviewRating) {
     if (!revealed || submitting.current) return
@@ -279,8 +284,8 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
           <div className="grid gap-2"><Label htmlFor="review-recall">Your approach <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="resize-y" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
         </div>
       </div>
-      {revealed ? <div id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4" : "practice-reveal grid gap-4"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
-      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-background/95 p-3 backdrop-blur">
+      {revealed ? <div ref={answer} tabIndex={-1} id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4 outline-none" : "practice-reveal grid gap-4 outline-none"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
+      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-background p-3">
         {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-2 sm:py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70">Space</kbd></Button>}
       </footer>
     </article>
@@ -497,13 +502,16 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
   const summaryCounts = useMemo(() => getMistakeQueueCounts(data.mistakes, now), [data.mistakes, now])
   const summaryProgress = useMemo(() => getMistakeProgress(data.mistakes, now), [data.mistakes, now])
   const topPriority = useMemo(() => buildRevisionPriorities(visibleMistakes).find((item) => item.unresolved > 0), [visibleMistakes])
-  const alternativeCount = useMemo(() => data.alternativeMistakeDeck?.cards.filter((card) => visibleMistakes.some((mistake) => mistake.id === card.sourceMistakeId)).length ?? 0, [data.alternativeMistakeDeck, visibleMistakes])
+  const alternativeCount = useMemo(() => {
+    const visibleIds = new Set(visibleMistakes.map((mistake) => mistake.id))
+    return data.alternativeMistakeDeck?.cards.filter((card) => visibleIds.has(card.sourceMistakeId)).length ?? 0
+  }, [data.alternativeMistakeDeck, visibleMistakes])
   const autofillCandidates = useMemo(() => data.mistakes.filter(hasEmptyMistakeFields), [data.mistakes])
   const hasMergeableFields = useMemo(() => data.mistakes.some((mistake) => Boolean(mistake.areaOfStudy?.trim())), [data.mistakes])
   const browsedMistakes = useMemo(() => {
     return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution })
   }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution])
-  const selectedMistakes = browsedMistakes.filter((mistake) => selected.has(mistake.id))
+  const selectedMistakes = useMemo(() => browsedMistakes.filter((mistake) => selected.has(mistake.id)), [browsedMistakes, selected])
   // ponytail: pagination bounds DOM work; use virtualisation if continuous scrolling is needed.
   const pageSize = 24
   const pageCount = Math.max(1, Math.ceil(browsedMistakes.length / pageSize))
@@ -511,11 +519,13 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
   const shownMistakes = browsedMistakes.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
   const activeMistake = browsedMistakes.find((mistake) => mistake.id === activeId) ?? null
   const worksheetMistakes = selectedMistakes.length ? selectedMistakes : browsedMistakes
-  const categories = [...new Set(visibleMistakes.map((mistake) => mistake.category))].sort()
-  const topics = [...new Set(visibleMistakes.flatMap((mistake) => mistake.areaOfStudy ? [mistake.areaOfStudy] : []))].sort()
-  const visibleAttemptIds = new Set(visibleMistakes.map((mistake) => mistake.attemptId))
-  const exams = data.attempts.filter((attempt) => visibleAttemptIds.has(attempt.id))
-  const providers = [...new Set(exams.map((attempt) => attempt.provider))].filter(Boolean).sort()
+  const categories = useMemo(() => [...new Set(visibleMistakes.map((mistake) => mistake.category))].sort(), [visibleMistakes])
+  const topics = useMemo(() => [...new Set(visibleMistakes.flatMap((mistake) => mistake.areaOfStudy ? [mistake.areaOfStudy] : []))].sort(), [visibleMistakes])
+  const exams = useMemo(() => {
+    const visibleAttemptIds = new Set(visibleMistakes.map((mistake) => mistake.attemptId))
+    return data.attempts.filter((attempt) => visibleAttemptIds.has(attempt.id))
+  }, [data.attempts, visibleMistakes])
+  const providers = useMemo(() => [...new Set(exams.map((attempt) => attempt.provider))].filter(Boolean).sort(), [exams])
   const examOptions = [
     { value: "all", label: "All exams", detail: "Any linked exam or no linked exam" },
     ...(provider === "all" ? [{ value: "unlinked", label: "No linked exam", detail: "Mistakes saved without an exam" }] : []),
@@ -532,6 +542,9 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
     ...(browserFilter !== "all" ? [{ key: "schedule", label: `Review: ${REVIEW_FILTER_LABELS[browserFilter]}`, clear: () => setBrowserFilter("all") }] : []),
     ...(resolution !== "all" ? [{ key: "resolution", label: `Progress: ${resolution === "resolved" ? "Resolved" : "Unresolved"}`, clear: () => setResolution("all") }] : []),
   ]
+  // The Next button sits at the bottom of the list; the new page starts at the top of it.
+  const results = useRef<HTMLElement>(null)
+  function goToPage(next: number) { setPage(next); results.current?.scrollIntoView({ block: "start" }) }
   function clearSelection() { setSelected(new Set()); setActiveId(null); setPage(0) }
   function resetFilters() { setSearch(""); setCategory("all"); setTopic("all"); setBrowserFilter("all"); setExamId("all"); setProvider("all"); setResolution("all"); clearSelection() }
   function clearAllFilters() { onSubjectChange("all"); setMathsExamFilter("all"); resetFilters() }
@@ -656,14 +669,14 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
                       {group.items.map(({ mistake, schedule }) => {
                         const attempt = attemptMap.get(mistake.attemptId)
                         return (
-                          <li key={mistake.id} className="min-w-0">
+                          <li key={mistake.id} className="min-w-0 [contain-intrinsic-size:auto_4rem] [content-visibility:auto]">
                             <Button
                               variant="ghost"
                               onClick={() => onEdit(mistake)}
                               className="grid h-auto min-h-16 w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] justify-items-stretch gap-x-4 gap-y-2 rounded-none px-4 py-3 text-left font-normal whitespace-normal hover:bg-accent focus-visible:relative focus-visible:z-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-center xl:gap-6"
                             >
                               <span className="grid min-w-0 gap-1">
-                                <span className="break-words text-sm font-medium">{mistake.question}</span>
+                                <span className="break-words text-sm font-medium"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>
                                 {mistake.areaOfStudy ? <span className="break-words text-xs text-muted-foreground">{mistake.areaOfStudy}</span> : null}
                               </span>
                               <span className="grid min-w-0 gap-1">
@@ -769,15 +782,15 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
             </div>
             {selectedMistakes.length ? <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted p-3" aria-label="Selected card actions"><span className="mr-auto text-sm font-medium tabular-nums">{selectedMistakes.length} selected</span><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), true); setSelected(new Set()) }}>Pause reviews</Button><Button size="sm" variant="outline" disabled={selectedMistakes.every((mistake) => !mistake.suspended)} onClick={() => { onSetSuspended(selectedMistakes.map((mistake) => mistake.id), false); setSelected(new Set()) }}>Resume reviews</Button>{AI_ENABLED ? <Button size="sm" variant="outline" onClick={() => setBulkEditOpen(true)}><Sparkles />Edit with ChatGPT</Button> : null}<Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><FileDown />Export selected</Button><Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X />Clear selection</Button></div> : null}
             <WorkspaceSplit id="mistakes" primary={
-              <section className="grid min-w-0 gap-3" aria-label="Mistake results">
+              <section ref={results} className="grid min-w-0 scroll-mt-16 gap-3" aria-label="Mistake results">
                 <ol className="grid min-w-0 divide-y overflow-hidden rounded-xl border bg-card">
                   {shownMistakes.map((mistake) => <BrowseRow key={mistake.id} mistake={mistake} now={now} active={mistake.id === activeId} selected={selected.has(mistake.id)} onOpen={() => setActiveId(mistake.id)} onSelect={() => toggleSelected(mistake.id)} onReimport={() => reimportMistake(mistake)} />)}
                 </ol>
-                <nav aria-label="Library pages" className="flex items-center justify-between gap-2">
-                  <Button size="sm" variant="outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</Button>
-                  <span className="text-xs text-muted-foreground" role="status">Page {currentPage + 1} of {pageCount}</span>
-                  <Button size="sm" variant="outline" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</Button>
-                </nav>
+                {pageCount > 1 ? <nav aria-label="Library pages" className="flex items-center justify-between gap-2">
+                  <Button size="sm" variant="outline" disabled={currentPage === 0} onClick={() => goToPage(currentPage - 1)}>Previous</Button>
+                  <span className="text-xs text-muted-foreground tabular-nums" role="status">Page {currentPage + 1} of {pageCount}</span>
+                  <Button size="sm" variant="outline" disabled={currentPage + 1 >= pageCount} onClick={() => goToPage(currentPage + 1)}>Next</Button>
+                </nav> : null}
               </section>
               } secondary={isWorkspace ? <div className="min-w-0 lg:sticky lg:top-4">{activeMistake
                 ? <MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} />
@@ -820,22 +833,23 @@ function ReviewPacing({ data, onSave, onReduce }: { data: AppData; onSave: (pref
   const [days, setDays] = useState(7)
   const [target, setTarget] = useState(5)
   const now = useTickingNow(30_000).getTime()
-  const changes = reduceMistakeReviews(data.mistakes, days, target, now)
+  // Memoised: dragging a slider fires this per step, and it reschedules the whole deck.
+  const changes = useMemo(() => reduceMistakeReviews(data.mistakes, days, target, now), [data.mistakes, days, target, now])
   return <Card className="mb-6">
     <CardHeader><CardTitle>Review pacing</CardTitle><CardDescription>Due dates are suggestions. Practise any saved question whenever you need to. These controls sync with Folio.</CardDescription></CardHeader>
     <CardContent className="grid gap-5">
       <div className="grid gap-4 sm:grid-cols-3">
         <Label className="grid gap-2 text-sm">Successful review spacing · {spacing.toFixed(1)}×<Slider min={0.5} max={3} step={0.1} value={spacing} onValueChange={(value) => setSpacing(Number(value))} /></Label>
-        <Label className="grid gap-2 text-sm">Retry after a miss · {retry < 1 ? `${Math.round(retry * 60)} minutes` : `${Math.round(retry)} hours`}<Slider min={1 / 6} max={168} step={1 / 60} value={retry} onValueChange={(value) => setRetry(Number(value))} /></Label>
+        <Label className="grid gap-2 text-sm">Retry after a miss · {retry < 1 ? `${Math.round(retry * 60)} minutes` : count(Math.round(retry), "hour")}<Slider min={1 / 6} max={168} step={1 / 60} value={retry} onValueChange={(value) => setRetry(Number(value))} /></Label>
         <Label className="grid gap-2 text-sm">Longest interval · {maximum} days<Slider min={7} max={365} step={1} value={maximum} onValueChange={(value) => setMaximum(Number(value))} /></Label>
       </div>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setSpacing(1); setRetry(1 / 6); setMaximum(365) }}>Frequent reviews</Button><Button variant="outline" onClick={() => { setSpacing(1.5); setRetry(24); setMaximum(180) }}>Relaxed defaults</Button><Button onClick={() => onSave({ ...preferences, spacingMultiplier: spacing, retryHours: retry, maximumIntervalDays: maximum, updatedAt: new Date().toISOString() })}>Save pacing</Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { setSpacing(1); setRetry(1 / 6); setMaximum(365) }}>Frequent reviews</Button><Button variant="outline" onClick={() => { setSpacing(1.5); setRetry(24); setMaximum(180) }}>Relaxed defaults</Button><Button onClick={() => { onSave({ ...preferences, spacingMultiplier: spacing, retryHours: retry, maximumIntervalDays: maximum, updatedAt: new Date().toISOString() }); toast.success("Review pacing saved") }}>Save pacing</Button></div>
       <div className="grid gap-4 border-t pt-4">
-        {preferences.lighterUntil && Date.parse(preferences.lighterUntil) > now ? <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Lighter schedule until {new Date(preferences.lighterUntil).toLocaleDateString()}</p><Button variant="outline" onClick={() => onSave({ ...preferences, lighterUntil: undefined })}>End lighter period</Button></div> : null}
+        {preferences.lighterUntil && Date.parse(preferences.lighterUntil) > now ? <div className="flex flex-wrap items-center gap-2"><p className="text-sm">Lighter schedule until {new Date(preferences.lighterUntil).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}</p><Button variant="outline" onClick={() => onSave({ ...preferences, lighterUntil: undefined })}>End lighter period</Button></div> : null}
         <h3 className="font-medium">Reduce upcoming reviews</h3>
-        <div className="grid gap-4 sm:grid-cols-2"><Label className="grid gap-2 text-sm">Next {days} days<Slider min={1} max={90} step={1} value={days} onValueChange={(value) => setDays(Number(value))} /></Label><Label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${target} scheduled questions per day`}<Slider min={0} max={50} step={1} value={target} onValueChange={(value) => setTarget(Number(value))} /></Label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><Label className="grid gap-2 text-sm">Next {count(days, "day")}<Slider min={1} max={90} step={1} value={days} onValueChange={(value) => setDays(Number(value))} /></Label><Label className="grid gap-2 text-sm">{target === 0 ? "Take a break" : `Up to ${count(target, "scheduled question")} per day`}<Slider min={0} max={50} step={1} value={target} onValueChange={(value) => setTarget(Number(value))} /></Label></div>
         <p className="text-sm text-muted-foreground">{count(changes.size, "question")} will move to later dates. Overflow is spread beyond this period around existing reviews. A break resumes at up to 10 questions a day. Review history stays intact; you can still practise early. New reviews also respect this target during the period.</p>
-        <Button className="w-fit" variant="outline" onClick={() => onReduce(days, target)}>Start lighter period · move {changes.size} dates</Button>
+        <Button className="w-fit" variant="outline" disabled={!changes.size} onClick={() => onReduce(days, target)}>Start lighter period · move {count(changes.size, "date")}</Button>
       </div>
     </CardContent>
   </Card>

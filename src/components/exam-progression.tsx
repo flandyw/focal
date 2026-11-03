@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { SubjectCombobox } from "./subject-combobox"
 import { buildProgressionPrompt, parseExamProgression, previewProgressionImport, progressionBySubject, type ProgressionImportMode, type ExamProgression, type ProgressionExam } from "../lib/exam-progression"
 import type { ExamAttempt } from "../lib/exam-data"
+import { count } from "../lib/utils"
 import type { ExamSuggestion } from "../lib/exam-suggestions"
 
 export type ExamProgressionProps = {
@@ -85,7 +86,7 @@ function ProgressionEditor({ progression, subjects, adding, initialSubject, onCl
     setName(result.name); setExams(result.exams)
     setFilter(result.subjects.length === 1 ? result.subjects[0] : "")
     setError(""); setJson("")
-    setNotice(`Draft updated: ${result.added} papers added, ${result.removed} replaced, ${result.skipped} duplicates skipped. Review the papers below and save when ready.`)
+    setNotice(`Draft updated: ${count(result.added, "paper")} added, ${result.removed} replaced, ${count(result.skipped, "duplicate")} skipped. Review the papers below and save when ready.`)
   }
   function save() {
     try { onSave({ ...parseExamProgression(JSON.stringify({ version: 1, name, exams })), updatedAt: new Date().toISOString() }) }
@@ -124,7 +125,7 @@ function ProgressionEditor({ progression, subjects, adding, initialSubject, onCl
         <Label className="grid gap-1 text-sm">Show subject<NativeSelect value={filter} onChange={(event) => setFilter(event.target.value)}><NativeSelectOption value="">All subjects</NativeSelectOption>{planSubjects.map((subject) => <NativeSelectOption key={subject}>{subject}</NativeSelectOption>)}</NativeSelect></Label>
         <Button type="button" variant="outline" disabled={exams.length >= 1000} onClick={() => addPaper(filter || subjects[0] || "")}>Add paper</Button>
       </div>
-      <p className="text-xs text-muted-foreground">{exams.length} papers. Use the arrows to reorder. Remove all papers and save to clear the progression. Check marks for each paper before saving.</p>
+      <p className="text-xs text-muted-foreground">{count(exams.length, "paper")}. Use the arrows to reorder. Remove all papers and save to clear the progression. Check marks for each paper before saving.</p>
       <div className="grid gap-3">{visible.map(({ exam, index }, position) => <fieldset key={index} className="grid gap-3 rounded-lg border p-3">
         <legend className="px-1 text-xs font-medium">Paper {position + 1}{filter ? ` · ${filter}` : ""}</legend>
         <div className="grid gap-3 sm:grid-cols-2">

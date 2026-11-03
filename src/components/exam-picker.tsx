@@ -138,7 +138,7 @@ export function ExamPicker({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent className="max-h-[85dvh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b px-6 py-5">
           <DialogTitle>Track VCE exams I'm doing</DialogTitle>
           <DialogDescription>

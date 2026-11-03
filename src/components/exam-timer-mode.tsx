@@ -32,7 +32,7 @@ import { formatTimer, getExamClock, type ExamClock } from "../lib/exam-timer"
 import { loadAppData } from "../lib/storage"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
-import { cn } from "../lib/utils"
+import { cn, count } from "../lib/utils"
 import type { VcaaStudyResources } from "../lib/vcaa-resources"
 import { pauseExamSession, resumeExamSession, skipExamReading, type ExamTimerSession } from "../lib/ongoing-timers"
 import { localDate } from "../lib/learning-workspace"
@@ -72,7 +72,7 @@ function SuggestionButton({ suggestion, onClick, showProvider = false }: {
       <span className="grid gap-1">
         <span className="font-medium">{showProvider ? `${suggestion.provider} · ${suggestion.paper}` : suggestion.subject}</span>
         <span className="text-xs font-normal text-muted-foreground">
-          {showProvider ? `${suggestion.subject} · ${suggestion.examYear}` : `${suggestion.examYear} · ${suggestion.paper}`} · {suggestion.marks} marks
+          {showProvider ? `${suggestion.subject} · ${suggestion.examYear}` : `${suggestion.examYear} · ${suggestion.paper}`} · {count(suggestion.marks, "mark")}
         </span>
       </span>
     </Button>
@@ -400,7 +400,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold tracking-tight">{session.title}{session.paper ? ` · ${session.paper}` : ""}</h2>
           <p className="text-sm text-muted-foreground tabular-nums">
-            {minutes(session.readingMinutes)} reading · {minutes(session.writingMinutes)} writing · {session.marks} marks
+            {minutes(session.readingMinutes)} reading · {minutes(session.writingMinutes)} writing · {count(session.marks, "mark")}
             <span role="status" className="ml-2">{saveStatus}</span>
           </p>
         </div>
@@ -469,7 +469,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
       }} /> : null}
 
       <Dialog open={markingOpen} onOpenChange={setMarkingOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Mark and log exam</DialogTitle>
             <DialogDescription className="tabular-nums">

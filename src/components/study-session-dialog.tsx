@@ -162,7 +162,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) close() }}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{converting ? "Convert study to event" : creating ? "Plan study session" : "Edit study session"}</DialogTitle>
           <DialogDescription>{converting ? "Save these details as calendar events and remove the planned study session. Each time block becomes a separate event." : creating ? "Schedule one or more study blocks with breaks. You can start the same plan here or in Folio." : "Change the details, reschedule study, or split it into blocks with breaks."}</DialogDescription>

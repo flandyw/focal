@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react"
 import { swipe } from "../lib/mobile"
 import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
@@ -144,8 +144,8 @@ export function CalendarPage({
   const days = useMemo(() => buildCalendarMonth(month, source, timetable, now), [month, source, timetable, now])
   const plan = useMemo(() => buildDayPlan(selected, source, timetable, now.getTime()), [selected, source, timetable, now])
   const overdue = useMemo(
-    () => (selected >= today() ? overdueTasks(data.learning.tasks, today()) : []),
-    [data.learning.tasks, selected],
+    () => (selected >= localDate(now) ? overdueTasks(data.learning.tasks, localDate(now)) : []),
+    [data.learning.tasks, selected, now],
   )
   const monthLabel = month.toLocaleDateString("en-AU", { month: "long", year: "numeric" })
   const completion = plan.totalCount ? plan.completedCount / plan.totalCount * 100 : 0
@@ -169,11 +169,11 @@ export function CalendarPage({
     onChange((current) => ({ ...update(current), updatedAt: new Date().toISOString() }))
   }
 
-  function selectDay(date: string) {
+  const selectDay = useCallback((date: string) => {
     setSelected(date)
     const [year, month] = date.split("-").map(Number)
     setMonth(new Date(year, month - 1, 1))
-  }
+  }, [])
 
   function editSession(id: string) {
     const session = sessions.find((item) => item.id === id)
@@ -196,7 +196,8 @@ export function CalendarPage({
   }
 
   function move(id: string, date: string) {
-    if (!date) return
+    // Typing into a date field reports partial years ("0002") as complete dates.
+    if (!date || date < "2000") return
     commit((current) => moveTask(current, id, date))
     selectDay(date)
   }
@@ -238,7 +239,7 @@ export function CalendarPage({
     const removed = data.events?.find((item) => item.id === id)
     onEventsChange((current) => current.filter((item) => item.id !== id))
     setEventDialog(null)
-    toast("Event deleted", removed ? { action: { label: "Undo", onClick: () => onEventsChange((current) => [...current, removed]) } } : undefined)
+    toast("Event deleted", removed ? { duration: 8000, action: { label: "Undo", onClick: () => onEventsChange((current) => [...current, removed]) } } : undefined)
   }
 
   const classes = useMemo(() => classPeriodsOn(selected, classTimetable), [selected, classTimetable])
@@ -284,7 +285,7 @@ export function CalendarPage({
           </p>
         </div>
         <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
-          <Button onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
+          <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
           <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
         </div>
@@ -431,8 +432,8 @@ export function CalendarPage({
                       <li className="flex items-center gap-2 px-2 py-1.5" key={task.id}>
                         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK.task)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{task.title}</p>
-                          <p className="text-xs text-muted-foreground tabular-nums">{task.plannedFor} · {task.durationMinutes} min</p>
+                          <p className="truncate text-sm font-medium" title={task.title}>{task.title}</p>
+                          <p className="text-xs text-muted-foreground tabular-nums">{formatDayTitle(task.plannedFor)} · {task.durationMinutes} min</p>
                         </div>
                         <Button onClick={() => move(task.id, selected)} size="sm" variant="outline">Move here</Button>
                       </li>
@@ -484,7 +485,7 @@ const CELL_ORDER: Record<DayItem["kind"], number> = { exam: 0, sac: 0, event: 1,
  * A cell lists what is still open and folds what is finished into one count. A past week
  * used to be a column of struck-through titles: every line spent saying "this is over".
  */
-function DayCell({ day, active, weekend, onSelect }: {
+const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
   day: CalendarDay
   active: boolean
   weekend: boolean
@@ -498,7 +499,7 @@ function DayCell({ day, active, weekend, onSelect }: {
     <Button
       variant="ghost"
       aria-current={day.isToday ? "date" : undefined}
-      aria-label={`${day.date}, ${open.length} open, ${done} done, ${formatMinutes(day.minutes)} of study`}
+      aria-label={[formatDayTitle(day.date), `${open.length} open`, done ? `${done} done` : "", day.minutes ? `${formatMinutes(day.minutes)} of study` : ""].filter(Boolean).join(", ")}
       aria-pressed={active}
       data-calendar-date={day.date}
       onKeyDown={(event) => {
@@ -560,7 +561,7 @@ function DayCell({ day, active, weekend, onSelect }: {
       </span>
     </Button>
   )
-}
+})
 
 /** The grid's marks are its only colour, so they are named once, in the grid's own footer. */
 function KindLegend() {
@@ -633,7 +634,7 @@ function DayItemRow({
       <div className="flex items-center gap-2">
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
+          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground")} title={item.title}>{item.title}</p>
           {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (

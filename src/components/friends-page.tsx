@@ -112,7 +112,7 @@ function DayTrack({ blocks, now, className, color }: { blocks: Person["today_blo
       <div className={cn("relative h-3 overflow-hidden rounded-sm bg-muted", className)}>
         {[25, 50, 75].map((left) => <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />)}
         {(blocks ?? []).map(([from, to], index) => (
-          <span key={index} tabIndex={0} onClick={() => setHover(index)} onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} onBlur={() => setHover(null)} className={cn("absolute inset-y-0 rounded-[2px] bg-primary outline-none transition-[filter] hover:brightness-125 focus-visible:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(5px, ${at(to) - at(from)}%)`, background: color }} />
+          <span key={index} tabIndex={0} role="img" aria-label={`Studied ${timeOfDay(from)} to ${to ? timeOfDay(to) : "now"}`} onClick={() => setHover(index)} onMouseEnter={() => setHover(index)} onFocus={() => setHover(index)} onBlur={() => setHover(null)} className={cn("absolute inset-y-0 rounded-[2px] bg-primary outline-none transition-[filter] hover:brightness-125 focus-visible:brightness-125", !to && "motion-safe:animate-pulse")} style={{ left: `${at(from)}%`, width: `max(5px, ${at(to) - at(from)}%)`, background: color }} />
         ))}
         <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `${at(null)}%` }} />
       </div>
@@ -156,7 +156,7 @@ function DailyChart({ series, now, stacked, selected, onSelect }: { series: Char
         <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-foreground/30" style={{ bottom: `${average / max * 100}%` }} />
         <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(days.reduce((sum, offset) => sum + s.day(offset), 0))}`).join(". ")}.`}>
           {days.map((offset) => (
-            <div key={offset} tabIndex={0} role={onSelect ? "button" : undefined} aria-pressed={onSelect ? selected === offset : undefined} onClick={() => { setHover(offset); onSelect?.(offset) }} onKeyDown={(event) => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(offset) } }} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60", onSelect && "cursor-pointer", selected === offset && "ring-1 ring-primary")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
+            <div key={offset} tabIndex={0} role={onSelect ? "button" : "img"} aria-label={`${format(subDays(now, offset), "EEEE d MMMM")}: ${duration(total(offset))}`} aria-pressed={onSelect ? selected === offset : undefined} onClick={() => { setHover(offset); onSelect?.(offset) }} onKeyDown={(event) => { if (onSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(offset) } }} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 rounded-sm outline-none transition-opacity", stacked ? "flex-col-reverse justify-start" : "items-end gap-px", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60", onSelect && "cursor-pointer", selected === offset && "ring-1 ring-primary")} title={`${format(subDays(now, offset), "EEE d MMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(" · ")}`}>
               {series.map((s) => <span key={s.name} className={cn("w-full", stacked ? "first:rounded-b-[2px] last:rounded-t-[2px]" : "self-end rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%`, background: s.color }} />)}
             </div>
           ))}
@@ -226,7 +226,8 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
   const actionInFlight = useRef(false)
   const loadSequence = useRef(0)
   const poll = useTickingNow(30_000)
-  const now = useTickingNow(1_000)
+  // Live totals only move while someone studies; otherwise a once-a-second render of every row buys nothing.
+  const now = useTickingNow(people.some((person) => person.studying_since) ? 1_000 : 30_000)
 
   const loadCheers = useCallback(async () => {
     try {

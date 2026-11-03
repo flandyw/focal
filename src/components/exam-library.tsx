@@ -129,7 +129,7 @@ export function ExamLibrary({
         <Card className="bg-muted/20">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><CardTitle>{focusSubject} official pathway</CardTitle><CardDescription>{recentCompleted} of {recentExams.length} papers completed across the latest five available years.</CardDescription></div>
+              <div><CardTitle>{focusSubject} official pathway</CardTitle><CardDescription>{recentCompleted} of {count(recentExams.length, "paper")} completed across the latest five available years.</CardDescription></div>
               <Badge variant="outline">VCAA source pack</Badge>
             </div>
           </CardHeader>
@@ -182,7 +182,7 @@ export function ExamLibrary({
           const analysis = loggedAttempt ? analyseAttempt(loggedAttempt, reference) : null
           const provider = getVcaaExamProvider(exam)
           return (
-          <Card key={exam.url} className="min-w-0">
+          <Card key={exam.url} className="min-w-0 [contain-intrinsic-size:auto_14rem] [content-visibility:auto]">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0"><CardTitle>{exam.studyName}</CardTitle><CardDescription>{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)}{provider === "VCAA NHT" ? " · Northern Hemisphere" : ""}</CardDescription></div>
@@ -208,7 +208,7 @@ export function ExamLibrary({
           </Card>
         )})}
       </div>
-      {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {filtered.length} exams</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
+      {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(filtered.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
       {!filtered.length ? <div className="grid justify-items-center gap-3 rounded-lg border p-8 text-center text-sm text-muted-foreground"><p>No matching VCAA exams.</p><Button variant="outline" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button></div> : null}
     </div>
   )

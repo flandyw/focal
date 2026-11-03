@@ -110,7 +110,7 @@ export function AppTour({ onNavigate, onClose }: { onNavigate: (view: AppView) =
       <div className="fixed inset-0 z-50" aria-hidden />
       <div
         aria-hidden
-        className={`pointer-events-none fixed z-50 rounded-md shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] transition-all duration-200 motion-reduce:transition-none ${rect ? "ring-2 ring-primary" : ""}`}
+        className={`pointer-events-none fixed z-50 rounded-md shadow-[0_0_0_9999px_rgb(0_0_0/0.5)] transition-[top,left,width,height] duration-200 motion-reduce:transition-none ${rect ? "ring-2 ring-primary" : ""}`}
         style={rect ? { top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 } : { top: "50%", left: "50%", width: 0, height: 0 }}
       />
       {!ready ? null : anchor ? (

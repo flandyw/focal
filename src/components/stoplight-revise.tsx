@@ -69,7 +69,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Revise {subject} with a chatbot</DialogTitle>
           <DialogDescription>Quiz in chat, or get a printable XeLaTeX worksheet and upload it back to be marked. Either way the chatbot suggests a red, amber or green rating for each item it tested.</DialogDescription>

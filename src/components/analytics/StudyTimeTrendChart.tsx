@@ -103,7 +103,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
     <section className="border-t border-border/70 pt-5">
       <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Study Time Trends</h3>
       <p className="mb-4 text-xs text-muted-foreground">Daily study time and a rolling average of up to 7 days, including days off.</p>
-      <ResponsiveContainer width="100%" height={240}>
+      <ResponsiveContainer width="100%" height={240} debounce={120}>
         <ComposedChart accessibilityLayer data={chartData} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis

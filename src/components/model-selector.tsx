@@ -138,7 +138,7 @@ export function ModelSelector({ catalog, value, onValueChange, favourites, onTog
         <div className="space-y-2 pt-2 leading-relaxed">
           <p>Base USD prices per million tokens from <a className="underline underline-offset-2" href="https://vercel.com/ai-gateway/models" target="_blank" rel="noreferrer">Vercel AI Gateway</a>. Context, caching, and routing can change the final cost. All models support tools.</p>
           {selected ? <p className="break-words">{selected.id}<br />Input: {selected.inputPrice == null ? "Unavailable" : dollars.format(selected.inputPrice)} · Output: {selected.outputPrice == null ? "Unavailable" : dollars.format(selected.outputPrice)}</p> : null}
-          <p>Benchmarks: <a className="underline underline-offset-2" href="https://artificialanalysis.ai/" target="_blank" rel="noreferrer">Artificial Analysis</a>. {catalog.benchmarksUpdatedAt && (hasIntelligence || hasSpeed) ? `Retrieved ${new Date(catalog.benchmarksUpdatedAt).toLocaleDateString()}. Only exact model variants are included; speed varies by provider.` : "Unavailable for this catalogue. Price and capability filters still work."}</p>
+          <p>Benchmarks: <a className="underline underline-offset-2" href="https://artificialanalysis.ai/" target="_blank" rel="noreferrer">Artificial Analysis</a>. {catalog.benchmarksUpdatedAt && (hasIntelligence || hasSpeed) ? `Retrieved ${new Date(catalog.benchmarksUpdatedAt).toLocaleDateString("en-AU")}. Only exact model variants are included; speed varies by provider.` : "Unavailable for this catalogue. Price and capability filters still work."}</p>
         </div>
       </details>
     </PopoverContent>

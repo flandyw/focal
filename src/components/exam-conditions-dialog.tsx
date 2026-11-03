@@ -32,7 +32,7 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   const timer = preview ? getExamClock(preview, now) : undefined
 
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-    <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Edit exam conditions</DialogTitle>
         <DialogDescription>{session.pausedAt !== undefined ? "Your exam stays paused while you edit." : "Your timer keeps running while you edit."} Time already spent stays where it was, and question progress is kept.</DialogDescription>

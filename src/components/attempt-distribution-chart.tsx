@@ -14,6 +14,7 @@ import {
   analyseAttempt,
   analyseScore,
   computeDistributionStats,
+  formatOrdinal,
   formatReferenceName,
   findAttemptReferenceForYear,
   type AssessmentReference,
@@ -238,7 +239,7 @@ export function AttemptDistributionChart({
                       <dd className="text-right tabular-nums">{point.percentage.toFixed(1)}%</dd>
                       <dt className="text-muted-foreground">Estimated percentile</dt>
                       <dd className="text-right tabular-nums">
-                        {point.percentile === null ? "—" : `${point.percentile.toFixed(1)}th`}
+                        {point.percentile === null ? "—" : formatOrdinal(point.percentile)}
                       </dd>
                       <dt className="text-muted-foreground">Z-score</dt>
                       <dd className="text-right tabular-nums">

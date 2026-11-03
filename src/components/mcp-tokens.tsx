@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Copy, KeyRound, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { supabase } from "../lib/supabase"
@@ -36,7 +37,12 @@ export function McpTokens() {
   async function revoke(id: string) {
     const { error } = await supabase!.rpc("mcp_token_revoke", { p_id: id })
     if (error) setMessage("Could not revoke the token.")
+    else toast.success("Token revoked")
     void load()
+  }
+
+  function copy(text: string, label: string) {
+    void navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`), () => toast.error("Could not copy. Select the text above and copy it manually."))
   }
 
   const command = `claude mcp add --transport http focal ${MCP_URL} --header "Authorization: Bearer ${created}"`
@@ -53,9 +59,9 @@ export function McpTokens() {
           <p className="text-muted-foreground">For connectors that can't send headers (claude.ai), use this URL with no sign-in:</p>
           <code className="break-all text-xs">{`${MCP_URL}/${created}`}</code>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(created)}><Copy />Copy token</Button>
-            <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(command)}><Copy />Copy command</Button>
-            <Button variant="outline" size="sm" onClick={() => void navigator.clipboard.writeText(`${MCP_URL}/${created}`)}><Copy />Copy URL</Button>
+            <Button variant="outline" size="sm" onClick={() => copy(created, "Token")}><Copy />Copy token</Button>
+            <Button variant="outline" size="sm" onClick={() => copy(command, "Command")}><Copy />Copy command</Button>
+            <Button variant="outline" size="sm" onClick={() => copy(`${MCP_URL}/${created}`, "URL")}><Copy />Copy URL</Button>
             <Button variant="ghost" size="sm" onClick={() => setCreated(null)}>Done</Button>
           </div>
         </div>
@@ -65,7 +71,7 @@ export function McpTokens() {
         <div key={token.id} className="flex items-center justify-between gap-4 border-t pt-3 text-sm">
           <div className="min-w-0">
             <div className="font-medium">{token.name}</div>
-            <div className="text-muted-foreground">Created {new Date(token.created_at).toLocaleDateString()} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString()}` : "never used"}</div>
+            <div className="text-muted-foreground">Created {new Date(token.created_at).toLocaleDateString("en-AU")} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString("en-AU")}` : "never used"}</div>
           </div>
           <Button variant="outline" size="sm" onClick={() => void revoke(token.id)}><Trash2 />Revoke</Button>
         </div>

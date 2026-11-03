@@ -95,7 +95,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import mistakes from any chatbot</DialogTitle>
           <DialogDescription>

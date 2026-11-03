@@ -26,6 +26,7 @@ import {
   buildCoverage,
   findAttemptReferenceById,
   findAttemptReferenceForYear,
+  formatOrdinal,
   getDueMistakes,
   type AppData,
   type AssessmentReference,
@@ -46,6 +47,7 @@ import { getAttemptPerformance, weightedPerformanceAverage, type ExamDifficultyS
 import { openProgressReport } from "../lib/progress-report"
 import { localDate } from "../lib/learning-workspace"
 import { useTickingNow } from "../hooks/use-ticking-now"
+import { count } from "../lib/utils"
 
 const PerformanceTrendChart = lazy(() =>
   import("./performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
@@ -330,9 +332,9 @@ function StatRow({ data }: { data: AppData }) {
   const stats = useMemo(() => computeStats(data.attempts, data.examDifficulty), [data.attempts, data.examDifficulty])
   // Count mastery with the shared scheduler, so the exams page agrees with the
   // mistakes page, the calendar and the folio app rather than reading the raw flag.
-  const mature = getMistakeProgress(data.mistakes).matureCards
+  const mature = useMemo(() => getMistakeProgress(data.mistakes).matureCards, [data.mistakes])
   const total = data.mistakes.length
-  const due = getDueMistakes(data.mistakes).length
+  const due = useMemo(() => getDueMistakes(data.mistakes).length, [data.mistakes])
   const completion = total ? (mature / total) * 100 : 0
 
   return (
@@ -443,7 +445,7 @@ function ImprovementSignals({ data }: { data: AppData }) {
             <p className="text-sm text-muted-foreground">Review recall</p>
             <p className="text-2xl font-semibold tabular-nums">{review.recallRate === null ? "—" : `${review.recallRate.toFixed(0)}%`}</p>
             <p className="text-xs text-muted-foreground">
-              {review.reviewsCompleted ? `${review.reviewsCompleted} reviews in 30 days${review.recallDelta === null ? "" : ` · ${review.recallDelta >= 0 ? "+" : ""}${review.recallDelta.toFixed(0)} pts`}` : "Complete mistake reviews to measure retention"}
+              {review.reviewsCompleted ? `${count(review.reviewsCompleted, "review")} in 30 days${review.recallDelta === null ? "" : ` · ${review.recallDelta >= 0 ? "+" : ""}${review.recallDelta.toFixed(0)} pts`}` : "Complete mistake reviews to measure retention"}
             </p>
           </div>
           <div className="min-w-0 space-y-1 xl:pl-5">
@@ -559,7 +561,7 @@ function RecentExams({
                           Est.
                         </Badge>
                         <span className="text-xs text-muted-foreground tabular-nums">
-                          {analysis.percentile?.toFixed(0)}th pctile
+                          {analysis.percentile === null ? "—" : formatOrdinal(analysis.percentile)} pctile
                         </span>
                       </div>
                     ) : null}
@@ -671,7 +673,8 @@ export function ExamsPage(props: ExamsPageProps) {
             Log exam
           </Button>
         </PageHeader>
-        <NextActionNotice action={nextAction} />
+        {/* The empty state below already offers the first exam; a planned task is the only other thing worth saying here. */}
+        {nextAction?.onClick === onLogExam ? null : <NextActionNotice action={nextAction} />}
         {deadlineSection}
         <Empty className="min-h-64 border">
           <EmptyHeader>

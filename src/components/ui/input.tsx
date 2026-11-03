@@ -5,13 +5,16 @@ import { cn } from "../../lib/utils"
 
 const FINE_POINTER = typeof matchMedia === "function" && matchMedia("(pointer: fine)").matches
 
-function Input({ className, type, autoFocus, onFocus, ...props }: React.ComponentProps<"input">) {
+function Input({ className, type, autoFocus, onFocus, inputMode, ...props }: React.ComponentProps<"input">) {
   return (
     <InputPrimitive
       type={type}
       // Phones get the decimal pad for marks, and aren't handed a keyboard covering the form they just opened.
-      inputMode={type === "number" ? "decimal" : undefined}
+      inputMode={inputMode ?? (type === "number" ? "decimal" : undefined)}
       autoCapitalize={type === "email" || type === "url" ? "none" : undefined}
+      spellCheck={type === "search" || type === "email" || type === "url" ? false : undefined}
+      // Scrolling the page past a focused mark must not quietly change it.
+      onWheel={type === "number" ? (event) => event.currentTarget.blur() : undefined}
       enterKeyHint={type === "search" ? "search" : undefined}
       // Tapping a pre-filled mark should replace it; on a phone, placing the caret to delete a 0 is fiddly.
       onFocus={(event) => { if (type === "number") event.target.select(); onFocus?.(event) }}

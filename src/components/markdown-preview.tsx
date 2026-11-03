@@ -26,7 +26,7 @@ const components: Components = {
     const source = code?.type === "element" && Array.isArray(code.properties.className) && code.properties.className.includes("language-svg")
       ? code.children.map((child) => child.type === "text" ? child.value : "").join("").trim() : ""
     if (!/^<svg[\s>]/i.test(source)) return <pre>{children}</pre>
-    return <img alt="Diagram" loading="lazy" className="my-2 h-auto max-w-full rounded-md bg-white" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`} />
+    return <img alt="Diagram" loading="lazy" decoding="async" className="my-2 h-auto max-w-full rounded-md bg-white" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`} />
   },
 }
 

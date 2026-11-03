@@ -9,6 +9,7 @@ import {
   analyseAttempt,
   computeDistributionStats,
   findAttemptReference,
+  formatOrdinal,
   type AssessmentReference,
   type ExamAttempt,
 } from "../lib/exam-data"
@@ -233,7 +234,7 @@ export function PerformanceTrendChart({
                           Est.
                         </Badge>
                         <span className="text-muted-foreground tabular-nums">
-                          VCAA {point.referenceYear} · {point.scaledScore?.toFixed(1)} · {point.percentile?.toFixed(0)}th pctile
+                          VCAA {point.referenceYear} · {point.scaledScore?.toFixed(1)} · {point.percentile === null ? "—" : formatOrdinal(point.percentile)} pctile
                         </span>
                       </div>
                     ) : null}

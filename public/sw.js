@@ -26,7 +26,7 @@ function fetchAndCache(event, key) {
 }
 
 // Only reachable before the shell's first successful download.
-const OFFLINE_PAGE = `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Focal</title><body style="display:grid;place-content:center;min-height:90vh;margin:0;padding:1.5rem;font:1rem system-ui;text-align:center;color:#555;background:#f6f4ee"><p>Focal needs a connection the first time it opens.</p><button onclick="location.reload()" style="font:inherit;padding:.75rem 1.25rem">Try again</button>`
+const OFFLINE_PAGE = `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Focal</title><body style="display:grid;place-content:center;min-height:90dvh;margin:0;padding:1.5rem;font:1rem system-ui;text-align:center"><p>Focal needs a connection the first time it opens.</p><button onclick="location.reload()" style="font:inherit;padding:.75rem 1.25rem">Try again</button>`
 
 // A shell that can't boot the app must never open: its page can't run the update check that would replace it.
 const bootable = (html) => html.includes('id="root"')

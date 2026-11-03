@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { shrinkPhoto } from "../lib/mobile"
+import { count } from "../lib/utils"
 import { useChatGPT } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { ChatGPTConnection } from "./chatgpt-connection"
@@ -654,7 +655,7 @@ export function MistakeSheet({
           {error && !(isBatchReview && !isEditingBatchDraft) ? <FieldError className="sm:mr-auto sm:self-center">{error}</FieldError> : null}
           <Button type="button" variant="outline" disabled={saving || analysing} onClick={() => handleOpenChange(false)}>Cancel</Button>
           {isBatchReview && !isEditingBatchDraft ? (
-            <Button type="button" onClick={() => void saveBatch()} disabled={analysing || saving}>{saving ? "Saving…" : `Save all ${batchDrafts.length} mistakes`}</Button>
+            <Button type="button" onClick={() => void saveBatch()} disabled={analysing || saving}>{saving ? "Saving…" : `Save all ${count(batchDrafts.length, "mistake")}`}</Button>
           ) : (
             <Button type="submit" form="mistake-form" disabled={analysing || saving}>{saving ? "Saving…" : isEditingBatchDraft ? "Done editing" : initialMistake ? "Save changes" : "Save mistake"}</Button>
           )}

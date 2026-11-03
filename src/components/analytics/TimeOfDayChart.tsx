@@ -51,7 +51,7 @@ export function TimeOfDayChart({ data }: TimeOfDayChartProps) {
     <section className="border-t border-border/70 pt-5">
       <h3 className="font-heading text-xl font-normal tracking-tight mb-4">Study Time of Day</h3>
       {hasData ? (
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={200} debounce={120}>
           <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis

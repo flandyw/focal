@@ -65,7 +65,7 @@ export function AppearanceSettings() {
     updateAppearance(DEFAULT_APPEARANCE)
     selectAccent("sage")
     setTheme("light")
-    toast("Appearance reset", { action: { label: "Undo", onClick: () => {
+    toast("Appearance reset", { duration: 8000, action: { label: "Undo", onClick: () => {
       selectAccent(accent)
       updateAppearance(appearance)
       setTheme(theme ?? "system")

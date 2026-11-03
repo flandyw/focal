@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { canPromptInstall, onInstallChange, promptInstall } from "../lib/pwa"
 import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
+import { toast } from "sonner"
 import { GatewaySettings } from "./gateway-settings"
 import { AppearanceSettings } from "./appearance-settings"
 import { PushSettings } from "./push-settings"
@@ -140,7 +141,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               variant="ghost"
               aria-current={active === id ? "page" : undefined}
               onClick={() => setSection(id)}
-              className="h-auto shrink-0 justify-start rounded-xs border-l px-3 py-2 text-muted-foreground aria-[current=page]:border-primary aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+              className="h-auto shrink-0 justify-start rounded-xs px-3 py-2 text-muted-foreground aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
             >
               <Icon className="size-4" />{label}
             </Button>
@@ -166,7 +167,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 <form className="flex w-full gap-2" onSubmit={(event) => {
                   event.preventDefault()
                   const next = customSubject.trim()
-                  if (!next || selectedSubjects.some((subject) => subject.toLowerCase() === next.toLowerCase())) return
+                  if (!next) return
+                  if (selectedSubjects.some((subject) => subject.toLowerCase() === next.toLowerCase())) { toast(`${next} is already in your subjects`); return }
                   onSubjectsChange([...selectedSubjects, next])
                   setCustomSubject("")
                 }}>
@@ -179,7 +181,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   {selectedSubjects.map((subject, index) => (
                     <li key={subject} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{subject}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium" title={subject}>{subject}</span>
                       {index === 0 ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${subject} up`} disabled={index === 0} onClick={() => {
                         const next = [...selectedSubjects]
@@ -222,7 +224,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               <form className="flex w-full gap-2 py-4" onSubmit={(event) => {
                 event.preventDefault()
                 const next = providerToAdd.trim()
-                if (!next || difficulty.providerOrder.some((provider) => provider.toLowerCase() === next.toLowerCase())) return
+                if (!next) return
+                if (difficulty.providerOrder.some((provider) => provider.toLowerCase() === next.toLowerCase())) { toast(`${next} is already in the list`); return }
                 const baselineIndex = difficulty.providerOrder.indexOf("VCAA")
                 const providerOrder = [...difficulty.providerOrder]
                 providerOrder.splice(baselineIndex < 0 ? providerOrder.length : baselineIndex, 0, next)
@@ -391,7 +394,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
               </Row>
               <Row title="Import data" description="Replace your current data with a backup. You’ll be asked to confirm before anything is replaced.">
                 <Button variant="outline" onClick={() => importInput.current?.click()}><Upload />Import data</Button>
-                <Input ref={importInput} className="hidden" type="file" accept="application/json" onChange={(event) => {
+                <Input ref={importInput} className="hidden" type="file" accept="application/json,.json" onChange={(event) => {
                   const file = event.target.files?.[0]
                   if (file) void onImport(file)
                   event.currentTarget.value = ""

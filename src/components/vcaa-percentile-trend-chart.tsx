@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Label } from "./ui/label"
 import { ChartContainer, ChartTooltip } from "./ui/chart"
 import { SubjectCombobox } from "./subject-combobox"
-import { buildAttemptBenchmarks, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
+import { buildAttemptBenchmarks, formatOrdinal, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 
 const chartConfig = {
@@ -46,7 +46,7 @@ export function VcaaPercentileTrendChart({
     ? latest.percentile - first.percentile
     : null
   const summary = latest?.percentile !== null && latest?.percentile !== undefined
-    ? `${points.length} VCAA-linked attempt${points.length === 1 ? "" : "s"}; latest estimate ${latest.percentile.toFixed(0)}th percentile${change !== null && points.length > 1 ? ` (${change >= 0 ? "+" : ""}${change.toFixed(0)} since the first linked attempt)` : ""}.`
+    ? `${points.length} VCAA-linked attempt${points.length === 1 ? "" : "s"}; latest estimate ${formatOrdinal(latest.percentile)} percentile${change !== null && points.length > 1 ? ` (${change >= 0 ? "+" : ""}${change.toFixed(0)} since the first linked attempt)` : ""}.`
     : "No VCAA-linked attempts have enough grade-band data for a percentile estimate."
 
   return (
@@ -72,7 +72,7 @@ export function VcaaPercentileTrendChart({
               <LineChart data={points} margin={{ left: 4, right: 12, top: 12, bottom: 4 }} accessibilityLayer>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="timestamp" type="number" domain={([min, max]: readonly [number, number]) => min === max ? [min - 43_200_000, max + 43_200_000] : [min, max]} ticks={points.length > 0 && points[0].timestamp === points.at(-1)?.timestamp ? [points[0].timestamp] : undefined} scale="time" tickLine={false} axisLine={false} minTickGap={32} tickFormatter={formatTick} />
-                <YAxis domain={[0, 100]} width={42} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}th`} />
+                <YAxis domain={[0, 100]} width={42} tickLine={false} axisLine={false} tickFormatter={(value: number) => value === 0 ? "0" : formatOrdinal(value)} />
                 <ReferenceLine y={50} stroke="var(--border)" strokeDasharray="4 4" label={{ value: "50th", position: "insideBottomRight", fontSize: 10, fill: "var(--muted-foreground)" }} />
                 <ReferenceLine y={90} stroke="var(--border)" strokeDasharray="4 4" label={{ value: "Top 10%", position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }} />
                 <ChartTooltip content={({ active, payload }) => {
@@ -84,7 +84,7 @@ export function VcaaPercentileTrendChart({
                       <p className="text-muted-foreground">{point.attempt.subject} · {point.dateLabel} · VCAA {point.reference.year}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         <Badge variant="secondary">{point.grade ?? "—"}</Badge>
-                        <span className="font-medium tabular-nums">{point.percentile?.toFixed(0)}th percentile</span>
+                        <span className="font-medium tabular-nums">{point.percentile === null ? "—" : formatOrdinal(point.percentile)} percentile</span>
                       </div>
                       <p className="mt-1 text-muted-foreground tabular-nums">
                         Mark {point.percentage.toFixed(1)}% · {point.gapToAPlus === null ? "A+ cutoff unavailable" : `${Math.abs(point.gapToAPlus).toFixed(1)} points ${point.gapToAPlus >= 0 ? "above" : "below"} A+`}

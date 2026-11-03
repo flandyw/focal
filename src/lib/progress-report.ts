@@ -2,6 +2,7 @@ import { examHost } from "./host"
 import {
   analyseAttempt,
   findAttemptReferenceForYear,
+  formatOrdinal,
   getDueMistakes,
   type AppData,
   type AssessmentReference,
@@ -41,7 +42,7 @@ function buildAttemptRows(attempts: ExamAttempt[], references: AssessmentReferen
         ? "No official data"
         : [
             analysis?.grade ? `Grade ${analysis.grade}` : null,
-            analysis?.percentile !== null && analysis?.percentile !== undefined ? `${analysis.percentile}th percentile` : null,
+            analysis?.percentile !== null && analysis?.percentile !== undefined ? `${formatOrdinal(analysis.percentile)} percentile` : null,
           ].filter(Boolean).join(" · ") || "Official data available"
       return {
         attempt,

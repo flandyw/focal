@@ -75,10 +75,9 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
   const evidence = useMemo(() => buildItemEvidence(data, now), [data, now])
   const unlinked = useMemo(() => collectLinkRecords(data), [data])
   const subjectItems = useMemo(() => items.filter((item) => item.subject === subject), [items, subject])
-  const visible = subjectItems.filter((item) =>
+  const groups = useMemo(() => groupBy(subjectItems.filter((item) =>
     (filter === "all" || filter === "unrated" && !item.rating || filter === "recheck" && isRecheckDue(item, now) || item.rating === filter) &&
-    (!needle || `${item.name} ${item.group ?? ""} ${item.check ?? ""}`.toLowerCase().includes(needle)))
-  const groups = groupBy(visible, itemGroup)
+    (!needle || `${item.name} ${item.group ?? ""} ${item.check ?? ""}`.toLowerCase().includes(needle))), itemGroup), [subjectItems, filter, now, needle])
   const green = subjectItems.filter((item) => item.rating === "green").length
   const reds = subjectItems.filter((item) => item.rating === "red").length
   const rechecks = subjectItems.filter((item) => isRecheckDue(item, now)).length
@@ -147,7 +146,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
               <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          {visible.length ? [...groups].map(([group, groupItems]) => (
+          {groups.size ? [...groups].map(([group, groupItems]) => (
             <Collapsible key={group} defaultOpen className="rounded-xl border">
               <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
                 <span className="min-w-0 truncate font-medium">{group}</span>
@@ -162,7 +161,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                   const entry = evidence.get(item.id)
                   const text = entry ? evidenceText(entry) : ""
                   return (
-                    <li key={item.id} className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <li key={item.id} className="grid gap-3 px-4 py-3 [contain-intrinsic-size:auto_5rem] [content-visibility:auto] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{item.name}</span>
@@ -200,12 +199,12 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
       <StoplightImportDialog key={String(importOpen)} open={importOpen} subjects={subjects} preferredSubjects={data.subjects} defaultSubject={subject || data.subjects[0] || ""} onOpenChange={setImportOpen} onImport={importItems} />
       <StoplightReviseDialog key={`${revising}${subject}`} open={revising} subject={subject} items={subjectItems} evidence={evidence} onOpenChange={setRevising} onApply={applyRatings} />
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => { if (!open) setViewing(null) }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
           <DialogHeader><DialogTitle>{viewing?.name}</DialogTitle><DialogDescription>{viewingMistakes.length} linked mistake{viewingMistakes.length === 1 ? "" : "s"}. Review them in Mistakes.</DialogDescription></DialogHeader>
           <ul className="grid gap-3">
             {viewingMistakes.map((mistake) => (
               <li key={mistake.id} className="grid gap-2 rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2"><span className="font-medium">{mistake.question}</span>{mistake.itemsBy === "ai" ? <Badge variant="outline">Linked by ChatGPT</Badge> : null}</div>
+                <div className="flex items-center justify-between gap-2"><span className="min-w-0 font-medium"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>{mistake.itemsBy === "ai" ? <Badge variant="outline">Linked by ChatGPT</Badge> : null}</div>
                 <MarkdownPreview unframed>{mistake.explanation}</MarkdownPreview>
                 <MarkdownPreview unframed>{mistake.correction}</MarkdownPreview>
               </li>

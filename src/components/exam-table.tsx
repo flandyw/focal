@@ -8,10 +8,11 @@ import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Skeleton } from "./ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { analyseAttempt, findAttemptReferenceForYear, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
+import { analyseAttempt, findAttemptReferenceForYear, formatOrdinal, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
 import { compareExamRows, type ExamSortKey, type SortDirection } from "../lib/exam-sort"
 import { getExamIdFromHash, getExamTarget } from "../lib/exam-target"
 import { formatTimer } from "../lib/exam-timer"
+import { count } from "../lib/utils"
 
 const AttemptDistributionChart = lazy(() =>
   import("./attempt-distribution-chart").then((module) => ({ default: module.AttemptDistributionChart })),
@@ -145,7 +146,7 @@ export function ExamTable({
                         <TableCell className="whitespace-nowrap">{new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</TableCell>
                         <TableCell className="tabular-nums">{reference ? <><div>{analysis.scaledScore.toFixed(1)}/{reference.maxScore}</div><div className="text-xs text-muted-foreground">{attempt.rawScore}/{attempt.rawMax} raw</div></> : `${attempt.rawScore}/${attempt.rawMax}`}</TableCell>
                         <TableCell className="tabular-nums">{analysis.percentage.toFixed(1)}%</TableCell>
-                        <TableCell>{reference && analysis.grade ? <div className="flex items-center gap-2 whitespace-nowrap"><Badge variant="secondary">{analysis.grade}</Badge><span className="text-xs text-muted-foreground">est. {analysis.percentile?.toFixed(0)}th</span></div> : <span className="text-xs text-muted-foreground">Unavailable in {comparisonYear}</span>}</TableCell>
+                        <TableCell>{reference && analysis.grade ? <div className="flex items-center gap-2 whitespace-nowrap"><Badge variant="secondary">{analysis.grade}</Badge><span className="text-xs text-muted-foreground">{analysis.percentile === null ? "est." : `est. ${formatOrdinal(analysis.percentile)}`}</span></div> : <span className="text-xs text-muted-foreground">Unavailable in {comparisonYear}</span>}</TableCell>
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}><MoreHorizontal /><span className="sr-only">Actions for {attempt.title}</span></DropdownMenuTrigger>
@@ -172,7 +173,7 @@ export function ExamTable({
         ) : (
           <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
         )}
-        {rows.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {shownRows.length} of {rows.length} exams</p>{shownRows.length < rows.length ? <Button size="sm" variant="outline" onClick={() => setVisibleCount(shownRows.length + 60)}>Show more exams</Button> : null}</div> : null}
+        {rows.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {shownRows.length} of {count(rows.length, "exam")}</p>{shownRows.length < rows.length ? <Button size="sm" variant="outline" onClick={() => setVisibleCount(shownRows.length + 60)}>Show more exams</Button> : null}</div> : null}
       </section>
     </>
   )

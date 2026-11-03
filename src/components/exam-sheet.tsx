@@ -162,17 +162,17 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
               </Field>
               {showPaper && <Field>
                 <FieldLabel htmlFor="paper">Paper</FieldLabel>
-                <Input id="paper" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" required />
+                <Input id="paper" autoComplete="off" list="exam-paper-options" value={paper} onChange={(event) => changePaper(event.target.value)} placeholder="e.g. Exam 1" required />
                 <datalist id="exam-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
               </Field>}
               <Field>
                 <FieldLabel htmlFor="provider">Provider</FieldLabel>
-                <Input id="provider" value={provider} onChange={(event) => setProvider(event.target.value)} />
+                <Input id="provider" autoComplete="off" value={provider} onChange={(event) => setProvider(event.target.value)} />
               </Field>
               <div className="grid grid-cols-2 gap-5">
                 <Field>
                   <FieldLabel htmlFor="exam-year">Year</FieldLabel>
-                  <Input id="exam-year" type="number" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
+                  <Input id="exam-year" type="number" inputMode="numeric" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="completed-at">Completed</FieldLabel>
@@ -219,11 +219,12 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
           </section>
         </FieldGroup>
 
-        <footer className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t bg-background/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <footer className="sticky bottom-0 -mx-4 flex flex-wrap justify-end gap-2 border-t bg-background px-4 py-3 sm:-mx-6 sm:px-6">
           {error ? <FieldError className="w-full">{error}</FieldError> : null}
           <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
+          {/* First in the DOM: Enter submits with the first submit button, and that must be the plain save. */}
+          <Button type="submit" className="order-last">{initialAttempt ? "Save changes" : "Save exam"}</Button>
           <Button type="submit" name="next" value="mistake" variant="outline">Save & log mistake</Button>
-          <Button type="submit">{initialAttempt ? "Save changes" : "Save exam"}</Button>
         </footer>
       </form>
       </DialogPrimitive.Popup>

@@ -41,11 +41,11 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
   return <>
     <div className="flex h-full min-h-0 flex-col gap-4 p-3">
       <Button variant="ghost" className="justify-start" disabled={disabled} onClick={onNew}><Plus aria-hidden />New chat</Button>
-      <Input aria-label="Search chats" placeholder="Search chats…" className="border-border bg-transparent dark:bg-transparent" value={search} onChange={(event) => setSearch(event.target.value)} />
+      <Input type="search" aria-label="Search chats" placeholder="Search chats…" className="border-border bg-transparent dark:bg-transparent" value={search} onChange={(event) => setSearch(event.target.value)} />
       <nav aria-label="Chat history" className="min-h-0 flex-1 overflow-y-auto">
         <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Your chats</p>
         {matching.map((chat) => <div key={chat.id} className={`group flex items-center rounded-md ${chat.id === activeId ? "bg-accent" : "hover:bg-muted"}`}>
-          <Button variant="ghost" disabled={disabled} onClick={() => onSelect(chat)} aria-current={chat.id === activeId ? "page" : undefined} className="h-10 min-w-0 flex-1 justify-start px-2 text-left font-normal" title={`${chat.title} · ${new Date(chat.updatedAt).toLocaleString()}`}>
+          <Button variant="ghost" disabled={disabled} onClick={() => onSelect(chat)} aria-current={chat.id === activeId ? "page" : undefined} className="h-10 min-w-0 flex-1 justify-start px-2 text-left font-normal" title={`${chat.title} · ${new Date(chat.updatedAt).toLocaleString("en-AU")}`}>
             <span className="truncate">{chat.title}</span>
           </Button>
           <DropdownMenu>

@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { getSubjectColor } from "../../lib/progress-chart-theme"
 import { getSubjectById } from "../../lib/progress-utils"
+import { count } from "../../lib/utils"
 import type { EfficiencyPoint } from "../../lib/progress-analytics"
 
 interface EfficiencyChartProps {
@@ -52,7 +53,7 @@ export function EfficiencyChart({ data }: EfficiencyChartProps) {
                       : `${Math.floor(item.minutes / 60)}h ${item.minutes % 60}m`}
                   </span>
                   <span className="tabular-nums">
-                    {item.sessionCount} sessions
+                    {count(item.sessionCount, "session")}
                   </span>
                   <span className="tabular-nums font-medium text-foreground">
                     {item.averageConfidence.toFixed(1)}★

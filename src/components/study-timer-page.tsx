@@ -18,6 +18,7 @@ import {
   Volume2,
   VolumeX, ChevronDown } from "lucide-react"
 
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
@@ -159,6 +160,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const local = useStudyTimer({ subject, intent, onSessionChange, enabled: !sharedSession })
   const { settings, blocks, blocksToday, focusSecondsToday, updateSettings } = local
   const [sharedBusy, setSharedBusy] = useState(false)
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
   const sharedBusyRef = useRef(false)
   const [sharedFailure, setSharedFailure] = useState<{ key: string; message: string } | null>(null)
   const now = useTickingNow(sharedSession && isRunning(sharedSession) ? 1000 : 60_000)
@@ -268,6 +270,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   useWakeLock(state.running && settings.keepScreenOn)
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
   const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} ${state.running ? "started" : "paused"}.`
+  // The browser tab is where you glance from another window, and a running countdown belongs there.
+  const tabTitle = state.running ? displayMode : ""
   const readout = isFreeStudy ? formatTimer(state.overtimeSeconds) : state.studyOvertime ? `+${formatTimer(state.overtimeSeconds)}` : formatTimer(state.secondsLeft)
   const onBreak = !isFreeStudy && !state.studyOvertime && state.mode !== "work"
   // Every block lands in the study record under a subject, so there is nothing
@@ -346,6 +350,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     setNotificationBlockedMode(granted ? null : displayMode)
   }
 
+  useEffect(() => {
+    if (!tabTitle) return
+    const previous = document.title
+    document.title = `${readout} · ${tabTitle}`
+    return () => { document.title = previous }
+  }, [readout, tabTitle])
   const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
     ? isFreeStudy
       ? state.running
@@ -399,7 +409,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               {isFreeStudy ? (
                 <Button className="flex-1 sm:flex-none" disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
               ) : null}
-              <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={actions.reset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
+              <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={() => sharedSession ? setConfirmingDiscard(true) : actions.reset()} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
               {onBreak ? <Button className="flex-1 sm:flex-none" onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
             </div>
             {offerContinue ? (
@@ -432,6 +442,19 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
+
+      <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this session?</AlertDialogTitle>
+            <AlertDialogDescription>Its recorded study time will be removed on every device. Choose Finish instead to keep it.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep session</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>Discard session</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <section className="grid gap-3" aria-labelledby="planned-study-title">
         <div className="flex flex-wrap items-center justify-between gap-3">

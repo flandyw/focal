@@ -175,6 +175,7 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
     try {
       await navigator.clipboard.writeText(message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n\n"))
       setCopied(message.id)
+      window.setTimeout(() => setCopied((current) => current === message.id ? "" : current), 2000)
     } catch { toast.error("Could not copy this response. Select the text and copy it manually.") }
   }
 

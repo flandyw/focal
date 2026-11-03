@@ -76,6 +76,13 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   const aligned = !multiDay && suggestions.some((period) => period.startTime === startTime && period.endTime === endTime)
   const duration = !multiDay && toMinutes(endTime) > toMinutes(startTime) ? toMinutes(endTime) - toMinutes(startTime) : null
 
+  // Moving the start carries the end with it, so a later start can't leave the event ending before it begins.
+  function changeStart(next: string) {
+    setStartTime(next)
+    const end = toMinutes(next) + (duration ?? 0)
+    if (duration && next && end < 1440) setEndTime(fromMinutes(end))
+  }
+
   function align(period: TimetablePeriod) {
     setStartTime(period.startTime)
     setEndTime(period.endTime)
@@ -132,15 +139,16 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
           <DialogDescription>Events sync with the Focal desktop app.</DialogDescription>
         </DialogHeader>
+        <form id="event-form" onSubmit={(formEvent) => { formEvent.preventDefault(); submit() }}>
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="event-title">Title</FieldLabel>
-            <Input autoFocus id="event-title" value={title} onChange={(e) => { setTitle(e.target.value); setError(null) }} placeholder="Methods SAC 2" />
+            <Input autoFocus autoComplete="off" enterKeyHint="done" id="event-title" value={title} onChange={(e) => { setTitle(e.target.value); setError(null) }} placeholder="Methods SAC 2" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
@@ -169,7 +177,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="event-date">Date</FieldLabel>
-              <Input id="event-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); setError(null) }} />
+              <Input id="event-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); if (endDate && endDate < e.target.value) setEndDate(""); setError(null) }} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-end-date">Ends on <span className="text-muted-foreground">(multi-day)</span></FieldLabel>
@@ -177,7 +185,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
             </Field>
             <Field>
               <FieldLabel htmlFor="event-start">Start</FieldLabel>
-              <Input id="event-start" type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setError(null) }} />
+              <Input id="event-start" type="time" value={startTime} onChange={(e) => { changeStart(e.target.value); setError(null) }} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-end">End</FieldLabel>
@@ -220,7 +228,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
 
           <Field>
             <FieldLabel htmlFor="event-location">Location <span className="text-muted-foreground">(optional)</span></FieldLabel>
-            <Input id="event-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Room 12" />
+            <Input autoComplete="off" id="event-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Room 12" />
           </Field>
           <Field>
             <FieldLabel htmlFor="event-description">Notes <span className="text-muted-foreground">(optional)</span></FieldLabel>
@@ -252,6 +260,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           )}
           {error ? <FieldError>{error}</FieldError> : null}
         </FieldGroup>
+        </form>
         <DialogFooter className="sm:justify-between">
           {event ? (
             <div className="flex gap-1.5">
@@ -261,7 +270,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           ) : <span />}
           <div className="flex gap-1.5">
             <Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
-            <Button onClick={submit} type="button">{event ? "Save changes" : "Add event"}</Button>
+            <Button form="event-form" type="submit">{event ? "Save changes" : "Add event"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

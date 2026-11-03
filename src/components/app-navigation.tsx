@@ -35,7 +35,7 @@ import type { useStudySessionSync } from "../lib/study-session-sync"
 import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import type { SyncStatus } from "../lib/sync"
 import { buzz } from "../lib/mobile"
-import { cn } from "../lib/utils"
+import { cn, count } from "../lib/utils"
 import { useAppearance } from "../lib/appearance"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
@@ -88,7 +88,7 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
 function workedLabel(session: SessionSync["sessions"][number]) {
   const minutes = session.segments.reduce((total, segment) => total + (new Date(segment.ended_at ?? Date.now()).getTime() - new Date(segment.started_at).getTime()) / 60_000, 0)
   const rounded = Math.max(0, Math.round(minutes))
-  return `${Math.floor(rounded / 60)}h ${rounded % 60}m`
+  return rounded < 60 ? `${rounded}m` : `${Math.floor(rounded / 60)}h ${rounded % 60}m`
 }
 
 function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessions"]; onControl: SessionSync["control"] }) {
@@ -124,7 +124,7 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}>Resume</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => control(session, "pause")}>Pause</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => control(session, "complete")}>Finish</DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}>Cancel</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}>Discard session</DropdownMenuItem>
                 </DropdownMenuGroup>
                 {index < active.length - 1 ? <DropdownMenuSeparator /> : null}
               </Fragment>
@@ -173,6 +173,7 @@ export function AppSidebar({
   sessions,
   onViewChange,
   onSignOut,
+  onRetrySync,
   onControlSession,
   onLogExam,
   onLogPastStudy,
@@ -190,6 +191,7 @@ export function AppSidebar({
   sessions: SessionSync["sessions"]
   onViewChange: (view: AppView) => void
   onSignOut: () => void
+  onRetrySync: () => void
   onControlSession: SessionSync["control"]
   onLogExam: () => void
   onLogPastStudy: () => void
@@ -208,7 +210,8 @@ export function AppSidebar({
   if (commandOpen && !commandLoaded) setCommandLoaded(true)
   const accountLabel = user?.email || "Account"
   const accountStatus = syncStatus === "sign-in-required" ? "Sign in again" : syncStatus === "restoring" ? "Restoring account…"
-    : syncStatus === "reconnecting" ? "Reconnecting…" : user ? "Signed in" : "Not signed in"
+    : syncStatus === "reconnecting" ? "Reconnecting…" : syncStatus === "error" ? "Sync failed" : syncStatus === "syncing" ? "Syncing…"
+    : syncStatus === "pending" ? "Changes queued" : user ? "Signed in" : "Not signed in"
   const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
 
   function navigate(nextView: AppView) {
@@ -288,10 +291,10 @@ export function AppSidebar({
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                   {item.id === "mistakes" && dueMistakes > 0 ? (
-                    <SidebarMenuBadge aria-label={`${dueMistakes} mistakes due`}>{dueMistakes}</SidebarMenuBadge>
+                    <SidebarMenuBadge aria-label={`${count(dueMistakes, "mistake")} due`}>{dueMistakes > 99 ? "99+" : dueMistakes}</SidebarMenuBadge>
                   ) : null}
                   {item.id === "calendar" && plannedTasks > 0 ? (
-                    <SidebarMenuBadge aria-label={`${plannedTasks} study tasks due`}>{plannedTasks}</SidebarMenuBadge>
+                    <SidebarMenuBadge aria-label={`${count(plannedTasks, "study task")} due`}>{plannedTasks > 99 ? "99+" : plannedTasks}</SidebarMenuBadge>
                   ) : null}
                 </SidebarMenuItem>
               )})}
@@ -324,6 +327,7 @@ export function AppSidebar({
                   <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>
                     Settings
                   </DropdownMenuItem>
+                  {syncStatus === "error" ? <DropdownMenuItem onClick={onRetrySync}>Retry sync</DropdownMenuItem> : null}
                   {user && syncStatus === "sign-in-required" ? <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in again</DropdownMenuItem> : null}
                   {user
                     ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}>Sign out</DropdownMenuItem>

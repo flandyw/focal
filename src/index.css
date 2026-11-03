@@ -255,6 +255,8 @@
   body { -webkit-font-smoothing: antialiased; }
   :where(input, textarea) { caret-color: var(--primary); scroll-margin-block: 5rem; }
   :where(h1, h2, h3, p) { overflow-wrap: break-word; }
+  :where(h1, h2, h3) { text-wrap: balance; }
+  :where(p) { text-wrap: pretty; }
   h1, h2 { font-family: var(--font-heading); font-weight: 400; }
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
   :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
@@ -382,6 +384,8 @@ html {
   scroll-padding-bottom: calc(var(--mobile-tabbar) + 1rem);
 }
 .page-loading { animation: page-in 150ms 200ms ease-out both; }
+/* The tab answers at once; a slow chunk dims the outgoing page, late enough that fast navigation never flickers. */
+main[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms 250ms; }
 /* Installed app: no rubber-band reveal or pull-to-refresh behind the fixed bars. */
 @media (display-mode: standalone) { html, body { overscroll-behavior-y: none; } }
 
@@ -415,6 +419,11 @@ html {
   [data-density] .focal-navigation [data-sidebar="menu-button"] { min-height: 2.75rem; }
 }
 .typeset-mistake { --typeset-leading: var(--reading-spacing, 1.6); }
+/* Pages of different lengths must not shift sideways as a classic scrollbar comes and goes. */
+@media (pointer: fine) { html { scrollbar-gutter: stable; } }
+@media print {
+  .group\/sidebar-wrapper > .peer, .mobile-tabbar, .mobile-app-header, [data-sonner-toaster] { display: none !important; }
+}
 [data-content-width="wide"] #main-content:not([data-view="chat"]) { max-width: 1440px; margin-inline: auto; }
 [data-content-width="reading"] #main-content:not([data-view="chat"]) { max-width: 1000px; margin-inline: auto; }
 [data-density="compact"] .focal-navigation [data-sidebar="menu-button"] { min-height: 2rem; height: auto; padding-block: .3rem; }

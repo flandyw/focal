@@ -69,7 +69,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import a checklist</DialogTitle>
           <DialogDescription>Give any chatbot your study design or course outline with this prompt, then paste its reply to build a red, amber and green checklist.</DialogDescription>

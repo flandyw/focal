@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react"
 import { Archive, CalendarPlus, Flag, Pencil, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -120,6 +121,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
       goals: [...current.goals, { id: crypto.randomUUID(), kind, subject: kind === "atar" ? undefined : subject.trim(), target, deadline, createdAt: timestamp, updatedAt: timestamp }],
     }))
     setError(null)
+    toast.success("Goal added")
   }
 
   function removeGoal(id: string) {

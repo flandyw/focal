@@ -260,7 +260,7 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
             <Field><FieldLabel htmlFor="tt-day1">Day 1 starts</FieldLabel><Input id="tt-day1" required type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
             <Field><FieldLabel htmlFor="tt-cycle">Days in the cycle</FieldLabel><Input id="tt-cycle" required max={60} min={1} type="number" value={length} onChange={(e) => setLength(e.target.value)} /><FieldDescription>Choose between 1 and 60 school days.</FieldDescription></Field>
             <Label className="flex items-center gap-3 text-sm"><Checkbox checked={weekends} onCheckedChange={(checked) => setWeekends(checked)} />Include weekends as school days</Label>
-            {valid && removed > 0 ? <p className="border-l-2 border-destructive bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
+            {valid && removed > 0 ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
           </FieldGroup>
           <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!valid} type="submit">{removed > 0 && valid ? "Save & remove periods" : "Save cycle"}</Button></DialogFooter>
         </form>

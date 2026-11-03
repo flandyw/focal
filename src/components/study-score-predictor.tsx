@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { StudyScoreTrendChart } from "./study-score-trend-chart"
-import type { AppData, AssessmentReference } from "../lib/exam-data"
+import { formatOrdinal, type AppData, type AssessmentReference } from "../lib/exam-data"
 import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore, sacPercentileFromRank } from "../lib/study-score"
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
@@ -204,7 +204,7 @@ export function StudyScorePredictor({
                       />
                       <FieldDescription>
                         {parsedSac !== null
-                          ? `About the ${parsedSac.toFixed(0)}th percentile statewide after moderation.`
+                          ? `About the ${formatOrdinal(parsedSac)} percentile statewide after moderation.`
                           : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}
                       </FieldDescription>
                     </>
@@ -325,12 +325,12 @@ export function StudyScorePredictor({
                       {prediction.components.map((component) => (
                         <div key={component.label}>
                           <p className="text-xs text-muted-foreground">{component.label} · {component.weightPercent}%</p>
-                          <p className="mt-1 text-xl font-semibold tabular-nums">{component.percentile.toFixed(0)}th</p>
+                          <p className="mt-1 text-xl font-semibold tabular-nums">{formatOrdinal(component.percentile)}</p>
                           {component.projected ? <p className="text-xs text-muted-foreground">Projected from available exams</p> : null}
                         </div>
                       ))}
-                      <div><p className="text-xs text-muted-foreground">SAC percentile used</p><p className="mt-1 text-xl font-semibold tabular-nums">{prediction.sacPercentile.toFixed(0)}th</p></div>
-                      <div><p className="text-xs text-muted-foreground">Combined percentile</p><p className="mt-1 text-xl font-semibold tabular-nums">{prediction.combinedPercentile.toFixed(0)}th</p></div>
+                      <div><p className="text-xs text-muted-foreground">SAC percentile used</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatOrdinal(prediction.sacPercentile)}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Combined percentile</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatOrdinal(prediction.combinedPercentile)}</p></div>
                     </div>
                   </CardContent>
                 </Card>
@@ -363,7 +363,7 @@ export function StudyScorePredictor({
                               {!exactReferenceYear ? ` · using ${referenceYear} distribution` : ""}
                             </p>
                           </div>
-                          <span className="text-sm font-medium tabular-nums">{percentile.toFixed(0)}th percentile</span>
+                          <span className="text-sm font-medium tabular-nums">{formatOrdinal(percentile)} percentile</span>
                           <span className="w-16 text-right text-xs text-muted-foreground tabular-nums">{(weight * 100).toFixed(0)}% weight</span>
                         </li>
                       ))}

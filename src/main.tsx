@@ -56,6 +56,8 @@ createRoot(document.getElementById('root')!).render(
 const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
 if (!connection?.saveData && !/2g|3g/.test(connection?.effectiveType ?? '')) {
   const pages = Object.values(import.meta.glob(['./components/{calendar,mistakes,exams,study-timer}-page.tsx', './components/{exam,mistake}-sheet.tsx']))
+  // A wide window shows every page in the sidebar, so the rest are one click away too.
+  if (matchMedia('(min-width: 1024px)').matches) pages.push(...Object.values(import.meta.glob('./components/{progress,stoplight,goals,sac,friends,settings}-page.tsx')))
   const idle = (next: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(next, { timeout: 2000 }) : setTimeout(next, 200)
   const warm = () => {
     const load = pages.shift()

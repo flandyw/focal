@@ -88,7 +88,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); else onOpenChange(true) }}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import from chatbot</DialogTitle>
           <DialogDescription>Send the prompt to any chatbot with your timetable or notice, then paste its reply to add the items to your calendar.</DialogDescription>

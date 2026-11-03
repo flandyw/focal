@@ -22,7 +22,6 @@ function pickUpcoming(entries: TimetableEntry[], trackedSet: Set<string>, now: D
   return entries
     .filter((entry) => trackedSet.has(entry.id) && isUpcoming(entry, now))
     .toSorted((a, b) => getExamStart(a).getTime() - getExamStart(b).getTime())
-    .slice(0, MAX_VISIBLE)
 }
 
 function pickPast(entries: TimetableEntry[], trackedSet: Set<string>, now: Date): TimetableEntry[] {
@@ -51,7 +50,7 @@ export function UpcomingExamsCard({
 
   function downloadCalendar() {
     const calendar = buildTimetableCalendar(entries.filter((entry) => trackedSet.has(entry.id)), sourceUrl)
-    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "vce-2026-exams.ics")
+    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "vce-exams.ics")
   }
 
   return (
@@ -66,7 +65,7 @@ export function UpcomingExamsCard({
             <CardDescription>
               {totalTracked === 0
                 ? "Track the exams you're sitting to see days remaining here."
-                : `${upcoming.length} upcoming of ${totalTracked} tracked`}
+                : upcoming.length > MAX_VISIBLE ? `Next ${MAX_VISIBLE} of ${upcoming.length} upcoming` : `${upcoming.length} upcoming of ${totalTracked} tracked`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -99,7 +98,7 @@ export function UpcomingExamsCard({
           <AllCompleteState past={past} />
         ) : (
           <ul className="flex flex-col divide-y rounded-lg border" role="list">
-            {upcoming.map((entry) => (
+            {upcoming.slice(0, MAX_VISIBLE).map((entry) => (
               <UpcomingRow key={entry.id} entry={entry} now={now} />
             ))}
           </ul>
@@ -168,7 +167,7 @@ function UpcomingRow({ entry, now }: { entry: TimetableEntry; now: Date }) {
         aria-label={
           isRange
             ? `Window opens in ${days} day${days === 1 ? "" : "s"}`
-            : `In ${days} day${days === 1 ? "" : "s"}`
+            : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`
         }
       >
         {isRange ? `Window opens in ${days}d` : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days}d`}

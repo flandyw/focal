@@ -85,6 +85,8 @@ export function ExamTable({
       if (id && attempts.some((attempt) => attempt.id === id)) {
         setQuery("")
         setExpandedId(id)
+        // The row may only render once the search clears, after the browser's own anchor jump.
+        requestAnimationFrame(() => document.getElementById(getExamTarget(id))?.scrollIntoView({ block: "start" }))
       }
     }
     revealTarget()
@@ -98,7 +100,7 @@ export function ExamTable({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="all-exams-title" className="focal-section-title">All exams</h2>
-            <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Search, edit, log mistakes, or expand a row for its VCAA distribution. Scroll sideways to reach every column on a narrow screen.</p>
+            <p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Click an exam to see its VCAA distribution. Use the menu at the end of a row to edit it or log a mistake.</p>
           </div>
           <Input type="search" className="w-full sm:w-80" aria-label="Search exams" placeholder="Search exams…" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(60) }} />
         </div>
@@ -138,11 +140,11 @@ export function ExamTable({
                     <Fragment key={attempt.id}>
                       <TableRow id={getExamTarget(attempt.id)} className="scroll-mt-20 transition-colors target:bg-accent/60">
                         <TableCell className="py-2">
-                          <Button variant="ghost" size="icon-sm" aria-expanded={expanded} aria-controls={`distribution-${attempt.id}`} aria-label={`${expanded ? "Hide" : "Show"} distribution for ${attempt.title}`} onClick={() => setExpandedId(expanded ? null : attempt.id)}>
+                          <Button variant="ghost" size="icon-sm" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} aria-label={`${expanded ? "Hide" : "Show"} distribution for ${attempt.title}`} onClick={() => setExpandedId(expanded ? null : attempt.id)}>
                             {expanded ? <ChevronUp /> : <ChevronDown />}
                           </Button>
                         </TableCell>
-                        <TableCell><div className="font-medium">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => setExpandedId(expanded ? null : attempt.id)}><div className="font-medium">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
                         <TableCell className="whitespace-nowrap">{new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</TableCell>
                         <TableCell className="tabular-nums">{reference ? <><div>{analysis.scaledScore.toFixed(1)}/{reference.maxScore}</div><div className="text-xs text-muted-foreground">{attempt.rawScore}/{attempt.rawMax} raw</div></> : `${attempt.rawScore}/${attempt.rawMax}`}</TableCell>
                         <TableCell className="tabular-nums">{analysis.percentage.toFixed(1)}%</TableCell>
@@ -171,7 +173,7 @@ export function ExamTable({
             </Table>
           </div>
         ) : (
-          <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
+          <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" className="mt-2 w-fit" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
         )}
         {rows.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {shownRows.length} of {count(rows.length, "exam")}</p>{shownRows.length < rows.length ? <Button size="sm" variant="outline" onClick={() => setVisibleCount(shownRows.length + 60)}>Show more exams</Button> : null}</div> : null}
       </section>

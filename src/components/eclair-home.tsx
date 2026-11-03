@@ -358,7 +358,7 @@ export function EclairHome(props: EclairHomeProps) {
   const backRef = useRef(back)
   useEffect(() => { backRef.current = back })
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") backRef.current() }
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.querySelector('[role="alertdialog"]')) backRef.current() }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [])
@@ -392,7 +392,7 @@ export function EclairHome(props: EclairHomeProps) {
   )
 
   return createPortal(
-    <div aria-label="Study launcher" className="eclair" role="dialog">
+    <div aria-label="Study launcher" aria-modal="true" className="eclair" role="dialog">
       <Defs />
       <Wallpaper />
       <StatusBar now={now} onBack={back} onHome={home} onMenu={() => setOverlay(overlay === "menu" ? null : "menu")} onShade={() => setOverlay("shade")} planned={!cleared && props.plans.length > 0} running={props.running} />
@@ -465,7 +465,7 @@ export function EclairHome(props: EclairHomeProps) {
               </section>
               <section className="ecl-widget ecl-panel">
                 <h3>Rhythm</h3>
-                <div role="radiogroup">{TIMER_PRESETS.map((preset) => <Radio checked={preset === activePreset} detail={preset.description} disabled={shared} key={preset.id} label={preset.label} onClick={() => actions.preset(preset)} />)}</div>
+                <div aria-label="Rhythm" role="radiogroup">{TIMER_PRESETS.map((preset) => <Radio checked={preset === activePreset} detail={preset.description} disabled={shared} key={preset.id} label={preset.label} onClick={() => actions.preset(preset)} />)}</div>
               </section>
             </div>
           </div>
@@ -538,12 +538,12 @@ export function EclairHome(props: EclairHomeProps) {
 
       {overlay === "subject" ? (
         <Dialog onClose={close} title="Choose subject">
-          <div role="radiogroup">{props.subjects.map((name) => <Radio checked={props.subject === name} key={name} label={name} onClick={() => { actions.subject(name); close() }} />)}</div>
+          {props.subjects.length ? <div aria-label="Subject" role="radiogroup">{props.subjects.map((name) => <Radio checked={props.subject === name} key={name} label={name} onClick={() => { actions.subject(name); close() }} />)}</div> : <p className="ecl-dialog-note">No subjects yet. Exit the launcher and add them in Settings.</p>}
         </Dialog>
       ) : null}
       {overlay === "rhythm" ? (
         <Dialog onClose={close} title="Rhythm">
-          <div role="radiogroup">{TIMER_PRESETS.map((preset) => <Radio checked={preset === activePreset} detail={preset.description} key={preset.id} label={preset.label} onClick={() => { actions.preset(preset); close() }} />)}</div>
+          <div aria-label="Rhythm" role="radiogroup">{TIMER_PRESETS.map((preset) => <Radio checked={preset === activePreset} detail={preset.description} key={preset.id} label={preset.label} onClick={() => { actions.preset(preset); close() }} />)}</div>
         </Dialog>
       ) : null}
     </div>,

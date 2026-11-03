@@ -58,6 +58,7 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
   const [durationMinutes, setDurationMinutes] = useState(initialRecord?.durationMinutes ?? 50)
   const [maxScore, setMaxScore] = useState(initialRecord?.maxScore ?? 50)
   const [markingOpen, setMarkingOpen] = useState(false)
+  const pausedBeforeMarking = useRef(false)
   const [score, setScore] = useState(0)
   const [notes, setNotes] = useState(initialRecord?.notes ?? "")
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialRecord?.performanceContext ?? {})
@@ -82,6 +83,14 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
   const timer = useMemo(() => session
     ? getSacTimerState(session.pausedAt ?? now.getTime(), session.startedAt, session.durationMinutes)
     : null, [now, session])
+
+  const tabReadout = !timer ? "" : session?.pausedAt ? "Paused" : timer.phase === "overtime" ? `+${formatTimer(timer.overtimeSeconds)}` : formatTimer(timer.remainingSeconds)
+  useEffect(() => {
+    if (!tabReadout) return
+    const previous = document.title
+    document.title = `${tabReadout} · SAC`
+    return () => { document.title = previous }
+  }, [tabReadout])
 
   function start(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -135,6 +144,7 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
   }
 
   function openMarking() {
+    pausedBeforeMarking.current = Boolean(session?.pausedAt)
     pause()
     setError(null)
     setMarkingOpen(true)
@@ -142,7 +152,7 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
 
   function closeMarking() {
     setMarkingOpen(false)
-    resume()
+    if (!pausedBeforeMarking.current) resume()
   }
 
   function saveResult(event: FormEvent<HTMLFormElement>) {
@@ -212,10 +222,10 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
                 <Field><FieldLabel htmlFor="sac-timer-date">Date</FieldLabel><Input id="sac-timer-date" type="date" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} required /></Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field><FieldLabel htmlFor="sac-timer-duration">Time allowed (min)</FieldLabel><Input id="sac-timer-duration" type="number" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required /></Field>
-                <Field><FieldLabel htmlFor="sac-timer-marks">Total marks</FieldLabel><Input id="sac-timer-marks" type="number" min="0.5" max="500" step="0.5" value={Number.isFinite(maxScore) ? maxScore : ""} onChange={(event) => setMaxScore(event.target.valueAsNumber)} required /></Field>
+                <Field><FieldLabel htmlFor="sac-timer-duration">Time allowed (min)</FieldLabel><Input id="sac-timer-duration" type="number" inputMode="numeric" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required /></Field>
+                <Field><FieldLabel htmlFor="sac-timer-marks">Total marks</FieldLabel><Input id="sac-timer-marks" type="number" min="0.5" max="500" step="any" value={Number.isFinite(maxScore) ? maxScore : ""} onChange={(event) => setMaxScore(event.target.valueAsNumber)} required /></Field>
               </div>
-              <Alert><Clock3 /><AlertTitle>{(durationMinutes / maxScore || 0).toFixed(2)} minutes per mark</AlertTitle><AlertDescription>The timer records pauses and overtime, then saves both with your result.</AlertDescription></Alert>
+              <Alert><Clock3 /><AlertTitle>{durationMinutes > 0 && maxScore > 0 ? `${(durationMinutes / maxScore).toFixed(2)} minutes per mark` : "Enter the time and marks"}</AlertTitle><AlertDescription>The timer records pauses and overtime, then saves both with your result.</AlertDescription></Alert>
               <FieldError>{error}</FieldError>
               <Button type="submit" size="lg">Start SAC timer</Button>
             </FieldGroup>
@@ -234,19 +244,18 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
           <AlertDialogTrigger render={<Button variant="ghost" />}><RotateCcw />Discard</AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader><AlertDialogTitle>Discard this timed SAC?</AlertDialogTitle><AlertDialogDescription>The timer is cleared and you return to setup.</AlertDialogDescription></AlertDialogHeader>
-            <AlertDialogFooter><AlertDialogCancel>Keep timing</AlertDialogCancel><AlertDialogAction onClick={discard}>Discard</AlertDialogAction></AlertDialogFooter>
+            <AlertDialogFooter><AlertDialogCancel>Keep timing</AlertDialogCancel><AlertDialogAction variant="destructive" onClick={discard}>Discard</AlertDialogAction></AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog><Button variant="outline" onClick={session.pausedAt ? resume : pause}>{session.pausedAt ? <Play /> : <Pause />}{session.pausedAt ? "Resume" : "Pause"}</Button><Button onClick={openMarking}><Check />Finish & mark</Button></div>
       </div>
-      {session.id ? <Alert><Clock3 /><AlertTitle>Shared study session</AlertTitle><AlertDescription>Timer changes sync with Focal when you sign in to the same account.</AlertDescription></Alert> : null}
       <section className="grid gap-6 py-8 text-center">
         <div><p className={overtime ? "text-sm font-medium text-destructive" : "text-sm font-medium text-muted-foreground"}>{overtime ? "Overtime" : session.pausedAt ? "Paused" : "Time remaining"}</p><p role="timer" className={overtime ? "mt-2 text-7xl font-semibold tracking-tight text-destructive tabular-nums sm:text-8xl" : "mt-2 text-7xl font-semibold tracking-tight tabular-nums sm:text-8xl"}>{overtime ? `+${formatTimer(timer.overtimeSeconds)}` : formatTimer(timer.remainingSeconds)}</p></div>
         <Progress value={timer.progress} className="mx-auto w-full max-w-2xl"><ProgressLabel>{overtime ? "Time elapsed" : "SAC progress"}</ProgressLabel><span className="ml-auto text-sm text-muted-foreground tabular-nums">{Math.round(timer.progress)}%</span></Progress>
       </section>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Card><CardHeader><CardDescription>Pace</CardDescription><CardTitle className="text-3xl tabular-nums">{(session.durationMinutes / session.maxScore).toFixed(2)} min / mark</CardTitle></CardHeader></Card><Card><CardHeader><CardDescription>Expected progress</CardDescription><CardTitle className="text-3xl tabular-nums">{Math.min(session.maxScore, (timer.elapsedSeconds / (session.durationMinutes * 60)) * session.maxScore).toFixed(1)} / {session.maxScore} marks</CardTitle></CardHeader></Card></div>
+      <div className="grid gap-4 sm:grid-cols-2"><Card><CardHeader><CardDescription>Pace</CardDescription><CardTitle className="text-3xl tabular-nums">{(session.durationMinutes / session.maxScore).toFixed(2)} min / mark</CardTitle></CardHeader></Card><Card><CardHeader><CardDescription>Expected progress</CardDescription><CardTitle className="text-3xl tabular-nums">{Math.min(session.maxScore, (timer.elapsedSeconds / (session.durationMinutes * 60)) * session.maxScore).toFixed(1)} / {session.maxScore} marks</CardTitle></CardHeader></Card></div>
       {overtime ? <Alert variant="destructive"><Clock3 /><AlertTitle>Time has ended</AlertTitle><AlertDescription>The timer is recording overtime. Finish and mark when you put your pen down.</AlertDescription></Alert> : null}
       <Dialog open={markingOpen} onOpenChange={(open) => open ? setMarkingOpen(true) : closeMarking()}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Mark and log SAC</DialogTitle><DialogDescription>Save the result, conditions, and timing evidence to your SAC statistics.</DialogDescription></DialogHeader><form id="sac-timer-result" onSubmit={saveResult}><FieldGroup><div className="grid grid-cols-2 gap-4"><Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="sac-timer-score">Mark</FieldLabel><Input id="sac-timer-score" type="number" min="0" max={session.maxScore} step="0.5" value={Number.isFinite(score) ? score : ""} onChange={(event) => { setScore(event.target.valueAsNumber); setError(null) }} autoFocus required /></Field><Field><FieldLabel htmlFor="sac-timer-maximum">Out of</FieldLabel><Input id="sac-timer-maximum" value={session.maxScore} disabled /></Field></div><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="sac-timer-context" /><Field><FieldLabel htmlFor="sac-timer-notes">Notes <span className="text-muted-foreground">(optional)</span></FieldLabel><Textarea id="sac-timer-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What went well or what needs revision?" /></Field><FieldError>{error}</FieldError></FieldGroup></form><DialogFooter><Button variant="outline" onClick={closeMarking}>Keep timing</Button><Button type="submit" form="sac-timer-result">Log SAC result</Button></DialogFooter></DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>Mark and log SAC</DialogTitle><DialogDescription>Save the result, conditions, and timing evidence to your SAC statistics.</DialogDescription></DialogHeader><form id="sac-timer-result" onSubmit={saveResult}><FieldGroup><div className="grid grid-cols-2 gap-4"><Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="sac-timer-score">Mark</FieldLabel><Input id="sac-timer-score" type="number" min="0" max={session.maxScore} step="any" value={Number.isFinite(score) ? score : ""} onChange={(event) => { setScore(event.target.valueAsNumber); setError(null) }} autoFocus required /></Field><Field><FieldLabel htmlFor="sac-timer-maximum">Out of</FieldLabel><Input id="sac-timer-maximum" value={session.maxScore} disabled /></Field></div><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="sac-timer-context" /><Field><FieldLabel htmlFor="sac-timer-notes">Notes <span className="text-muted-foreground">(optional)</span></FieldLabel><Textarea id="sac-timer-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="What went well or what needs revision?" /></Field><FieldError>{error}</FieldError></FieldGroup></form><DialogFooter><Button variant="outline" onClick={closeMarking}>Keep timing</Button><Button type="submit" form="sac-timer-result">Log SAC result</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   )

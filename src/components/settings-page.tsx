@@ -193,7 +193,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                         ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
                         onSubjectsChange(next)
                       }}><ArrowDown /></Button>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => onSubjectsChange(selectedSubjects.filter((item) => item !== subject))}><X /></Button>
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => { const previous = selectedSubjects; onSubjectsChange(previous.filter((item) => item !== subject)); toast(`${subject} removed`, { duration: 8000, action: { label: "Undo", onClick: () => onSubjectsChange(previous) } }) }}><X /></Button>
                     </li>
                   ))}
                 </ol>
@@ -205,7 +205,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <Section
               title="Difficulty calibration"
               description="Order the providers you use from hardest to easiest. VCAA is the zero-adjustment baseline."
-              action={<Button type="button" size="sm" variant={difficulty.enabled ? "default" : "outline"} aria-pressed={difficulty.enabled} onClick={() => updateDifficulty({ enabled: !difficulty.enabled })}>{difficulty.enabled ? "Enabled" : "Disabled"}</Button>}
+              action={<Button type="button" size="sm" variant={difficulty.enabled ? "default" : "outline"} aria-label="Difficulty calibration" aria-pressed={difficulty.enabled} onClick={() => updateDifficulty({ enabled: !difficulty.enabled })}>{difficulty.enabled ? "Enabled" : "Disabled"}</Button>}
             >
               <Row title="Adjustment strength" description="Adjustments are capped at ±8 points. VCAA stays unchanged.">
                 <Select items={{ light: "Light · 1 point per rank", balanced: "Balanced · 1.5 points per rank", strong: "Strong · 2 points per rank" }} value={difficulty.strength} onValueChange={(value) => updateDifficulty({ strength: (value ?? "balanced") as ExamDifficultySettings["strength"] })} disabled={!difficulty.enabled}>
@@ -243,7 +243,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   return (
                     <li key={provider} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{provider}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium" title={provider}>{provider}</span>
                       <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">{adjustment === 0 ? "baseline" : `${adjustment > 0 ? "+" : ""}${adjustment} pts`}</span>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${provider} up`} disabled={!difficulty.enabled || index === 0} onClick={() => {
                         const providerOrder = [...difficulty.providerOrder]
@@ -255,7 +255,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                         ;[providerOrder[index], providerOrder[index + 1]] = [providerOrder[index + 1], providerOrder[index]]
                         updateDifficulty({ providerOrder })
                       }}><ArrowDown /></Button>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${provider}`} disabled={!difficulty.enabled || provider === "VCAA"} onClick={() => updateDifficulty({ providerOrder: difficulty.providerOrder.filter((item) => item !== provider) })}><Trash2 /></Button>
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${provider}`} disabled={!difficulty.enabled || provider === "VCAA"} onClick={() => { const previous = difficulty.providerOrder; updateDifficulty({ providerOrder: previous.filter((item) => item !== provider) }); toast(`${provider} removed`, { duration: 8000, action: { label: "Undo", onClick: () => updateDifficulty({ providerOrder: previous }) } }) }}><Trash2 /></Button>
                     </li>
                   )
                 })}
@@ -273,7 +273,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 : sync.status === "pending" ? sync.pendingCount ? `${sync.pendingCount} queued` : "Sync pending" : "Sync failed"}</Badge> : null}
             >
               {!sync.configured ? (
-                <p className="py-4 text-sm text-muted-foreground">Add the Supabase URL and publishable key to enable account sync.</p>
+                <p className="py-4 text-sm text-muted-foreground">Account sync is not available in this build. Your data stays on this device.</p>
               ) : sync.passwordRecovery === "checking" ? (
                 <p role="status" className="py-4 text-sm text-muted-foreground">Checking your password reset link…</p>
               ) : sync.user && sync.status !== "sign-in-required" && !recovering && !resetting ? (
@@ -557,7 +557,7 @@ function UpdatesSection() {
       </Row>
       {update.status === "downloading" ? (
         <div className="grid gap-2 py-4">
-          <Progress value={percent} />
+          <Progress aria-label="Update download" value={percent} />
           <p className="text-sm tabular-nums text-muted-foreground">
             {formatBytes(update.downloaded)}{update.total ? ` of ${formatBytes(update.total)}` : ""}{percent === null ? "" : ` · ${Math.round(percent)}%`}{update.speed ? ` · ${formatBytes(update.speed)}/s` : ""}
           </p>

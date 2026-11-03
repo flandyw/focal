@@ -31,8 +31,8 @@ export function QuestionResultsEditor({ value, onChange }: { value: QuestionResu
             <div key={result.id} className="grid gap-3 p-4">
               <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_6rem_6rem_9rem_auto]">
                 <Label className="grid gap-1 text-xs text-muted-foreground"><span>Item</span><Input aria-label="Assessment item label" autoFocus={!result.label} required value={result.label} onChange={(event) => update(result.id, { label: event.target.value })} placeholder="Section B, Question 4" /></Label>
-                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Earned</span><Input aria-label={`${result.label} marks awarded`} type="number" required min="0" max={Number.isFinite(result.maxMarks) ? result.maxMarks : undefined} step="0.5" value={Number.isFinite(result.marksAwarded) ? result.marksAwarded : ""} onChange={(event) => update(result.id, { marksAwarded: event.target.valueAsNumber })} /></Label>
-                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Out of</span><Input aria-label={`${result.label} maximum marks`} type="number" required min="0.5" step="0.5" value={Number.isFinite(result.maxMarks) ? result.maxMarks : ""} onChange={(event) => update(result.id, { maxMarks: event.target.valueAsNumber })} /></Label>
+                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Earned</span><Input aria-label={`${result.label} marks awarded`} type="number" required min="0" max={Number.isFinite(result.maxMarks) ? result.maxMarks : undefined} step="any" value={Number.isFinite(result.marksAwarded) ? result.marksAwarded : ""} onChange={(event) => update(result.id, { marksAwarded: event.target.valueAsNumber })} /></Label>
+                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Out of</span><Input aria-label={`${result.label} maximum marks`} type="number" required min="0.5" step="any" value={Number.isFinite(result.maxMarks) ? result.maxMarks : ""} onChange={(event) => update(result.id, { maxMarks: event.target.valueAsNumber })} /></Label>
                 <Label className="grid gap-1 text-xs text-muted-foreground"><span>Confidence</span><Select value={result.confidence} onValueChange={(confidence) => update(result.id, { confidence: confidence as QuestionConfidence })}>
                   <SelectTrigger aria-label={`${result.label} confidence`} className="w-full"><SelectValue>{result.confidence[0].toUpperCase() + result.confidence.slice(1)}</SelectValue></SelectTrigger>
                   <SelectContent>{(["low", "medium", "high"] as const).map((confidence) => <SelectItem key={confidence} value={confidence}>{confidence[0].toUpperCase() + confidence.slice(1)}</SelectItem>)}</SelectContent>
@@ -43,6 +43,7 @@ export function QuestionResultsEditor({ value, onChange }: { value: QuestionResu
               <Textarea aria-label={`${result.label} marker feedback`} rows={2} value={result.examinerNote ?? ""} onChange={(event) => update(result.id, { examinerNote: event.target.value || undefined })} placeholder="Marker feedback, expected qualities, or examiner advice" />
             </div>
           ))}
+          <p className="p-3 text-sm tabular-nums">Items total {value.reduce((sum, result) => sum + (result.marksAwarded || 0), 0)} / {value.reduce((sum, result) => sum + (result.maxMarks || 0), 0)}</p>
         </div>
       ) : null}
     </Field>

@@ -17,6 +17,7 @@ import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { localDate } from "../lib/learning-workspace"
+import { count } from "../lib/utils"
 
 type ExamEntryProps = {
   references: AssessmentReference[]
@@ -43,8 +44,10 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   const [provider, setProvider] = useState(initialAttempt?.provider ?? "VCAA")
   const [examYear, setExamYear] = useState(() => initialAttempt?.examYear ?? new Date().getFullYear())
   const [paper, setPaper] = useState(initialAttempt?.paper ?? "")
-  const [completedAt, setCompletedAt] = useState(() => initialAttempt?.completedAt ?? localDate(new Date()))
-  const [rawScore, setRawScore] = useState(initialAttempt?.rawScore ?? 0)
+  const [today] = useState(() => localDate(new Date()))
+  const [completedAt, setCompletedAt] = useState(initialAttempt?.completedAt ?? today)
+  // Blank, not 0: a stray save must not log a real-looking 0%.
+  const [rawScore, setRawScore] = useState(initialAttempt?.rawScore ?? Number.NaN)
   const [rawMax, setRawMax] = useState(initialAttempt?.rawMax ?? 100)
   const [comment, setComment] = useState(initialAttempt?.comment ?? "")
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialAttempt?.performanceContext ?? {})
@@ -75,7 +78,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
   )
   const showPaper = isTwoPaperMathematics(subject) || paperOptions.length === 0 || paperOptions.some((option) => /\b(?:exam|paper)\s*[12]\b/i.test(option))
   const reference = findAttemptReferenceForYear({ subject, paper }, references, comparisonYear)
-  const scaled = reference && rawMax > 0 ? analyseAttempt({ rawScore, rawMax }, reference) : null
+  const scaled = reference && rawMax > 0 && Number.isFinite(rawScore) ? analyseAttempt({ rawScore, rawMax }, reference) : null
   function changePaper(next: string) {
     setPaper(next)
     const marks = getKnownExamMarks(subject, next)
@@ -88,7 +91,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
     setExamYear(new Date().getFullYear())
     setPaper("")
     setCompletedAt(localDate(new Date()))
-    setRawScore(0)
+    setRawScore(Number.NaN)
     setRawMax(100)
     setComment("")
     setPerformanceContext({})
@@ -118,7 +121,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
       id: initialAttempt?.id ?? crypto.randomUUID(),
       subject: subject.trim(),
       provider: provider.trim() || "Other",
-      title: formatExamTitle(provider, examYear, subject),
+      title: formatExamTitle(provider.trim() || "Other", examYear, subject),
       examYear,
       paper: showPaper ? paper.trim() : (initialAttempt?.subject === subject ? initialAttempt.paper : "Exam"),
       completedAt,
@@ -145,7 +148,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
       <ExamSheetBack />
       <form id="exam-form" className="mx-auto grid max-w-3xl gap-8 p-4 sm:p-6 lg:py-10" onChange={() => setError(null)} onSubmit={submit}>
         <header className="grid gap-3">
-          <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back to exams</Button>
+          <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit" onClick={() => handleOpenChange(false)}><ArrowLeft />Back</Button>
           <div>
             <h1 id="exam-editor-title" className="focal-page-title">{initialAttempt ? "Edit practice exam" : "Log practice exam"}</h1>
             <p id="exam-editor-description" className="mt-1 text-sm text-muted-foreground">Two steps: which paper, then your mark. Everything else is optional.</p>
@@ -176,7 +179,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="completed-at">Completed</FieldLabel>
-                  <Input id="completed-at" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
+                  <Input id="completed-at" type="date" max={today} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
                 </Field>
               </div>
             </div>
@@ -187,11 +190,11 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
             <div className="grid items-end gap-5 sm:grid-cols-[1fr_1fr_auto]">
               <Field>
                 <FieldLabel htmlFor="raw-score">Mark</FieldLabel>
-                <Input id="raw-score" type="number" min="0" step="0.5" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} required />
+                <Input id="raw-score" type="number" min="0" step="any" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} required />
               </Field>
               <Field>
                 <FieldLabel htmlFor="raw-max">Out of</FieldLabel>
-                <Input id="raw-max" type="number" min="0.5" step="0.5" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
+                <Input id="raw-max" type="number" min="0.5" step="any" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
               </Field>
               <p className="pb-1.5 focal-stat-value tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
             </div>
@@ -213,7 +216,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
             <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Conditions and headspace <span className="font-normal text-muted-foreground">{hasPerformanceContext(performanceContext) ? "· recorded" : "sleep, focus, stress"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
               <div className="mt-3"><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="exam-context" /></div>
             </CollapsibleContent></Collapsible>
-            <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${questionResults.length} items` : "reveal coverage gaps"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
+            <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${count(questionResults.length, "item")}` : "reveal coverage gaps"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
               <div className="mt-3"><QuestionResultsEditor value={questionResults} onChange={setQuestionResults} /></div>
             </CollapsibleContent></Collapsible>
           </section>

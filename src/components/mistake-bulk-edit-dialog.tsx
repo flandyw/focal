@@ -5,7 +5,7 @@ import { toast } from "sonner"
 
 import type { ExamAttempt, Mistake } from "../lib/exam-data"
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
-import { getMistakeEditChanges, MISTAKE_EDIT_FIELDS, type MistakeEdit, type MistakeEditField } from "../lib/mistake-autofill"
+import { getMistakeEditChanges, MISTAKE_EDIT_FIELDS, MISTAKE_FIELD_LABELS as FIELD_LABELS, type MistakeEdit, type MistakeEditField } from "../lib/mistake-autofill"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
@@ -13,14 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "./ui/textarea"
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
-
-const FIELD_LABELS: Record<MistakeEditField, string> = {
-  question: "Question label",
-  questionText: "Question text",
-  explanation: "What went wrong",
-  correction: "Improved response",
-  areaOfStudy: "Topic",
-}
 
 const PRESETS = [
   "Improve the formatting: clear Markdown structure, proper LaTeX for all maths, consistent punctuation.",
@@ -105,7 +97,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <Field>
               <FieldLabel>Mistakes to edit</FieldLabel>
               <Select value={scope} onValueChange={(value) => setScope((value ?? "current") as Scope)}>
-                <SelectTrigger><SelectValue>{scopeLabels[scope]}</SelectValue></SelectTrigger>
+                <SelectTrigger aria-label="Mistakes to edit"><SelectValue>{scopeLabels[scope]}</SelectValue></SelectTrigger>
                 <SelectContent>{(Object.keys(scopeLabels) as Scope[]).map((key) => <SelectItem key={key} value={key} disabled={key === "selected" && !selected.length}>{scopeLabels[key]}</SelectItem>)}</SelectContent>
               </Select>
               <FieldDescription>Filter or tick rows in the library first to narrow this down.</FieldDescription>
@@ -146,7 +138,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
         <DialogFooter>
           <Button type="button" variant="outline" disabled={running} onClick={() => onOpenChange(false)}>Cancel</Button>
           {edits === null ? (
-            <Button type="button" disabled={!targets.length || !fields.size || !instruction.trim()} onClick={() => void run()}><Sparkles />Preview edits for {targets.length}</Button>
+            <Button type="button" disabled={!targets.length || !fields.size || !instruction.trim()} onClick={() => void run()}><Sparkles />Preview edits for {count(targets.length, "mistake")}</Button>
           ) : (
             <>
               <Button type="button" variant="outline" disabled={running} onClick={() => { setEdits(null); setFailure(null) }}>Change instruction</Button>

@@ -128,7 +128,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
                       onCheckedChange={() => setSkipped((current) => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next })}
                     />
                     <span className="min-w-0 flex-1 basis-32 break-words font-medium">{draft.title}{draft.subjectId ? <span className="block text-xs font-normal text-muted-foreground">{draft.subjectId}</span> : null}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{imported.has(index) ? "Added" : `${draft.date} · ${draft.startTime} · ${draft.durationMinutes}m`}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{imported.has(index) ? "Added" : `${new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })} · ${draft.startTime} · ${draft.durationMinutes}m`}</span>
                   </Label>
                 </li>
               ))}

@@ -108,7 +108,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="date"
-            tickFormatter={(value) => new Date(`${value}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            tickFormatter={(value) => new Date(`${value}T00:00:00`).toLocaleDateString("en-AU", { month: "short", day: "numeric" })}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             axisLine={false}
             tickLine={false}
@@ -130,7 +130,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
               color: "var(--popover-foreground)",
             }}
             labelStyle={{ color: "var(--muted-foreground)", fontSize: 11 }}
-            labelFormatter={(date) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+            labelFormatter={(date) => new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             formatter={(value: unknown, name: unknown) => {
               const sid = String(name)
               if (sid === "average") return [formatMinutes(Number(value)), "7-day average"]

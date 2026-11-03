@@ -87,7 +87,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubje
               </ul>
             </section>
           ))}
-          <p className="text-sm text-muted-foreground">Press <kbd className="rounded-xs border px-1.5 font-sans text-xs">{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd> anywhere to search and jump to any page.</p>
+          <p className="text-sm text-muted-foreground pointer-coarse:hidden">Press <kbd className="rounded-xs border px-1.5 font-sans text-xs">{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd> anywhere to search and jump to any page.</p>
         </div>
       ),
     },

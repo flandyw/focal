@@ -10,7 +10,7 @@ const UNASSIGNED = "_unassigned"
 const MONTHS = 12
 const hours = (minutes: number) => Math.round(minutes / 6) / 10
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-const monthLabel = (key: string, year = false) => new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, year ? { month: "long", year: "numeric" } : { month: "short" })
+const monthLabel = (key: string, year = false) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-AU", year ? { month: "long", year: "numeric" } : { month: "short" })
 
 function formatHours(minutes: number) {
   if (minutes < 60) return `${minutes}m`

@@ -191,6 +191,8 @@ export type MistakeEdit = { id: string } & Partial<Record<MistakeEditField, stri
 /** Text fields a chatbot bulk edit may rewrite. */
 export const MISTAKE_EDIT_FIELDS = TEXT_FIELDS
 
+export const MISTAKE_FIELD_LABELS = { question: "Question label", questionText: "Question text", explanation: "What went wrong", correction: "Improved response", areaOfStudy: "Topic" } as const
+
 /** The fields an edit would actually change, as before/after pairs. Blank replacements never overwrite. */
 export function getMistakeEditChanges(mistake: Mistake, edit: MistakeEdit) {
   return MISTAKE_EDIT_FIELDS.flatMap((field) => {

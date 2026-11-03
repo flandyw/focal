@@ -171,7 +171,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="session-title">Title</FieldLabel>
-              <Input autoFocus id="session-title" maxLength={512} value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input autoFocus id="session-title" maxLength={512} placeholder="e.g. Organic chemistry revision" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(converting ? "convert" : "save") } }} />
             </Field>
             <div className="grid gap-3" role="group" aria-label="Time blocks">
               <p className="text-sm font-medium">Time blocks · {Math.round(totalMinutes)} min total</p>
@@ -182,7 +182,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               </div> : null}
               {blocks.map((block, index) => (
                 <div key={block.id} className="grid gap-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between"><span className="text-xs font-medium">Block {index + 1}</span><Button aria-label={`Remove block ${index + 1}`} disabled={blocks.length === 1} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button></div>
+                  <div className="flex items-center justify-between"><span className="text-xs font-medium">Block {index + 1}</span>{blocks.length > 1 ? <Button aria-label={`Remove block ${index + 1}`} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button> : null}</div>
                   <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>

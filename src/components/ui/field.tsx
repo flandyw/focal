@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "../../lib/utils"
@@ -195,6 +195,8 @@ function FieldError({
       </ul>
     )
   }, [children, errors])
+  // Most forms scroll: an error under the fold looks like a save button that does nothing.
+  const scrollIntoView = useCallback((node: HTMLDivElement | null) => { node?.scrollIntoView({ block: "nearest" }) }, [])
 
   if (!content) {
     return null
@@ -202,6 +204,7 @@ function FieldError({
 
   return (
     <div
+      ref={scrollIntoView}
       role="alert"
       className={cn("text-sm font-normal text-destructive", className)}
       {...props}

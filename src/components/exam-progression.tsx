@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, ChevronDown, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Button } from "./ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { Input } from "./ui/input"
@@ -39,7 +40,7 @@ export function ExamProgressionPanel({ progression, onProgressionChange, attempt
       {group.next ? <Button type="button" variant="outline" className="h-auto justify-start whitespace-normal py-3 text-left" onClick={() => onSelect(group.next!)}>
         <span className="grid gap-1"><span>{group.next.provider} {group.next.examYear} · {group.next.paper}</span><span className="text-xs font-normal text-muted-foreground">{group.next.phase ? `${group.next.phase} · ` : ""}{group.next.marks} marks</span></span>
       </Button> : <p className="text-sm text-muted-foreground">Progression complete</p>}
-    </div>)}</div> : <p className="text-sm text-muted-foreground">Build an ordered plan across all your subjects, or copy a prompt to your LLM and import its JSON.</p>}
+    </div>)}</div> : <p className="text-sm text-muted-foreground">Build an ordered plan across all your subjects, or copy a prompt to your chatbot and import its JSON.</p>}
     {editor ? <ProgressionEditor progression={progression} subjects={subjects} adding={editor.adding} initialSubject={editor.subject} onClose={() => setEditor(null)} onSave={(plan) => { onProgressionChange(plan); setEditor(null); toast.success("Exam progression saved") }} /> : null}
   </section>
 }
@@ -98,12 +99,16 @@ function ProgressionEditor({ progression, subjects, adding, initialSubject, onCl
     setNotice("Paper added to the draft. Fill in its details below, then save.")
   }
   const visible = exams.map((exam, index) => ({ exam, index })).filter(({ exam }) => !filter || exam.subject === filter)
-  return <Dialog open onOpenChange={(next) => { if (!next) onClose() }}>
+  const snapshot = JSON.stringify({ name, exams, json })
+  const [initialSnapshot] = useState(snapshot)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  function requestClose() { if (snapshot !== initialSnapshot) setConfirmingClose(true); else onClose() }
+  return <Dialog open onOpenChange={(next) => { if (!next) requestClose() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
       <DialogHeader><DialogTitle>{adding ? "Add to your exam progression" : progression?.exams.length ? "Edit your exam progression" : "Create your exam progression"}</DialogTitle><DialogDescription>Order papers within each subject. Phase labels can mark company practice, older papers and final preparation. Logging a matching subject, provider, year and paper completes it automatically.</DialogDescription></DialogHeader>
       <Label className="grid gap-2 text-sm font-medium">Plan name<Input value={name} maxLength={200} onChange={(event) => setName(event.target.value)} /></Label>
       <Collapsible defaultOpen={adding} className="rounded-lg border p-4">
-        <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between text-left text-sm font-medium">Plan with an LLM · copy prompt and import JSON<ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger>
+        <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between text-left text-sm font-medium">Plan with a chatbot · copy prompt and import JSON<ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger>
         <CollapsibleContent keepMounted><div className="mt-4 grid gap-3">
           <div className="grid gap-2 text-sm"><Label htmlFor={`${id}-target`}>Subject to plan (optional)</Label><SubjectCombobox id={`${id}-target`} subjects={planSubjects} preferredSubjects={subjects} value={targetSubject} onValueChange={setTargetSubject} allowCustom placeholder="Choose or enter a new subject" /></div>
           <p className="text-xs text-muted-foreground">Choose a subject for the prompt, or leave it blank and describe the subjects you want below. Imported papers keep the subjects specified in the JSON.</p>
@@ -111,12 +116,12 @@ function ProgressionEditor({ progression, subjects, adding, initialSubject, onCl
           <Label className="grid gap-2 text-sm">Import action<NativeSelect value={importMode} onChange={(event) => setImportMode(event.target.value as ProgressionImportMode)}><NativeSelectOption value="append">Add papers to existing progressions</NativeSelectOption><NativeSelectOption value="replace-subjects">Replace only subjects included in JSON</NativeSelectOption></NativeSelect></Label>
           <p className="text-xs text-muted-foreground">{importMode === "append" ? "New subjects get their own progression. Existing subjects keep their paper order; new papers are added at the end. Duplicate papers are skipped and keep their existing marks and phase." : "The imported sequence replaces the papers for each subject included in the JSON. Subjects absent from the import are preserved. Your logged exams are kept."}</p>
           <Label className="grid gap-2 text-sm">Planning preferences<Textarea value={instructions} onChange={(event) => setInstructions(event.target.value)} /></Label>
-          <p className="text-xs text-muted-foreground">The prompt includes your subjects and draft papers. Add any other subjects, available papers and target dates to your preferences. Confirm paper details with your LLM.</p>
-          <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(prompt); toast.success("Prompt copied") } catch { setShowPrompt(true); toast.error("Could not copy. Select and copy the prompt below.") } }}>Copy LLM prompt</Button><Button type="button" variant="ghost" onClick={() => setShowPrompt(!showPrompt)}>View prompt</Button></div>
-          {showPrompt ? <Textarea aria-label="LLM prompt" readOnly value={prompt} className="min-h-40" /> : null}
+          <p className="text-xs text-muted-foreground">The prompt includes your subjects and draft papers. Add any other subjects, available papers and target dates to your preferences. Confirm paper details with your chatbot.</p>
+          <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={async () => { try { await navigator.clipboard.writeText(prompt); toast.success("Prompt copied") } catch { setShowPrompt(true); toast.error("Could not copy. Select and copy the prompt below.") } }}>Copy chatbot prompt</Button><Button type="button" variant="ghost" onClick={() => setShowPrompt(!showPrompt)}>View prompt</Button></div>
+          {showPrompt ? <Textarea aria-label="Chatbot prompt" readOnly value={prompt} className="min-h-40" /> : null}
           <Label className="grid gap-2 text-sm">Paste returned JSON<Textarea value={json} onChange={(event) => setJson(event.target.value)} className="min-h-36 font-mono text-xs" placeholder={'{"version":1,"name":"My plan","exams":[...]}'} /></Label>
           {importPreview?.error ? <p role="alert" className="text-sm text-destructive">{importPreview.error}</p> : null}
-          {importPreview?.result ? <div role="status" className="grid gap-1 rounded-md border p-3 text-sm"><p className="font-medium">Import preview · {importPreview.result.subjects.join(", ")}</p><p>{importPreview.result.added} papers to add · {importPreview.result.removed} existing papers to replace · {importPreview.result.skipped} duplicates to skip</p>{importPreview.result.preservedSubjects.length ? <p className="text-muted-foreground">Other subjects preserved: {importPreview.result.preservedSubjects.join(", ")}.</p> : null}<p className="text-muted-foreground">{importPreview.result.exams.length} papers in the combined plan. Changes are saved only when you select Save progression.</p></div> : null}
+          {importPreview?.result ? <div role="status" className="grid gap-1 rounded-md border p-3 text-sm"><p className="font-medium">Import preview · {importPreview.result.subjects.join(", ")}</p><p>{count(importPreview.result.added, "paper")} to add · {importPreview.result.removed} existing papers to replace · {importPreview.result.skipped} duplicates to skip</p>{importPreview.result.preservedSubjects.length ? <p className="text-muted-foreground">Other subjects preserved: {importPreview.result.preservedSubjects.join(", ")}.</p> : null}<p className="text-muted-foreground">{importPreview.result.exams.length} papers in the combined plan. Changes are saved only when you select Save progression.</p></div> : null}
           <Button type="button" variant="outline" disabled={!importPreview?.result || (!importPreview.result.added && !importPreview.result.removed)} onClick={previewImport}>{importMode === "append" ? "Add imported papers to draft" : "Replace imported subjects in draft"}</Button>
         </div></CollapsibleContent>
       </Collapsible>
@@ -131,16 +136,17 @@ function ProgressionEditor({ progression, subjects, adding, initialSubject, onCl
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1 text-sm"><Label htmlFor={`${id}-${index}`}>Subject</Label><SubjectCombobox id={`${id}-${index}`} subjects={planSubjects} preferredSubjects={subjects} value={exam.subject} onValueChange={(subject) => update(index, { subject })} allowCustom /></div>
           <Label className="grid gap-1 text-sm">Provider<Input value={exam.provider} onChange={(event) => update(index, { provider: event.target.value })} /></Label>
-          <Label className="grid gap-1 text-sm">Year<Input type="number" min={1990} max={2100} value={Number.isFinite(exam.examYear) ? exam.examYear : ""} onChange={(event) => update(index, { examYear: event.target.valueAsNumber })} /></Label>
+          <Label className="grid gap-1 text-sm">Year<Input type="number" inputMode="numeric" min={1990} max={2100} value={Number.isFinite(exam.examYear) ? exam.examYear : ""} onChange={(event) => update(index, { examYear: event.target.valueAsNumber })} /></Label>
           <Label className="grid gap-1 text-sm">Paper<Input value={exam.paper} onChange={(event) => update(index, { paper: event.target.value })} /></Label>
-          <Label className="grid gap-1 text-sm">Total marks<Input type="number" min={0.5} max={500} step={0.5} value={Number.isFinite(exam.marks) ? exam.marks : ""} onChange={(event) => update(index, { marks: event.target.valueAsNumber })} /></Label>
+          <Label className="grid gap-1 text-sm">Total marks<Input type="number" min={0.5} max={500} step="any" value={Number.isFinite(exam.marks) ? exam.marks : ""} onChange={(event) => update(index, { marks: event.target.valueAsNumber })} /></Label>
           <Label className="grid gap-1 text-sm">Phase (optional)<Input value={exam.phase} placeholder="Older VCAA" onChange={(event) => update(index, { phase: event.target.value })} /></Label>
         </div>
         <div className="flex gap-2"><Button type="button" variant="outline" size="sm" aria-label={`Move paper ${position + 1} up`} disabled={position === 0} onClick={() => move(index, -1)}><ArrowUp />Up</Button><Button type="button" variant="outline" size="sm" aria-label={`Move paper ${position + 1} down`} disabled={position === visible.length - 1} onClick={() => move(index, 1)}><ArrowDown />Down</Button><Button type="button" variant="ghost" size="sm" aria-label={`Remove paper ${position + 1}`} onClick={() => setExams(exams.filter((_, i) => i !== index))}><Trash2 />Remove</Button></div>
       </fieldset>)}</div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {json.trim() ? <p className="text-sm text-muted-foreground">Apply the import to your draft above, or <Button type="button" variant="link" className="h-auto p-0 text-inherit underline" onClick={() => setJson("")}>discard the pasted JSON</Button> before saving.</p> : null}
-      <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="button" disabled={!!json.trim()} onClick={save}>Save progression</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="outline" onClick={requestClose}>Cancel</Button><Button type="button" disabled={!!json.trim()} onClick={save}>Save progression</Button></DialogFooter>
     </DialogContent>
+    <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
   </Dialog>
 }

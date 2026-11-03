@@ -82,12 +82,12 @@ export function StudyScorePredictor({
   const selectedDistributionYear = distributionYear === "automatic" ? null : Number(distributionYear)
 
   const parsedSac = sacMode === "rank"
-    ? sacRank.trim() === "" || sacCohort.trim() === "" ? null : sacPercentileFromRank(
+    ? sacRank.trim() === "" || sacCohort.trim() === "" || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)) ? null : sacPercentileFromRank(
       Number(sacRank),
       Number(sacCohort),
       schoolMedian.trim() === "" || !Number.isFinite(Number(schoolMedian)) ? undefined : Number(schoolMedian),
     )
-    : sacPercentile.trim() === "" ? null : Number(sacPercentile)
+    : sacPercentile.trim() === "" || !(Number(sacPercentile) > 0 && Number(sacPercentile) < 100) ? null : Number(sacPercentile)
   const prediction = useMemo(
     () => predictStudyScore({
       subject,
@@ -205,6 +205,7 @@ export function StudyScorePredictor({
                       <FieldDescription>
                         {parsedSac !== null
                           ? `About the ${formatOrdinal(parsedSac)} percentile statewide after moderation.`
+                          : sacRank.trim() && sacCohort.trim() ? "Rank must be between 1 and the number of students."
                           : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}
                       </FieldDescription>
                     </>
@@ -223,7 +224,7 @@ export function StudyScorePredictor({
                         onChange={(event) => saveSac({ sacPercentile: event.target.value })}
                       />
                       <FieldDescription>
-                        Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile.
+                        {sacPercentile.trim() && parsedSac === null ? "Enter a percentile between 0 and 100." : "Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile."}
                       </FieldDescription>
                     </>
                   )}
@@ -260,8 +261,9 @@ export function StudyScorePredictor({
                         min="0"
                         max="100"
                         step="1"
+                        inputMode="numeric"
                         value={examWeight}
-                        onChange={(event) => setSavedInputs({ ...inputs, examWeight: Number(event.target.value) })}
+                        onChange={(event) => setSavedInputs({ ...inputs, examWeight: Math.min(100, Math.max(0, Number(event.target.value))) })}
                       />
                       <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                     </div>
@@ -357,9 +359,9 @@ export function StudyScorePredictor({
                       {[...prediction.evidence].reverse().map(({ attempt, percentile, weight, referenceYear, exactReferenceYear }) => (
                         <li key={attempt.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">{attempt.title} · {attempt.paper} · {attempt.examYear}</p>
+                            <p className="truncate text-sm font-medium" title={`${attempt.title} · ${attempt.paper}`}>{attempt.title} · {attempt.paper}</p>
                             <p className="text-xs text-muted-foreground">
-                              {attempt.completedAt} · {(attempt.rawScore / attempt.rawMax * 100).toFixed(1)}%
+                              {new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · {(attempt.rawScore / attempt.rawMax * 100).toFixed(1)}%
                               {!exactReferenceYear ? ` · using ${referenceYear} distribution` : ""}
                             </p>
                           </div>
@@ -378,6 +380,7 @@ export function StudyScorePredictor({
                   <EmptyTitle>No official comparison available</EmptyTitle>
                   <EmptyDescription>Log a paper that matches a VCAA examination in the reference data to predict this subject.</EmptyDescription>
                 </EmptyHeader>
+                <EmptyContent><Button onClick={onLogExam}>Log exam</Button></EmptyContent>
               </Empty>
             )}
           </div>

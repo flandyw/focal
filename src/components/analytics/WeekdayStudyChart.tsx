@@ -8,7 +8,7 @@ const config = { average: { label: "Daily average", color: "var(--chart-2)" } }
 export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
   const data = useMemo(() => {
     const weekdays = Array.from({ length: 7 }, (_, index) => ({
-      label: new Date(2024, 0, index + 1).toLocaleDateString(undefined, { weekday: "short" }),
+      label: new Date(2024, 0, index + 1).toLocaleDateString("en-AU", { weekday: "short" }),
       minutes: 0, count: 0, studied: 0, average: 0,
     }))
     for (const day of days) {

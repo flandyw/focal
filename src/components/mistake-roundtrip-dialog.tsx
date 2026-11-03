@@ -4,7 +4,8 @@ import { Check, FileDown, FileUp } from "lucide-react"
 
 import type { Mistake } from "../lib/exam-data"
 import { parseMistakeRoundTrip } from "../lib/mistake-json"
-import { getMistakeEditChanges, type MistakeEdit } from "../lib/mistake-autofill"
+import { getMistakeEditChanges, MISTAKE_FIELD_LABELS, type MistakeEdit } from "../lib/mistake-autofill"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
@@ -22,6 +23,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   onApply: (edits: MistakeEdit[]) => void
 }) {
   const [text, setText] = useState("")
+  const [confirmingClose, setConfirmingClose] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<ReturnType<typeof parseMistakeRoundTrip> | null>(null)
@@ -34,6 +36,8 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
     })
   }, [result, mistakes])
   const accepted = changes.filter(({ mistake }) => !skipped.has(mistake.id))
+
+  function close() { if (text.trim()) setConfirmingClose(true); else onOpenChange(false) }
 
   function review() {
     try {
@@ -52,7 +56,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   }
 
   return (
-    <Dialog open onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(open) => { if (!open) close() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{singleMistake ? "Reimport with changes" : "Re-import edited mistakes"}</DialogTitle>
@@ -88,7 +92,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
                       <Label className="flex items-center gap-2 font-medium"><Checkbox checked={!skipped.has(mistake.id)} onCheckedChange={() => setSkipped((value) => { const next = new Set(value); if (!next.delete(mistake.id)) next.add(mistake.id); return next })} />{mistake.question}</Label>
                       {list.map(({ field, before, after }) => (
                         <div key={field} className="grid gap-2 sm:grid-cols-2">
-                          <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{field} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || "(empty)"}</pre></div>
+                          <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{MISTAKE_FIELD_LABELS[field]} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || "(empty)"}</pre></div>
                           <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">after</p><pre className="max-h-40 overflow-auto rounded bg-primary/5 p-2 text-xs break-words whitespace-pre-wrap">{after}</pre></div>
                         </div>
                       ))}
@@ -101,12 +105,13 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
         </FieldGroup>
         <DialogFooter>
           <Button type="button" variant="outline" className="sm:mr-auto" onClick={onExport}><FileDown />Export JSON…</Button>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           {result
             ? <Button type="button" disabled={!accepted.length} onClick={apply}><Check />Apply {accepted.length} {accepted.length === 1 ? "edit" : "edits"}</Button>
             : <Button type="button" disabled={!text.trim()} onClick={review}>Review changes</Button>}
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => onOpenChange(false)} />
     </Dialog>
   )
 }

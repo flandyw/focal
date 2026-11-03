@@ -197,7 +197,7 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
                 <Empty className="min-h-[50dvh] bg-transparent p-4">
                   <EmptyHeader>
                     <EmptyTitle>{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
-                    <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings > AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
+                    <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings → AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
                   </EmptyHeader>
                   {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
                     {([[Target, "What should I focus on today?"], [TrendingDown, "Where am I losing marks?"], [CalendarDays, "Help me plan my study for this week."]] as const).map(([Icon, prompt]) => (
@@ -240,7 +240,7 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
                         <span>{catalog?.models.find((model) => model.id === message.metadata?.model)?.name ?? message.metadata?.model}</span>
                         {message.metadata?.latencyMs != null ? <span title="Time to first model output, including reasoning or a tool call">{(message.metadata.latencyMs / 1000).toFixed(2)}s latency</span> : null}
                         {message.metadata?.tokensPerSecond != null ? <span title="Output tokens per second for the final model step">{message.metadata.tokensPerSecond.toFixed(1)} tok/s</span> : null}
-                        {message.metadata?.outputTokens != null ? <span>{message.metadata.outputTokens.toLocaleString()} tokens</span> : null}
+                        {message.metadata?.outputTokens != null ? <span>{message.metadata.outputTokens.toLocaleString("en-AU")} tokens</span> : null}
                       </MessageFooter> : null}
                     </MessageContent>
                   </Message>

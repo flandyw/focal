@@ -536,7 +536,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       atarEstimates: current.atarEstimates.filter((estimate) => estimate.id !== id),
       atarEstimatesUpdatedAt: new Date().toISOString(),
     }))
-    toast("Saved ATAR estimate deleted")
   }
 
   function saveExamDifficulty(examDifficulty: ExamDifficultySettings) {
@@ -807,14 +806,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       ...current,
       mistakes: current.mistakes.map((item) => item.id === mistake.id ? { ...item, suspended: !item.suspended, updatedAt: timestamp } : item),
     }))
-    toast.success(mistake.suspended ? "Card returned to the review queue" : "Card suspended")
+    toast.success(mistake.suspended ? "Card returned to the review queue" : "Reviews paused for this card", { duration: 8000, action: { label: "Undo", onClick: () => toggleMistakeSuspension({ ...mistake, suspended: !mistake.suspended }) } })
   }
 
   function setMistakesSuspended(ids: string[], suspended: boolean) {
     const selectedIds = new Set(ids)
     const updatedAt = new Date().toISOString()
     setData((current) => ({ ...current, mistakes: current.mistakes.map((mistake) => selectedIds.has(mistake.id) ? { ...mistake, suspended, updatedAt } : mistake) }))
-    toast.success(suspended ? "Selected cards paused" : "Selected cards returned to the review queue")
+    toast.success(suspended ? `Reviews paused for ${ids.length} ${ids.length === 1 ? "card" : "cards"}` : `${ids.length} ${ids.length === 1 ? "card" : "cards"} back in the review queue`)
   }
 
   function importMistakes(incoming: Mistake[], attempt?: ExamAttempt) {
@@ -865,7 +864,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function clearTrackedExams() {
+    const previous = data.trackedExamIds
     setData((current) => ({ ...current, trackedExamIds: subjectScoped ? current.trackedExamIds.filter((id) => !pageTimetable?.exams.some((exam) => exam.id === id)) : [], trackedExamIdsUpdatedAt: new Date().toISOString() }))
+    toast("Tracked exams cleared", { duration: 8000, action: { label: "Undo", onClick: () => setData((current) => ({ ...current, trackedExamIds: previous, trackedExamIdsUpdatedAt: new Date().toISOString() })) } })
   }
 
   function trackExamSubjects() {
@@ -996,6 +997,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <div key={`${view}:${subjectScoped && view !== "mistakes" ? selectedSubject : "all"}`} className={`page-enter ${view === "chat" ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           {view === "exams" ? (
             <ExamsPage
+              scopedSubject={subjectScoped ? selectedSubject : undefined}
                 data={pageData}
                 references={pageReferences}
                 comparisonYear={comparisonYear}
@@ -1038,7 +1040,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             const scopedIds = new Set(pageData.mistakes.map((mistake) => mistake.id))
             return { ...current, alternativeMistakeDeck: { ...deck, cards: [...(subjectScoped ? current.alternativeMistakeDeck?.cards ?? [] : []).filter((card) => !scopedIds.has(card.sourceMistakeId)), ...deck.cards] } }
           })} /> : null}
-          {view === "sacs" ? <SacPage openTimerRequest={sacTimerRequest} records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /> : null}
+          {view === "sacs" ? <SacPage openTimerRequest={sacTimerRequest} scopedSubject={subjectScoped ? selectedSubject : undefined} records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /> : null}
           {view === "library" ? <>{referencesLoading ? PAGE_LOADING : <ExamLibrary references={pageReferences} studies={pageStudies} attempts={pageData.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} onCompare={openVcaaComparison} />}</> : null}
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onLogExam={openNewExam} onOpenAtar={() => setView("atar")} />}</> : null}
           {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <AtarEstimator data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} />}</> : null}

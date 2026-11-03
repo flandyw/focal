@@ -3,6 +3,7 @@ import { FileDown } from "lucide-react"
 import { toast } from "sonner"
 
 import { exportMistakes, type ExportFormat } from "../lib/mistake-export"
+import { count } from "../lib/utils"
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "../lib/exam-data"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
@@ -38,12 +39,12 @@ export function MistakeExportDialog({ initialFormat = "pdf", mistakes, current, 
       <DialogContent>
         <DialogHeader><DialogTitle>Export mistakes</DialogTitle><DialogDescription>Choose a format and which mistakes to include.</DialogDescription></DialogHeader>
         <FieldGroup>
-          <Field><FieldLabel>Format</FieldLabel><Select value={format} onValueChange={(value) => setFormat((value ?? "pdf") as ExportFormat)}><SelectTrigger><SelectValue>{FORMATS[format]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(FORMATS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></Field>
-          <Field><FieldLabel>Mistakes</FieldLabel><Select value={scope} onValueChange={(value) => { setScope(value === "all" ? "all" : "current"); setCategory("all") }}><SelectTrigger><SelectValue>{scope === "current" ? `Current view / selection (${current.length})` : `Everything (${mistakes.length})`}</SelectValue></SelectTrigger><SelectContent><SelectItem value="current">Current view / selection ({current.length})</SelectItem><SelectItem value="all">Everything ({mistakes.length})</SelectItem></SelectContent></Select></Field>
-          <Field><FieldLabel>Category</FieldLabel><Select value={category} onValueChange={(value) => setCategory(value ?? "all")}><SelectTrigger><SelectValue>{category === "all" ? "All categories" : category}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></Field>
-          <Field><FieldLabel>Status</FieldLabel><Select value={status} onValueChange={(value) => setStatus((value ?? "all") as keyof typeof STATUSES)}><SelectTrigger><SelectValue>{STATUSES[status]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(STATUSES).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></Field>
+          <Field><FieldLabel>Format</FieldLabel><Select value={format} onValueChange={(value) => setFormat((value ?? "pdf") as ExportFormat)}><SelectTrigger aria-label="Format"><SelectValue>{FORMATS[format]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(FORMATS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></Field>
+          <Field><FieldLabel>Mistakes</FieldLabel><Select value={scope} onValueChange={(value) => { setScope(value === "all" ? "all" : "current"); setCategory("all") }}><SelectTrigger aria-label="Mistakes to export"><SelectValue>{scope === "current" ? `Current view / selection (${current.length})` : `Everything (${mistakes.length})`}</SelectValue></SelectTrigger><SelectContent><SelectItem value="current">Current view / selection ({current.length})</SelectItem><SelectItem value="all">Everything ({mistakes.length})</SelectItem></SelectContent></Select></Field>
+          <Field><FieldLabel>Category</FieldLabel><Select value={category} onValueChange={(value) => setCategory(value ?? "all")}><SelectTrigger aria-label="Category"><SelectValue>{category === "all" ? "All categories" : category}</SelectValue></SelectTrigger><SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></Field>
+          <Field><FieldLabel>Status</FieldLabel><Select value={status} onValueChange={(value) => setStatus((value ?? "all") as keyof typeof STATUSES)}><SelectTrigger aria-label="Status"><SelectValue>{STATUSES[status]}</SelectValue></SelectTrigger><SelectContent>{Object.entries(STATUSES).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></Field>
         </FieldGroup>
-        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button disabled={!result.length || busy} onClick={() => void run()}><FileDown />{busy ? "Exporting…" : `Export ${result.length}`}</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button disabled={!result.length || busy} onClick={() => void run()}><FileDown />{busy ? "Exporting…" : `Export ${count(result.length, "mistake")}`}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -223,6 +223,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
   const [profileError, setProfileError] = useState(false)
   const [pending, setPending] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
+  const [deletingGroup, setDeletingGroup] = useState<Group | null>(null)
   const actionInFlight = useRef(false)
   const loadSequence = useRef(0)
   const poll = useTickingNow(30_000)
@@ -615,7 +616,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
                 : !cheersLoaded ? <Skeleton className="h-12 motion-reduce:animate-none" />
                 : receivedCheers.length ? receivedCheers.map((cheer) => <div key={cheer.sender_id} className="flex min-w-0 items-center gap-3 text-sm">
                   <HeartHandshake className="size-5 shrink-0 text-primary" />
-                  <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on{cheer.message ? <>: “{cheer.message}”</> : null}</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "PPp")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
+                  <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on{cheer.message ? <>: “{cheer.message}”</> : null}</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "d MMM yyyy, h:mmaaa")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
                   <Button variant="outline" size="sm" disabled={!!pending || cheered(cheer.sender_id)} onClick={() => { const friend = people.find((person) => person.user_id === cheer.sender_id); if (friend) void cheerFriend(friend) }}>{cheered(cheer.sender_id) ? "Cheered" : "Cheer back"}</Button>
                 </div>) : <p className="text-sm text-muted-foreground">No cheers in the last 7 days. Send one from the leaderboard to encourage a friend.</p>}
               {receivedCheers.length ? <p className="text-xs text-muted-foreground">Latest cheer from each friend in the last 7 days.</p> : null}
@@ -638,7 +639,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
                     <Button variant="ghost" size="sm" aria-pressed={group?.id === entry.id} className="min-w-0 flex-1 justify-start truncate px-1 font-medium" onClick={() => setGroupId(group?.id === entry.id ? "all" : entry.id)} title="Show only this group across the page">{entry.name}{group?.id === entry.id ? " · filtering" : ""}</Button>
                     {owned ? <>
                       <Button variant="ghost" size="icon-sm" aria-label={`Edit ${entry.name}`} onClick={() => setEditing({ id: entry.id, name: entry.name, hours: entry.goal_minutes ? String(entry.goal_minutes / 60) : "", members: entry.members.filter((id) => id !== entry.owner_id) })}><Pencil /></Button>
-                      <Button variant="ghost" size="icon-sm" aria-label={`Delete ${entry.name}`} disabled={!!pending} onClick={() => void call("friends_group_delete", { p_id: entry.id }, "Could not delete the group.").then((ok) => { if (ok) toast.success("Group deleted") })}><Trash2 /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Delete ${entry.name}`} disabled={!!pending} onClick={() => setDeletingGroup(entry)}><Trash2 /></Button>
                     </> : null}
                   </div>
                   <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${entry.name}: ${duration(total)}${goal ? ` of ${duration(goal)} goal` : ""} in the last 7 days`}>
@@ -742,7 +743,25 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
               {!people.some((person) => person.status === "friend") ? <p className="text-sm text-muted-foreground">Add a friend first.</p> : null}
             </fieldset>
           </form> : null}
-          <DialogFooter><Button type="submit" form="group-form" disabled={!!pending || !editing?.name.trim()}>{pending === "friends_group_save" ? "Saving…" : "Save group"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={!!pending} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" form="group-form" disabled={!!pending || !editing?.name.trim()}>{pending === "friends_group_save" ? "Saving…" : "Save group"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deletingGroup} onOpenChange={(open) => { if (!pending && !open) setDeletingGroup(null) }}>
+        <DialogContent showCloseButton={!pending}>
+          <DialogHeader>
+            <DialogTitle>Delete {deletingGroup?.name}?</DialogTitle>
+            <DialogDescription>The group and its weekly goal are removed for everyone in it. Friends stay friends.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={!!pending} onClick={() => setDeletingGroup(null)}>Keep group</Button>
+            <Button variant="destructive" disabled={!!pending} onClick={() => {
+              if (!deletingGroup) return
+              void call("friends_group_delete", { p_id: deletingGroup.id }, "Could not delete the group.").then((ok) => {
+                if (ok) { setDeletingGroup(null); toast.success("Group deleted") }
+              })
+            }}>{pending === "friends_group_delete" ? "Deleting…" : "Delete group"}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

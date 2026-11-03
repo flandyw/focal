@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { localStudyTime, pastStudyBlocks, type PastStudyLog } from "../../lib/pastStudy"
+import { count } from "../../lib/utils"
 import { Button } from "../ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible"
 import { Field, FieldGroup, FieldLabel } from "../ui/field"
@@ -26,7 +27,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
   try {
     const blocks = pastStudyBlocks(rows)
     const minutes = blocks.reduce((sum, block) => sum + (Date.parse(block.end) - Date.parse(block.start)) / 60000, 0)
-    preview = `${minutes} minutes of study · Finished ${new Date(blocks[blocks.length - 1].end).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+    preview = `${count(minutes, "minute")} of study · Finished ${new Date(blocks[blocks.length - 1].end).toLocaleString("en-AU", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
   } catch { /* Validation is shown on submit, not while typing. */ }
 
   return <form className="grid gap-5" onChange={() => setError("")} onSubmit={async (event) => {
@@ -65,7 +66,7 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
           </Field>
           <Field>
             <FieldLabel htmlFor={`${id}-minutes-${index}`}>Minutes studied</FieldLabel>
-            <Input id={`${id}-minutes-${index}`} type="number" min="1" max="1440" step="1" required value={row.minutes} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, minutes: event.target.value } : item))} />
+            <Input id={`${id}-minutes-${index}`} type="number" inputMode="numeric" min="1" max="1440" step="1" required value={row.minutes} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, minutes: event.target.value } : item))} />
           </Field>
           {rows.length > 1 && <Button type="button" variant="link" className="h-auto justify-self-start p-0" onClick={() => setRows(rows.filter((_, i) => i !== index))}>Remove block {index + 1}</Button>}
         </div>)}

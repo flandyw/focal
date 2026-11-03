@@ -167,7 +167,7 @@ export function ExamLibrary({
           <SelectTrigger className="w-full sm:w-44" aria-label="Filter by completion"><SelectValue>{completion === "todo" ? "Not completed" : completion === "completed" ? "Completed" : "All papers"}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
         </Select>
-        {(query || subject !== "all" || completion !== "all") ? <Button variant="ghost" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button> : null}
+        {query || completion !== "all" ? <Button variant="ghost" onClick={() => { setQuery(""); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button> : null}
         <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{count(filtered.length, "exam")} · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">

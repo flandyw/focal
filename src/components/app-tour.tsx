@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 import type { AppView } from "../lib/app-view"
+import { AI_ENABLED } from "../lib/host"
 import { Button } from "./ui/button"
 
 const SHORTCUT = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"
@@ -8,10 +9,10 @@ const TITLE = "#main-content h1"
 const ACTIONS = "#main-content [data-tour=page-actions]"
 
 // Each step opens its view first. A target that never appears (mobile sidebar, empty states) shows the card centred.
-const STEPS: Array<{ view?: AppView; target?: string; title: string; text: string }> = [
+const STEPS_ALL: Array<{ view?: AppView; target?: string; title: string; text: string }> = [
   { view: "calendar", title: "A quick tour of Focal", text: "We’ll visit each page and show what it’s for. Use the arrow keys or Next, and Esc to leave anytime." },
   { target: "[data-tour=add]", title: "Add to your study", text: "Log a practice exam, past study, or a mistake from any page." },
-  { target: "[aria-label='Search anything']", title: "Search anything", text: `Press ${SHORTCUT} to jump to any page or action.` },
+  { target: "[aria-label='Search pages and actions'], [aria-label='Search']", title: "Search anything", text: matchMedia("(pointer: coarse)").matches ? "Tap search to jump to any page or action." : `Press ${SHORTCUT} to jump to any page or action.` },
   { view: "calendar", target: TITLE, title: "Calendar", text: "Your month at a glance. Pick a day to see its plan: study blocks, SACs, classes and exams." },
   { view: "calendar", target: ACTIONS, title: "Plan your days", text: "Add events, or paste a schedule from a chatbot with Import." },
   { view: "exams", target: TITLE, title: "Exams", text: "Every practice paper you’ve sat, with marks compared against VCAA grade distributions." },
@@ -34,6 +35,8 @@ const STEPS: Array<{ view?: AppView; target?: string; title: string; text: strin
   { view: "calendar", title: "You’re all set", text: "Start with today’s plan. Good luck with your exams." },
 ]
 
+const STEPS = STEPS_ALL.filter((step) => AI_ENABLED || step.view !== "chat")
+
 function findTarget(selector?: string) {
   if (!selector) return null
   return [...document.querySelectorAll<HTMLElement>(selector)].find((element) => element.getClientRects().length > 0) ?? null
@@ -55,7 +58,8 @@ export function AppTour({ onNavigate, onClose }: { onNavigate: (view: AppView) =
     let tries = 0
     const timer = window.setInterval(() => {
       const element = findTarget(step.target)
-      if (element || !step.target || ++tries > 40) {
+      // A page may take a moment to load; a sidebar target is either there or hidden on this screen.
+      if (element || !step.target || ++tries > (step.view ? 40 : 3)) {
         window.clearInterval(timer)
         setFound({ index, element })
       }

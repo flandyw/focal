@@ -10,6 +10,7 @@ import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "./ui/sheet"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { WorkspacePage } from "./workspace-layout"
@@ -48,6 +49,8 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   const [target, setTarget] = useState(goal.target)
   const [deadline, setDeadline] = useState(goal.deadline)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const dirty = kind !== goal.kind || target !== goal.target || deadline !== goal.deadline || (kind !== "atar" && subject !== (goal.subject ?? data.subjects[0] ?? ""))
   const now = useTickingNow()
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -65,7 +68,7 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   }
 
   return (
-    <Sheet open onOpenChange={(open) => { if (!open) onClose() }}>
+    <Sheet open onOpenChange={(open) => { if (!open) { if (dirty) setConfirmingClose(true); else onClose() } }}>
       <SheetContent resizable className="w-full">
         <SheetHeader>
           <SheetTitle>Edit goal</SheetTitle>
@@ -86,6 +89,7 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
         </form>
         <SheetFooter><Button type="submit" form="edit-goal-form"><Pencil />Save changes</Button></SheetFooter>
       </SheetContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
     </Sheet>
   )
 }
@@ -125,8 +129,9 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
   }
 
   function removeGoal(id: string) {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = canonicalNow().toISOString()
     commit((current) => ({ ...current, goals: current.goals.map((goal) => goal.id === id ? { ...goal, archivedAt: updatedAt, updatedAt } : goal) }))
+    toast.success("Goal archived", { duration: 8000, action: { label: "Undo", onClick: () => restoreGoal(id) } })
   }
 
   function saveEditedGoal(updated: StudyGoal) {
@@ -159,7 +164,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
         const expired = !achieved && goal.deadline < localDate(now)
         return <Card key={goal.id}>
           <CardHeader><div className="flex items-start justify-between gap-3"><div><CardTitle>{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</CardTitle><CardDescription>Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</CardDescription></div><Badge variant={expired ? "destructive" : achieved ? "success" : "outline"}>{expired ? "Expired" : achieved ? "Reached" : item.gap === null ? "Needs baseline" : `${item.gap.toFixed(goal.kind === "atar" ? 2 : 1)} to go`}</Badge></div></CardHeader>
-          <CardContent className="grid gap-4"><div><div className="mb-2 flex justify-between text-sm"><span>{item.label}</span><strong className="tabular-nums">{item.current === null ? "—" : item.current.toFixed(goal.kind === "atar" ? 2 : 1)} / {goal.target}</strong></div><Progress value={item.progress} /></div><p className="text-sm text-muted-foreground">{item.evidence}</p><p className="text-sm">{item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button><Button size="sm" variant="ghost" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button><Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button></div></CardContent>
+          <CardContent className="grid gap-4"><div><div className="mb-2 flex justify-between text-sm"><span>{item.label}</span><strong className="tabular-nums">{item.current === null ? "—" : item.current.toFixed(goal.kind === "atar" ? 2 : 1)} / {goal.target}</strong></div><Progress aria-label={`Progress to ${goal.target}`} value={item.progress} /></div><p className="text-sm text-muted-foreground">{item.evidence}</p><p className="text-sm">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button><Button size="sm" variant="ghost" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button><Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button></div></CardContent>
         </Card>
       })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see your current baseline and the gap to close.</EmptyDescription></EmptyHeader></Empty>}
       {archivedGoals.length ? <Card><CardHeader><CardTitle>Archived goals</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 rounded-md border p-3"><div><p className="text-sm font-medium">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</p><p className="text-xs text-muted-foreground">Target {goal.target}</p></div><Button size="sm" variant="outline" onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</CardContent></Card> : null}

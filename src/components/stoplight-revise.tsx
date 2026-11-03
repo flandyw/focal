@@ -62,7 +62,6 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
       setError(failure instanceof Error ? failure.message : "Could not save ratings. Your reply is still here; try again.")
       return
     }
-    toast.success(`Updated ${ratings.size} item${ratings.size === 1 ? "" : "s"}`)
     setText("")
     onOpenChange(false)
   }

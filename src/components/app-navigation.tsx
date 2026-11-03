@@ -28,6 +28,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 import { useSidebar } from "../hooks/use-sidebar"
 import type { AppView } from "../lib/app-view"
 import { NAVIGATION_GROUPS, SETTINGS_ITEM } from "../lib/navigation"
@@ -92,6 +93,7 @@ function workedLabel(session: SessionSync["sessions"][number]) {
 }
 
 function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessions"]; onControl: SessionSync["control"] }) {
+  const [discarding, setDiscarding] = useState<SessionSync["sessions"][number] | null>(null)
   const active = sessions.filter((session) => session.originating_app !== "examtrack" && (isRunning(session) || isPaused(session)))
   if (active.length === 0) return null
 
@@ -117,20 +119,32 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
               <Fragment key={session.id}>
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="truncate">
-                    {session.title}
+                    {session.title || "Study"}
                     <span className="ml-1 text-muted-foreground">{workedLabel(session)}</span>
                   </DropdownMenuLabel>
                   {isPaused(session)
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}>Resume</DropdownMenuItem>
                     : <DropdownMenuItem onClick={() => control(session, "pause")}>Pause</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => control(session, "complete")}>Finish</DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onClick={() => control(session, "cancel")}>Discard session</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => setDiscarding(session)}>Discard session</DropdownMenuItem>
                 </DropdownMenuGroup>
                 {index < active.length - 1 ? <DropdownMenuSeparator /> : null}
               </Fragment>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <AlertDialog open={discarding !== null} onOpenChange={(open) => { if (!open) setDiscarding(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard this session?</AlertDialogTitle>
+              <AlertDialogDescription>Its recorded study time will be removed on every device. Choose Finish instead to keep it.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep session</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={() => { if (discarding) control(discarding, "cancel"); setDiscarding(null) }}>Discard session</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarMenuItem>
     </SidebarMenu>
   )
@@ -140,7 +154,7 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
   synced: "Synced with your account",
   syncing: "Syncing…",
   pending: "Changes queued to sync",
-  error: "Sync failed. Retry from settings",
+  error: "Sync failed. Retry from the account menu",
   restoring: "Restoring your account…",
   reconnecting: "Reconnecting. Changes stay on this device",
   "sign-in-required": "Session ended. Sign in again to sync",
@@ -224,10 +238,10 @@ export function AppSidebar({
     action()
   }
 
-  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={() => run(onSearch)} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={() => run(onSearch)} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground/90 group-data-[collapsible=icon]:hidden">
     <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
     <span className="flex-1 text-left text-[0.8125rem]">Search</span>
-    <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+    <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/80" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
   </Button>
 
   return (
@@ -244,7 +258,7 @@ export function AppSidebar({
           >
             <span className="font-heading text-[2.75rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal<span className="text-chart-1">.</span></span>
           </Button>
-          <SidebarTrigger className="shrink-0 text-sidebar-foreground/60" />
+          <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />
         </div>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -258,6 +272,7 @@ export function AppSidebar({
                 <DropdownMenuItem onClick={() => run(onLogExam)}>Log exam</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => run(onLogPastStudy)}>Log past study</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => run(onLogMistake)}>Log mistake</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => run(onStartExam)}>Start timed paper</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => run(onSearch)}>Search actions</DropdownMenuItem>
               </DropdownMenuContent>
@@ -267,7 +282,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
         {!isMobile && (commandOpen || commandLoaded) ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
-        <Button variant="ghost" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 rounded-xs text-sidebar-foreground/70 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></Button>
+        <Button variant="ghost" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 rounded-xs text-sidebar-foreground/90 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></Button>
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
           if (!items.length) return null
@@ -314,7 +329,7 @@ export function AppSidebar({
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-tour="account" tooltip={accountTooltip} aria-label={accountTooltip} />}>
-                <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/60" strokeWidth={1.25} />
+                <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/80" strokeWidth={1.25} />
                 <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{accountLabel}</span>
                   <span className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>

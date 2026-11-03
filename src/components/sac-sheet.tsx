@@ -149,7 +149,7 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-duration">Time allowed (min)</FieldLabel>
-                <Input id="sac-duration" type="number" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
+                <Input id="sac-duration" type="number" inputMode="numeric" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
               </Field>
             </div>
             <div className="border-t pt-5">
@@ -157,15 +157,15 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
               <div className="grid gap-5 sm:grid-cols-3">
                 <Field>
                   <FieldLabel htmlFor="sac-score">Mark</FieldLabel>
-                  <Input id="sac-score" type="number" min="0" step="0.5" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" />
+                  <Input id="sac-score" type="number" min="0" step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="sac-maximum">Out of</FieldLabel>
-                  <Input id="sac-maximum" type="number" min="0.5" step="0.5" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" />
+                  <Input id="sac-maximum" type="number" min="0.5" step="any" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="sac-weighting">Weighting (%)</FieldLabel>
-                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="0.1" value={weighting} onChange={(event) => setWeighting(event.target.value)} placeholder="Optional" />
+                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="any" value={weighting} onChange={(event) => setWeighting(event.target.value)} placeholder="Optional" />
                 </Field>
               </div>
               <FieldDescription className="mt-2">Leave mark and maximum blank to track this as an upcoming SAC.</FieldDescription>

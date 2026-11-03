@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { toast } from "sonner"
 import { Check, Circle, Plus, RotateCcw, Save, Trash2 } from "lucide-react"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -50,7 +51,11 @@ export function AtarEstimator({
   }, [data.subjects, scalingReferences, year])
   const firstStudyName = firstPreferredSubject(studies.map((study) => study.studyName), data.subjects)
   const firstStudyCode = studies.find((study) => study.studyName === firstStudyName)?.code ?? ""
-  const [rows, setRows] = useState<Row[]>(() => [newRow(firstStudyCode)])
+  // Start from the student's own subjects, not a single blank row to fill in six times.
+  const [rows, setRows] = useState<Row[]>(() => {
+    const codes = data.subjects.flatMap((subject) => studies.find((study) => normaliseScalingStudyName(study.studyName) === normaliseScalingStudyName(subject))?.code ?? [])
+    return codes.length ? codes.slice(0, 6).map((code) => newRow(code)) : [newRow(firstStudyCode)]
+  })
 
   const predictions = useMemo(() => {
     const map = new Map<string, number>()
@@ -87,6 +92,11 @@ export function AtarEstimator({
       aggregate: estimate.aggregate,
       savedAt: new Date().toISOString(),
     })
+  }
+
+  function deleteEstimate(saved: SavedAtarEstimate) {
+    onDeleteEstimate(saved.id)
+    toast("Scenario deleted", { duration: 8000, action: { label: "Undo", onClick: () => onSaveEstimate(saved) } })
   }
 
   function loadEstimate(saved: SavedAtarEstimate) {
@@ -138,11 +148,11 @@ export function AtarEstimator({
                 return (
                   <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
                     <div role="cell" className="max-md:col-span-3">
-                      <SubjectCombobox subjects={studies.map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
+                      <SubjectCombobox subjects={studies.filter((study) => study.code === row.code || !rows.some((other) => other.code === study.code)).map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
                     <div role="cell" className="flex items-center gap-1.5">
-                      <Input aria-label={`Raw score for ${name}`} aria-invalid={invalidScore || undefined} aria-describedby={invalidScore ? `score-error-${row.id}` : undefined} className="w-16 tabular-nums" type="number" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
-                      {prediction !== undefined ? <Toggle variant="outline" size="sm" pressed={usePrediction} onPressedChange={(pressed) => updateRow(row.id, { usePrediction: pressed })} aria-label={`Use Focal prediction for ${name}`}>Focal</Toggle> : null}
+                      <Input aria-label={`Raw score for ${name}`} aria-invalid={invalidScore || undefined} aria-describedby={invalidScore ? `score-error-${row.id}` : undefined} className="w-16 tabular-nums" type="number" inputMode="numeric" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
+                      {prediction !== undefined ? <Toggle variant="outline" size="sm" title="Use Focal’s predicted score" pressed={usePrediction} onPressedChange={(pressed) => updateRow(row.id, { usePrediction: pressed })} aria-label={`Use Focal prediction for ${name}`}>Focal</Toggle> : null}
                     </div>
                     <div role="cell" className="text-right text-sm tabular-nums max-md:hidden">{result ? result.scaledScore.toFixed(1) : "—"}</div>
                     <div role="cell" className="flex items-center gap-2 max-md:justify-end">
@@ -177,7 +187,7 @@ export function AtarEstimator({
                   <ul className="grid gap-2 text-sm">
                     {counted.map((item) => (
                       <li key={item.id} className="flex items-baseline gap-3">
-                        <span className="min-w-0 flex-1 truncate">{item.studyName}</span>
+                        <span className="min-w-0 flex-1 truncate" title={item.studyName}>{item.studyName}</span>
                         <span className="text-xs text-muted-foreground">{item.role === "Increment" ? "10%" : ""}</span>
                         <span className="w-10 text-right font-medium tabular-nums">{item.contribution.toFixed(1)}</span>
                       </li>
@@ -210,7 +220,7 @@ export function AtarEstimator({
                         <p className="truncate text-xs text-muted-foreground">{saved.year} VTAC · {new Date(saved.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => loadEstimate(saved)}><RotateCcw />Load</Button>
-                      <Button variant="ghost" size="icon-sm" aria-label={`Delete saved ATAR ${saved.atarLabel}`} onClick={() => onDeleteEstimate(saved.id)}><Trash2 /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Delete saved ATAR ${saved.atarLabel}`} onClick={() => deleteEstimate(saved)}><Trash2 /></Button>
                     </li>
                   ))}
                 </ul>

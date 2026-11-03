@@ -59,7 +59,7 @@ export function AppCommandMenu({
 
   return (
     <Command className="mx-2 size-auto rounded-none! bg-transparent p-0 group-data-[collapsible=icon]:hidden">
-      <Label className="h-8 rounded-xs px-3 font-normal text-sidebar-foreground/70 focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
+      <Label className="h-8 rounded-xs px-3 font-normal text-sidebar-foreground/90 focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
         <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
         <CommandPrimitive.Input
           ref={input}
@@ -73,9 +73,9 @@ export function AppCommandMenu({
           onFocus={() => onOpenChange(true)}
           onBlur={() => onOpenChange(false)}
           onKeyDown={(event) => { if (event.key === "Escape") { onOpenChange(false); input.current?.blur() } }}
-          className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none placeholder:text-sidebar-foreground/70"
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-sidebar-accent-foreground outline-none placeholder:text-sidebar-foreground/90"
         />
-        <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/60" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
+        <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[10px] text-sidebar-foreground/80" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
       </Label>
       {open && rect && (
         <div

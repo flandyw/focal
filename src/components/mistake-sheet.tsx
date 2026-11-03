@@ -110,9 +110,13 @@ function draftFromFields({
 }
 
 function validateMistakeDraft(draft: MistakeDraft, imageCount = 0): string | null {
-  if (!draft.question.trim() || (!draft.questionText.trim() && !imageCount) || !draft.explanation.trim() || !draft.correction.trim()) {
-    return "Item label, a question (text or images), mistake, and improved response are required."
-  }
+  const missing = [
+    !draft.question.trim() && "a question number",
+    !draft.questionText.trim() && !imageCount && "the prompt (text or an image)",
+    !draft.explanation.trim() && "what went wrong",
+    !draft.correction.trim() && "the improved response",
+  ].filter(Boolean)
+  if (missing.length) return `Add ${missing.join(", ")}.`
   return validateMistakeMarks(draft.totalMarks, draft.marksLost)
 }
 
@@ -423,16 +427,8 @@ export function MistakeSheet({
               {batchDrafts.map((draft, index) => (
                 <Card
                   key={`${index}-${draft.question}`}
-                  className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
-                  role="button"
-                  tabIndex={0}
+                  className="cursor-pointer transition-colors hover:bg-muted/40"
                   onClick={() => openBatchDraft(index)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault()
-                      openBatchDraft(index)
-                    }
-                  }}
                 >
                   <CardHeader className="gap-2">
                     <div className="flex items-start justify-between gap-2">
@@ -501,7 +497,7 @@ export function MistakeSheet({
                       }}
                     />
                     <Button type="button" variant="secondary" disabled={!images.length || analysing || batchDrafts.length > 0 || !auth.isAuthenticated} onClick={() => void analyse()}>
-                      <Sparkles />{analysing ? "Analysing…" : importMode === "batch" ? `Import ${images.length || ""} questions` : "Fill with AI"}
+                      <Sparkles />{analysing ? "Analysing…" : importMode === "batch" ? `Import ${images.length > 1 ? `${images.length} ` : ""}questions` : "Fill with AI"}
                     </Button>
                   </div>
                   <FieldDescription>{importMode === "batch" ? "Optionally choose a shared exam, then add 2–10 images. Each image becomes a separate mistake in the same order; each can be up to 3 MB and the batch up to 15 MB." : "Optionally choose an exam, then upload one or more related images totalling up to 3 MB. Matching VCAA attempts also include the official exam PDF for context."}</FieldDescription>
@@ -538,7 +534,7 @@ export function MistakeSheet({
                   </Combobox>
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="question">Item label</FieldLabel>
+                  <FieldLabel htmlFor="question">Question number</FieldLabel>
                   <Input id="question" aria-required="true" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Section B, Question 4 or Essay 1" />
                 </Field>
               </div>
@@ -551,11 +547,11 @@ export function MistakeSheet({
               <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-total-marks">Total marks</FieldLabel>
-                  <Input id="mistake-total-marks" type="number" inputMode="decimal" min="0.5" step="0.5" value={totalMarks || ""} aria-invalid={Boolean(marksError)} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
+                  <Input id="mistake-total-marks" type="number" inputMode="decimal" min="0.5" step="any" value={totalMarks || ""} aria-invalid={Boolean(marksError)} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
                 </Field>
                 <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-marks-lost">Marks lost</FieldLabel>
-                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="0.5" value={Number.isFinite(marksLost) ? marksLost : ""} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
+                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="any" value={Number.isFinite(marksLost) ? marksLost : ""} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
                 </Field>
                 <Button type="button" variant="outline" disabled={!(totalMarks > 0)} onClick={() => setMarksLost(totalMarks)}>All marks</Button>
                 {marksError ? <FieldError className="sm:col-span-3">{marksError}</FieldError> : null}
@@ -576,7 +572,7 @@ export function MistakeSheet({
               <MarkdownField id="question-text" label="Prompt or task" rows={4} value={questionText} onChange={setQuestionText} placeholder="Enter the full question, essay prompt, stimulus task, or practical requirement." hint="Markdown and LaTeX ($x^2$) are supported." />
 
               {!isEditingBatchDraft ? <Field>
-                <FieldLabel htmlFor="question-images">Question images</FieldLabel>
+                <FieldLabel htmlFor="question-images">Question images <span className="text-muted-foreground">(optional)</span></FieldLabel>
                 <FieldDescription>Add diagrams, screenshots, or multiple pages as part of this question. Up to 5 images, 5 MB each, 20 MB total including saved and retained AI images. Text above is optional when the question is in images.</FieldDescription>
                 <Input id="question-images" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={!storageUserId || saving || analysing || importMode === "batch"} onChange={async (event) => {
                   const picked = Array.from(event.target.files ?? [])

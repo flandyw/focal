@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import { useWakeLock } from "../lib/mobile"
 import {
@@ -98,6 +99,8 @@ function NumberField({ id, label, value, min, max, onChange }: {
   max: number
   onChange: (value: number) => void
 }) {
+  // Held as text while typing: clearing the box to enter a new number must not snap it back.
+  const [draft, setDraft] = useState<string | null>(null)
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
@@ -105,14 +108,21 @@ function NumberField({ id, label, value, min, max, onChange }: {
         id={id}
         max={max}
         min={min}
-        onChange={(event) => onChange(event.target.valueAsNumber)}
+        onBlur={() => setDraft(null)}
+        onChange={(event) => {
+          setDraft(event.target.value)
+          const next = event.target.valueAsNumber
+          if (Number.isInteger(next) && next >= min && next <= max) onChange(next)
+        }}
         step={1}
         type="number"
-        value={Number.isFinite(value) ? value : min}
+        value={draft ?? (Number.isFinite(value) ? value : min)}
       />
     </Field>
   )
 }
+
+const blockRange = new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" })
 
 function formatClock(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
@@ -237,6 +247,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 1000),
   } : local.state
   const progress = sharedSession ? 0 : local.progress
+  // Blocks only reach the record when they finish, so a reset throws this time away.
+  const unsavedTime = !sharedSession && (local.state.mode === "free" || local.state.studyOvertime
+    ? local.state.overtimeSeconds >= 60
+    : local.state.mode === "work" && local.state.totalSeconds - local.state.secondsLeft >= 60)
   const sessionBusy = sharedBusy || local.sessionBusy || (!!sharedSession && !onControlSession)
   const actions = sharedSession ? {
     ...local,
@@ -246,6 +260,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     selectMode: () => {},
   } : local
 
+  const requestReset = () => { if (sharedSession || unsavedTime) setConfirmingDiscard(true); else actions.reset() }
   const isFreeStudy = state.mode === "free"
   const displayMode = isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
   const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
@@ -267,6 +282,24 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const askForAlerts = () => {
     if (permission === "default" && settings.notificationsEnabled) void requestTimerNotifications().then(() => notificationPermission()).then(setNotificationPermission)
   }
+  function toggleTimer() {
+    if (!state.running && !subjectChosen) {
+      toast("Choose a subject first, so this time lands in your record.")
+      document.getElementById("timer-subject")?.focus()
+      return
+    }
+    askForAlerts()
+    actions.toggle()
+  }
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== " " || event.repeat || eclair || sessionBusy || !(event.target instanceof HTMLElement) || event.target.closest("input, textarea, select, button, a, [role='combobox'], [role='slider'], [contenteditable='true']") || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')) return
+      event.preventDefault()
+      toggleTimer()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  })
   useWakeLock(state.running && settings.keepScreenOn)
   if (notificationBlockedMode && notificationBlockedMode !== displayMode) setNotificationBlockedMode(null)
   const announcement = notificationBlockedMode === displayMode ? `Could not enable notifications. ${timerNotificationHelp()}` : `${displayMode} ${state.running ? "started" : "paused"}.`
@@ -357,11 +390,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     return () => { document.title = previous }
   }, [readout, tabTitle])
   const caption = isFreeStudy ? "Study at your own pace. Pause when you need to; finish to save your time." : state.studyOvertime
-    ? isFreeStudy
-      ? state.running
-        ? "Free study has no end. Finish it when you are done and it lands in your record."
-        : "Free study is held. Your time is safe until you continue."
-      : "Break time is being logged as study time."
+    ? "Break time is being logged as study time."
     : onBreak
       ? "Rest properly. The next focus block starts itself if you left auto-start on."
       : "Stay with one task until the block ends."
@@ -381,7 +410,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </p>
           ) : (
             <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:w-auto lg:max-w-[34rem] lg:flex-1">
-              <SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
+              <FieldLabel htmlFor="timer-subject" className="sr-only">Subject</FieldLabel><SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
               <Input aria-label="Intent" id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Intent, e.g. redo the 2023 organic paper" value={intent} />
               {state.running ? <p className="text-xs text-muted-foreground sm:col-span-2">Change the subject to switch; this session keeps going and records each subject's time.</p> : null}
             </div>
@@ -403,13 +432,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {/* A lifecycle command is one transaction with the server: its button
                   stays down until the server has answered for the boundary. */}
-              <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy || (!state.running && !subjectChosen)} onClick={() => { askForAlerts(); actions.toggle() }} size="lg">
+              <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy} aria-keyshortcuts="Space" onClick={toggleTimer} size="lg">
                 {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
               </Button>
               {isFreeStudy ? (
                 <Button className="flex-1 sm:flex-none" disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
               ) : null}
-              <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={() => sharedSession ? setConfirmingDiscard(true) : actions.reset()} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
+              <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={requestReset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
               {onBreak ? <Button className="flex-1 sm:flex-none" onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
             </div>
             {offerContinue ? (
@@ -446,12 +475,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard this session?</AlertDialogTitle>
-            <AlertDialogDescription>Its recorded study time will be removed on every device. Choose Finish instead to keep it.</AlertDialogDescription>
+            <AlertDialogTitle>{sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
+            <AlertDialogDescription>{sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep session</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>Discard session</AlertDialogAction>
+            <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>{sharedSession ? "Discard session" : "Reset timer"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -472,11 +501,11 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           const plan = studySessionPlan(session)
           return <Card key={session.id} size="sm"><CardContent className="grid gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0"><h3 className="break-words font-medium">{session.title}</h3><p className="text-sm text-muted-foreground">{studySessionSubjects(session).map(subjectNameFor).join(" · ") || "No subject"} · {Math.round(plan.milliseconds / 60_000)} min planned</p></div>
+              <div className="min-w-0"><h3 className="break-words font-medium">{session.title || "Study"}</h3><p className="text-sm text-muted-foreground">{studySessionSubjects(session).map(subjectNameFor).join(" · ") || "No subject"} · {Math.round(plan.milliseconds / 60_000)} min planned</p></div>
               <div className="flex gap-2"><Button disabled={!!blockedPlan || !!planBusy || !onControlSession} onClick={() => void startPlan(session)} size="sm"><Play />{planBusy === session.id ? "Starting…" : "Start session"}</Button>
-                {plannedActions ? <Button aria-label={`Edit ${session.title}`} onClick={() => { setCreatingPlan(false); setEditingPlan(session) }} size="icon-sm" variant="outline"><Pencil /></Button> : null}</div>
+                {plannedActions ? <Button aria-label={`Edit ${session.title || "this plan"}`} onClick={() => { setCreatingPlan(false); setEditingPlan(session) }} size="icon-sm" variant="outline"><Pencil /></Button> : null}</div>
             </div>
-            <div className="text-xs text-muted-foreground">{plan.blocks.slice(0, 3).map((block) => <p key={block.start}>{new Date(block.start).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })} – {new Date(block.end).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>)}{plan.blocks.length > 3 ? <p>{plan.blocks.length} scheduled blocks</p> : null}</div>
+            <div className="text-xs text-muted-foreground">{plan.blocks.slice(0, 3).map((block) => <p key={block.start}>{blockRange.formatRange(new Date(block.start), new Date(block.end))}</p>)}{plan.blocks.length > 3 ? <p>{plan.blocks.length} scheduled blocks</p> : null}</div>
             {plan.description ? <p className="line-clamp-3 whitespace-pre-wrap text-sm">{plan.description}</p> : null}
             {plan.topics.length ? <p className="text-sm text-muted-foreground">Topics: {plan.topics.join(" · ")}</p> : null}
           </CardContent></Card>
@@ -495,10 +524,10 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         continueLabel={offerContinue ? continueLabel : undefined}
         onContinue={offerContinue ? () => void startPlan(offerContinue, "resume") : undefined}
         plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
-          detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }),
+          detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }),
           start: () => void startPlan(session) }))}
         actions={{
-          toggle: actions.toggle, reset: actions.reset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
+          toggle: actions.toggle, reset: requestReset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
           addTime: actions.addTime, selectMode: actions.selectMode, preset: applyPreset, setting: updateSettings,
           notifications: () => void toggleNotifications(), subject: setSubject, intent: setIntent,
           paper: () => { setEclair(false); onTimedPaper() }, exit: () => setEclair(false),
@@ -524,7 +553,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                   <div className="min-w-0">
                     <p className="font-medium">{item.title || "Focus block"}</p>
                     <p className="text-sm text-muted-foreground">
-                      {[item.detail || subject, `${Math.round(item.minutes)} min`].filter(Boolean).join(" · ")}
+                      {[item.detail, `${Math.round(item.minutes)} min`].filter(Boolean).join(" · ")}
                     </p>
                   </div>
                   {continuable.has(item.id) && onControlSession ? (
@@ -651,7 +680,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             />
             <NumberField
               id="timer-goal"
-              label="Daily goal (blocks)"
+              label="Daily goal (0 = off)"
               max={MAX_DAILY_GOAL}
               min={0}
               onChange={(value) => updateSettings({ dailyGoal: value })}

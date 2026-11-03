@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { downloadExamFile } from "./host"
+import { localDate } from "./learning-workspace"
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "./exam-data"
 
 // ponytail: this `examtrack` prefix is load-bearing. Renaming it would orphan every
@@ -45,5 +46,5 @@ export function parseAppDataFile(text: string): AppData {
 }
 
 export function downloadAppData(data: AppData) {
-  return downloadExamFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `focal-${new Date().toISOString().slice(0, 10)}.json`)
+  return downloadExamFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `focal-${localDate(new Date())}.json`)
 }

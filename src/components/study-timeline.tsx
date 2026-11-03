@@ -962,7 +962,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               <Button onClick={() => zoomTo(picked)} size="xs" variant="ghost"><ZoomIn />Zoom</Button>
               {picked.session && picked.tone !== "live" ? (
                 confirmRemove
-                  ? <Button className="ml-auto" onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button>
+                  ? <><Button className="ml-auto" onClick={() => setConfirmRemove(false)} size="xs" variant="ghost">Keep</Button><Button onClick={() => remove(picked.session!)} size="xs" variant="destructive"><Trash2 />Remove for good?</Button></>
                   : <Button aria-label="Remove" className="ml-auto text-muted-foreground hover:text-destructive" onClick={() => setConfirmRemove(true)} size="xs" variant="ghost"><Trash2 />Remove</Button>
               ) : null}
             </div>
@@ -978,7 +978,7 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
               <Input aria-label="Start time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, start: minute }) }} type="time" value={hhmm(draft.start)} />
               <span aria-hidden className="text-muted-foreground">–</span>
               <Input aria-label="End time" className="h-7 w-28 px-1.5 text-xs" onChange={(event) => { const minute = parseHhmm(event.target.value); if (Number.isFinite(minute)) setDraft({ ...draft, end: minute }) }} type="time" value={hhmm(draft.end)} />
-              <span className="text-xs text-muted-foreground tabular-nums">{draft.end > draft.start ? duration(draft.end - draft.start) : ""}</span>
+              {draft.end > draft.start ? <span className="text-xs text-muted-foreground tabular-nums">{duration(draft.end - draft.start)}</span> : <span className="text-xs text-destructive">End must be after start</span>}
               <Button aria-label="Cancel" className="ml-auto" onClick={() => setDraft(null)} size="icon-xs" type="button" variant="ghost"><X /></Button>
             </div>
             {options.length > 12 ? (

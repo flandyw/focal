@@ -200,6 +200,12 @@ export function CalendarPage({
     if (!date || date < "2000") return
     commit((current) => moveTask(current, id, date))
     selectDay(date)
+    toast(`Moved to ${formatDayTitle(date)}`)
+  }
+
+  function archive(id: string) {
+    commit((current) => archiveTask(current, id))
+    toast("Task archived", { duration: 8000, action: { label: "Undo", onClick: () => commit((current) => ({ ...current, tasks: current.tasks.map((task) => task.id === id ? { ...task, archivedAt: undefined, updatedAt: new Date().toISOString() } : task) })) } })
   }
 
   async function importDrafts(drafts: TextEventDraft[]) {
@@ -254,7 +260,7 @@ export function CalendarPage({
   }
 
   const rowActions = {
-    onArchive: (id: string) => commit((current) => archiveTask(current, id)),
+    onArchive: archive,
     onEditEvent: (id: string) => setEventDialog({ event: data.events?.find((item) => item.id === id) ?? null, key: Date.now() }),
     onMove: move,
     onNavigate,
@@ -421,7 +427,7 @@ export function CalendarPage({
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
                     <EmptyTitle>{banked.length ? "All done" : "Nothing planned"}</EmptyTitle>
-                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add an event or plan study in the timeline below."}</EmptyDescription>
+                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add an event above, or plan study in the timeline below."}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
@@ -522,7 +528,6 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
         <span className={cn(
           "grid size-6 place-items-center rounded-full text-xs font-medium tabular-nums",
           day.isToday && "bg-primary text-primary-foreground",
-          !day.inMonth && !day.isToday && "opacity-60",
         )}>{day.day}</span>
         {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums sm:inline">{formatMinutes(day.minutes)}</span> : null}
       </span>
@@ -621,6 +626,7 @@ function DayItemRow({
   onStatus: (id: string, status: "completed" | "skipped" | "planned") => void
 }) {
   const [more, setMore] = useState(false)
+  const [moveTo, setMoveTo] = useState("")
   const done = isDayItemDone(item)
   const isTask = item.kind === "task"
   const meta = [
@@ -692,12 +698,16 @@ function DayItemRow({
         <div className="mt-1 flex animate-in flex-wrap items-center gap-1.5 pl-3.5 duration-400 ease-[var(--ease-spring)] fade-in-0 slide-in-from-top-2">
           {isTask && item.status === "planned" ? (
             <Button aria-label={`Skip ${item.title}`} onClick={() => onStatus(item.id, "skipped")} size="sm" variant="outline"><SkipForward />Skip</Button>
-          ) : null}          <Input
+          ) : null}
+          <Input
             aria-label={`Move ${item.title} to another day`}
             className="h-7 w-32 px-1.5 text-xs"
-            onChange={(event) => onMove(item.id, event.target.value)}
+            onChange={(event) => setMoveTo(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") onMove(item.id, moveTo) }}
             type="date"
+            value={moveTo}
           />
+          <Button disabled={moveTo < "2000"} onClick={() => onMove(item.id, moveTo)} size="sm" variant="outline">Move</Button>
           <Button onClick={() => onArchive(item.id)} size="sm" variant="outline"><Archive />Archive</Button>
         </div>
       ) : null}

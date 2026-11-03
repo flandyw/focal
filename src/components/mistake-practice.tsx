@@ -17,7 +17,12 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
   const card = cards[index]
   function go(next: number) { setIndex(next); setRevealed(false) }
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+    <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl" onKeyDown={(event) => {
+      if (finished || !card || (event.target as HTMLElement).closest("button, a, input, textarea")) return
+      if (event.key === " ") { event.preventDefault(); setRevealed(!revealed) }
+      else if (event.key === "ArrowLeft" && index > 0) go(index - 1)
+      else if (event.key === "ArrowRight" && index < cards.length - 1) go(index + 1)
+    }}>
       <DialogHeader>
         <DialogTitle>{finished ? "Practice complete" : "Practice your way"}</DialogTitle>
         <DialogDescription>Explore answers at your own pace. Practice does not change your review schedule.</DialogDescription>
@@ -34,7 +39,7 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         }}><Shuffle />Shuffle & restart</Button></div>
         <Progress value={(index + 1) / cards.length * 100} aria-label="Practice progress" />
         <div className="flex flex-wrap gap-2"><Badge variant="secondary">{card.category}</Badge>{card.areaOfStudy ? <Badge variant="outline">{card.areaOfStudy}</Badge> : null}</div>
-        <h3 className="font-heading text-2xl font-normal">{card.question}</h3>
+        <h3 className="font-heading text-2xl font-normal"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
         <div className="min-h-32"><MarkdownPreview>{card.questionText || card.question}</MarkdownPreview><MistakeAttachments attachments={card.attachments} /></div>
         <Button variant="secondary" aria-expanded={revealed} onClick={() => setRevealed(!revealed)}>{revealed ? "Hide answer" : "Reveal answer"}</Button>
         {revealed ? <div className="grid gap-5 rounded-xl border bg-muted/30 p-5">

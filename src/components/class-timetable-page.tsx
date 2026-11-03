@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { PageHeader } from "./page-header"
 import { WorkspacePage } from "./workspace-layout"
 import {
@@ -28,11 +29,12 @@ import { Label } from "./ui/label"
 const byStart = (a: TimetablePeriod, b: TimetablePeriod) => a.startTime.localeCompare(b.startTime)
 const dayPeriods = (config: TimetableConfig, day: number) => config.entries.filter((entry) => entry.dayLabel === day).flatMap((entry) => entry.periods).toSorted(byStart)
 const minutes = (time: string) => { const [hours, mins] = time.split(":").map(Number); return hours * 60 + mins }
-const timeLabel = (time: string) => new Date(2000, 0, 1, ...time.split(":").map(Number)).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-const dateLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+const timeLabel = (time: string) => new Date(2000, 0, 1, ...time.split(":").map(Number)).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+const dateLabel = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
 const isBreak = (period: TimetablePeriod) => isTimetableBreakLabel(period.subject) || isTimetableBreakLabel(period.period)
 const periodTint = (period: TimetablePeriod) => isBreak(period) ? { className: "tt-break" } : { className: "tt-block", style: { "--tt-color": subjectColor(periodSubjectName(period)) ?? "var(--primary)" } as CSSProperties }
-const hourLabel = (hour: number) => new Date(2000, 0, 1, Math.floor(hour / 60) % 24).toLocaleTimeString(undefined, { hour: "numeric" })
+const classCount = (value: number) => `${value} ${value === 1 ? "class" : "classes"}`
+const hourLabel = (hour: number) => new Date(2000, 0, 1, Math.floor(hour / 60) % 24).toLocaleTimeString("en-AU", { hour: "numeric" })
 
 function withDay(config: TimetableConfig, dayLabel: number, periods: TimetablePeriod[]): TimetableConfig {
   const others = config.entries.filter((entry) => entry.dayLabel !== dayLabel)
@@ -127,7 +129,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             <div>
               <p className="focal-eyebrow text-primary">One day at a time</p>
               <h2 className="mt-2 font-heading text-4xl" id="tt-agenda-heading">Day {day}{day === today ? <span className="ml-3 align-middle font-sans text-xs text-primary">Today</span> : null}</h2>
-              <p className="mt-3 text-sm text-muted-foreground">{periods.length ? `${classes} ${classes === 1 ? "class" : "classes"}${periods.length > classes ? ` · ${periods.length - classes} ${periods.length - classes === 1 ? "break" : "breaks"}` : ""}` : "A blank page for your school day."}</p>
+              <p className="mt-3 text-sm text-muted-foreground">{periods.length ? `${classCount(classes)}${periods.length > classes ? ` · ${periods.length - classes} ${periods.length - classes === 1 ? "break" : "breaks"}` : ""}` : "A blank page for your school day."}</p>
               {periods.length ? <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-3.5" />{timeLabel(periods[0].startTime)} – {timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}</p> : null}
               <Button className="mt-5" onClick={addPeriod} size="sm"><Plus />Add a period</Button>
             </div>
@@ -147,7 +149,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           <Holidays config={config} onChange={onChange} />
         </>
       )}
-      {importOpen ? <ImportDialog current={config ?? defaultClassTimetable()} onClose={() => setImportOpen(false)} onImport={(next) => { onChange(next); setSelectedDay(1); setImportOpen(false); toast("Timetable imported") }} /> : null}
+      {importOpen ? <ImportDialog current={config ?? defaultClassTimetable()} onClose={() => setImportOpen(false)} onImport={(next) => { const previous = config; onChange(next); setSelectedDay(1); setImportOpen(false); toast("Timetable imported", previous ? { duration: 8000, action: { label: "Undo", onClick: () => onChange(previous) } } : undefined) }} /> : null}
       {settingsOpen && config ? <SettingsDialog config={config} onClose={() => setSettingsOpen(false)} onSave={(next) => { onChange(next); setSettingsOpen(false); toast("Cycle settings saved") }} /> : null}
       {editor ? <PeriodDialog editor={editor} subjects={subjects} onClose={() => setEditor(null)} onSave={(period) => {
         const timetable = config ?? defaultClassTimetable()
@@ -159,9 +161,10 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
         toast(editor.original ? "Period updated" : "Period added")
       }} onDelete={editor.original && config ? () => {
         const original = editor.original!
+        const previous = config
         onChange(withDay(config, editor.day, dayPeriods(config, editor.day).filter((period) => period !== original)))
         setEditor(null)
-        toast("Period removed")
+        toast("Period removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(previous) } })
       } : undefined} /> : null}
     </WorkspacePage>
   )
@@ -192,7 +195,7 @@ function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
         {columns.map(({ day, periods }) => <Button data-today={today === day ? "" : undefined} variant="ghost" aria-pressed={selected === day} className={`snap-center h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
           <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Day</span>
           <span className={`flex size-10 items-center justify-center rounded-md text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
-          <span className="text-[10px] text-muted-foreground">{periods.filter((period) => !isBreak(period)).length} classes</span>
+          <span className="text-[10px] text-muted-foreground">{classCount(periods.filter((period) => !isBreak(period)).length)}</span>
         </Button>)}
         <div aria-hidden="true" className="relative" style={{ height: height * 1.35 }}>
           {hours.slice(1).map((hour) => <span className="absolute right-2 -translate-y-1/2 text-[11px] whitespace-nowrap tabular-nums text-muted-foreground" key={hour} style={{ top: (hour - start) * 1.35 }}>{hourLabel(hour)}</span>)}
@@ -218,9 +221,11 @@ function PeriodDialog({ editor, subjects, onClose, onSave, onDelete }: {
 }) {
   const [draft, setDraft] = useState(editor.draft)
   const [error, setError] = useState<string | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
   function update(patch: Partial<TimetablePeriod>) { setDraft({ ...draft, ...patch }); setError(null) }
+  function requestClose() { if (JSON.stringify(draft) !== JSON.stringify(editor.draft)) setConfirmingClose(true); else onClose() }
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader><p className="focal-eyebrow text-primary">Day {editor.day}</p><DialogTitle>{editor.original ? "Edit a period" : "Add a period"}</DialogTitle><DialogDescription>Give this part of your day a time and a place.</DialogDescription></DialogHeader>
         <form className="contents" onSubmit={(event) => {
@@ -237,9 +242,10 @@ function PeriodDialog({ editor, subjects, onClose, onSave, onDelete }: {
             <Field><FieldLabel htmlFor="tt-room">Room <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel><Input id="tt-room" value={draft.location ?? ""} onChange={(e) => update({ location: e.target.value })} placeholder="e.g. B12" /></Field>
             {error ? <FieldError role="alert">{error}</FieldError> : null}
           </FieldGroup>
-          <DialogFooter>{onDelete ? <Button className="sm:mr-auto" onClick={onDelete} type="button" variant="ghost"><Trash2 />Remove</Button> : null}<Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button type="submit">{editor.original ? "Save changes" : "Add period"}</Button></DialogFooter>
+          <DialogFooter>{onDelete ? <Button className="sm:mr-auto" onClick={onDelete} type="button" variant="ghost"><Trash2 />Remove</Button> : null}<Button onClick={requestClose} type="button" variant="outline">Cancel</Button><Button type="submit">{editor.original ? "Save changes" : "Add period"}</Button></DialogFooter>
         </form>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
     </Dialog>
   )
 }
@@ -258,7 +264,7 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
         <form className="contents" onSubmit={(event) => { event.preventDefault(); if (valid) onSave({ ...config, day1Starts: start, cycleLength: cycle, weekendTimetables: weekends, dayToWeekday: undefined, entries: config.entries.filter((entry) => entry.dayLabel <= cycle) }) }}>
           <FieldGroup>
             <Field><FieldLabel htmlFor="tt-day1">Day 1 starts</FieldLabel><Input id="tt-day1" required type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
-            <Field><FieldLabel htmlFor="tt-cycle">Days in the cycle</FieldLabel><Input id="tt-cycle" required max={60} min={1} type="number" value={length} onChange={(e) => setLength(e.target.value)} /><FieldDescription>Choose between 1 and 60 school days.</FieldDescription></Field>
+            <Field><FieldLabel htmlFor="tt-cycle">Days in the cycle</FieldLabel><Input id="tt-cycle" required max={60} min={1} type="number" inputMode="numeric" value={length} onChange={(e) => setLength(e.target.value)} /><FieldDescription>Choose between 1 and 60 school days.</FieldDescription></Field>
             <Label className="flex items-center gap-3 text-sm"><Checkbox checked={weekends} onCheckedChange={(checked) => setWeekends(checked)} />Include weekends as school days</Label>
             {valid && removed > 0 ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
           </FieldGroup>
@@ -276,10 +282,10 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
     <Collapsible className="border-y">
       <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-4 py-5 text-left"><div><h2 className="font-heading text-2xl">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" /></CollapsibleTrigger>
       <CollapsibleContent keepMounted><div className="grid gap-5 pb-6">
-        {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) })} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
+        {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => { onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) }); toast("Holiday removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(config) } }) }} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
         <form className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); if (!valid) return; onChange({ ...config, holidays: [...config.holidays, { ...draft, name: draft.name.trim() }].toSorted((a, b) => a.startDate.localeCompare(b.startDate)) }); setDraft({ name: "", startDate: "", endDate: "" }); toast("Holiday added") }}>
           <Field><FieldLabel htmlFor="tt-holiday-name">Holiday name</FieldLabel><Input id="tt-holiday-name" required placeholder="Term break" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
-          <Field><FieldLabel htmlFor="tt-holiday-start">From</FieldLabel><Input id="tt-holiday-start" required type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value, endDate: draft.endDate || e.target.value })} /></Field>
+          <Field><FieldLabel htmlFor="tt-holiday-start">From</FieldLabel><Input id="tt-holiday-start" required type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value, endDate: draft.endDate >= e.target.value ? draft.endDate : e.target.value })} /></Field>
           <Field><FieldLabel htmlFor="tt-holiday-end">Until</FieldLabel><Input id="tt-holiday-end" required min={draft.startDate} type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></Field>
           <Button disabled={!valid} type="submit" variant="outline"><Plus />Add holiday</Button>
         </form>

@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { sameStudySubject, studySubjectId } from "../../lib/studySubjects"
 import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
@@ -75,7 +76,7 @@ function formatMinutesLong(m: number) {
 }
 
 function formatDay(date: string) {
- return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+ return new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", {
  weekday:"short",
  month:"short",
  day:"numeric",
@@ -83,7 +84,7 @@ function formatDay(date: string) {
 }
 
 function formatHour(hour: number) {
- return new Date(2000, 0, 1, hour).toLocaleTimeString(undefined, {
+ return new Date(2000, 0, 1, hour).toLocaleTimeString("en-AU", {
  hour:"numeric",
  minute:"2-digit",
  })
@@ -127,7 +128,7 @@ function formatPeriod(range: AnalyticsRange, periodEnd: number) {
  if (range === 0) return "All time"
  const start = new Date(periodEnd)
  start.setDate(start.getDate() - (range - 1))
- const format = (date: Date) => date.toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" })
+ const format = (date: Date) => date.toLocaleDateString("en-AU", { month:"short", day:"numeric", year:"numeric" })
  return `${format(start)} – ${format(new Date(periodEnd))}`
 }
 
@@ -177,7 +178,7 @@ function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
  ].join(","))
  }
  const blob = new Blob(["\uFEFF", rows.join("\n")], { type:"text/csv;charset=utf-8" })
- return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${new Date().toISOString().slice(0, 10)}.csv`)
+ return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${toDateInput(Date.now())}.csv`)
 }
 
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
@@ -300,17 +301,18 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  )
 
  const handleExport = useCallback(() => {
- exportAnalyticsCsv(filteredTimeTrends, range)
+ void exportAnalyticsCsv(filteredTimeTrends, range).then((saved) => { if (saved) toast.success("Study CSV downloaded") })
  }, [filteredTimeTrends, range])
 
  const handleToggleSubject = useCallback(
  (sid: string) => {
  setSelectedSubjects((prev) => {
- const base = prev ?? new Set(allSubjectIds)
- const next = new Set(base)
+ // From "All", a click means "just this one", not "everything but this".
+ if (prev === null) return new Set([sid])
+ const next = new Set(prev)
  if (next.has(sid)) next.delete(sid)
  else next.add(sid)
- return next
+ return next.size === 0 || next.size === allSubjectIds.length ? null : next
  })
  },
  [allSubjectIds],
@@ -495,7 +497,7 @@ function RangeToggle({
  reduceMotion: boolean
 }) {
  return (
-<div className="flex max-w-full gap-3 border-b border-border">
+<div role="group" aria-label="Period length" className="flex max-w-full gap-3 border-b border-border">
  {RANGE_OPTIONS.map((opt) => {
  const isActive = value === opt.value
  return (
@@ -604,7 +606,7 @@ function Highlight({ label, value, detail }: { label: string; value: string; det
  return (
  <div className="px-3 py-2.5">
  <p className="text-caption text-muted-foreground">{label}</p>
- <p className="mt-1 truncate text-sm font-medium">{value}</p>
+ <p className="mt-1 truncate text-sm font-medium" title={value}>{value}</p>
  {detail ? <p className="text-caption tabular-nums text-muted-foreground">{detail}</p> : null}
  </div>
  )
@@ -632,7 +634,7 @@ function KpiCard({
  <div className="mt-1 text-caption text-muted-foreground">
  {label}
  {sub ? (
- <span className="text-muted-foreground/70"> · {sub}</span>
+ <span> · {sub}</span>
  ) : null}
  </div>
  </motion.div>

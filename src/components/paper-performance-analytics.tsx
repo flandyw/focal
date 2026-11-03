@@ -183,7 +183,7 @@ export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas 
         <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.45fr)]">
           <div className="grid gap-3">{lostMarks.categories.map((row) => <div key={row.category} className="grid gap-1.5">
             <div className="flex items-center justify-between gap-3 text-sm"><span className={row.category === "Unattributed" ? "text-muted-foreground" : "font-medium"}>{row.category}</span><span className="tabular-nums">{formatNumber(row.marks)} <span className="text-xs text-muted-foreground">E1 {formatNumber(row.exam1)} · E2 {formatNumber(row.exam2)}</span></span></div>
-            <Progress value={lostMarks.totalLost ? row.marks / lostMarks.totalLost * 100 : 0} />
+            <Progress aria-label={`${row.category} share of lost marks`} value={lostMarks.totalLost ? row.marks / lostMarks.totalLost * 100 : 0} />
           </div>)}</div>
           <div className="grid content-start gap-3">
             <div className="rounded-lg border p-4"><p className="text-xs text-muted-foreground">Exam 1 pattern</p><p className="mt-1 font-medium">{exam1Dominant && exam1Dominant.exam1 > 0 ? `${exam1Dominant.category} dominates · ${formatNumber(exam1Dominant.exam1)} marks` : "Not enough attributed mistakes yet"}</p></div>

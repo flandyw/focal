@@ -25,6 +25,7 @@ import { QuestionResultsEditor } from "./question-results-editor"
 import { PerformanceContextFields } from "./performance-context-fields"
 import { ExamWorkspace } from "./exam-workspace"
 import { useTickingNow } from "../hooks/use-ticking-now"
+import { canonicalNow } from "../lib/study-session-sync"
 import { formatExamTitle, formatReferenceName, validateAttempt, validateQuestionResults, type AssessmentReference, type ExamAttempt, type QuestionResult } from "../lib/exam-data"
 import { buildCompanyExamSuggestions, buildExamSuggestions, findLatestAttempt, type ExamSuggestion } from "../lib/exam-suggestions"
 import { getKnownExamConditions } from "../lib/exam-conditions"
@@ -54,7 +55,7 @@ export type ExamTimerModeProps = ExamProgressionProps & {
 }
 
 const today = () => localDate(new Date())
-const clockTime = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+const clockTime = (ms: number) => new Date(ms).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
 const minutes = (value: number) => `${value} min`
 
 function SuggestionButton({ suggestion, onClick, showProvider = false }: {
@@ -139,7 +140,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
   const [markingOpen, setMarkingOpen] = useState(false)
   const [conditionsOpen, setConditionsOpen] = useState(false)
   const [discardOpen, setDiscardOpen] = useState(false)
-  const [rawScore, setRawScore] = useState(0)
+  const [rawScore, setRawScore] = useState(Number.NaN)
   const [rawMax, setRawMax] = useState(initialExam?.marks ?? initialConditions?.marks ?? 100)
   const [comment, setComment] = useState("")
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>({})
@@ -185,6 +186,13 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
   const showPaper = isTwoPaperMathematics(subject) || paperOptions.length === 0 || paperOptions.some((option) => /\b(?:exam|paper)\s*[12]\b/i.test(option))
   const clock = session ? getExamClock(session, now.getTime()) : null
   const paused = session?.pausedAt !== undefined
+  const tabReadout = !clock ? "" : paused ? "Paused" : clock.phase === "overtime" ? `+${formatTimer(clock.overtimeSeconds)}` : formatTimer(clock.remainingSeconds)
+  useEffect(() => {
+    if (!tabReadout) return
+    const previous = document.title
+    document.title = `${tabReadout} · Timed paper`
+    return () => { document.title = previous }
+  }, [tabReadout])
 
   function applySuggestion(suggestion: ExamSuggestion) {
     const conditions = getKnownExamConditions(suggestion.subject, suggestion.paper)
@@ -205,7 +213,8 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
     onSessionChange({
       subject: subject.trim(), provider: provider.trim(), title: formatExamTitle(provider, examYear, subject), examYear, paper: showPaper ? paper.trim() : "Exam",
       id: crypto.randomUUID(), phase: readingMinutes > 0 ? "reading" : "writing",
-      readingMinutes, writingMinutes, marks, startedAt: now.getTime(), pausedSeconds: 0, workspaceItems: [],
+      // Not `now`: it ticks every 30 seconds here, which would start the paper already behind.
+      readingMinutes, writingMinutes, marks, startedAt: canonicalNow().getTime(), pausedSeconds: 0, workspaceItems: [],
     })
     setRawMax(marks)
   }
@@ -215,23 +224,24 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
     setMarkingOpen(false)
     setDiscardOpen(false)
     setQuestionResults([])
-    setRawScore(0)
+    setRawScore(Number.NaN)
     setComment("")
     setPerformanceContext({})
   }
 
   function pause() {
-    if (session && !paused) onSessionChange(pauseExamSession(session, now.getTime()))
+    if (session && !paused) onSessionChange(pauseExamSession(session, canonicalNow().getTime()))
   }
 
   function resume() {
-    if (session && paused) onSessionChange(resumeExamSession(session, now.getTime()))
+    if (session && paused) onSessionChange(resumeExamSession(session, canonicalNow().getTime()))
   }
 
   function openMarking() {
     if (!session) return
     pause()
     setRawMax(session.marks)
+    setCompletedAt(today())
     if (!questionResults.length && session.workspaceItems?.length) {
       setQuestionResults(session.workspaceItems.map((item) => ({
         id: item.id,
@@ -309,31 +319,31 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                   </Field>
                   {showPaper && <Field>
                     <FieldLabel htmlFor="exam-mode-paper">Paper</FieldLabel>
-                    <Input id="exam-mode-paper" list="exam-mode-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="e.g. Exam 1" />
+                    <Input id="exam-mode-paper" autoComplete="off" list="exam-mode-paper-options" value={paper} onChange={(event) => setPaper(event.target.value)} placeholder="e.g. Exam 1" />
                     <datalist id="exam-mode-paper-options">{paperOptions.map((item) => <option key={item} value={item} />)}</datalist>
                   </Field>}
                   <Field>
                     <FieldLabel htmlFor="exam-mode-provider">Provider</FieldLabel>
-                    <Input id="exam-mode-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />
+                    <Input id="exam-mode-provider" autoComplete="off" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="VCAA" required />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-year">Year</FieldLabel>
-                    <Input id="exam-mode-year" type="number" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-year" type="number" inputMode="numeric" min="1990" max="2100" value={Number.isFinite(examYear) ? examYear : ""} onChange={(event) => setExamYear(event.target.valueAsNumber)} required />
                   </Field>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 border-t pt-5">
                   <Field>
                     <FieldLabel htmlFor="exam-mode-reading">Reading (min)</FieldLabel>
-                    <Input id="exam-mode-reading" type="number" min="0" max="180" value={Number.isFinite(readingMinutes) ? readingMinutes : ""} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-reading" type="number" inputMode="numeric" min="0" max="180" value={Number.isFinite(readingMinutes) ? readingMinutes : ""} onChange={(event) => setReadingMinutes(event.target.valueAsNumber)} required />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-writing">Writing (min)</FieldLabel>
-                    <Input id="exam-mode-writing" type="number" min="1" max="360" value={Number.isFinite(writingMinutes) ? writingMinutes : ""} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-writing" type="number" inputMode="numeric" min="1" max="360" value={Number.isFinite(writingMinutes) ? writingMinutes : ""} onChange={(event) => setWritingMinutes(event.target.valueAsNumber)} required />
                   </Field>
                   <Field>
                     <FieldLabel htmlFor="exam-mode-marks">Marks</FieldLabel>
-                    <Input id="exam-mode-marks" type="number" min="1" max="500" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
+                    <Input id="exam-mode-marks" type="number" inputMode="numeric" min="1" max="500" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} required />
                   </Field>
                 </div>
 
@@ -481,15 +491,15 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
               <div className="grid grid-cols-3 gap-4">
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-score">Mark</FieldLabel>
-                  <Input id="timer-score" type="number" min="0" step="0.5" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} autoFocus required />
+                  <Input id="timer-score" type="number" min="0" step="any" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} autoFocus required />
                 </Field>
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-maximum">Out of</FieldLabel>
-                  <Input id="timer-maximum" type="number" min="0.5" step="0.5" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
+                  <Input id="timer-maximum" type="number" min="0.5" step="any" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="timer-completed">Completed</FieldLabel>
-                  <Input id="timer-completed" type="date" value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
+                  <Input id="timer-completed" type="date" max={today()} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
                 </Field>
               </div>
               <QuestionResultsEditor value={questionResults} onChange={(results) => {

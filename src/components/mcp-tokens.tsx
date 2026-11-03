@@ -15,6 +15,8 @@ export function McpTokens() {
   const [name, setName] = useState("")
   const [created, setCreated] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [revoking, setRevoking] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const { data, error } = await supabase!.rpc("mcp_token_list")
@@ -26,8 +28,11 @@ export function McpTokens() {
   useEffect(() => { void load() }, [load])
 
   async function create() {
+    if (creating) return
     setMessage(null)
+    setCreating(true)
     const { data, error } = await supabase!.rpc("mcp_token_create", { p_name: name })
+    setCreating(false)
     if (error) return setMessage(error.message)
     setCreated(data as string)
     setName("")
@@ -35,6 +40,7 @@ export function McpTokens() {
   }
 
   async function revoke(id: string) {
+    setRevoking(null)
     const { error } = await supabase!.rpc("mcp_token_revoke", { p_id: id })
     if (error) setMessage("Could not revoke the token.")
     else toast.success("Token revoked")
@@ -50,7 +56,7 @@ export function McpTokens() {
     <div className="grid gap-3 py-4">
       <form className="flex max-w-md gap-2" onSubmit={(event) => { event.preventDefault(); void create() }}>
         <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Token name, e.g. Claude Code" aria-label="Token name" maxLength={60} required />
-        <Button type="submit"><KeyRound />Create</Button>
+        <Button type="submit" disabled={creating}><KeyRound />{creating ? "Creating…" : "Create"}</Button>
       </form>
       {created ? (
         <div className="grid gap-2 rounded-xs border p-3 text-sm">
@@ -58,7 +64,7 @@ export function McpTokens() {
           <code className="break-all text-xs">{command}</code>
           <p className="text-muted-foreground">For connectors that can't send headers (claude.ai), use this URL with no sign-in:</p>
           <code className="break-all text-xs">{`${MCP_URL}/${created}`}</code>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => copy(created, "Token")}><Copy />Copy token</Button>
             <Button variant="outline" size="sm" onClick={() => copy(command, "Command")}><Copy />Copy command</Button>
             <Button variant="outline" size="sm" onClick={() => copy(`${MCP_URL}/${created}`, "URL")}><Copy />Copy URL</Button>
@@ -73,7 +79,9 @@ export function McpTokens() {
             <div className="font-medium">{token.name}</div>
             <div className="text-muted-foreground">Created {new Date(token.created_at).toLocaleDateString("en-AU")} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString("en-AU")}` : "never used"}</div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void revoke(token.id)}><Trash2 />Revoke</Button>
+          {revoking === token.id
+            ? <div className="flex shrink-0 gap-1.5"><Button variant="ghost" size="sm" onClick={() => setRevoking(null)}>Keep</Button><Button variant="destructive" size="sm" onClick={() => void revoke(token.id)}><Trash2 />Revoke for good?</Button></div>
+            : <Button variant="outline" size="sm" onClick={() => setRevoking(token.id)}><Trash2 />Revoke</Button>}
         </div>
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Circle, CircleCheck, CircleDot, Flag, Plus, Split, Trash2 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -31,6 +31,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   const [marks, setMarks] = useState(1)
   const [checkpointCount, setCheckpointCount] = useState(10)
   const [error, setError] = useState<string | null>(null)
+  const labelInput = useRef<HTMLInputElement>(null)
   const doneMarks = items.filter((item) => item.status === "done").reduce((total, item) => total + item.marks, 0)
   const mappedMarks = items.reduce((total, item) => total + item.marks, 0)
   const flagged = items.filter((item) => item.status === "flagged").length
@@ -45,6 +46,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
     // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".
     setLabel(label.trim().replace(/\d+$/, (number) => String(Number(number) + 1)).replace(/^[^\d]*$/, ""))
     setError(null)
+    labelInput.current?.focus()
   }
 
   function createCheckpoints() {
@@ -86,11 +88,11 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
               return (
                 <li key={item.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                   <div className="flex min-w-0 items-center gap-2">
-                    <Button variant="ghost" size="icon-sm" onClick={() => update(item.id, { status: nextStatus[item.status] })} aria-label={`${item.label}: ${statusLabel[item.status]}. Advance status`}>
-                      <Icon className={cn(item.status === "done" && "text-primary", item.status === "flagged" && "text-destructive")} />
+                    <Button variant="ghost" size="icon-sm" onClick={() => update(item.id, { status: nextStatus[item.status] })} title={`${statusLabel[item.status]}. Click to change`} aria-label={`${item.label}: ${statusLabel[item.status]}. Advance status`}>
+                      <Icon aria-hidden className={cn(item.status === "done" && "text-primary", item.status === "flagged" && "text-destructive")} />
                     </Button>
                     <span className={cn("truncate text-sm font-medium", item.status === "done" && "text-muted-foreground line-through")}>{item.label}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{item.marks} {item.marks === 1 ? "mark" : "marks"}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{count(item.marks, "mark")}</span>
                     <Input className="h-7 min-w-0 flex-1 border-transparent bg-transparent text-xs shadow-none hover:border-input focus-visible:border-input" aria-label={`Note for ${item.label}`} value={item.note ?? ""} onChange={(event) => update(item.id, { note: event.target.value || undefined })} placeholder="Note" />
                   </div>
                   <div className="flex items-center gap-1 justify-self-end">
@@ -108,8 +110,8 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
 
         <div className="flex flex-wrap items-center gap-2">
           {remainingMarks > 0 ? <>
-            <Input className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
-            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="0.5" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input ref={labelInput} className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="any" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
             <Button size="sm" variant="outline" onClick={add}><Plus />Add</Button>
           </> : null}
           {!items.length ? <>

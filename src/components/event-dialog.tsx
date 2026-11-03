@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { CalendarClock, Copy, Trash2 } from "lucide-react"
 
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
@@ -61,13 +62,20 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   const [date, setDate] = useState(start ? localDate(start) : defaultDate)
   const [endDate, setEndDate] = useState(start && end ? localDate(end) : "")
   const [startTime, setStartTime] = useState(event ? timeInput(event.startTime) : "09:00")
-  const [endTime, setEndTime] = useState(event?.endTime ? timeInput(event.endTime) : "10:00")
+  const [endTime, setEndTime] = useState(event?.endTime ? timeInput(event.endTime) : event ? fromMinutes(Math.min(toMinutes(timeInput(event.startTime)) + 60, 1439)) : "10:00")
   const [location, setLocation] = useState(event?.location ?? "")
   const [description, setDescription] = useState(event?.description ?? "")
   const [finished, setFinished] = useState(Boolean(event?.isFinished))
   const [repeat, setRepeat] = useState("none")
   const [repeatUntil, setRepeatUntil] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const snapshot = JSON.stringify({ title, type, subject, date, endDate, startTime, endTime, location, description, finished, repeat, repeatUntil })
+  const [initialSnapshot] = useState(snapshot)
+  function requestClose(next: boolean) {
+    if (!next && snapshot !== initialSnapshot) setConfirmingClose(true)
+    else onOpenChange(next)
+  }
 
   const multiDay = Boolean(endDate) && endDate !== date
   const subjectOptions = useMemo(() => [...new Set([...subjects, ...(subject ? [subject] : [])])], [subjects, subject])
@@ -138,11 +146,11 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{event ? "Edit event" : "New event"}</DialogTitle>
-          <DialogDescription>Events sync with the Focal desktop app.</DialogDescription>
+          <DialogDescription>Shows on your calendar and syncs across your devices.</DialogDescription>
         </DialogHeader>
         <form id="event-form" onSubmit={(formEvent) => { formEvent.preventDefault(); submit() }}>
         <FieldGroup>
@@ -252,7 +260,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               {repeat !== "none" ? (
                 <Field>
                   <FieldLabel htmlFor="event-repeat-until">Until</FieldLabel>
-                  <Input id="event-repeat-until" type="date" min={date} value={repeatUntil} onChange={(e) => setRepeatUntil(e.target.value)} />
+                  <Input id="event-repeat-until" type="date" min={date} value={repeatUntil} onChange={(e) => { setRepeatUntil(e.target.value); setError(null) }} />
                   <FieldDescription>Up to {MAX_OCCURRENCES} occurrences.</FieldDescription>
                 </Field>
               ) : null}
@@ -269,11 +277,12 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
             </div>
           ) : <span />}
           <div className="flex gap-1.5">
-            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">Cancel</Button>
+            <Button onClick={() => requestClose(false)} type="button" variant="outline">Cancel</Button>
             <Button form="event-form" type="submit">{event ? "Save changes" : "Add event"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => onOpenChange(false)} />
     </Dialog>
   )
 }

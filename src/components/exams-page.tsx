@@ -107,7 +107,7 @@ function pickNextAction(
     return {
       icon: CalendarCheck2,
       title: nextTask.title,
-      description: `${nextTask.durationMinutes} minute planned session${nextTask.subject ? ` · ${nextTask.subject}` : ""}${nextTask.plannedFor < localDate(new Date()) ? " · overdue" : ""}.`,
+      description: `${nextTask.durationMinutes}-minute planned session${nextTask.subject ? ` · ${nextTask.subject}` : ""}${nextTask.plannedFor < localDate(new Date()) ? " · overdue" : ""}.`,
       cta: "Open day plan",
       onClick: handlers.onOpenCalendar,
     }
@@ -186,7 +186,7 @@ function CoverageSummary({ data }: { data: AppData }) {
     <section aria-labelledby="coverage-title" className="grid content-start gap-3 rounded-lg border p-5">
       <div><h2 id="coverage-title" className="font-semibold">Outcome coverage</h2><p className="max-w-[68ch] text-sm text-muted-foreground text-pretty">Weakest marked topics and skills first. Label sections, questions, essays, or tasks while marking to improve this view.</p></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {coverage.slice(0, 6).map((area) => <div key={`${area.subject}-${area.areaOfStudy}`} className="grid gap-1 rounded-md bg-muted/50 p-3"><div className="flex justify-between gap-3 text-sm"><span className="min-w-0 truncate font-medium">{area.areaOfStudy}</span><span className="tabular-nums">{area.percentage.toFixed(0)}%</span></div><p className="truncate text-xs text-muted-foreground">{area.subject} · {area.questions} marked item{area.questions === 1 ? "" : "s"}</p><Progress value={area.percentage} /></div>)}
+        {coverage.slice(0, 6).map((area) => <div key={`${area.subject}-${area.areaOfStudy}`} className="grid gap-1 rounded-md bg-muted/50 p-3"><div className="flex justify-between gap-3 text-sm"><span className="min-w-0 truncate font-medium" title={area.areaOfStudy}>{area.areaOfStudy}</span><span className="tabular-nums">{area.percentage.toFixed(0)}%</span></div><p className="truncate text-xs text-muted-foreground">{area.subject} · {area.questions} marked item{area.questions === 1 ? "" : "s"}</p><Progress aria-label={`${area.areaOfStudy} mark`} value={area.percentage} /></div>)}
       </div>
     </section>
   )
@@ -357,7 +357,7 @@ function StatRow({ data }: { data: AppData }) {
                 <ArrowDownRight className="size-3.5" aria-hidden />
               )}
               {stats.trend === "up" ? "+" : ""}
-              {stats.trendDiff.toFixed(1)}%
+              {stats.trendDiff.toFixed(1)} pts
             </span>
           ) : null}
           {stats.exam1Average !== null || stats.exam2Average !== null ? (
@@ -392,7 +392,7 @@ function StatRow({ data }: { data: AppData }) {
         <p className="text-xs text-muted-foreground max-sm:hidden">Your strongest recorded practice result</p>
       </div>
       <div className="col-span-2 flex min-w-0 flex-col gap-1.5 p-3 sm:p-5 lg:order-4 lg:col-span-1 lg:border-b">
-        <p className="text-sm text-muted-foreground">Mistake cards</p>
+        <p className="text-sm text-muted-foreground">Mistakes due</p>
         <div className="flex items-baseline gap-2">
           <p className="focal-stat-value tabular-nums">{total === 0 ? "—" : due}</p>
           <p className="text-xs text-muted-foreground">
@@ -400,7 +400,7 @@ function StatRow({ data }: { data: AppData }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Progress value={completion} className="min-w-8 flex-1 lg:max-w-24" />
+          <Progress aria-label="Mature cards" value={completion} className="min-w-8 flex-1 lg:max-w-24" />
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
             {total === 0 ? "0/0" : `${mature}/${total} mature`}
           </span>
@@ -450,7 +450,7 @@ function ImprovementSignals({ data }: { data: AppData }) {
           </div>
           <div className="min-w-0 space-y-1 xl:pl-5">
             <p className="text-sm text-muted-foreground">Highest leverage</p>
-            <p className="truncate text-2xl font-semibold">{topPriority?.areaOfStudy ?? "—"}</p>
+            <p className="truncate text-2xl font-semibold" title={topPriority?.areaOfStudy}>{topPriority?.areaOfStudy ?? "—"}</p>
             <p className="text-xs text-muted-foreground">
               {topPriority ? `${topPriority.priorityScore.toFixed(0)}/100 priority · ${topPriority.missedMarks} marked opportunity marks` : "Label topics or skills to calculate a focus score"}
             </p>
@@ -565,10 +565,6 @@ function RecentExams({
                         </span>
                       </div>
                     ) : null}
-                    <Button nativeButton={false} variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
-                      Go to exam
-                      <ArrowDownRight aria-hidden />
-                    </Button>
                     <span className="whitespace-nowrap text-sm font-medium tabular-nums">
                       {reference ? `${analysis.scaledScore.toFixed(1)}/${reference.maxScore}` : `${attempt.rawScore}/${attempt.rawMax}`}
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">
@@ -578,6 +574,10 @@ function RecentExams({
                           : null}
                       </span>
                     </span>
+                    <Button nativeButton={false} variant="ghost" size="sm" className="shrink-0" render={<a href={`#${getExamTarget(attempt.id)}`} />}>
+                      Go to exam
+                      <ArrowDownRight aria-hidden />
+                    </Button>
                   </div>
                 </li>
               )
@@ -620,6 +620,8 @@ export type ExamsPageProps = {
   onEditExam: (attempt: ExamAttempt) => void
   onAddMistake: (attemptId: string) => void
   onDeleteExam: (attempt: ExamAttempt) => void
+  /** Set when the page is filtered to one subject, so its empty state doesn't claim there are no exams at all. */
+  scopedSubject?: string
 }
 
 export function ExamsPage(props: ExamsPageProps) {
@@ -638,6 +640,7 @@ export function ExamsPage(props: ExamsPageProps) {
     onEditExam,
     onAddMistake,
     onDeleteExam,
+    scopedSubject,
   } = props
   const [section, setSection] = useState<"overview" | "insights">("overview")
   const nextAction = useMemo(
@@ -681,7 +684,7 @@ export function ExamsPage(props: ExamsPageProps) {
             <EmptyMedia variant="icon">
               <BookOpenCheck />
             </EmptyMedia>
-            <EmptyTitle>Log a practice exam to begin</EmptyTitle>
+            <EmptyTitle>{scopedSubject ? `No ${scopedSubject} exams yet` : "Log a practice exam to begin"}</EmptyTitle>
             <EmptyDescription>
               Record a raw mark, link an official grade distribution when one exists, and capture mistakes
               worth revisiting before your next paper.
@@ -690,7 +693,7 @@ export function ExamsPage(props: ExamsPageProps) {
           <EmptyContent>
             <Button size="lg" onClick={onLogExam}>
               <Plus />
-              Log first exam
+              {scopedSubject ? "Log exam" : "Log first exam"}
             </Button>
           </EmptyContent>
         </Empty>

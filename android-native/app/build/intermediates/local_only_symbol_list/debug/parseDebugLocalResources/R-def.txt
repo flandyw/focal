@@ -1,0 +1,11 @@
+R_DEF: Internal format may change without notice
+local
+drawable icon_background
+drawable icon_foreground
+drawable icon_monochrome
+mipmap ic_launcher
+string app_name
+style Theme.Focal
+xml backup_rules
+xml data_extraction_rules
+xml update_paths

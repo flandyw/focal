@@ -1,0 +1,205 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.andy.focal.android"
+4    android:versionCode="1004008"
+5    android:versionName="1.4.8" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:2:5-67
+11-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:2:22-64
+12    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+12-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:3:5-77
+12-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:3:22-74
+13    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+13-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:4:5-81
+13-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:4:22-78
+14    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+14-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:5:5-83
+14-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:5:22-80
+15
+16    <permission
+16-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+17        android:name="com.andy.focal.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+17-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+18        android:protectionLevel="signature" />
+18-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+19
+20    <uses-permission android:name="com.andy.focal.android.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+20-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+20-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+21
+22    <application
+22-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:6:5-29:19
+23        android:allowBackup="false"
+23-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:6:18-45
+24        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+24-->[androidx.core:core:1.15.0] /Users/andy/.gradle/caches/8.9/transforms/108fb9c8d20e95ccf5e8efc7fd7c53cd/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+25        android:dataExtractionRules="@xml/data_extraction_rules"
+25-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:7:9-65
+26        android:debuggable="true"
+27        android:extractNativeLibs="false"
+28        android:fullBackupContent="@xml/backup_rules"
+28-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:6:46-91
+29        android:icon="@mipmap/ic_launcher"
+29-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:8:42-76
+30        android:label="@string/app_name"
+30-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:8:9-41
+31        android:theme="@style/Theme.Focal"
+31-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:9:9-43
+32        android:usesCleartextTraffic="false" >
+32-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:9:44-80
+33        <activity
+33-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:10:9-16:20
+34            android:name="com.andy.focal.MainActivity"
+34-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:10:19-47
+35            android:exported="true"
+35-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:10:48-71
+36            android:windowSoftInputMode="adjustResize" >
+36-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:11:13-55
+37            <intent-filter>
+37-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:12:13-15:29
+38                <action android:name="android.intent.action.MAIN" />
+38-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:13:17-69
+38-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:13:25-66
+39
+40                <category android:name="android.intent.category.LAUNCHER" />
+40-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:14:17-77
+40-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:14:27-74
+41            </intent-filter>
+42        </activity>
+43
+44        <receiver
+44-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:17:9-81
+45            android:name="com.andy.focal.TimerAlarmReceiver"
+45-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:17:19-53
+46            android:exported="false" />
+46-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:17:54-78
+47
+48        <service
+48-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:18:9-21:19
+49            android:name="com.andy.focal.FocalMediaListener"
+49-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:18:18-52
+50            android:exported="true"
+50-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:19:88-111
+51            android:label="Focal music controls"
+51-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:18:53-89
+52            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" >
+52-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:19:13-87
+53            <intent-filter>
+53-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:20:13-126
+54                <action android:name="android.service.notification.NotificationListenerService" />
+54-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:20:28-110
+54-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:20:36-107
+55            </intent-filter>
+56        </service>
+57
+58        <provider
+59            android:name="androidx.core.content.FileProvider"
+59-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:22:19-68
+60            android:authorities="com.andy.focal.android.updates"
+60-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:22:69-115
+61            android:exported="false"
+61-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:23:13-37
+62            android:grantUriPermissions="true" >
+62-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:23:38-72
+63            <meta-data
+63-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:24:13-114
+64                android:name="android.support.FILE_PROVIDER_PATHS"
+64-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:24:24-74
+65                android:resource="@xml/update_paths" />
+65-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:24:75-111
+66        </provider>
+67
+68        <receiver
+68-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:26:9-28:20
+69            android:name="com.andy.focal.TimerBootReceiver"
+69-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:26:19-52
+70            android:exported="true" >
+70-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:26:53-76
+71            <intent-filter>
+71-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:27:13-106
+72                <action android:name="android.intent.action.BOOT_COMPLETED" />
+72-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:27:28-90
+72-->/Users/andy/Projects/focal/android-native/app/src/main/AndroidManifest.xml:27:36-87
+73            </intent-filter>
+74        </receiver>
+75
+76        <activity
+76-->[androidx.compose.ui:ui-tooling-android:1.8.3] /Users/andy/.gradle/caches/8.9/transforms/2effa39ca11a0e6020ebae702052b3f8/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
+77            android:name="androidx.compose.ui.tooling.PreviewActivity"
+77-->[androidx.compose.ui:ui-tooling-android:1.8.3] /Users/andy/.gradle/caches/8.9/transforms/2effa39ca11a0e6020ebae702052b3f8/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
+78            android:exported="true" />
+78-->[androidx.compose.ui:ui-tooling-android:1.8.3] /Users/andy/.gradle/caches/8.9/transforms/2effa39ca11a0e6020ebae702052b3f8/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
+79
+80        <provider
+80-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+81            android:name="androidx.startup.InitializationProvider"
+81-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+82            android:authorities="com.andy.focal.android.androidx-startup"
+82-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+83            android:exported="false" >
+83-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+84            <meta-data
+84-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+85                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+85-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+86                android:value="androidx.startup" />
+86-->[androidx.emoji2:emoji2:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/606cba8843ab1c2aa80e5d003ef4e60f/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+87            <meta-data
+87-->[androidx.lifecycle:lifecycle-process:2.9.0] /Users/andy/.gradle/caches/8.9/transforms/a740da4565868705b3f31d0749e0bf64/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:29:13-31:52
+88                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+88-->[androidx.lifecycle:lifecycle-process:2.9.0] /Users/andy/.gradle/caches/8.9/transforms/a740da4565868705b3f31d0749e0bf64/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:30:17-78
+89                android:value="androidx.startup" />
+89-->[androidx.lifecycle:lifecycle-process:2.9.0] /Users/andy/.gradle/caches/8.9/transforms/a740da4565868705b3f31d0749e0bf64/transformed/lifecycle-process-2.9.0/AndroidManifest.xml:31:17-49
+90            <meta-data
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+91                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+91-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+92                android:value="androidx.startup" />
+92-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+93        </provider>
+94
+95        <receiver
+95-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+96            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+96-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+97            android:directBootAware="false"
+97-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+98            android:enabled="true"
+98-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+99            android:exported="true"
+99-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+100            android:permission="android.permission.DUMP" >
+100-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+101            <intent-filter>
+101-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+102                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+102-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+102-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+103            </intent-filter>
+104            <intent-filter>
+104-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+105                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+105-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+105-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+106            </intent-filter>
+107            <intent-filter>
+107-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+108                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+108-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+108-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+109            </intent-filter>
+110            <intent-filter>
+110-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+111                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+111-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+111-->[androidx.profileinstaller:profileinstaller:1.4.0] /Users/andy/.gradle/caches/8.9/transforms/d254f6b8845c065097fb8d760e4c8efe/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+112            </intent-filter>
+113        </receiver>
+114    </application>
+115
+116</manifest>

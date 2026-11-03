@@ -33,6 +33,11 @@ dist-ssr
 .env
 supabase/.temp/
 
+# Generated Android caches, build outputs, and machine-specific SDK path
+/android-native/.gradle/
+/android-native/**/build/
+/android-native/local.properties
+
 # Windows stray nul artifact (touches history shows untracked `nul` file)
 nul
 

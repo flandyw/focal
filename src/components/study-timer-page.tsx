@@ -116,8 +116,11 @@ function NumberField({ id, label, value, min, max, onChange }: {
         }}
         step={1}
         type="number"
+        inputMode="numeric"
+        aria-invalid={draft !== null && !(Number.isInteger(Number(draft)) && draft !== "" && Number(draft) >= min && Number(draft) <= max) ? true : undefined}
         value={draft ?? (Number.isFinite(value) ? value : min)}
       />
+      {draft !== null && !(Number.isInteger(Number(draft)) && draft !== "" && Number(draft) >= min && Number(draft) <= max) ? <p className="text-xs text-destructive">Enter a whole number from {min} to {max}.</p> : null}
     </Field>
   )
 }

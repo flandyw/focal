@@ -20,7 +20,7 @@ export function MetricCard({ label, value, children }: { label: string; value: R
   return (
     <Card size="sm" className="min-w-0 justify-between border-x-0 border-b-0 border-t-2 border-t-primary/40 rounded-none bg-transparent">
       <CardHeader className="gap-1">
-        <CardDescription className="text-[10px] font-medium leading-tight uppercase tracking-wide sm:text-xs">{label}</CardDescription>
+        <CardDescription className="text-[11px] font-medium leading-tight uppercase tracking-wide sm:text-xs">{label}</CardDescription>
         <div className="focal-stat-value tabular-nums">{value}</div>
       </CardHeader>
       {children ? <CardContent className="hidden text-sm text-muted-foreground sm:block">{children}</CardContent> : null}

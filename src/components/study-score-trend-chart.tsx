@@ -57,7 +57,7 @@ export function StudyScoreTrendChart({ points }: { points: StudyScoreTrendPoint[
                   if (!active || !payload?.length) return null
                   const point = payload[0].payload as StudyScoreTrendPoint
                   return (
-                    <div className="max-w-72 min-w-56 rounded-lg border bg-background p-3 text-xs shadow-md">
+                    <div className="max-w-72 min-w-56 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
                       <p className="truncate font-medium">{point.attempt.title}</p>
                       <p className="text-muted-foreground">{point.dateLabel} · {point.attempt.examYear} · {point.attempt.paper}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">

@@ -279,7 +279,7 @@ export function CalendarPage({
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase max-lg:hidden">Calendar</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <h1 className="focal-page-title">{monthLabel}</h1>
+            <h1 className="focal-page-title" aria-live="polite">{monthLabel}</h1>
             <div className="flex items-center gap-0.5">
               <Button aria-label="Previous month" onClick={() => selectDay(localDate(shiftMonth(month, -1)))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
               <Button aria-label="Next month" onClick={() => selectDay(localDate(shiftMonth(month, 1)))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
@@ -347,7 +347,7 @@ export function CalendarPage({
           </div>
           <div key={monthLabel}>
           {weeks.map((week) => (
-            <div className={cn(WEEK_GRID, "border-b border-border")} key={week.days[0].date}>
+            <div className={cn(WEEK_GRID, "border-b border-border last:border-b-0")} key={week.days[0].date}>
               {week.days.map((day, index) => (
                 <DayCell
                   active={day.date === selected}

@@ -647,7 +647,7 @@ export function MistakeSheet({
           </form>
         )}
 
-        <SheetFooter className="border-t bg-background">
+        <SheetFooter>
           {error && !(isBatchReview && !isEditingBatchDraft) ? <FieldError className="sm:mr-auto sm:self-center">{error}</FieldError> : null}
           <Button type="button" variant="outline" disabled={saving || analysing} onClick={() => handleOpenChange(false)}>Cancel</Button>
           {isBatchReview && !isEditingBatchDraft ? (

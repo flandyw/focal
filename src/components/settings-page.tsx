@@ -172,7 +172,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                   onSubjectsChange([...selectedSubjects, next])
                   setCustomSubject("")
                 }}>
-                  <Input value={customSubject} onChange={(event) => setCustomSubject(event.target.value)} placeholder="Or add a custom subject" aria-label="Custom subject name" />
+                  <Input autoComplete="off" value={customSubject} onChange={(event) => setCustomSubject(event.target.value)} placeholder="Or add a custom subject" aria-label="Custom subject name" />
                   <Button type="submit" variant="outline" disabled={!customSubject.trim()}><Plus />Add</Button>
                 </form>
               </div>
@@ -232,7 +232,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 updateDifficulty({ providerOrder })
                 setProviderToAdd("")
               }}>
-                <Input list="known-exam-providers" value={providerToAdd} onChange={(event) => setProviderToAdd(event.target.value)} placeholder="Add a school or exam provider" aria-label="Exam provider name" disabled={!difficulty.enabled} />
+                <Input autoComplete="off" list="known-exam-providers" value={providerToAdd} onChange={(event) => setProviderToAdd(event.target.value)} placeholder="Add a school or exam provider" aria-label="Exam provider name" disabled={!difficulty.enabled} />
                 <datalist id="known-exam-providers">{providers.filter((provider) => !difficulty.providerOrder.some((item) => item.toLowerCase() === provider.toLowerCase())).map((provider) => <option key={provider} value={provider} />)}</datalist>
                 <Button type="submit" variant="outline" disabled={!difficulty.enabled || !providerToAdd.trim()}><Plus />Add</Button>
               </form>

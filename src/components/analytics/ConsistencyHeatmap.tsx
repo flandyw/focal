@@ -184,9 +184,9 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
     <section className="border-t border-border/70 pt-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-heading text-xl font-normal tracking-tight">Study Consistency</h3>
+          <h3 className="font-heading text-xl font-normal tracking-tight">Study consistency</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" aria-hidden>
           <span className="text-micro text-muted-foreground/70">Less</span>
           {[0, 1, 2, 3, 4].map((level) => (
             <div
@@ -197,7 +197,8 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
           ))}
           <span className="text-micro text-muted-foreground/70">More</span>
         </div>
-      </div> <div className="min-w-0 overflow-x-auto rounded-xl border border-border/60 bg-background/30 p-3">
+      </div>
+      <div className="min-w-0 overflow-x-auto rounded-xl border border-border/60 bg-background/30 p-3">
  <div className="flex min-w-max gap-3">
           <div className="flex shrink-0 flex-col gap-0.75">
             {/* Spacer to align day labels with cells, below the month-label row */}
@@ -292,7 +293,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
           <div className="text-sm font-semibold tabular-nums">
             {stats.totalMinutes < 60
               ? `${stats.totalMinutes}m`
-              : `${Math.floor(stats.totalMinutes / 60)}h`}
+              : `${Math.floor(stats.totalMinutes / 60)}h${stats.totalMinutes % 60 && stats.totalMinutes < 6000 ? ` ${stats.totalMinutes % 60}m` : ""}`}
           </div>
           <div className="text-micro text-muted-foreground">Total time</div>
         </div>
@@ -300,7 +301,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
           <div className="text-sm font-semibold tabular-nums">
             {stats.averageMinutesPerDay < 60
               ? `${stats.averageMinutesPerDay}m`
-              : `${Math.floor(stats.averageMinutesPerDay / 60)}h`}
+              : `${Math.floor(stats.averageMinutesPerDay / 60)}h${stats.averageMinutesPerDay % 60 ? ` ${stats.averageMinutesPerDay % 60}m` : ""}`}
           </div>
           <div className="text-micro text-muted-foreground">Avg per day</div>
         </div>

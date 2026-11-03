@@ -11,7 +11,7 @@ export function EmptyAnalytics({ onNewSession, onLogExam }: EmptyAnalyticsProps)
     <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
       <BarChart3 className="size-10 text-primary" aria-hidden="true" />
       <h2 className="font-heading text-2xl font-normal">See your progress take shape</h2>
-      <p className="max-w-64 text-sm leading-relaxed text-muted-foreground">
+      <p className="max-w-sm text-sm leading-relaxed text-muted-foreground text-pretty">
         Complete a study session or log an exam to start tracking your habits and results.
       </p>
       <div className="flex flex-wrap justify-center gap-2">

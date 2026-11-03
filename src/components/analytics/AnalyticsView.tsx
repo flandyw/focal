@@ -30,7 +30,6 @@ import {
  MOTION_EASE,
  TRANSITION,
  REDUCED_TRANSITION,
- hoverLift,
  staggerContainer,
  staggerItem,
 } from"../../lib/progress-motion"
@@ -391,7 +390,6 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  comparison={periodComparison}
  range={periodDays}
  filterActive={isFilterActive}
- reduceMotion={reduceMotion}
  />
  </motion.div>
 
@@ -538,7 +536,6 @@ function KpiStrip({
  comparison,
  range,
  filterActive,
- reduceMotion,
 }: {
  totalMinutes: number
  dailyAverage: number
@@ -549,7 +546,6 @@ function KpiStrip({
  comparison: ReturnType<typeof getStudyPeriodComparison>
  range: AnalyticsRange
  filterActive: boolean
- reduceMotion: boolean
 }) {
  return (
  <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-b border-border/60 sm:grid-cols-4 sm:divide-y-0">
@@ -557,24 +553,20 @@ function KpiStrip({
  label="Total time"
  value={formatMinutesShort(totalMinutes)}
  sub={formatComparison(comparison, range, filterActive)}
- reduceMotion={reduceMotion}
  />
  <KpiCard
  label="Daily average"
  value={formatMinutesLong(dailyAverage)}
  sub={filterActive ?"filtered" : undefined}
- reduceMotion={reduceMotion}
  />
  <KpiCard
  label="Days studied"
  value={`${daysStudied} / ${totalDays}`}
- reduceMotion={reduceMotion}
  />
  <KpiCard
  label="Current streak"
  value={`${currentStreak}d`}
  sub={`best ${longestStreak}d`}
- reduceMotion={reduceMotion}
  />
  </div>
  )
@@ -616,18 +608,13 @@ function KpiCard({
  label,
  value,
  sub,
- reduceMotion,
 }: {
  label: string
  value: string
  sub?: string
- reduceMotion: boolean
 }) {
  return (
- <motion.div
- whileHover={hoverLift(reduceMotion)}
- className="relative px-4 py-3 transition-colors hover:bg-accent/20"
- >
+ <div className="relative px-4 py-3">
  <div className="focal-stat-value tabular-nums">
  {value}
  </div>
@@ -637,7 +624,7 @@ function KpiCard({
  <span> · {sub}</span>
  ) : null}
  </div>
- </motion.div>
+ </div>
  )
 }
 
@@ -658,7 +645,7 @@ function SubjectFilterChips({
 }) {
  return (
  <div className="w-full overflow-x-auto whitespace-nowrap">
- <div className="flex items-center gap-1.5 py-1">
+ <div className="flex items-center gap-1.5 py-1" role="group" aria-label="Filter by subject">
  <FilterChip
  onClick={onSelectAll}
  active={selectionState ==="all"}
@@ -666,7 +653,7 @@ function SubjectFilterChips({
  >
  All
  </FilterChip>
- <div className="mx-0.5 h-4 w-px shrink-0 bg-border/60" />
+ <div aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border/60" />
  {subjectIds.map((sid) => {
  const subject = getSubjectById(sid)
  const color = getSubjectColor(sid)
@@ -715,7 +702,7 @@ function FilterChip({
  : { type:"spring", stiffness: 520, damping: 34, mass: 0.65 }
  }
  className={cn(
-"inline-flex shrink-0 items-center gap-1.5 rounded-xs border px-2.5 py-1 text-xs font-medium transition-colors",
+"inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-xs border px-2.5 py-1 text-xs font-medium transition-colors pointer-fine:min-h-0",
  active
  ?"border-primary/30 bg-primary/5 text-primary"
  :"border-border/60 bg-background/30 text-muted-foreground hover:text-foreground",
@@ -723,6 +710,7 @@ function FilterChip({
  >
  {color ? (
  <span
+ aria-hidden
  className="h-2 w-2 rounded-full"
  style={{ backgroundColor: color, opacity: active ? 1 : 0.35 }}
  />

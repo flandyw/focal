@@ -138,14 +138,14 @@ export function ExamTable({
                   const expanded = expandedId === attempt.id
                   return (
                     <Fragment key={attempt.id}>
-                      <TableRow id={getExamTarget(attempt.id)} className="scroll-mt-20 transition-colors target:bg-accent/60">
+                      <TableRow id={getExamTarget(attempt.id)} data-state={expanded ? "selected" : undefined} className="scroll-mt-20 transition-colors target:bg-accent/60">
                         <TableCell className="py-2">
                           <Button variant="ghost" size="icon-sm" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} aria-label={`${expanded ? "Hide" : "Show"} distribution for ${attempt.title}`} onClick={() => setExpandedId(expanded ? null : attempt.id)}>
                             {expanded ? <ChevronUp /> : <ChevronDown />}
                           </Button>
                         </TableCell>
-                        <TableCell className="cursor-pointer" onClick={() => setExpandedId(expanded ? null : attempt.id)}><div className="font-medium">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
-                        <TableCell className="whitespace-nowrap">{new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</TableCell>
+                        <TableCell className="cursor-pointer" onClick={() => setExpandedId(expanded ? null : attempt.id)}><div className="font-medium text-pretty">{attempt.title}</div><div className="text-xs text-muted-foreground">{attempt.provider} · {attempt.paper}</div></TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">{new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</TableCell>
                         <TableCell className="tabular-nums">{reference ? <><div>{analysis.scaledScore.toFixed(1)}/{reference.maxScore}</div><div className="text-xs text-muted-foreground">{attempt.rawScore}/{attempt.rawMax} raw</div></> : `${attempt.rawScore}/${attempt.rawMax}`}</TableCell>
                         <TableCell className="tabular-nums">{analysis.percentage.toFixed(1)}%</TableCell>
                         <TableCell>{reference && analysis.grade ? <div className="flex items-center gap-2 whitespace-nowrap"><Badge variant="secondary">{analysis.grade}</Badge><span className="text-xs text-muted-foreground">{analysis.percentile === null ? "est." : `est. ${formatOrdinal(analysis.percentile)}`}</span></div> : <span className="text-xs text-muted-foreground">Unavailable in {comparisonYear}</span>}</TableCell>
@@ -162,8 +162,8 @@ export function ExamTable({
                         </TableCell>
                       </TableRow>
                       {expanded ? <TableRow id={`distribution-${attempt.id}`} className="bg-muted/30 hover:bg-muted/30"><TableCell colSpan={7} className="p-4 whitespace-normal"><div className="grid gap-5">
-                        {attempt.timing ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span><strong>Writing:</strong> {formatTimer(attempt.timing.actualWritingSeconds)}</span><span><strong>Overtime:</strong> {formatTimer(attempt.timing.overtimeSeconds)}</span><span><strong>Paused:</strong> {formatTimer(attempt.timing.pausedSeconds)}</span></div> : null}
-                        {attempt.questionResults?.length ? <div className="overflow-x-auto rounded-lg border bg-background"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Topic</TableHead><TableHead>Confidence</TableHead><TableHead className="text-right">Mark</TableHead></TableRow></TableHeader><TableBody>{attempt.questionResults.map((result) => <TableRow key={result.id}><TableCell className="font-medium">{result.label}</TableCell><TableCell><div>{result.areaOfStudy || "—"}</div>{result.examinerNote ? <div className="max-w-2xl text-xs text-muted-foreground">{result.examinerNote}</div> : null}</TableCell><TableCell className="capitalize">{result.confidence}</TableCell><TableCell className="text-right tabular-nums">{result.marksAwarded}/{result.maxMarks}</TableCell></TableRow>)}</TableBody></Table></div> : null}
+                        {attempt.timing ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span className="tabular-nums"><span className="text-muted-foreground">Writing</span> {formatTimer(attempt.timing.actualWritingSeconds)}</span><span className={`tabular-nums ${attempt.timing.overtimeSeconds ? "text-destructive" : ""}`}><span className="text-muted-foreground">Overtime</span> {formatTimer(attempt.timing.overtimeSeconds)}</span><span className="tabular-nums"><span className="text-muted-foreground">Paused</span> {formatTimer(attempt.timing.pausedSeconds)}</span></div> : null}
+                        {attempt.questionResults?.length ? <div className="overflow-x-auto rounded-lg border bg-background"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Topic</TableHead><TableHead>Confidence</TableHead><TableHead className="text-right">Mark</TableHead></TableRow></TableHeader><TableBody>{attempt.questionResults.map((result) => <TableRow key={result.id}><TableCell className="font-medium">{result.label}</TableCell><TableCell><div>{result.areaOfStudy || "—"}</div>{result.examinerNote ? <div className="max-w-2xl text-xs text-muted-foreground">{result.examinerNote}</div> : null}</TableCell><TableCell className="capitalize">{result.confidence || "—"}</TableCell><TableCell className="text-right tabular-nums">{result.marksAwarded}/{result.maxMarks}</TableCell></TableRow>)}</TableBody></Table></div> : null}
                         <Suspense fallback={<Skeleton className="h-64 w-full" />}><AttemptDistributionChart attempt={attempt} references={references} comparisonYear={comparisonYear} /></Suspense>
                       </div></TableCell></TableRow> : null}
                     </Fragment>
@@ -173,7 +173,7 @@ export function ExamTable({
             </Table>
           </div>
         ) : (
-          <Alert><CircleAlert /><AlertTitle>No matching exams</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" className="mt-2 w-fit" onClick={() => setQuery("")}>Clear search</Button> : null}</Alert>
+          <Alert><CircleAlert /><AlertTitle>{deferredQuery.trim() ? <>No exams match “{deferredQuery.trim()}”</> : "No matching exams"}</AlertTitle><AlertDescription>Try a subject, provider, paper, exam year or completion date.</AlertDescription>{query ? <Button size="sm" variant="outline" className="mt-2 w-fit" onClick={() => { setQuery(""); setVisibleCount(60) }}>Clear search</Button> : null}</Alert>
         )}
         {rows.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {shownRows.length} of {count(rows.length, "exam")}</p>{shownRows.length < rows.length ? <Button size="sm" variant="outline" onClick={() => setVisibleCount(shownRows.length + 60)}>Show more exams</Button> : null}</div> : null}
       </section>

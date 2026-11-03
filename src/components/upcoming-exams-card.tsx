@@ -121,8 +121,8 @@ function EmptyState({ onOpenPicker }: { onOpenPicker: () => void }) {
           Tell us which VCE exams you're sitting.
         </p>
         <p className="text-sm text-muted-foreground leading-snug text-pretty">
-          We'll show days until each one on this card. Knows everything from the GAT in June to
-          the final written paper in November.
+          We'll count down the days to each one here, from the GAT in June to the last written
+          paper in November.
         </p>
       </div>
       <Button size="sm" onClick={onOpenPicker}>
@@ -134,8 +134,8 @@ function EmptyState({ onOpenPicker }: { onOpenPicker: () => void }) {
 }
 
 function AllCompleteState({ past }: { past: TimetableEntry[] }) {
-  if (past.length === 0) return null
   const last = past[0]
+  if (!last) return <p className="rounded-lg border bg-muted/30 px-4 py-4 text-sm text-muted-foreground">Your tracked exams aren't in this year's timetable. Choose Manage to pick them again.</p>
   return (
     <div className="flex items-start gap-3 rounded-lg border bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
       <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-foreground" aria-hidden />
@@ -153,7 +153,7 @@ function UpcomingRow({ entry, now }: { entry: TimetableEntry; now: Date }) {
   const days = daysUntil(entry, now)
   const isRange = entry.dateEnd !== null
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+    <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="truncate text-sm font-medium">{formatExamLabel(entry)}</p>
         <p className="text-xs text-muted-foreground tabular-nums">
@@ -161,16 +161,9 @@ function UpcomingRow({ entry, now }: { entry: TimetableEntry; now: Date }) {
           {entry.scheduledNote ? <> · {entry.scheduledNote}</> : null}
         </p>
       </div>
-      <Badge
-        variant={days <= 7 ? "default" : "secondary"}
-        className="text-xs tabular-nums"
-        aria-label={
-          isRange
-            ? `Window opens in ${days} day${days === 1 ? "" : "s"}`
-            : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`
-        }
-      >
-        {isRange ? `Window opens in ${days}d` : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days}d`}
+      <Badge variant={days <= 7 ? "default" : "secondary"} className="shrink-0 text-xs tabular-nums">
+        <span aria-hidden>{isRange ? days <= 0 ? "Window open" : `Opens in ${days}d` : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days}d`}</span>
+        <span className="sr-only">{isRange ? days <= 0 ? "Window open now" : `Window opens in ${days} day${days === 1 ? "" : "s"}` : days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`}</span>
       </Badge>
     </li>
   )

@@ -47,7 +47,7 @@ export function ImprovementOutlookChart({ attempts, difficultySettings }: { atte
                   if (!active || !payload?.length) return null
                   const row = payload[0].payload as SubjectOutlook
                   return (
-                    <div className="min-w-64 rounded-lg border bg-background p-3 text-xs shadow-md">
+                    <div className="min-w-64 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{row.subject}</p>
                         <Badge variant="outline">{row.confidence} confidence</Badge>

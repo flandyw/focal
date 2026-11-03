@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -129,7 +130,7 @@ export function ExamLibrary({
         <Card className="bg-muted/20">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><CardTitle>{focusSubject} official pathway</CardTitle><CardDescription>{recentCompleted} of {count(recentExams.length, "paper")} completed across the latest five available years.</CardDescription></div>
+              <div className="min-w-0"><CardTitle className="text-pretty">{focusSubject} official pathway</CardTitle><CardDescription>{recentCompleted} of {count(recentExams.length, "paper")} completed across the latest five available years.</CardDescription></div>
               <Badge variant="outline">VCAA source pack</Badge>
             </div>
           </CardHeader>
@@ -137,7 +138,7 @@ export function ExamLibrary({
             <div className="grid gap-3">
               <Progress value={recentExams.length ? recentCompleted / recentExams.length * 100 : 0} aria-label={`${recentCompleted} of ${recentExams.length} recent official papers completed`} />
               {nextExam && nextPreset ? (
-                <div className="rounded-lg border bg-background p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recommended next paper</p>
                   <p className="mt-1 font-medium">{nextExam.year} · {getVcaaExamPaper(nextExam)}{getVcaaExamProvider(nextExam) === "VCAA NHT" ? " · NHT" : ""}</p>
                   <p className="mt-1 text-sm text-muted-foreground">Uses the official paper title, VCAA-aligned marks, and known reading and writing times.</p>
@@ -147,7 +148,7 @@ export function ExamLibrary({
                   </div>
                 </div>
               ) : (
-                <div className="rounded-lg border bg-background p-4"><p className="font-medium">Recent official set complete</p><p className="mt-1 text-sm text-muted-foreground">Use the archive below for more papers, or revisit examiner reports and logged comparisons.</p></div>
+                <div className="rounded-lg border bg-card p-4"><p className="font-medium">Recent official set complete</p><p className="mt-1 text-sm text-muted-foreground">Use the archive below for more papers, or revisit examiner reports and logged comparisons.</p></div>
               )}
             </div>
             <div className="grid content-start gap-2">
@@ -186,7 +187,7 @@ export function ExamLibrary({
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0"><CardTitle>{exam.studyName}</CardTitle><CardDescription>{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)}{provider === "VCAA NHT" ? " · Northern Hemisphere" : ""}</CardDescription></div>
-                <div className="flex flex-wrap gap-2">{completed ? <Badge><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}{reference ? <Badge variant="outline">Official distribution</Badge> : <Badge variant="secondary">Archive · no distribution</Badge>}</div>
+                <div className="flex shrink-0 flex-wrap gap-2">{completed ? <Badge><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}{reference ? <Badge variant="outline">Official distribution</Badge> : <Badge variant="secondary">Archive · no distribution</Badge>}</div>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -209,7 +210,7 @@ export function ExamLibrary({
         )})}
       </div>
       {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(filtered.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
-      {!filtered.length ? <div className="grid justify-items-center gap-3 rounded-lg border p-8 text-center text-sm text-muted-foreground"><p>No matching VCAA exams.</p><Button variant="outline" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button></div> : null}
+      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matches “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try another subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button></Empty> : null}
     </div>
   )
 }

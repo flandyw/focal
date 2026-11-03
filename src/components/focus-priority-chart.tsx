@@ -44,7 +44,7 @@ export function FocusPriorityChart({ attempts, mistakes }: { attempts: ExamAttem
                   if (!active || !payload?.length) return null
                   const row = payload[0].payload as FocusPriority
                   return (
-                    <div className="min-w-64 rounded-lg border bg-background p-3 text-xs shadow-md">
+                    <div className="min-w-64 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
                       <p className="font-medium">{row.areaOfStudy}</p>
                       <p className="text-muted-foreground">{row.subject}{row.paper ? ` · ${row.paper}` : ""}</p>
                       <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 tabular-nums">

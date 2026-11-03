@@ -229,7 +229,7 @@ export function AttemptDistributionChart({
                   ? "At the mean"
                   : `${distance.toFixed(2)}σ ${point.zScore > 0 ? "above" : "below"} mean`
                 return (
-                  <div className="min-w-56 rounded-lg border bg-background p-3 text-xs shadow-md">
+                  <div className="min-w-56 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
                     <div className="mb-2 flex items-baseline justify-between gap-4">
                       <p className="font-medium">Score {point.score.toFixed(1)} / {reference.maxScore}</p>
                       <p className="font-semibold">Grade {point.grade ?? "—"}</p>

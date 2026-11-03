@@ -43,7 +43,7 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
       <Button variant="ghost" className="justify-start" disabled={disabled} onClick={onNew}><Plus aria-hidden />New chat</Button>
       <Input type="search" aria-label="Search chats" placeholder="Search chats…" className="border-border bg-transparent dark:bg-transparent" value={search} onChange={(event) => setSearch(event.target.value)} />
       <nav aria-label="Chat history" className="min-h-0 flex-1 overflow-y-auto">
-        <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">Your chats</p>
+        {matching.length ? <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">{search ? `${matching.length} matching` : "Your chats"}</p> : null}
         {matching.map((chat) => <div key={chat.id} className={`group flex items-center rounded-md ${chat.id === activeId ? "bg-accent" : "hover:bg-muted"}`}>
           <Button variant="ghost" disabled={disabled} onClick={() => onSelect(chat)} aria-current={chat.id === activeId ? "page" : undefined} className="h-10 min-w-0 flex-1 justify-start px-2 text-left font-normal" title={`${chat.title} · ${new Date(chat.updatedAt).toLocaleString("en-AU")}`}>
             <span className="truncate">{chat.title}</span>
@@ -64,7 +64,7 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
       <DialogContent>
         <form onSubmit={(event) => { event.preventDefault(); void change(false) }} className="grid gap-4">
           <DialogHeader><DialogTitle>Rename chat</DialogTitle><DialogDescription>Give this conversation a name you can find later.</DialogDescription></DialogHeader>
-          <label className="grid gap-2 text-sm">Chat name<Input autoFocus value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} disabled={saving} /></label>
+          <label className="grid gap-2 text-sm">Chat name<Input autoFocus onFocus={(event) => event.target.select()} value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} disabled={saving} /></label>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           <DialogFooter><Button variant="outline" disabled={saving} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" disabled={saving || !title.trim()}>{saving ? "Saving…" : "Save name"}</Button></DialogFooter>
         </form>

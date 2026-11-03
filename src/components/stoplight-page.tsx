@@ -121,7 +121,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
     <WorkspacePage>
       <PageHeader title="Stoplight">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
-        {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />Link mistakes{unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
+        {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
         {subject ? <Button onClick={planWeek}><CalendarPlus />Plan this week</Button> : null}
       </PageHeader>
@@ -134,16 +134,16 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
           </Tabs>
           <MetricGrid className="sm:grid-cols-4">
             <MetricCard label="Green" value={`${subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%`}><span>{green} of {subjectItems.length} items</span></MetricCard>
-            <MetricCard label="Red" value={reds}><span>Start here</span></MetricCard>
+            <MetricCard label="Red" value={reds}><span>{reds ? "Start here" : "Nothing red right now"}</span></MetricCard>
             <MetricCard label="Re-check due" value={rechecks}><span>Greens fade after 21 days, ambers after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
-            <Input type="search" className="w-full sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <p className="max-w-prose basis-full text-sm text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
+            <Input type="search" className="min-w-0 flex-1 sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
             <Select value={filter} onValueChange={(value) => setFilter((value ?? "all") as Filter)}>
               <SelectTrigger className="w-40" aria-label="Filter items"><SelectValue>{FILTERS[filter]}</SelectValue></SelectTrigger>
-              <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}</SelectItem>)}</SelectContent>
+              <SelectContent>{Object.entries(FILTERS).map(([id, text]) => <SelectItem key={id} value={id}>{text}{id === "all" ? null : <span className="ml-auto text-muted-foreground tabular-nums">{subjectItems.filter((item) => id === "unrated" ? !item.rating : id === "recheck" ? isRecheckDue(item, now) : item.rating === id).length}</span>}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           {groups.size ? [...groups].map(([group, groupItems]) => (
@@ -151,7 +151,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
               <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
                 <span className="min-w-0 truncate font-medium">{group}</span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
-                  {groupItems.filter((item) => item.rating === "green").length}/{groupItems.length}
+                  {groupItems.filter((item) => item.rating === "green").length}/{groupItems.length}<span className="sr-only"> green</span>
                   <CountBar items={groupItems} />
                   <ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" />
                 </span>
@@ -171,7 +171,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                         {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
                         {text ? <Button variant="link" size="xs" className="h-auto p-0 text-muted-foreground" onClick={() => setViewing(item)}>{text}</Button> : null}
                       </div>
-                      <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1" onKeyDown={(event) => {
+                      <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1 max-sm:[&>*]:flex-1" onKeyDown={(event) => {
                         const offset = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 0
                         if (!offset) return
                         event.preventDefault()
@@ -190,7 +190,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                 })}
               </ul></CollapsibleContent>
             </Collapsible>
-          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setFilter("all") }}>Clear filters</Button></Empty>}
+          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setFilter("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
         <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Import it from your study design with any chatbot. Each key knowledge and skill becomes an item you can rate.</EmptyDescription></EmptyHeader><Button onClick={() => setImportOpen(true)}><Link2 />Import checklist</Button></Empty>
@@ -204,7 +204,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
           <ul className="grid gap-3">
             {viewingMistakes.map((mistake) => (
               <li key={mistake.id} className="grid gap-2 rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2"><span className="min-w-0 font-medium"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>{mistake.itemsBy === "ai" ? <Badge variant="outline">Linked by ChatGPT</Badge> : null}</div>
+                <div className="flex items-center justify-between gap-2"><span className="min-w-0 font-medium"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>{mistake.itemsBy === "ai" ? <Badge variant="outline" className="shrink-0">Linked by ChatGPT</Badge> : null}</div>
                 <MarkdownPreview unframed>{mistake.explanation}</MarkdownPreview>
                 <MarkdownPreview unframed>{mistake.correction}</MarkdownPreview>
               </li>

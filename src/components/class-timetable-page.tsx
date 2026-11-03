@@ -109,7 +109,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             </div>
 
             <div className="flex items-center justify-between gap-3 pb-3">
-              <p className="text-xs font-medium">Days {firstDay}–{days.at(-1)} <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">of {cycleLength}</span></p>
+              <p className="text-xs font-medium tabular-nums">Days {firstDay}–{days.at(-1)} <span className="ml-2 hidden font-normal text-muted-foreground sm:inline">of {cycleLength}</span></p>
               <div className="flex items-center gap-1">
                 <Button aria-label="Previous cycle days" disabled={firstDay === 1} onClick={() => setSelectedDay(firstDay - 5)} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
                 <Button aria-label="Next cycle days" disabled={firstDay + 5 > cycleLength} onClick={() => setSelectedDay(firstDay + 5)} size="icon-sm" variant="ghost"><ChevronRight /></Button>
@@ -117,7 +117,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             </div>
 
             <div className="flex border-b md:hidden">
-              {days.map((label) => <Button variant="ghost" aria-pressed={day === label} className={`h-auto min-h-16 min-w-0 flex-1 flex-col rounded-none border-0 border-b-2 px-1 py-3 text-center font-normal ${day === label ? "border-primary bg-secondary/50 text-primary" : "border-transparent text-muted-foreground"}`} key={label} onClick={() => setSelectedDay(label)}><span className="block font-heading text-xl">Day {label}</span>{today === label ? <span className="text-[10px]">Today</span> : null}</Button>)}
+              {days.map((label) => <Button variant="ghost" aria-pressed={day === label} className={`h-auto min-h-16 min-w-0 flex-1 flex-col rounded-none border-0 border-b-2 px-1 py-3 text-center font-normal ${day === label ? "border-primary bg-secondary/50 text-primary" : "border-transparent text-muted-foreground"}`} key={label} onClick={() => setSelectedDay(label)}><span className="block font-heading text-xl">Day {label}</span>{today === label ? <span className="text-[11px] font-medium">Today</span> : null}</Button>)}
             </div>
             <div className="hidden md:block">
               <CycleBoard config={config} days={days} selected={day} today={today} now={date.getHours() * 60 + date.getMinutes()} onSelect={setSelectedDay} onEdit={(label, period) => { setSelectedDay(label); setEditor({ day: label, original: period, draft: { ...period, subject: periodSubjectName(period) } }) }} />
@@ -130,7 +130,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
               <p className="focal-eyebrow text-primary">One day at a time</p>
               <h2 className="mt-2 font-heading text-4xl" id="tt-agenda-heading">Day {day}{day === today ? <span className="ml-3 align-middle font-sans text-xs text-primary">Today</span> : null}</h2>
               <p className="mt-3 text-sm text-muted-foreground">{periods.length ? `${classCount(classes)}${periods.length > classes ? ` · ${periods.length - classes} ${periods.length - classes === 1 ? "break" : "breaks"}` : ""}` : "A blank page for your school day."}</p>
-              {periods.length ? <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-3.5" />{timeLabel(periods[0].startTime)} – {timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}</p> : null}
+              {periods.length ? <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground tabular-nums"><Clock3 className="size-3.5" aria-hidden />{timeLabel(periods[0].startTime)} – {timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}</p> : null}
               <Button className="mt-5" onClick={addPeriod} size="sm"><Plus />Add a period</Button>
             </div>
             <div className="min-w-0">
@@ -138,9 +138,9 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                 {periods.map((period, index) => <li key={index}>
                   <Button variant="ghost" aria-label={`Edit ${periodSubjectName(period) || period.period}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}`} className="group h-auto w-full justify-start gap-3 rounded-none border-0 px-0 py-4 text-left font-normal whitespace-normal hover:bg-secondary/40 sm:gap-5" onClick={() => setEditor({ day, original: period, draft: { ...period, subject: periodSubjectName(period) } })}>
                     <div className="w-20 shrink-0 text-xs tabular-nums text-muted-foreground"><span className="block font-medium text-foreground">{timeLabel(period.startTime)}</span><span className="mt-1 block">{timeLabel(period.endTime)}</span></div>
-                    <span className={`h-9 w-1 shrink-0 rounded-full ${periodTint(period).className}`} style={periodTint(period).style} />
+                    <span aria-hidden className={`h-9 w-1 shrink-0 rounded-full ${periodTint(period).className}`} style={periodTint(period).style} />
                     <div className="min-w-0 flex-1"><span className={`block break-words ${isBreak(period) ? "text-sm text-muted-foreground" : "font-heading text-xl"}`}>{periodSubjectName(period) || period.period}</span><span className="mt-1 block text-xs text-muted-foreground">{period.subject ? period.period : isBreak(period) ? `${minutes(period.endTime) - minutes(period.startTime)} minutes` : "Subject not set"}{period.location ? ` · ${period.location}` : ""}</span>{getTimetablePeriodError(period) ? <span className="mt-1 block text-xs text-destructive">{getTimetablePeriodError(period)}</span> : null}</div>
-                    <Pencil className="mr-2 size-3.5 shrink-0 text-muted-foreground opacity-50 group-hover:text-primary group-hover:opacity-100" />
+                    <Pencil aria-hidden className="mr-2 size-3.5 shrink-0 text-muted-foreground opacity-50 group-hover:text-primary group-hover:opacity-100 group-focus-visible:opacity-100" />
                   </Button>
                 </li>)}
               </ol> : <div className="flex min-h-36 flex-col justify-center border-y border-dashed py-6"><p className="font-heading text-2xl">Start with the first bell.</p><p className="mt-2 text-sm text-muted-foreground">Add classes and breaks, with their times and rooms.</p></div>}
@@ -195,7 +195,7 @@ function CycleBoard({ config, days, selected, today, now, onSelect, onEdit }: {
         {columns.map(({ day, periods }) => <Button data-today={today === day ? "" : undefined} variant="ghost" aria-pressed={selected === day} className={`snap-center h-auto flex-col gap-1 rounded-none border-0 border-b border-l border-border px-2 py-4 font-normal hover:bg-secondary/40 ${selected === day ? "bg-foreground/[0.04]" : ""}`} key={day} onClick={() => onSelect(day)}>
           <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Day</span>
           <span className={`flex size-10 items-center justify-center rounded-md text-2xl font-medium tabular-nums ${today === day ? "bg-foreground text-background" : ""}`}>{day}</span>
-          <span className="text-[10px] text-muted-foreground">{classCount(periods.filter((period) => !isBreak(period)).length)}</span>
+          <span className="text-[11px] text-muted-foreground">{classCount(periods.filter((period) => !isBreak(period)).length)}</span>
         </Button>)}
         <div aria-hidden="true" className="relative" style={{ height: height * 1.35 }}>
           {hours.slice(1).map((hour) => <span className="absolute right-2 -translate-y-1/2 text-[11px] whitespace-nowrap tabular-nums text-muted-foreground" key={hour} style={{ top: (hour - start) * 1.35 }}>{hourLabel(hour)}</span>)}
@@ -282,9 +282,9 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
     <Collapsible className="border-y">
       <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-4 py-5 text-left"><div><h2 className="font-heading text-2xl">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" /></CollapsibleTrigger>
       <CollapsibleContent keepMounted><div className="grid gap-5 pb-6">
-        {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => { onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) }); toast("Holiday removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(config) } }) }} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
+        {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground tabular-nums">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => { onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) }); toast("Holiday removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(config) } }) }} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
         <form className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); if (!valid) return; onChange({ ...config, holidays: [...config.holidays, { ...draft, name: draft.name.trim() }].toSorted((a, b) => a.startDate.localeCompare(b.startDate)) }); setDraft({ name: "", startDate: "", endDate: "" }); toast("Holiday added") }}>
-          <Field><FieldLabel htmlFor="tt-holiday-name">Holiday name</FieldLabel><Input id="tt-holiday-name" required placeholder="Term break" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
+          <Field><FieldLabel htmlFor="tt-holiday-name">Holiday name</FieldLabel><Input id="tt-holiday-name" required autoComplete="off" placeholder="Term break" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
           <Field><FieldLabel htmlFor="tt-holiday-start">From</FieldLabel><Input id="tt-holiday-start" required type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value, endDate: draft.endDate >= e.target.value ? draft.endDate : e.target.value })} /></Field>
           <Field><FieldLabel htmlFor="tt-holiday-end">Until</FieldLabel><Input id="tt-holiday-end" required min={draft.startDate} type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></Field>
           <Button disabled={!valid} type="submit" variant="outline"><Plus />Add holiday</Button>

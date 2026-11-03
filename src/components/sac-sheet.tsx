@@ -153,8 +153,8 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
               </Field>
             </div>
             <div className="border-t pt-5">
-              <p className="mb-4 text-sm font-medium">Result</p>
-              <div className="grid gap-5 sm:grid-cols-3">
+              <p className="mb-4 flex items-baseline justify-between gap-3 text-sm font-medium">Result{Number(maxScore) > 0 && score.trim() !== "" && Number.isFinite(Number(score)) ? <span className="font-semibold tabular-nums">{(Number(score) / Number(maxScore) * 100).toFixed(1)}%</span> : <span className="font-normal text-muted-foreground">(optional)</span>}</p>
+              <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
                 <Field>
                   <FieldLabel htmlFor="sac-score">Mark</FieldLabel>
                   <Input id="sac-score" type="number" min="0" step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" />
@@ -163,9 +163,9 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
                   <FieldLabel htmlFor="sac-maximum">Out of</FieldLabel>
                   <Input id="sac-maximum" type="number" min="0.5" step="any" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" />
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="sac-weighting">Weighting (%)</FieldLabel>
-                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="any" value={weighting} onChange={(event) => setWeighting(event.target.value)} placeholder="Optional" />
+                <Field className="col-span-2 sm:col-span-1">
+                  <FieldLabel htmlFor="sac-weighting">Weighting % <span className="text-muted-foreground">(optional)</span></FieldLabel>
+                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="any" value={weighting} onChange={(event) => setWeighting(event.target.value)} />
                 </Field>
               </div>
               <FieldDescription className="mt-2">Leave mark and maximum blank to track this as an upcoming SAC.</FieldDescription>

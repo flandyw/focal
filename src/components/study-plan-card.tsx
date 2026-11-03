@@ -99,14 +99,16 @@ export function StudyPlanCard({
             id="study-plan-request"
             maxLength={400}
             onChange={(event) => setRequest(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void requestPlan() } }}
+            aria-keyshortcuts="Meta+Enter Control+Enter"
             placeholder="An hour of chemistry organic reactions before dinner, starting now"
             value={request}
           />
           <FieldDescription>Current time, your subjects, and today's progress are sent so the plan fits your actual evening.</FieldDescription>
         </Field>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <Field className="w-56">
+        <div className="flex flex-wrap items-end gap-2 max-sm:[&>button]:w-full">
+          <Field className="w-full sm:w-56">
             <FieldLabel htmlFor="study-plan-model">Planning model</FieldLabel>
             <Select
               items={options.map((option) => ({ value: option, label: `${option}${isCheapestModel(option) ? " · cheapest" : ""}` }))}
@@ -127,7 +129,7 @@ export function StudyPlanCard({
             </Select>
           </Field>
           <Button disabled={busy || !request.trim() || !auth.isAuthenticated} onClick={() => void requestPlan()}>
-            <Sparkles className={busy ? "animate-pulse" : ""} />{busy ? "Planning" : "Plan it"}
+            <Sparkles className={busy ? "animate-pulse" : ""} />{busy ? "Planning…" : "Plan it"}
           </Button>
         </div>
 

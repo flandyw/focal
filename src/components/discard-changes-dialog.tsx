@@ -10,13 +10,13 @@ type DiscardChangesDialogProps = {
 export function DiscardChangesDialog({ open, onKeep, onDiscard }: DiscardChangesDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onKeep() }}>
-      <DialogContent>
+      <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Discard unsaved changes?</DialogTitle>
           <DialogDescription>Closing now loses everything typed into this form.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={onKeep}>Keep editing</Button>
+          <Button variant="outline" onClick={onKeep} autoFocus>Keep editing</Button>
           <Button variant="destructive" onClick={onDiscard}>Discard changes</Button>
         </DialogFooter>
       </DialogContent>

@@ -285,7 +285,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
         </div>
       </div>
       {revealed ? <div ref={answer} tabIndex={-1} id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4 outline-none" : "practice-reveal grid gap-4 outline-none"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
-      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-background p-3">
+      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-card p-3 shadow-lg">
         {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-2 sm:py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60 pointer-coarse:hidden">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70 pointer-coarse:hidden">Space</kbd></Button>}
       </footer>
     </article>
@@ -705,7 +705,7 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
         <TabsContent value="browse" className="mt-4">
           <div className="grid gap-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
+              <div className="relative min-w-0 flex-1"><Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" className="pl-8" value={search} onChange={(event) => { setSearch(event.target.value); clearSelection() }} placeholder="Search mistakes" aria-label="Search mistake cards" /></div>
               <div className="flex gap-2 sm:shrink-0">
               <Select items={{ due: "Due date", newest: "Newest first", oldest: "Oldest first", marks: "Most marks lost", question: "Question order" }} value={sort} onValueChange={(value) => { setSort((value ?? "due") as LibrarySort); setPage(0) }}>
                 <SelectTrigger className="min-w-0 flex-1 sm:flex-none" aria-label="Sort mistakes"><span className="text-muted-foreground">Sort:</span><SelectValue /></SelectTrigger>

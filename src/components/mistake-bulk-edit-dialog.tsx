@@ -95,9 +95,9 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
         {edits === null ? (
           <FieldGroup>
             <Field>
-              <FieldLabel>Mistakes to edit</FieldLabel>
+              <FieldLabel htmlFor="mistake-bulk-scope">Mistakes to edit</FieldLabel>
               <Select value={scope} onValueChange={(value) => setScope((value ?? "current") as Scope)}>
-                <SelectTrigger aria-label="Mistakes to edit"><SelectValue>{scopeLabels[scope]}</SelectValue></SelectTrigger>
+                <SelectTrigger id="mistake-bulk-scope" className="w-full"><SelectValue>{scopeLabels[scope]}</SelectValue></SelectTrigger>
                 <SelectContent>{(Object.keys(scopeLabels) as Scope[]).map((key) => <SelectItem key={key} value={key} disabled={key === "selected" && !selected.length}>{scopeLabels[key]}</SelectItem>)}</SelectContent>
               </Select>
               <FieldDescription>Filter or tick rows in the library first to narrow this down.</FieldDescription>
@@ -111,7 +111,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <Field>
               <FieldLabel htmlFor="mistake-bulk-instruction">Instruction</FieldLabel>
               <Textarea id="mistake-bulk-instruction" rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="e.g. Improve the formatting of every question" />
-              <div className="flex flex-wrap gap-1.5">{PRESETS.map((preset) => <Button key={preset} type="button" size="xs" variant="outline" onClick={() => setInstruction(preset)}>{preset.split(/[:.]/)[0]}</Button>)}</div>
+              <div className="flex flex-wrap gap-1.5">{PRESETS.map((preset) => <Button key={preset} type="button" size="xs" variant={instruction === preset ? "secondary" : "outline"} aria-pressed={instruction === preset} title={preset} onClick={() => setInstruction(preset)}>{preset.split(/[:.]/)[0]}</Button>)}</div>
             </Field>
           </FieldGroup>
         ) : (
@@ -122,11 +122,11 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
             <div className="max-h-96 overflow-y-auto rounded-lg border">
               {changes.map(({ mistake, list }) => (
                 <div key={mistake.id} className="grid gap-2 border-b p-3 text-sm last:border-b-0">
-                  <Label className="flex items-center gap-2 font-medium"><Checkbox checked={!skipped.has(mistake.id)} onCheckedChange={() => setSkipped((value) => { const next = new Set(value); if (next.has(mistake.id)) next.delete(mistake.id); else next.add(mistake.id); return next })} />{mistake.question}</Label>
+                  <Label className="flex items-center gap-2 font-medium"><Checkbox checked={!skipped.has(mistake.id)} onCheckedChange={() => setSkipped((value) => { const next = new Set(value); if (next.has(mistake.id)) next.delete(mistake.id); else next.add(mistake.id); return next })} /><span className="line-clamp-2 min-w-0">{mistake.question}</span></Label>
                   {list.map(({ field, before, after }) => (
                     <div key={field} className="grid gap-2 sm:grid-cols-2">
-                      <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{FIELD_LABELS[field]} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || "(empty)"}</pre></div>
-                      <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">after</p><pre className="max-h-40 overflow-auto rounded bg-primary/5 p-2 text-xs break-words whitespace-pre-wrap">{after}</pre></div>
+                      <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{FIELD_LABELS[field]} · before</p><pre className="max-h-40 overflow-auto rounded bg-muted/40 p-2 text-xs break-words whitespace-pre-wrap">{before || <span className="text-muted-foreground italic">empty</span>}</pre></div>
+                      <div className="min-w-0"><p className="mb-1 text-xs text-muted-foreground">{FIELD_LABELS[field]} · after</p><pre className="max-h-40 overflow-auto rounded bg-primary/5 p-2 text-xs break-words whitespace-pre-wrap">{after}</pre></div>
                     </div>
                   ))}
                 </div>

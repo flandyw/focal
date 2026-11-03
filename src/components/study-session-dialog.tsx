@@ -174,7 +174,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               <Input autoFocus id="session-title" maxLength={512} placeholder="e.g. Organic chemistry revision" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(converting ? "convert" : "save") } }} />
             </Field>
             <div className="grid gap-3" role="group" aria-label="Time blocks">
-              <p className="text-sm font-medium">Time blocks · {Math.round(totalMinutes)} min total</p>
+              <p className="text-sm font-medium tabular-nums">Time blocks · {Math.round(totalMinutes) >= 60 ? `${Math.floor(Math.round(totalMinutes) / 60)}h ${Math.round(totalMinutes) % 60}m` : `${Math.round(totalMinutes)} min`} total</p>
               {session.started_at === null ? <div className="flex flex-wrap gap-2">
                 <Button size="xs" variant="outline" onClick={() => movePlan(0)}>Move to today</Button>
                 <Button size="xs" variant="outline" onClick={() => movePlan(1)}>Move to tomorrow</Button>
@@ -182,7 +182,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               </div> : null}
               {blocks.map((block, index) => (
                 <div key={block.id} className="grid gap-2 rounded-lg border p-3">
-                  <div className="flex items-center justify-between"><span className="text-xs font-medium">Block {index + 1}</span>{blocks.length > 1 ? <Button aria-label={`Remove block ${index + 1}`} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button> : null}</div>
+                  <div className="flex min-h-6 items-center justify-between"><span className="text-xs font-medium tabular-nums">Block {index + 1}{Number.isFinite(Date.parse(block.end) - Date.parse(block.start)) && Date.parse(block.end) > Date.parse(block.start) ? <span className="font-normal text-muted-foreground"> · {Math.round((Date.parse(block.end) - Date.parse(block.start)) / 60_000)} min</span> : null}</span>{blocks.length > 1 ? <Button aria-label={`Remove block ${index + 1}`} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button> : null}</div>
                   <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
                     <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
@@ -204,13 +204,13 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
                 setBlocks((current) => [...current, { id: crypto.randomUUID(), start: localTime(new Date(start).toISOString()), end: localTime(new Date(start + 30 * 60_000).toISOString()), subject: lastSubject }])
               }}><Plus />Add time block</Button>
             </div>
-            <Field><FieldLabel htmlFor="session-notes">Notes</FieldLabel><Textarea id="session-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+            <Field><FieldLabel htmlFor="session-notes">Notes <span className="text-muted-foreground">(optional)</span></FieldLabel><Textarea id="session-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
             <Field><FieldLabel htmlFor="session-topics">Topics <span className="text-muted-foreground">(one per line)</span></FieldLabel><Textarea id="session-topics" rows={3} value={topics} onChange={(e) => setTopics(e.target.value)} /></Field>
             {converting ? <div className="grid gap-3 sm:grid-cols-2">
               <Field><FieldLabel htmlFor="session-event-type">Event type</FieldLabel><Select items={EVENT_TYPES} value={eventType} onValueChange={(value) => value && setEventType(value as EventType)}><SelectTrigger id="session-event-type" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{EVENT_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></Field>
-              <Field><FieldLabel htmlFor="session-location">Location</FieldLabel><Input id="session-location" value={location} onChange={(e) => setLocation(e.target.value)} /></Field>
+              <Field><FieldLabel htmlFor="session-location">Location <span className="text-muted-foreground">(optional)</span></FieldLabel><Input id="session-location" autoComplete="off" value={location} onChange={(e) => setLocation(e.target.value)} /></Field>
             </div> : null}
-            {error ? <FieldError>{error}</FieldError> : null}
+            {error ? <FieldError role="alert">{error}</FieldError> : null}
           </FieldGroup>
         </fieldset>
         <DialogFooter className="flex-wrap sm:justify-between">

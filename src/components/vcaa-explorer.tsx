@@ -98,7 +98,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
     return (
       <div className="grid gap-6">
         <PageHeader title="VCAA data" />
-        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">VCAA reference data is unavailable. Reload the app to try again.</CardContent></Card>
+        <Card><CardContent className="grid justify-items-center gap-3 py-10 text-center text-sm text-muted-foreground"><p>VCAA reference data is unavailable. Check your connection, then reload.</p><Button variant="outline" onClick={() => window.location.reload()}>Reload</Button></CardContent></Card>
       </div>
     )
   }
@@ -127,7 +127,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="vcaa-score">Score to compare (%)</Label>
+            <Label htmlFor="vcaa-score">Your score (%)</Label>
             <Input id="vcaa-score" type="number" min={0} max={100} step={0.1} value={score} onChange={(event) => setScore(Math.min(100, Math.max(0, event.currentTarget.valueAsNumber || 0)))} />
           </div>
         </CardContent>
@@ -160,15 +160,14 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
         <Card>
           <CardHeader>
             <CardTitle>Coverage</CardTitle>
-            
           </CardHeader>
           <CardContent className="grid gap-5">
             <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 text-sm">
-              <dt className="text-muted-foreground">Years</dt><dd className="font-medium tabular-nums">{insights.length}</dd>
-              <dt className="text-muted-foreground">Range</dt><dd className="font-medium tabular-nums">{insights.length ? `${insights[0].year}–${latest?.year}` : "—"}</dd>
-              <dt className="text-muted-foreground">Students represented</dt><dd className="font-medium tabular-nums">{cohortTotal ? cohortTotal.toLocaleString("en-AU") : "—"}</dd>
-              <dt className="text-muted-foreground">Latest A+ cutoff</dt><dd className="font-medium tabular-nums">{formatPercent(latest?.aPlusCutoffPercentage ?? null)}</dd>
-              <dt className="text-muted-foreground">Your latest estimate</dt><dd>{latest?.grade ? <Badge variant="secondary">{latest.grade} · {latest.percentile === null || latest.percentile === undefined ? "—" : formatOrdinal(latest.percentile)}</Badge> : "—"}</dd>
+              <dt className="text-muted-foreground">Years</dt><dd className="text-right font-medium tabular-nums">{insights.length}</dd>
+              <dt className="text-muted-foreground">Range</dt><dd className="text-right font-medium tabular-nums">{insights.length ? `${insights[0].year}–${latest?.year}` : "—"}</dd>
+              <dt className="text-muted-foreground">Students represented</dt><dd className="text-right font-medium tabular-nums">{cohortTotal ? cohortTotal.toLocaleString("en-AU") : "—"}</dd>
+              <dt className="text-muted-foreground">Latest A+ cutoff</dt><dd className="text-right font-medium tabular-nums">{formatPercent(latest?.aPlusCutoffPercentage ?? null)}</dd>
+              <dt className="text-muted-foreground">Your latest estimate</dt><dd className="text-right">{latest?.grade ? <Badge variant="secondary">{latest.grade} · {latest.percentile === null || latest.percentile === undefined ? "—" : formatOrdinal(latest.percentile)}</Badge> : "—"}</dd>
             </dl>
             {selectedExam ? (
               <div className="grid gap-2 border-t pt-4">
@@ -186,14 +185,14 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
         <CardHeader><CardTitle>Year-by-year detail</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Year</TableHead><TableHead>Cohort</TableHead><TableHead>A+ cutoff</TableHead><TableHead>Est. mean</TableHead><TableHead>Est. median</TableHead><TableHead>Your result</TableHead><TableHead className="text-right">Source</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Year</TableHead><TableHead className="text-right">Cohort</TableHead><TableHead className="text-right">A+ cutoff</TableHead><TableHead className="text-right">Est. mean</TableHead><TableHead className="text-right">Est. median</TableHead><TableHead>Your result</TableHead><TableHead className="text-right">Source</TableHead></TableRow></TableHeader>
             <TableBody>{insights.toReversed().map((insight) => (
               <TableRow key={insight.year}>
                 <TableCell className="font-medium tabular-nums">{insight.year}</TableCell>
-                <TableCell className="tabular-nums">{insight.cohortSize?.toLocaleString("en-AU") ?? "—"}</TableCell>
-                <TableCell className="tabular-nums">{formatPercent(insight.aPlusCutoffPercentage)}</TableCell>
-                <TableCell className="tabular-nums">{formatPercent(insight.meanPercentage)}</TableCell>
-                <TableCell className="tabular-nums">{formatPercent(insight.medianPercentage)}</TableCell>
+                <TableCell className="text-right tabular-nums">{insight.cohortSize?.toLocaleString("en-AU") ?? "—"}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatPercent(insight.aPlusCutoffPercentage)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatPercent(insight.meanPercentage)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatPercent(insight.medianPercentage)}</TableCell>
                 <TableCell><span className="font-medium">{insight.grade ?? "—"}</span>{insight.percentile !== null ? <span className="ml-2 text-xs text-muted-foreground tabular-nums">{formatOrdinal(insight.percentile)} percentile</span> : null}</TableCell>
                 <TableCell className="text-right"><Button nativeButton={false} variant="ghost" size="sm" render={<a href={insight.sourceUrl} target="_blank" rel="noreferrer" />}><ExternalLink />PDF<span className="sr-only"> for {insight.year}</span></Button></TableCell>
               </TableRow>

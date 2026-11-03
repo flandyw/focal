@@ -187,7 +187,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
 
           <section className="grid gap-5 border-t pt-8" aria-labelledby="exam-step-result">
             <h2 id="exam-step-result" className="focal-section-title">2. Result</h2>
-            <div className="grid items-end gap-5 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 sm:gap-5">
               <Field>
                 <FieldLabel htmlFor="raw-score">Mark</FieldLabel>
                 <Input id="raw-score" type="number" min="0" step="any" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} required />
@@ -196,7 +196,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
                 <FieldLabel htmlFor="raw-max">Out of</FieldLabel>
                 <Input id="raw-max" type="number" min="0.5" step="any" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
               </Field>
-              <p className="pb-1.5 focal-stat-value tabular-nums" aria-live="polite">{percent === null ? "–" : `${percent}%`}</p>
+              <p className={`min-w-[3.5ch] pb-1.5 text-right focal-stat-value tabular-nums ${percent !== null && percent > 100 ? "text-destructive" : ""}`} aria-live="polite">{percent === null ? "—" : `${percent}%`}</p>
             </div>
             {scaled && reference ? (
               <FieldDescription>

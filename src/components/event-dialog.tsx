@@ -182,13 +182,13 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
             </Field>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Field>
               <FieldLabel htmlFor="event-date">Date</FieldLabel>
               <Input id="event-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); if (endDate && endDate < e.target.value) setEndDate(""); setError(null) }} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="event-end-date">Ends on <span className="text-muted-foreground">(multi-day)</span></FieldLabel>
+              <FieldLabel htmlFor="event-end-date">Ends on <span className="text-muted-foreground">(optional)</span></FieldLabel>
               <Input id="event-end-date" type="date" min={date} value={endDate} onChange={(e) => { setEndDate(e.target.value); setError(null) }} />
             </Field>
             <Field>
@@ -219,14 +219,14 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           {suggestions.length ? (
             <div className="grid gap-2 rounded-lg border bg-muted/30 p-3" aria-label="Timetable">
               <p className="flex items-center gap-2 text-sm font-medium">
-                <CalendarClock className="size-4" />
+                <CalendarClock className="size-4" aria-hidden />
                 {aligned ? "Aligned to your timetable" : subject ? "This subject is on your timetable that day" : "Classes on your timetable that day"}
                 {aligned ? <Badge variant="secondary">Aligned</Badge> : null}
               </p>
               {!aligned ? <p className="text-xs text-muted-foreground">Pick a class to use its time.</p> : null}
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.map((period, index) => (
-                  <Button key={`${period.period}-${index}`} onClick={() => align(period)} size="sm" type="button" variant={period.startTime === startTime && period.endTime === endTime ? "secondary" : "outline"}>
+                  <Button key={`${period.period}-${index}`} onClick={() => align(period)} size="sm" type="button" className="tabular-nums" aria-pressed={period.startTime === startTime && period.endTime === endTime} variant={period.startTime === startTime && period.endTime === endTime ? "secondary" : "outline"}>
                     {period.period} · {periodSubjectName(period)} · {period.startTime}–{period.endTime}
                   </Button>
                 ))}
@@ -266,13 +266,13 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               ) : null}
             </div>
           )}
-          {error ? <FieldError>{error}</FieldError> : null}
+          {error ? <FieldError role="alert">{error}</FieldError> : null}
         </FieldGroup>
         </form>
         <DialogFooter className="sm:justify-between">
           {event ? (
             <div className="flex gap-1.5">
-              <Button onClick={() => onDelete(event.id)} type="button" variant="outline"><Trash2 />Delete</Button>
+              <Button onClick={() => onDelete(event.id)} type="button" variant="outline" className="text-destructive hover:text-destructive"><Trash2 />Delete</Button>
               <Button onClick={duplicate} type="button" variant="outline"><Copy />Duplicate</Button>
             </div>
           ) : <span />}

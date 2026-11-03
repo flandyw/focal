@@ -10,7 +10,7 @@ export function SubjectCompletionChart({ data }: SubjectCompletionChartProps) {
   if (data.length === 0) {
     return (
       <section className="border-t border-border/70 pt-5">
-        <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Completion Rate</h3>
+        <h3 className="font-heading text-xl font-normal tracking-tight mb-1">Completion rate</h3>
         <p className="text-xs text-muted-foreground">No session data for this period.</p>
       </section>
     )

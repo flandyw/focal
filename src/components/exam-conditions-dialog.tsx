@@ -44,14 +44,14 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
         onSave(updateExamSessionConditions(session, preview, Math.round(performance.timeOrigin + event.timeStamp)))
         onClose()
       }} noValidate className="grid gap-5">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
           <Field><FieldLabel htmlFor="edit-reading">Reading (min)</FieldLabel><Input id="edit-reading" type="number" min="0" max="180" step="0.5" value={reading} onChange={(event) => setReading(event.target.value)} autoFocus required /></Field>
           <Field><FieldLabel htmlFor="edit-writing">Writing (min)</FieldLabel><Input id="edit-writing" type="number" min="1" max="360" step="0.5" value={writing} onChange={(event) => setWriting(event.target.value)} required /></Field>
           <Field><FieldLabel htmlFor="edit-marks">Total marks</FieldLabel><Input id="edit-marks" type="number" min="0.5" max="500" step="0.5" value={marks} onChange={(event) => setMarks(event.target.value)} required /></Field>
         </div>
         {timer && preview ? <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-          <p className="font-medium">After saving: {timer.phase === "overtime" ? `${formatTimer(timer.overtimeSeconds)} overtime` : `${formatTimer(timer.remainingSeconds)} ${timer.phase === "reading" ? "reading time" : "writing time"} remaining`}</p>
-          <p className="mt-1 text-muted-foreground">{(preview.writingMinutes / preview.marks).toFixed(2)} minutes per mark · {preview.marks} marks</p>
+          <p className="font-medium tabular-nums">After saving: {timer.phase === "overtime" ? `${formatTimer(timer.overtimeSeconds)} overtime` : `${formatTimer(timer.remainingSeconds)} ${timer.phase === "reading" ? "reading time" : "writing time"} remaining`}</p>
+          <p className="mt-1 text-muted-foreground tabular-nums">{(preview.writingMinutes / preview.marks).toFixed(2)} minutes per mark · {preview.marks} marks</p>
           {timer.phase === "overtime" ? <p className="mt-2">The new duration is shorter than the time already used. Your exam will record overtime.</p> : null}
         </div> : null}
         <p className="text-sm text-muted-foreground">Changes save with this session across devices. Focal’s planned duration updates while keeping your recorded study intervals.</p>

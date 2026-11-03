@@ -62,12 +62,12 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
   const { openMobile, setOpenMobile } = useSidebar()
   const inTabs = MOBILE_TABS.some((tab) => tab.id === view)
   // The active tab grows into a labelled pill; the rest stay icon-only with the label kept for screen readers.
-  const tab = (key: string, label: string, Icon: typeof Menu, active: boolean, onClick: () => void, badge = 0) => (
+  const tab = (key: string, label: string, Icon: typeof Menu, active: boolean, onClick: () => void, badge = 0, badgeLabel = "due") => (
     <button key={key} type="button" aria-current={active ? "page" : undefined} onClick={onClick}
       className={`relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-[background-color,padding,color] duration-200 ease-(--ease-spring) ${active ? "shrink-0 bg-accent px-4 font-semibold text-accent-foreground" : "flex-1 text-muted-foreground"}`}>
       <Icon aria-hidden className="size-5 shrink-0" strokeWidth={active ? 2 : 1.5} />
       <span className={active ? "whitespace-nowrap" : "sr-only"}>{label}</span>
-      {badge > 0 ? <span className={`absolute ${active ? "" : "top-1"} min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "right-1 -top-1 ring-card" : "left-1/2 ml-1 ring-card"}`}><span aria-hidden>{badge > 99 ? "99+" : badge}</span><span className="sr-only">{badge} due</span></span> : null}
+      {badge > 0 ? <span className={`absolute ${active ? "" : "top-1"} min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "right-1 -top-1 ring-card" : "left-1/2 ml-1 ring-card"}`}><span aria-hidden>{badge > 99 ? "99+" : badge}</span><span className="sr-only">{badge} {badgeLabel}</span></span> : null}
     </button>
   )
   return (
@@ -79,7 +79,7 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
         if (view === item.id) window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
         else { buzz(); onViewChange(item.id) }
       },
-        item.id === "mistakes" ? dueMistakes : item.id === "calendar" ? plannedTasks : 0))}
+        item.id === "mistakes" ? dueMistakes : item.id === "calendar" ? plannedTasks : 0, item.id === "calendar" ? "planned" : "due"))}
       {tab("more", "More", Menu, openMobile || !inTabs, () => { buzz(); setOpenMobile(!openMobile) })}
       </div>
     </nav>
@@ -121,7 +121,7 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="truncate">
                     {session.title || "Study"}
-                    <span className="ml-1 text-muted-foreground">{workedLabel(session)}</span>
+                    <span className="ml-1 text-muted-foreground tabular-nums">{workedLabel(session)}</span>
                   </DropdownMenuLabel>
                   {isPaused(session)
                     ? <DropdownMenuItem onClick={() => control(session, "resume")}>Resume</DropdownMenuItem>

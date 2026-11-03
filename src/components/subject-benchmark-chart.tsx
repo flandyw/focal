@@ -78,7 +78,7 @@ export function SubjectBenchmarkChart({
                     if (!active || !payload?.length) return null
                     const row = payload[0].payload as SubjectBenchmark
                     return (
-                      <div className="min-w-64 rounded-lg border bg-background p-3 text-xs shadow-md">
+                      <div className="min-w-64 rounded-lg border bg-popover p-3 text-xs text-popover-foreground shadow-md">
                         <p className="font-medium">{row.subject}</p>
                         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 tabular-nums">
                           <dt className="text-muted-foreground">Your average / best</dt><dd>{row.averageMark.toFixed(1)}% / {row.bestMark.toFixed(1)}%</dd>

@@ -4,10 +4,12 @@
 
 Four rounded tiles: three filled blocks of study and one ticked off. It stands for planned work getting done, which is what the app does.
 
-- `focal-icon.svg`: the forest tile. This is the canonical app icon (desktop, PWA, Apple touch, notifications) and the in-app mark in dark mode.
-- `focal-mark-light.svg`: the pale sage tile, used in-app in light mode.
+- `focal-icon.svg`: the forest tile. This is the canonical app icon (desktop, PWA, Apple touch, notifications).
+- `focal-mark-light.svg`: the pale sage tile, for light backgrounds outside the app.
 
-Copies live in `public/` (`focal-icon.svg`, `focal-mark-light.svg`). `public/favicon.svg` contains both and switches with `prefers-color-scheme`. `public/apple-touch-icon.svg` is the full-bleed version for iOS and the maskable PWA icons.
+Inside the app, `src/components/focal-mark.tsx` draws the mark from `currentColor` and `--card`, so it follows the accent, sidebar tint, and theme. In the sidebar it is aligned to the baseline and sized to the ascender height of the wordmark.
+
+`public/focal-icon.svg` is a copy of the app icon. `public/favicon.svg` contains both and switches with `prefers-color-scheme`. `public/apple-touch-icon.svg` is the full-bleed version for iOS and the maskable PWA icons.
 
 ## Palette
 

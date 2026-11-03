@@ -4,6 +4,7 @@ import { NAVIGATION_GROUPS } from "../lib/navigation"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
+import { FocalMark } from "./focal-mark"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Progress } from "./ui/progress"
 
@@ -112,7 +113,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubje
         <DialogHeader>
           <Progress value={((step + 1) / steps.length) * 100} aria-label={`Step ${step + 1} of ${steps.length}`} className="mb-2" />
           <p className="text-xs text-muted-foreground tabular-nums">Step {step + 1} of {steps.length}</p>
-          {step === 0 ? <><img alt="" src="/focal-mark-light.svg" className="mt-2 size-12 dark:hidden" /><img alt="" src="/focal-icon.svg" className="mt-2 hidden size-12 dark:block" /></> : null}
+          {step === 0 ? <FocalMark className="mt-2 size-11 text-primary" /> : null}
           <DialogTitle>{current.title}</DialogTitle>
           <DialogDescription>{current.description}</DialogDescription>
         </DialogHeader>

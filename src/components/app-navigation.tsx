@@ -37,6 +37,7 @@ import { isPaused, isRunning } from "../lib/sync/sessionContract"
 import type { SyncStatus } from "../lib/sync"
 import { buzz } from "../lib/mobile"
 import { cn, count } from "../lib/utils"
+import { FocalMark } from "./focal-mark"
 import { useAppearance } from "../lib/appearance"
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
@@ -252,13 +253,13 @@ export function AppSidebar({
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <Button
             variant="ghost"
-            className="h-auto min-w-0 flex-1 justify-start gap-2.5 rounded-sm p-0 text-left hover:bg-transparent group-data-[collapsible=icon]:hidden"
+            className="h-auto min-w-0 flex-1 items-baseline justify-start gap-2.5 rounded-sm p-0 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
-            <img alt="" src="/focal-mark-light.svg" className="size-10 shrink-0 dark:hidden" />
-            <img alt="" src="/focal-icon.svg" className="hidden size-10 shrink-0 dark:block" />
-            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em] text-sidebar-primary">focal</span>
+            {/* Baseline-aligned and sized to the ascender height so the tile spans the lettering's full height. */}
+            <FocalMark className="size-[1.875rem]" />
+            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">focal</span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />
         </div>

@@ -6,8 +6,10 @@
   "bundle": {
     "macOS": {
       "signingIdentity": "-",
+      "infoPlist": "WidgetInfo.plist",
       "files": {
-        "PlugIns/FocalWidget.appex": "target/widget/FocalWidget.appex"
+        "PlugIns/FocalWidget.appex": "target/widget/FocalWidget.appex",
+        "MacOS/focal-widget-publisher": "target/widget/focal-widget-publisher"
       }
     }
   },

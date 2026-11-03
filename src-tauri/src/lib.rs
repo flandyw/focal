@@ -153,9 +153,12 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .manage(commands::chatgpt::ChatGptSidecar::default())
+        .manage(commands::widgets::WidgetNavigation::default())
         .invoke_handler(tauri::generate_handler![
             commands::chatgpt::stop_chatgpt_sidecar,
             commands::chatgpt::start_chatgpt_sidecar,
+            commands::widgets::publish_widget_snapshot,
+            commands::widgets::take_widget_navigation,
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -167,6 +170,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { ref urls } = event {
+                commands::widgets::open(app, urls);
+            }
             if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
                 if let Err(error) = commands::chatgpt::stop(app) {
                     eprintln!("could not stop ChatGPT sidecar on exit: {error}");

@@ -1,41 +1,51 @@
-# macOS widget packaging probe
+# Focal macOS widgets
 
-This is a static SwiftUI/WidgetKit widget, deliberately without Supabase data or
-App Groups until an ad-hoc signed CI download is confirmed to load on macOS.
-It supports small and medium widgets on macOS 14 or later. It does not raise
-the minimum macOS version of the containing Focal app.
+Four native SwiftUI widgets for macOS 14+: **Up Next** (small, medium, large),
+**Exam Countdown**, **Study Today**, and **Review Queue** (small, medium).
+Click a widget to open the corresponding Focal screen.
 
-`bun run tauri build` automatically compiles it before macOS bundling, including
-both existing macOS release jobs. No extra CI secrets, developer membership,
-Xcode project, or dependencies are required. The widget architecture and version
-match the app. Linux and Windows builds are unaffected.
+Focal publishes a small snapshot from its existing Supabase-synced account data:
+classes and calendar events, tracked exams and SACs, actual study minutes with
+overlapping sessions merged, daily goals, and due spaced-repetition cards.
+The extension never receives a Supabase token or database credentials.
+Signing out clears the snapshot. Gallery previews use sample data only.
 
-To compile just the extension on a Mac with Xcode installed:
+While Focal is open and synced, it publishes changes after a short debounce and
+refreshes study minutes every minute. WidgetKit controls when those changes render.
+While Focal is closed, widgets use cached data and schedule event transitions,
+review due dates, and midnight changes. They do not independently sync Supabase;
+open Focal to fetch fresh data. Old snapshots show an update reminder.
+
+## Building and installing
+
+`bun run tauri build` compiles and packages both the WidgetKit extension and a
+small Swift publisher during macOS bundling, including both existing macOS CI jobs.
+Architecture and version match the app. No paid developer account, provisioning
+profile, new dependency, or CI secret is required. Windows and Linux are unaffected.
+
+To compile the native components independently on a Mac with Xcode installed:
 
 ```sh
 bun scripts/build-macos-widget.ts
 ```
 
-The output is `src-tauri/target/widget/FocalWidget.appex`. Tauri copies it to
-`Focal.app/Contents/PlugIns/` before signing and creating the installer and
-updater archive. Both the extension and app use ad-hoc signatures, which do not
-provide Developer ID trust or notarization.
+Outputs in `src-tauri/target/widget/`:
 
-## Try the CI download
+- `FocalWidget.appex`, packaged into `Focal.app/Contents/PlugIns/`.
+- `focal-widget-publisher`, packaged into `Focal.app/Contents/MacOS/`.
 
-1. Download the correct macOS release and quit the running Focal app.
-2. Install the downloaded Focal into Applications, replacing the older copy.
-3. Open Focal once, then right-click the desktop and choose **Edit Widgets**.
-4. Search for **Focal** and add **Focal Preview**, in either size.
-5. Confirm it renders “Ready to focus.” and the downloaded release version.
+The publisher atomically writes a private (0600) JSON file at
+`~/Library/Application Support/com.andy.focal/widgets.json` and tells WidgetKit
+to reload. The sandboxed extension has a read-only exception for that exact file.
+This supports the existing ad-hoc signing setup; migrate the file to an App Group
+when distributing with a team identity. Neither executable stores account secrets.
+Ad-hoc signatures provide no Developer ID trust or notarization.
 
-Finding the widget in the gallery and seeing its content are separate checks:
-successful compilation or registration alone does not prove rendering works.
-Repeat with a later CI version to verify updates, and on Intel if available.
+Install the app into Applications, open it and let the account sync, then choose
+**Edit Widgets** from the desktop and search **Focal**. The old preview widget kind
+is preserved and becomes Up Next. Add the other widgets from the gallery.
 
-If macOS blocks this unnotarized download, approve it in **System Settings →
-Privacy & Security**. If Focal opens but the widget is absent, inspect its
-registration and signature:
+If discovery fails, inspect registration and signing:
 
 ```sh
 pluginkit -m -A -D -v -i com.andy.focal.widget
@@ -43,6 +53,5 @@ codesign --verify --deep --strict --verbose=2 /Applications/Focal.app
 codesign -d --entitlements :- /Applications/Focal.app/Contents/PlugIns/FocalWidget.appex
 ```
 
-Ad-hoc widget discovery and execution after download remain experimental. Do not
-disable Gatekeeper or change global security settings to make the probe work.
-Supabase integration is a separate next step after this installation check.
+Rendering and clicking the installed widgets are separate checks from compilation.
+Intel execution and CI download/update behavior require verification on those installs.

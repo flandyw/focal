@@ -25,24 +25,33 @@ await rm(output, { recursive: true, force: true })
 await mkdir(join(output, "Contents/MacOS"), { recursive: true })
 const sdk = execFileSync("xcrun", ["--sdk", "macosx", "--show-sdk-path"], { encoding: "utf8" }).trim()
 const binary = join(output, "Contents/MacOS/FocalWidget")
+const helper = join(root, "target/widget/focal-widget-publisher")
+// Match Xcode's extension entry point; using Swift's main directly crashes WidgetKit at startup.
 for (const arch of targets) {
   execFileSync("xcrun", [
     "swiftc", "-sdk", sdk, "-target", `${arch}-apple-macos14.0`,
     "-parse-as-library", "-application-extension", "-O", "-module-name", "FocalWidget",
-    join(root, "widgets/FocalWidget.swift"), "-o", `${binary}-${arch}`,
+    "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
+    join(root, "widgets/WidgetData.swift"), join(root, "widgets/FocalWidget.swift"), "-o", `${binary}-${arch}`,
+  ], { stdio: "inherit" })
+  execFileSync("xcrun", [
+    "swiftc", "-sdk", sdk, "-target", `${arch}-apple-macos14.0`, "-parse-as-library", "-O",
+    join(root, "widgets/WidgetData.swift"), join(root, "widgets/WidgetPublisher.swift"), "-o", `${helper}-${arch}`,
   ], { stdio: "inherit" })
 }
 execFileSync("xcrun", ["lipo", "-create", ...targets.map((arch) => `${binary}-${arch}`), "-output", binary], { stdio: "inherit" })
-await Promise.all(targets.map((arch) => rm(`${binary}-${arch}`)))
+execFileSync("xcrun", ["lipo", "-create", ...targets.map((arch) => `${helper}-${arch}`), "-output", helper], { stdio: "inherit" })
+await Promise.all(targets.flatMap((arch) => [rm(`${binary}-${arch}`), rm(`${helper}-${arch}`)]))
+execFileSync("codesign", ["--force", "--sign", "-", "--options", "runtime", helper], { stdio: "inherit" })
 
 // ponytail: compile with the installed Swift toolchain instead of maintaining an Xcode project.
-// This static probe needs no assets, App Groups, credentials, or provisioning profiles.
+// Both executables use ad-hoc signatures without provisioning profiles.
 await writeFile(join(output, "Contents/Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>com.andy.focal.widget</string>
   <key>CFBundleName</key><string>FocalWidget</string>
-  <key>CFBundleDisplayName</key><string>Focal Preview</string>
+  <key>CFBundleDisplayName</key><string>Focal Widgets</string>
   <key>CFBundleExecutable</key><string>FocalWidget</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
   <key>CFBundleShortVersionString</key><string>${config.version}</string>

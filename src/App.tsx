@@ -54,6 +54,7 @@ import { useTickingNow } from "./hooks/use-ticking-now"
 import { count } from "./lib/utils"
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
 import { AI_ENABLED } from "./lib/host"
+import { useDesktopWidgets } from "./lib/widgets"
 import { applyItemLinks, collectLinkRecords, demoteGreens, progressStoplight, restoreItems, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
@@ -233,6 +234,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     scalingStatus,
     reload: reloadReferences,
   } = useReferenceData(view === "predictor" || view === "atar", !["calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view))
+  useDesktopWidgets(data, studySessionSync.sessions, timetable, sync.user?.id, sync.status, setView)
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
   const [onboarding, setOnboarding] = useState(false)

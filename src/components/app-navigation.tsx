@@ -253,12 +253,12 @@ export function AppSidebar({
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <Button
             variant="ghost"
-            className="h-auto min-w-0 flex-1 items-baseline justify-start gap-2.5 rounded-sm p-0 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
+            className="h-auto min-w-0 flex-1 items-center justify-start gap-2.5 rounded-sm p-0 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
-            {/* Baseline-aligned and sized to the ascender height so the tile spans the lettering's full height. */}
-            <FocalMark className="size-[1.875rem]" />
+            {/* Newsreader's visible letters sit above the centre of its line box. */}
+            <FocalMark className="size-[1.875rem] -translate-y-1" />
             <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">focal</span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />

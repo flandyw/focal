@@ -6,7 +6,7 @@ Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for the fronte
 
 For password recovery, set Supabase Authentication's Site URL to the hosted frontend and allow each deployment's `/?reset-password=1` redirect, including `http://localhost:5173/?reset-password=1` for local development. Retain the Supabase confirmation link in the reset email template.
 
-Friends features require the relevant migrations, including `0031_friends_competition.sql` and `0037_friend_usernames.sql`. Existing friendships and sharing preferences are preserved. See [sync protocol](sync-protocol.md) before changing shared records or lifecycle behavior.
+Friends features require the relevant migrations, including `0031_friends_competition.sql`, `0037_friend_usernames.sql` and `0043_friend_study_sessions.sql` for shared desks, focus rounds and scheduled invitations. Existing friendships and sharing preferences are preserved. See [sync protocol](sync-protocol.md) before changing shared records or lifecycle behavior.
 
 ## Web
 

@@ -8,7 +8,7 @@ import { Input } from "./ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Skeleton } from "./ui/skeleton"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet"
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { PageHeader } from "./page-header"
@@ -22,6 +22,8 @@ import { cn } from "../lib/utils"
 import { Avatar, AvatarBadge, AvatarFallback } from "./ui/avatar"
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
+import { FriendStudySessions } from "./friend-study-sessions"
+import type { CanonicalStudySession } from "../lib/sync/sessionContract"
 
 type SharedExam = { subject: string | null; title: string | null; provider: string | null; examYear: number | null; paper: string | null; referenceId: string | null; rawScore: number | null; rawMax: number | null; completedAt: string | null }
 type Person = {
@@ -197,7 +199,11 @@ const emptyCache = (userId?: string): FriendsCache => ({ userId, profile: null, 
 let cache = emptyCache()
 supabase?.auth.onAuthStateChange((_event, session) => { if (session?.user.id !== cache.userId) cache = emptyCache(session?.user.id) })
 
-export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean; onSignIn: () => void; onJoin: () => void }) {
+export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
+  signedIn: boolean; userId?: string; sessions: CanonicalStudySession[]; onSignIn: () => void
+  onJoin: (subject?: string, intent?: string, sessionId?: string) => void
+}) {
+  const [section, setSection] = useState(() => new URLSearchParams(location.search).has("add") ? "activity" : "together")
   const [profile, setProfile] = useState(cache.profile)
   const [draft, setDraft] = useState({ name: cache.profile?.display_name ?? "", username: cache.profile?.username ?? "", status: cache.profile?.status_message ?? "" })
   const [people, setPeople] = useState(cache.people)
@@ -391,16 +397,22 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
 
   return (
     <WorkspacePage>
-      <PageHeader title="Friends">
-        <Button variant="outline" onClick={() => { void load(); void loadCheers() }} disabled={refreshing}><RefreshCw className={cn(refreshing && "motion-safe:animate-spin")} />Refresh</Button>
+      <PageHeader title="Friends" description="Make time to study together.">
+        <Button variant="outline" onClick={() => { void load(); void loadCheers(); window.dispatchEvent(new Event("focal:friend-study-refresh")) }} disabled={refreshing}><RefreshCw className={cn(refreshing && "motion-safe:animate-spin")} />Refresh</Button>
         <Button variant="outline" onClick={() => void copyUsername()} disabled={!profile} aria-label={profile ? `Copy your username @${profile.username}` : "Copy username"}><Copy /><span className="max-w-48 truncate">{profile ? `@${profile.username}` : "Copy username"}</span></Button>
-        <Button onClick={() => document.getElementById("friend-username")?.focus()}><UserPlus />Add friend</Button>
+        <Button onClick={() => { setSection("activity"); requestAnimationFrame(() => document.getElementById("friend-username")?.focus()) }}><UserPlus />Add friend</Button>
       </PageHeader>
 
       {loadError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
         <p>{fetchedAt ? "Could not refresh friends. Showing the last available activity." : "Could not load friends. Check your connection and try again."}</p>
         <Button variant="outline" size="sm" disabled={refreshing} onClick={() => void load()}>Try again</Button>
       </div> : null}
+
+      <Tabs className="gap-6 lg:gap-8" value={section} onValueChange={setSection}><TabsList aria-label="Friends view"><TabsTrigger value="together">Together</TabsTrigger><TabsTrigger value="activity">Activity & sharing{incoming.length ? ` (${incoming.length} request${incoming.length === 1 ? "" : "s"})` : ""}</TabsTrigger></TabsList>
+      <TabsContent value="together">
+        {userId ? <FriendStudySessions userId={userId} sessions={sessions} friends={people.filter((person) => person.status === "friend").map((person) => ({ id: person.user_id, name: personName(person), studying: !!person.studying_since }))} onOpenTimer={onJoin} /> : null}
+      </TabsContent>
+      <TabsContent value="activity" className="grid gap-6 lg:gap-8">
 
       {incoming.length || outgoing.length ? <section aria-label="Friend requests" className="grid gap-4 rounded-xl border p-4 sm:p-5">
         <h2 className="text-base font-medium">Friend requests <span className="text-muted-foreground">({incoming.length + outgoing.length})</span></h2>
@@ -438,7 +450,7 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
               </span>
               <span className="font-mono text-lg tabular-nums text-primary">{clock(stats.session)}</span>
             </Button>
-            {person.status === "friend" ? <Button variant="outline" className="h-auto rounded-xl border-primary/40 bg-primary/5 px-4 text-primary hover:bg-primary/10" onClick={onJoin} title="Open the study timer and study alongside them">Join</Button> : null}
+            {person.status === "friend" ? <Button variant="outline" className="h-auto rounded-xl border-primary/40 bg-primary/5 px-4 text-primary hover:bg-primary/10" onClick={() => onJoin()} title="Open your personal study timer">Study alongside</Button> : null}
             </div>
           ))}
         </section>
@@ -726,6 +738,9 @@ export function FriendsPage({ signedIn, onSignIn, onJoin }: { signedIn: boolean;
           </Card>
         </div>
       </div>
+
+      </TabsContent>
+      </Tabs>
 
       {selected ? <FriendSheet key={selected.person.user_id} person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} pending={pending} onSaveNickname={(nickname) => call("friends_set_nickname", { p_user_id: selected.person.user_id, p_nickname: nickname }, "Could not save this nickname.")} cheerDisabled={!!pending || !cheersLoaded || cheersError} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
       <Dialog open={!!editing} onOpenChange={(open) => { if (!pending && !open) setEditing(null) }}>

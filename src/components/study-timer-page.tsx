@@ -803,6 +803,7 @@ export function StudyTimerPage({
   preferredSubjects,
   mode,
   focusPreset,
+  company,
   sessions,
   onModeChange,
   onFocusSessionChange,
@@ -820,6 +821,7 @@ export function StudyTimerPage({
   mode: StudyTimerMode
   plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge">
   focusPreset?: { subject?: string; intent: string }
+  company?: React.ReactNode
   events?: CalendarEvent[]
   classTimetable?: TimetableConfig
   /** Opens the timer on a block picked in the timeline. */
@@ -854,6 +856,7 @@ export function StudyTimerPage({
         </PageHeader>
 
         {!embedded && <TabsContent className="mt-0" value="focus">
+          {company}
           <FocusBlocks preferredSubjects={preferredSubjects} subjects={subjects} onSessionChange={onFocusSessionChange} preset={focusPreset} sessions={sessions} onControlSession={onControlSession} plannedActions={plannedActions} examActive={!!exam.activeSession} onTimedPaper={() => onModeChange("exam")} eclair={eclair} setEclair={setEclair} />
           {plannedActions && sessions ? <div className="mt-6 lg:mt-8"><DayTimeline actions={plannedActions} classTimetable={classTimetable} events={events} onStartFocus={onStartFocus} sessions={sessions} subjects={preferredSubjects} /></div> : null}
         </TabsContent>}

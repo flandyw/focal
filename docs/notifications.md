@@ -13,7 +13,9 @@ once opened it starts without a connection. Android and desktop Chrome also get 
 
 Signed-in users can opt into planned study, calendar deadlines and SACs, a daily
 study nudge, friends starting study, and received cheers. Each type has its own
-switch. Plans made in Folio are included once synced. Planned blocks support 0–60
+switch. Shared-session invitations also follow the Friends switch (migration
+`0043_friend_study_sessions.sql`); accepted scheduled sessions use ordinary planned-study
+reminders. Plans made in Folio are included once synced. Planned blocks support 0–60
 minutes of notice; deadlines support same-day, 1-, 3-, or 7-day notice at the
 chosen daily time (or the deadline's start if earlier on the same day). Started,
 completed and cancelled study is skipped. Text is generic, without subject

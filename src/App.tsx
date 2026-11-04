@@ -35,6 +35,7 @@ import {
 import { downloadAppData, loadAppData, parseAppDataFile, saveAppData } from "./lib/storage"
 import { useSupabaseSync } from "./lib/sync"
 import { canonicalNow, saveTimerSessionChange, useStudySessionSync } from "./lib/study-session-sync"
+import { loadFocusSession } from "./lib/study-timer"
 import { getExamClock } from "./lib/exam-timer"
 import { suggestTimetableForAttempt, formatExamLabel } from "./lib/timetable"
 import type { ExamTimerPreset } from "./components/exam-timer-mode"
@@ -102,6 +103,9 @@ const StudyTimerPage = lazy(() =>
 )
 const StoplightPage = lazy(() =>
   import("./components/stoplight-page").then((module) => ({ default: module.StoplightPage })),
+)
+const FriendStudySessions = lazy(() =>
+  import("./components/friend-study-sessions").then((module) => ({ default: module.FriendStudySessions })),
 )
 const FriendsPage = lazy(() =>
   import("./components/friends-page").then((module) => ({ default: module.FriendsPage })),
@@ -556,6 +560,17 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     if (isRunning(session)) open()
     else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
       .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
+  }
+
+  function openFriendsTimer(subject?: string, intent = "", sessionId?: string) {
+    if (loadFocusSession() || studySessionSync.sessions.some((session) => isRunning(session) || isPaused(session))) {
+      setFocusPreset(undefined)
+      setTimerMode("focus")
+      setView("focus")
+      toast("Your current timer is unchanged.")
+      return
+    }
+    startFocus(subject, intent, sessionId)
   }
 
   function saveClassTimetable(classTimetable: TimetableConfig) {
@@ -1028,7 +1043,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             catch (error) { throw new Error(`Events saved, but the study session could not be removed. Retry conversion to finish. ${error instanceof Error ? error.message : ""}`) }
           }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={startFocus} /> : null}
           {view === "progress" ? <ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} attempts={pageData.attempts} onLogExam={openNewExam} onNewSession={() => setView("focus")} /> : null}
-          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
+          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
           {view === "stoplight" ? <StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /> : null}
           {view === "goals" ? <GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /> : null}
           {view === "mistakes" ? <MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={setMistakesSubject} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
@@ -1047,7 +1062,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onLogExam={openNewExam} onOpenAtar={() => setView("atar")} />}</> : null}
           {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <AtarEstimator data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} />}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} />}</> : null}
-          {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} onSignIn={() => setView("settings")} onJoin={() => { setTimerMode("focus"); setView("focus") }} /> : null}
+          {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}
           {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} /> : null}
           </div>

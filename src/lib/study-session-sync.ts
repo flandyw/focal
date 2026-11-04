@@ -895,6 +895,7 @@ export function useStudySessionSync(
     const timingTimer = window.setInterval(checkpoint, 1_000)
     window.addEventListener("online", onOnline)
     window.addEventListener("focus", onFocus)
+    window.addEventListener("focal:study-sessions-changed", onFocus)
     document.addEventListener("visibilitychange", onVisibility)
     return () => {
       cancelled = true
@@ -908,6 +909,7 @@ export function useStudySessionSync(
       clearInterval(timingTimer)
       window.removeEventListener("online", onOnline)
       window.removeEventListener("focus", onFocus)
+      window.removeEventListener("focal:study-sessions-changed", onFocus)
       document.removeEventListener("visibilitychange", onVisibility)
       void supabase?.removeChannel(channel)
     }

@@ -257,8 +257,7 @@ export function AppSidebar({
             aria-label="Focal home"
             onClick={() => navigate("calendar")}
           >
-            {/* Newsreader's visible letters sit above the centre of its line box. */}
-            <FocalMark className="size-[1.875rem] -translate-y-1" />
+            <FocalMark className="size-[1.875rem]" />
             <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">focal</span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />

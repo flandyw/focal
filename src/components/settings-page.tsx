@@ -2,7 +2,7 @@ import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
 import { AI_ENABLED } from "../lib/host"
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { canPromptInstall, onInstallChange, promptInstall } from "../lib/pwa"
 import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Database, Eye, EyeOff, LogOut, Compass, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { McpTokens } from "./mcp-tokens"
@@ -117,40 +117,52 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
   const fillPercent = ((REASONING_OPTIONS.indexOf(selectedEffort) + 0.5) / REASONING_OPTIONS.length) * 100
 
   const sections = [
-    { id: "subjects", label: "Subjects", icon: BookOpen },
-    { id: "difficulty", label: "Difficulty", icon: SlidersHorizontal },
-    { id: "account", label: "Account", icon: UserRound },
-    { id: "appearance", label: "Appearance", icon: Sun },
-    { id: "notifications", label: "Notifications", icon: Bell },
-    ...(!import.meta.env.VITE_DESKTOP ? [{ id: "app", label: "Mobile app", icon: Smartphone }] : []),
-    { id: "data", label: "Data", icon: Database },
-    { id: "ai", label: "AI", icon: Sparkles },
-    ...(AI_ENABLED ? [{ id: "updates", label: "Updates", icon: Download }] : []),
+    { id: "subjects", group: "Study", label: "Subjects", icon: BookOpen },
+    { id: "difficulty", group: "Study", label: "Difficulty", icon: SlidersHorizontal },
+    { id: "account", group: "Account", label: "Account", icon: UserRound },
+    { id: "notifications", group: "Account", label: "Notifications", icon: Bell },
+    { id: "appearance", group: "App", label: "Appearance", icon: Sun },
+    { id: "ai", group: "App", label: "AI", icon: Sparkles },
+    ...(!import.meta.env.VITE_DESKTOP ? [{ id: "app", group: "App", label: "Mobile app", icon: Smartphone }] : []),
+    ...(AI_ENABLED ? [{ id: "updates", group: "App", label: "Updates", icon: Download }] : []),
+    { id: "data", group: "Data", label: "Data", icon: Database },
   ] as const
+  const signedIn = Boolean(sync.user) && sync.status !== "sign-in-required"
+  const syncLabel = sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
+    : sync.status === "sign-in-required" ? "Sign in again" : sync.status === "reconnecting" || sync.status === "restoring" ? "Reconnecting"
+    : sync.status === "pending" ? sync.pendingCount ? `${sync.pendingCount} queued` : "Sync pending" : "Sync failed"
   const active = sync.passwordRecovery ? "account" : sections.some((item) => item.id === section) ? section : "subjects"
   const recovering = sync.passwordRecovery === "ready"
   const resetting = !recovering && (resetRequested || sync.passwordRecovery === "invalid")
 
   return (
     <div className="grid gap-6">
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" description="Subjects, account, appearance and data. Most preferences save instantly.">
+        {sync.configured ? (
+          <Button variant="outline" onClick={() => setSection("account")}>
+            <Cloud />{sync.user ? <><span className="max-w-48 truncate">{sync.user.email ?? "Signed in"}</span><span className="text-muted-foreground">· {syncLabel}</span></> : "Sign in to sync"}
+          </Button>
+        ) : null}
+      </PageHeader>
 
-      <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:px-0">
-          {sections.map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              variant="ghost"
-              aria-current={active === id ? "page" : undefined}
-              onClick={() => setSection(id)}
-              className="h-auto shrink-0 justify-start rounded-xs px-3 py-2 text-muted-foreground aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
-            >
-              <Icon className="size-4" />{label}
-            </Button>
+      <div className="grid gap-6 md:grid-cols-[11rem_minmax(0,1fr)] md:items-start md:gap-10 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <nav aria-label="Settings sections" className="-mx-1 flex gap-1 overflow-x-auto px-1 md:sticky md:top-4 md:mx-0 md:flex-col md:overflow-visible md:px-0">
+          {sections.map(({ id, group, label, icon: Icon }, index) => (
+            <Fragment key={id}>
+              {sections[index - 1]?.group !== group ? <span className={`hidden px-3 pb-1 text-xs font-medium text-muted-foreground md:block ${index ? "md:mt-4" : ""}`}>{group}</span> : null}
+              <Button
+                variant="ghost"
+                aria-current={active === id ? "page" : undefined}
+                onClick={() => setSection(id)}
+                className="h-auto shrink-0 justify-start rounded-xs px-3 py-2 text-muted-foreground aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary"
+              >
+                <Icon className="size-4" />{label}
+              </Button>
+            </Fragment>
           ))}
         </nav>
 
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-3xl">
           {active === "subjects" ? (
             <Section title="Subjects" description="Your first subject is the default. Selected subjects appear first and bold in subject searches.">
               <div className="grid gap-2 py-4 sm:grid-cols-2">
@@ -270,9 +282,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             <Section
               title="Account"
               description={recovering ? "Choose a new password for your account." : resetting ? "Enter your account email to receive a password reset link." : "Sign in to sync exams, SACs, and mistakes across devices."}
-              action={sync.user ? <Badge variant="secondary"><Cloud />{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
-                : sync.status === "sign-in-required" ? "Sign in again" : sync.status === "reconnecting" || sync.status === "restoring" ? "Reconnecting"
-                : sync.status === "pending" ? sync.pendingCount ? `${sync.pendingCount} queued` : "Sync pending" : "Sync failed"}</Badge> : null}
+              action={sync.user ? <Badge variant="secondary"><Cloud />{syncLabel}</Badge> : null}
             >
               {!sync.configured ? (
                 <p className="py-4 text-sm text-muted-foreground">Account sync is not available in this build. Your data stays on this device.</p>
@@ -354,8 +364,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             </Section>
           ) : null}
 
-          {active === "account" && sync.user && sync.status !== "sign-in-required" ? (
-            <div className="mt-8">
+          {active === "account" && signedIn ? (
+            <div className="mt-10">
               <Section title="MCP access" description="Let an AI client such as Claude Code read and change your Focal data. Anyone with a token has full access to your account; revoke it here at any time.">
                 <McpTokens />
               </Section>
@@ -413,15 +423,15 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
           {active === "updates" && AI_ENABLED ? <UpdatesSection /> : null}
 
           {active === "ai" ? <Section title="Study chat" description="Connect your Vercel AI Gateway account. Choose your model in Chat.">
-            {sync.user && sync.status !== "sign-in-required" ? <GatewaySettings key={sync.user.id} userId={sync.user.id} /> : <p className="py-4 text-sm text-muted-foreground">Sign in under Account to save your Gateway API key.</p>}
+            {signedIn && sync.user ? <GatewaySettings key={sync.user.id} userId={sync.user.id} /> : <p className="py-4 text-sm text-muted-foreground">Sign in under Account to save your Gateway API key.</p>}
           </Section> : null}
 
-          {active === "ai" && sync.user && sync.status !== "sign-in-required" ? <Section title="AI overviews" description="Short reads of your data with suggested next steps, cached so they cost a few cents a month.">
+          {active === "ai" && signedIn && sync.user ? <div className="mt-10"><Section title="AI overviews" description="Short reads of your data with suggested next steps, cached so they cost a few cents a month.">
             <AIOverviewSettings key={sync.user.id} userId={sync.user.id} />
-          </Section> : null}
+          </Section></div> : null}
 
           {active === "ai" && AI_ENABLED ? (
-            <Section title="AI" description="AI requests use the connected account's ChatGPT plan." action={auth.isAuthenticated ? <Badge variant="secondary"><CheckCircle2 />Connected</Badge> : null}>
+            <div className="mt-10"><Section title="ChatGPT" description="AI requests use the connected account's ChatGPT plan." action={auth.isAuthenticated ? <Badge variant="secondary"><CheckCircle2 />Connected</Badge> : null}>
               <div className="py-4"><ChatGPTConnection /></div>
               <div className="grid gap-3 border-t py-4">
                 <div className="flex items-center justify-between gap-3">
@@ -498,7 +508,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
             {modelError ? <p role="alert" className="text-sm text-destructive">{modelError}</p> : null}
           </Field>
               </div>
-            </Section>
+            </Section></div>
           ) : null}
         </div>
       </div>

@@ -27,15 +27,16 @@ const overviewInputSchema = z.object({
   timeZone: inputSchema.shape.context.shape.timeZone,
 })
 const OVERVIEW_VIEWS = ["today", "calendar", "exams", "library", "mistakes", "focus", "stoplight", "sacs", "goals", "progress", "predictor", "vcaa"] as const
+// Nullable, not optional: OpenAI strict structured output requires every property to be listed as required.
 const overviewOutputSchema = z.object({
   headline: z.string().describe("One short sentence, under 12 words"),
   body: z.string().describe("At most two short sentences of insight grounded in the data"),
   actions: z.array(z.object({
     label: z.string().describe("Button text, 2-5 words, imperative"),
     kind: z.enum(["open", "review", "focus"]).describe("open: go to a page; review: start due mistake reviews; focus: set up a study timer"),
-    view: z.enum(OVERVIEW_VIEWS).optional().describe("Page for kind open"),
-    subject: z.string().optional().describe("Exact subject name from the data, if the action is about one subject"),
-    intent: z.string().optional().describe("For kind focus: what to study, under 8 words"),
+    view: z.enum(OVERVIEW_VIEWS).nullable().describe("Page for kind open"),
+    subject: z.string().nullable().describe("Exact subject name from the data, if the action is about one subject"),
+    intent: z.string().nullable().describe("For kind focus: what to study, under 8 words"),
   })).describe("1 to 3 concrete next steps, most useful first"),
 })
 // Overviews read the account through the same read-only tools chat uses; write tools are never reachable here.
@@ -226,12 +227,13 @@ Current UTC time: ${new Date().toISOString()}. Student time zone: ${JSON.stringi
       const { headline, body: text, actions } = result.output
       return Response.json({
         headline: headline.slice(0, 160), body: text.slice(0, 600),
-        actions: actions.slice(0, 3).map((action) => ({ ...action, label: action.label.slice(0, 40), intent: action.intent?.slice(0, 80) })),
+        actions: actions.slice(0, 3).map(({ label, kind, view, subject, intent }) => ({ label: label.slice(0, 40), kind, view: view ?? undefined, subject: subject ?? undefined, intent: intent?.slice(0, 80) })),
         model: overview.model, createdAt: Date.now(),
       }, { headers })
     } catch (error) {
-      console.error("Overview generation failed")
       const status = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined
+      // Name and status only: provider messages can echo request details.
+      console.error("Overview generation failed", error instanceof Error ? error.name : "", status ?? "")
       return fail(status === 401 || status === 403 ? "Your Gateway key was rejected. Replace it in Settings > AI." : "Could not write an overview right now.", 502)
     }
   }

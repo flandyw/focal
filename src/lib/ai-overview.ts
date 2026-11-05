@@ -52,6 +52,14 @@ export function readOverview(userId: string, area: OverviewArea, subject: string
   } catch { return null }
 }
 
+/** Forget every cached overview and failure backoff for this account; each page writes a fresh one next time it opens. */
+export function clearOverviews(userId: string) {
+  try {
+    const prefix = `focal:ai-overview:${userId}:`
+    for (const key of Object.keys(localStorage)) if (key.startsWith(prefix)) localStorage.removeItem(key)
+  } catch { /* Nothing cached to clear. */ }
+}
+
 function writeOverview(userId: string, area: OverviewArea, subject: string, entry: Entry) {
   try { localStorage.setItem(cacheKey(userId, area, subject), JSON.stringify(entry)) } catch { /* Overviews still show; they just regenerate sooner. */ }
 }

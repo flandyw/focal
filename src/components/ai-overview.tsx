@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState, useSyncExternalStore } from "react"
 import { RefreshCw, Sparkles } from "lucide-react"
-import { AIOverviewContext, generateOverview, loadOverviewSettings, needsRefresh, readOverview, saveOverviewSettings, type OverviewArea } from "../lib/ai-overview"
+import { AIOverviewContext, clearOverviews, generateOverview, loadOverviewSettings, needsRefresh, readOverview, saveOverviewSettings, type OverviewArea } from "../lib/ai-overview"
 import { loadChatSettings, saveChatSettings, type ChatSettings } from "../lib/chat-history"
 import { CHAT_ENDPOINT, chatHeaders, gatewayCatalogSchema, type GatewayCatalog } from "../lib/gateway-client"
 import { localDate } from "../lib/learning-workspace"
@@ -77,6 +77,7 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
   const [catalog, setCatalog] = useState<GatewayCatalog | null>(null)
   const [error, setError] = useState("")
   const [chat, setChat] = useState<ChatSettings | null>(null)
+  const [cleared, setCleared] = useState(false)
   useEffect(() => {
     if (!CHAT_ENDPOINT) return
     const controller = new AbortController()
@@ -115,6 +116,13 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
         </div>
         {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={(value) => update({ model: value })} favourites={chat?.favourites ?? []} onToggleFavourite={toggleFavourite} disabled={!settings.enabled} /> : error ? null : <Skeleton className="h-8 w-40" />}
+      </div>
+      <div className="flex flex-col gap-3 border-t py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium">Refresh overviews</h3>
+          <p className="text-sm text-muted-foreground">{cleared ? "Cleared. Each page writes a new overview when you next open it." : "Discard saved overviews and any retry wait, so each page writes a new one."}</p>
+        </div>
+        <Button size="sm" variant="outline" disabled={!settings.enabled} onClick={() => { clearOverviews(userId); setCleared(true) }}>Refresh all</Button>
       </div>
     </div>
   )

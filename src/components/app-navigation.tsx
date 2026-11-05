@@ -257,7 +257,8 @@ export function AppSidebar({
             aria-label="Focal home"
             onClick={() => navigate("today")}
           >
-            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">
+            {/* -mb trims the empty descender space (0.265em, minus the 0.025em gap above f/l) so the box is centred on the lettering. */}
+            <span className="-mb-[0.24em] font-heading text-[2.5rem] leading-none tracking-[-0.06em]">
               {/* Sits on the baseline at Newsreader's f/l ascender height (1419/2000 em), so it spans the lettering exactly. */}
               <FocalMark className="mr-2.5 inline-block size-[0.71em] align-baseline" />focal
             </span>

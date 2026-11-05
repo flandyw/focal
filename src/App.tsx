@@ -20,7 +20,6 @@ import { Toaster } from "./components/ui/sonner"
 import {
   EMPTY_APP_DATA,
   getDueMistakes,
-  recordMistakeReview,
   reduceMistakeReviews,
   mistakeReviewDayStart,
   normalizeMistakeReviewPreferences,
@@ -43,6 +42,7 @@ import type { StudyTimerMode } from "./components/study-timer-page"
 import type { ExamDifficultySettings } from "./lib/exam-difficulty"
 import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
+import * as ops from "./lib/app-operations"
 import { parseRoute, routePath } from "./lib/routes"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
@@ -550,12 +550,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     const isNew = !editingAttempt
     setView(logMistake ? "mistakes" : "exams")
     linkInBackground({ ...data, attempts: [...data.attempts.filter((item) => item.id !== attempt.id), attempt] }, (attempt.questionResults ?? []).map((result) => result.id))
-    setData((current) => ({
-      ...current,
-      attempts: isNew
-        ? [...current.attempts, attempt]
-        : current.attempts.map((item) => item.id === attempt.id ? attempt : item),
-    }))
+    setData((current) => ops.recordAttemptResult(current, attempt))
     if (logMistake) {
       setEditingMistake(null)
       setMistakeAttemptId(attempt.id)
@@ -778,22 +773,11 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function toggleCompletedExam(id: string) {
-    setData((current) => ({
-      ...current,
-      completedExamIds: current.completedExamIds.includes(id)
-        ? current.completedExamIds.filter((examId) => examId !== id)
-        : [...current.completedExamIds, id],
-      completedExamIdsUpdatedAt: new Date().toISOString(),
-    }))
+    setData((current) => ops.setExamFlag(current, "completed", id, !current.completedExamIds.includes(id), new Date().toISOString()))
   }
   function saveMistake(mistakeOrMistakes: Mistake | Mistake[]) {
     const mistakes = Array.isArray(mistakeOrMistakes) ? mistakeOrMistakes : [mistakeOrMistakes]
-    setData((current) => ({
-      ...current,
-      mistakes: editingMistake
-        ? current.mistakes.map((item) => item.id === mistakes[0].id ? mistakes[0] : item)
-        : [...current.mistakes, ...mistakes],
-    }))
+    setData((current) => ops.saveMistakes(current, editingMistake ? mistakes.slice(0, 1) : mistakes))
     toast.success(editingMistake ? "Mistake updated" : `${mistakes.length} mistake${mistakes.length === 1 ? "" : "s"} saved`)
     const relinked = mistakes.filter((mistake) => !editingMistake || mistake.itemIds?.join() !== editingMistake.itemIds?.join())
     const { previous } = demoteGreens(data.learning, relinked)
@@ -805,7 +789,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function saveTimedAttempt(attempt: ExamAttempt) {
-    setData((current) => ({ ...current, attempts: [...current.attempts, attempt] }))
+    setData((current) => ops.recordAttemptResult(current, attempt))
     openRecord("exams", attempt.id, unloggedMistakes(attempt, data.mistakes).length ? "?marking=1" : "")
     if (attempt.provider.trim().toLowerCase() === "vcaa") {
       toast.success("Timed VCAA exam logged", {
@@ -829,19 +813,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function saveSac(record: SacRecord) {
     const exists = data.sacRecords.some((item) => item.id === record.id)
-    const updatedAt = new Date().toISOString()
-    setData((current) => ({
-      ...current,
-      sacRecords: current.sacRecords.some((item) => item.id === record.id)
-        ? current.sacRecords.map((item) => item.id === record.id ? record : item)
-        : [...current.sacRecords, record],
-      sacRecordsUpdatedAt: updatedAt,
-    }))
+    setData((current) => ops.saveSacRecord(current, record, new Date().toISOString()))
     toast.success(exists ? "SAC updated" : "SAC saved")
   }
 
   async function deleteSac(record: SacRecord) {
-    if (!await commitRecoverable((current) => ({ ...current, sacRecords: current.sacRecords.filter((item) => item.id !== record.id), sacRecordsUpdatedAt: new Date().toISOString() }))) return
+    if (!await commitRecoverable((current) => ops.deleteSacRecord(current, record.id, new Date().toISOString()))) return
     toast("SAC deleted", {
       duration: 8000,
       action: {
@@ -896,25 +873,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function reviewMistake(mistake: Mistake, rating: ReviewRating, context: PracticeContext = {}) {
     const completedAt = new Date().toISOString()
-    setData((current) => ({
-      ...current,
-      mistakes: current.mistakes.map((item) => item.id === mistake.id ? recordMistakeReview(item, rating, completedAt, current.mistakeReviewPreferences, current.mistakes, context) : item),
-    }))
+    setData((current) => ops.reviewMistake(current, mistake.id, rating, completedAt, context))
   }
 
   function toggleMistakeSuspension(mistake: Mistake) {
-    const timestamp = new Date().toISOString()
-    setData((current) => ({
-      ...current,
-      mistakes: current.mistakes.map((item) => item.id === mistake.id ? { ...item, suspended: !item.suspended, updatedAt: timestamp } : item),
-    }))
+    setData((current) => ops.setMistakesSuspended(current, [mistake.id], !mistake.suspended, new Date().toISOString()))
     toast.success(mistake.suspended ? "Card returned to the review queue" : "Reviews paused for this card", { duration: 8000, action: { label: "Undo", onClick: () => toggleMistakeSuspension({ ...mistake, suspended: !mistake.suspended }) } })
   }
 
   function setMistakesSuspended(ids: string[], suspended: boolean) {
-    const selectedIds = new Set(ids)
-    const updatedAt = new Date().toISOString()
-    setData((current) => ({ ...current, mistakes: current.mistakes.map((mistake) => selectedIds.has(mistake.id) ? { ...mistake, suspended, updatedAt } : mistake) }))
+    setData((current) => ops.setMistakesSuspended(current, ids, suspended, new Date().toISOString()))
     toast.success(suspended ? `Reviews paused for ${ids.length} ${ids.length === 1 ? "card" : "cards"}` : `${ids.length} ${ids.length === 1 ? "card" : "cards"} back in the review queue`)
   }
 
@@ -953,16 +921,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function toggleTrackedExam(id: string) {
-    setData((current) => {
-      const has = current.trackedExamIds.includes(id)
-      return {
-        ...current,
-        trackedExamIds: has
-          ? current.trackedExamIds.filter((value) => value !== id)
-          : [...current.trackedExamIds, id],
-        trackedExamIdsUpdatedAt: new Date().toISOString(),
-      }
-    })
+    setData((current) => ops.setExamFlag(current, "tracked", id, !current.trackedExamIds.includes(id), new Date().toISOString()))
   }
 
   function clearTrackedExams() {
@@ -1077,7 +1036,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <Button variant="ghost" size="icon" aria-label="Search" className="text-muted-foreground" onClick={() => setCommandOpen(true)}><Search aria-hidden /></Button>
         </header>}
         {embedded && <nav aria-label="Exam tools" className="flex flex-wrap gap-1 border-b px-4 py-2">
-          {[ALL_NAVIGATION[1], ALL_NAVIGATION[0], ...ALL_NAVIGATION.slice(2)].map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
+          {ALL_NAVIGATION.toSorted((a, b) => Number(b.id === "exams") - Number(a.id === "exams")).map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
         <main id="main-content" data-view={view} aria-busy={navView !== view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar)-var(--keyboard-inset))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { deleteSacRecord, recordAttemptResult, saveSacRecord, setExamFlag } from "../../src/lib/app-operations.js"
 import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
 import {
   analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, MISTAKE_DIFFICULTIES, normalizeMistakeReviewPreferences,
@@ -102,7 +103,7 @@ export function recordTools(define: Define) {
         referenceId: old?.referenceId ?? null, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp,
       }
       warnings = examWarnings(next)
-      return { ...data, attempts: old ? data.attempts.map((item) => item.id === id ? next : item) : [...data.attempts, next] }
+      return recordAttemptResult(data, next)
     })
     return { id, warnings }
   })
@@ -120,10 +121,7 @@ export function recordTools(define: Define) {
   define("set_exam_flag", "Tick or untick an exam in the VCAA library. `tracked`: id is a VCE exam-timetable entry id (see vce_exam_timetable) and adds it to the calendar/day plan. `completed`: id is a VCAA resource URL (see vcaa_exam_resources) marked done without logging a mark.",
     { list: z.enum(["tracked", "completed"]), id: z.string().min(1), on: z.boolean() }, "write", async ({ list, id, on }) => {
       const stamp = nowIso()
-      const toggle = (ids: string[]) => on ? [...new Set([...ids, id])] : ids.filter((value) => value !== id)
-      await updateApp((data) => list === "tracked"
-        ? { ...data, trackedExamIds: toggle(data.trackedExamIds), trackedExamIdsUpdatedAt: stamp }
-        : { ...data, completedExamIds: toggle(data.completedExamIds), completedExamIdsUpdatedAt: stamp })
+      await updateApp((data) => setExamFlag(data, list, id, on, stamp))
     })
 
   /* ------------------------------------------------------------- mistakes */
@@ -430,14 +428,14 @@ export function recordTools(define: Define) {
       if (a.id && !old) throw new Error("No SAC with that id.")
       const record = { ...old, id, ...candidate, sacNumber: text(a.sacNumber), areaOfStudy: text(a.areaOfStudy), notes: text(a.notes),
         completedAt: a.score !== undefined ? old?.completedAt?.slice(0, 10) ?? scheduledAt : undefined, createdAt: old?.createdAt ?? timestamp, updatedAt: timestamp }
-      return { ...data, sacRecords: old ? data.sacRecords.map((r) => r.id === id ? record : r) : [...data.sacRecords, record], sacRecordsUpdatedAt: timestamp }
+      return saveSacRecord(data, record, timestamp)
     })
     return { id }
   })
 
   define("delete_sac", "Delete a SAC.", { id: z.string() }, "delete", async ({ id }) => {
     const stamp = nowIso()
-    await updateApp((data) => { required(data.sacRecords.find((r) => r.id === id), "SAC"); return { ...data, sacRecords: data.sacRecords.filter((r) => r.id !== id), sacRecordsUpdatedAt: stamp } })
+    await updateApp((data) => { required(data.sacRecords.find((r) => r.id === id), "SAC"); return deleteSacRecord(data, id, stamp) })
   })
 
   /* --------------------------------------------------------------- events */

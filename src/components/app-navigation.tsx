@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
-import { ArrowUpRight, Calculator, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
+import { Sun, ArrowUpRight, Calculator, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
 
@@ -45,7 +45,7 @@ const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => 
 const MobileSearch = lazy(() => import("./app-command-menu").then((module) => ({ default: module.MobileSearch })))
 
 const NAVIGATION_ICONS = {
-  chat: MessageSquare,
+  today: Sun, subjects: BookOpen, chat: MessageSquare,
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,
@@ -53,8 +53,8 @@ const NAVIGATION_ICONS = {
 }
 
 const MOBILE_TABS = [
-  { id: "calendar", label: "Today" }, { id: "focus", label: "Timer" },
-  { id: "mistakes", label: "Mistakes" }, { id: "exams", label: "Exams" },
+  { id: "today", label: "Today" }, { id: "calendar", label: "Plan" },
+  { id: "exams", label: "Practice" }, { id: "focus", label: "Timer" },
 ] as const
 
 /** Phone-style tab bar for the four daily destinations; everything else stays in the "More" sheet. */
@@ -79,7 +79,7 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
         if (view === item.id) window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
         else { buzz(); onViewChange(item.id) }
       },
-        item.id === "mistakes" ? dueMistakes : item.id === "calendar" ? plannedTasks : 0, item.id === "calendar" ? "planned" : "due"))}
+        item.id === "exams" ? dueMistakes : item.id === "today" ? plannedTasks : 0, item.id === "today" ? "planned" : "due"))}
       {tab("more", "More", Menu, openMobile || !inTabs, () => { buzz(); setOpenMobile(!openMobile) })}
       </div>
     </nav>
@@ -255,7 +255,7 @@ export function AppSidebar({
             variant="ghost"
             className="h-auto min-w-0 flex-1 items-center justify-start gap-2.5 rounded-sm p-0 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
-            onClick={() => navigate("calendar")}
+            onClick={() => navigate("today")}
           >
             <FocalMark className="size-[1.875rem]" />
             <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">focal</span>
@@ -310,7 +310,7 @@ export function AppSidebar({
                   {item.id === "mistakes" && dueMistakes > 0 ? (
                     <SidebarMenuBadge aria-label={`${count(dueMistakes, "mistake")} due`}>{dueMistakes > 99 ? "99+" : dueMistakes}</SidebarMenuBadge>
                   ) : null}
-                  {item.id === "calendar" && plannedTasks > 0 ? (
+                  {item.id === "today" && plannedTasks > 0 ? (
                     <SidebarMenuBadge aria-label={`${count(plannedTasks, "study task")} due`}>{plannedTasks > 99 ? "99+" : plannedTasks}</SidebarMenuBadge>
                   ) : null}
                 </SidebarMenuItem>

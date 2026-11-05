@@ -43,6 +43,7 @@ import type { StudyTimerMode } from "./components/study-timer-page"
 import type { ExamDifficultySettings } from "./lib/exam-difficulty"
 import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
+import { parseRoute, routePath } from "./lib/routes"
 import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
@@ -172,8 +173,10 @@ function InstallNudge() {
   )
 }
 
+const initialRoute = typeof location === "undefined" ? null : parseRoute(location.pathname)
+
 export default function App({ embedded = false }: { embedded?: boolean } = {}) {
-  const [view, commitView] = useState<AppView>(() => embedded ? "exams" : loadAppView(
+  const [view, commitView] = useState<AppView>(() => embedded ? "exams" : initialRoute?.view ?? loadAppView(
     typeof localStorage === "undefined" ? null : localStorage,
     typeof location === "undefined" ? "" : location.search,
   ))
@@ -187,6 +190,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const scrollByView = useRef(new Map<AppView, number>())
   const [data, setData] = useState<AppData>(() => (typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
   const [chosenSubject, setChosenSubject] = useState<string | null>(() => {
+    if (initialRoute?.subject) return initialRoute.subject
     try { return localStorage.getItem("examtrack:subject:v1") } catch { return null }
   })
   const [timerPreset, setTimerPreset] = useState<ExamTimerPreset | null>(null)
@@ -426,15 +430,22 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   // Without history entries, Android's back button quits the installed app from any page.
   useEffect(() => {
     if (embedded || import.meta.env.VITE_DESKTOP) return
-    return handleBack<AppView>((next) => { fromBack.current = true; setView(next) })
+    return handleBack<AppView>((next) => {
+      const subject = parseRoute(location.pathname)?.subject
+      if (subject) setChosenSubject(subject)
+      fromBack.current = true
+      setView(next)
+    })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- setView only touches stable state setters
   }, [embedded])
   useEffect(() => {
     if (embedded || import.meta.env.VITE_DESKTOP) return
     if (fromBack.current) { fromBack.current = false; return }
-    if (!history.state?.view) history.replaceState({ ...history.state, view }, "")
-    else if (history.state.view !== view) history.pushState({ view }, "")
-  }, [view, embedded])
+    const path = routePath({ view, subject: chosenSubject ?? undefined }) + location.search + location.hash
+    if (!history.state?.view) history.replaceState({ ...history.state, view }, "", path)
+    else if (history.state.view !== view) history.pushState({ view }, "", path)
+    else if (location.pathname + location.search + location.hash !== path) history.replaceState(history.state, "", path)
+  }, [view, embedded, chosenSubject])
   // Consume one-shot launch links, so a reload lands on the saved page rather than replaying the link.
   const launchAction = useRef(typeof location === "undefined" ? null : new URLSearchParams(location.search).get("action"))
   useEffect(() => {

@@ -17,13 +17,14 @@ const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) 
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
 /** The personal starting page: a read-only view over the same day plan the calendar uses, with one way into each kind of work. */
-export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onStartFocus }: {
+export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt }: {
   now: number
   data: DayPlanSource
   timetable: Timetable | null
   dueMistakes: number
   onNavigate: (view: AppView) => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
+  onOpenAttempt: (id: string) => void
 }) {
   const today = localDate(new Date(now))
   const plan = useMemo(() => buildDayPlan(today, data, timetable, now), [today, data, timetable, now])
@@ -57,6 +58,16 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
   ].filter((item) => item.date > today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5)
   const next = upcoming[0]
 
+  // Latest papers with the change from the previous paper in the same subject.
+  const papers = useMemo(() => {
+    const sorted = data.attempts.filter((attempt) => attempt.rawMax > 0).toSorted((a, b) => b.completedAt.localeCompare(a.completedAt))
+    const percent = (attempt: (typeof sorted)[number]) => Math.round((attempt.rawScore / attempt.rawMax) * 100)
+    return sorted.slice(0, 4).map((attempt, index) => {
+      const previous = sorted.slice(index + 1).find((other) => other.subject === attempt.subject)
+      return { attempt, score: percent(attempt), delta: previous ? percent(attempt) - percent(previous) : null }
+    })
+  }, [data.attempts])
+
   const stats = [
     { label: "Studied today", value: hours(todayMinutes), note: plan.plannedMinutes ? `${hours(plan.plannedMinutes)} still planned` : "Nothing else planned" },
     { label: "This week", value: hours(weekMinutes), note: `${days.filter((day) => day.minutes > 0).length} of 7 days active` },
@@ -86,6 +97,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
       <AIOverview area="today" fingerprint={`${dueMistakes}:${items.length}:${done}:${next?.id ?? ""}`} />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-8">
         <section aria-labelledby="today-plan">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 id="today-plan" className="font-medium">Plan{items.length ? <span className="ml-2 text-sm font-normal text-muted-foreground tabular-nums">{done}/{items.length} done</span> : null}</h2>
@@ -121,6 +133,31 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
           )}
         </section>
 
+        {papers.length ? (
+          <section aria-labelledby="today-papers">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 id="today-papers" className="font-medium">Recent papers</h2>
+              <Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All papers</Button>
+            </div>
+            <ul>{papers.map(({ attempt, score, delta }) => (
+              <li key={attempt.id} className="border-b border-border last:border-b-0">
+                <button type="button" className="flex w-full items-center gap-3 py-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpenAttempt(attempt.id)}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{attempt.title || `${attempt.provider} ${attempt.examYear} ${attempt.paper}`}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{attempt.subject} · {new Date(attempt.completedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
+                  </span>
+                  <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-muted sm:block" aria-hidden><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, score)}%` }} /></span>
+                  <span className="w-10 shrink-0 text-right font-medium tabular-nums">{score}%</span>
+                  <span className={cn("w-10 shrink-0 text-right text-xs tabular-nums", delta == null ? "text-muted-foreground" : delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : "text-muted-foreground")}>
+                    {delta == null ? "new" : delta > 0 ? `▲${delta}` : delta < 0 ? `▼${-delta}` : "±0"}
+                  </span>
+                </button>
+              </li>
+            ))}</ul>
+          </section>
+        ) : null}
+        </div>
+
         <div className="flex flex-col gap-8">
           <section aria-labelledby="today-reviews" className="flex items-center justify-between gap-3 rounded-md border border-border p-4">
             <div>
@@ -139,7 +176,8 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
               {days.map((day, index) => (
                 <li key={index} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5" title={`${day.date.toLocaleDateString(undefined, { weekday: "long" })}: ${hours(day.minutes)}`}>
                   <span className="sr-only">{day.date.toLocaleDateString(undefined, { weekday: "long" })}: {hours(day.minutes)}</span>
-                  <div className={cn("w-full rounded-sm transition-[height] duration-500", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 100)}%` }} />
+                  {day.minutes ? <span aria-hidden className="text-[10px] tabular-nums text-muted-foreground">{hours(day.minutes)}</span> : null}
+                  <div className={cn("w-full rounded-sm transition-[height] duration-500", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 80)}%` }} />
                   <span aria-hidden className={cn("text-[11px] text-muted-foreground", index === 6 && "font-medium text-foreground")}>{day.date.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
                 </li>
               ))}

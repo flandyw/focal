@@ -68,7 +68,13 @@ export function ExamLibrary({
   onToggleCompleted,
   onStart,
   onCompare,
+  selectedPaperId,
+  onSelectPaper,
+  onClosePaper,
 }: {
+  selectedPaperId?: string
+  onSelectPaper: (id: string) => void
+  onClosePaper: () => void
   references: AssessmentReference[]
   studies: VcaaStudyResources[]
   attempts: ExamAttempt[]
@@ -93,6 +99,7 @@ export function ExamLibrary({
     const priorities = new Map(preferredSubjects.map((item, index) => [normaliseComparisonName(item), index]))
     const terms = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return exams.filter((exam) => {
+      if (selectedPaperId) return exam.url === selectedPaperId
       const done = completedUrls.has(exam.url)
       return (subject === "all" || exam.studyName === subject) &&
         (completion === "all" || (completion === "completed" ? done : !done)) &&
@@ -100,7 +107,7 @@ export function ExamLibrary({
     }).toSorted((first, second) =>
       (priorities.get(normaliseComparisonName(first.studyName)) ?? Infinity) - (priorities.get(normaliseComparisonName(second.studyName)) ?? Infinity) ||
       (second.year ?? 0) - (first.year ?? 0) || paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
-  }, [completedUrls, completion, exams, preferredSubjects, deferredQuery, subject])
+  }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject])
 
   const focusSubject = subject === "all" ? firstPreferredSubject(subjects, preferredSubjects) || subjects[0] : subject
   const focusStudy = resourcesByStudy.get(normaliseComparisonName(focusSubject))
@@ -120,13 +127,15 @@ export function ExamLibrary({
   return (
     <div className="grid gap-6">
       <PageHeader title="VCAA exam library" />
+      {selectedPaperId ? <Button variant="outline" className="justify-self-start" onClick={onClosePaper}>Back to all papers</Button> : null}
+      {selectedPaperId && !filtered.length ? <p role="status">Paper not found in the current library.</p> : null}
       <Alert>
         <Search />
         <AlertTitle>Confirm the current study design before using an older paper</AlertTitle>
         <AlertDescription>VCAA publishes examination specifications, sample papers, assessment guides and external assessment reports on each study page. <a className="font-medium underline underline-offset-4" href={getVcaaExamResourcesUrl()} target="_blank" rel="noreferrer">Browse official study resources</a>.</AlertDescription>
       </Alert>
 
-      {focusStudy && recentExams.length ? (
+      {!selectedPaperId && focusStudy && recentExams.length ? (
         <Card className="bg-muted/20">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -183,12 +192,12 @@ export function ExamLibrary({
           const analysis = loggedAttempt ? analyseAttempt(loggedAttempt, reference) : null
           const provider = getVcaaExamProvider(exam)
           return (
-          <Card key={exam.url} className={`min-w-0 gap-4 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${completed ? "bg-muted/20" : ""}`}>
+          <Card key={exam.url} className={`${selectedPaperId === exam.url ? "ring-2 ring-primary" : ""} min-w-0 gap-4 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${completed ? "bg-muted/20" : ""}`}>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground tabular-nums">{exam.year ?? "Unknown year"}{provider === "VCAA NHT" ? " · Northern Hemisphere" : ""}</p>
-                  <CardTitle className="mt-0.5 text-pretty">{getVcaaExamPaper(exam)}</CardTitle>
+                  <CardTitle className="mt-0.5 text-pretty"><Button variant="link" className="h-auto p-0 text-base text-inherit" onClick={() => onSelectPaper(exam.url)}>{getVcaaExamPaper(exam)}</Button></CardTitle>
                   <CardDescription className="truncate">{exam.studyName}</CardDescription>
                 </div>
                 {completed ? <Badge className="shrink-0" variant={loggedAttempt ? "success" : "secondary"}><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}

@@ -45,7 +45,7 @@ const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => 
 const MobileSearch = lazy(() => import("./app-command-menu").then((module) => ({ default: module.MobileSearch })))
 
 const NAVIGATION_ICONS = {
-  today: Sun, chat: MessageSquare,
+  today: Sun, subjects: BookOpen, chat: MessageSquare,
   calendar: CalendarDays, exams: BookOpen, focus: Timer, mistakes: Layers,
   timetable: CalendarRange, sacs: GraduationCap, library: Library,
   progress: ChartNoAxesCombined, stoplight: ListChecks, goals: Target,

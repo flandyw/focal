@@ -18,6 +18,7 @@ export const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }
     item("focus", "Study timer", "Focus blocks and timed practice papers"),
   ] },
   { label: "Subjects", items: [
+    item("subjects", "Overview", "Everything for one subject"),
     item("stoplight", "Skills", "Rate every skill red, amber or green"),
     item("sacs", "Assessments", "Plan, time, and record SACs"),
     item("goals", "Goals", "Work backwards from score targets"),

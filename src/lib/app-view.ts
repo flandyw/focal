@@ -8,6 +8,7 @@ const APP_VIEWS = [
   "focus",
   "mistakes",
   "timetable",
+  "subjects",
   "sacs",
   "library",
   "progress",

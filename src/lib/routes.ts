@@ -9,6 +9,7 @@ const VIEW_PATHS: Record<AppView, string> = {
   library: "/practice/papers",
   mistakes: "/practice/mistakes",
   focus: "/sessions",
+  subjects: "/subjects/:subject",
   sacs: "/subjects/:subject/assessments",
   stoplight: "/subjects/:subject/skills",
   goals: "/subjects/:subject/goals",
@@ -24,13 +25,15 @@ const VIEW_PATHS: Record<AppView, string> = {
 export type AppRoute = { view: AppView; subject?: string; id?: string }
 
 export function routePath({ view, subject, id }: AppRoute) {
-  const path = VIEW_PATHS[view].replace(":subject", encodeURIComponent(subject ?? "all"))
+  const path = (view === "exams" && id ? "/practice/attempts" : VIEW_PATHS[view]).replace(":subject", encodeURIComponent(subject ?? "all"))
   return id ? `${path}/${encodeURIComponent(id)}` : path
 }
 
 /** Longest matching pattern wins; one trailing segment after it is a record id (paper, attempt, mistake, session, conversation). */
 export function parseRoute(pathname: string): AppRoute | null {
-  const parts = pathname.split("/").filter(Boolean).map(decodeURIComponent)
+  let parts: string[]
+  try { parts = pathname.split("/").filter(Boolean).map(decodeURIComponent) } catch { return null }
+  if (parts[0] === "practice" && parts[1] === "attempts" && parts.length <= 3) return { view: "exams", id: parts[2] }
   let best: AppRoute | null = null
   let bestLength = -1
   for (const [view, pattern] of Object.entries(VIEW_PATHS) as Array<[AppView, string]>) {

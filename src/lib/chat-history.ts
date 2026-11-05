@@ -94,3 +94,11 @@ export async function saveChatSettings(settings: ChatSettings) {
   transaction.objectStore("settings").put(settings)
   await completed(transaction)
 }
+
+export async function loadChatSettings(owner: string): Promise<ChatSettings> {
+  const db = await openDatabase()
+  const saved = await result(db.transaction("settings", "readonly").objectStore("settings").get(owner) as IDBRequest<unknown>)
+  const settings = saved === undefined ? { owner, favourites: [], model: "", activeId: "" } : settingsSchema.parse(saved)
+  if (settings.owner !== owner) throw new Error("Chat settings account mismatch.")
+  return settings
+}

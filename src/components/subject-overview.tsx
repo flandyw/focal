@@ -1,5 +1,6 @@
 import { Button } from "./ui/button"
 import { PageHeader } from "./page-header"
+import { AIOverview } from "./ai-overview"
 import type { AppView } from "../lib/app-view"
 import type { ExamAttempt } from "../lib/exam-data"
 
@@ -17,6 +18,7 @@ export function SubjectOverview({ subject, attempts, dueMistakes, onNavigate, on
       <PageHeader title={subject === "all" ? "Subjects" : subject} description="Skills, assessments and goals for your next study session.">
         {([["stoplight", "Skills"], ["sacs", "Assessments"], ["goals", "Goals"]] as const).map(([destination, label]) => <Button key={destination} variant="outline" onClick={() => onNavigate(destination)}>{label}</Button>)}
       </PageHeader>
+      {subject === "all" ? null : <AIOverview area="subject" subject={subject} fingerprint={`${dueMistakes}:${attempts.length}`} />}
       <div className="rounded-md border p-4"><p className="font-medium">{dueMistakes} mistakes due</p><Button className="mt-3" onClick={onReview}>Review due mistakes</Button></div>
       <section className="grid gap-3">
         <h2 className="font-medium">Recent attempts</h2>

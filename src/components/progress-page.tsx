@@ -8,6 +8,7 @@ import { AnalyticsView } from "./analytics/AnalyticsView"
 import type { AppData } from "../lib/exam-data"
 import type { TaskDraft } from "../lib/learning-workspace"
 import { WeeklyReview } from "./weekly-review"
+import { AIOverview } from "./ai-overview"
 import { sameStudySubject } from "../lib/studySubjects"
 import { studySessionSubjects } from "../lib/sync/sessionContract"
 
@@ -28,5 +29,5 @@ export function ProgressPage({ sessions, data, subject, onPlan, onNewSession, on
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} />} />
+  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<><AIOverview area="progress" fingerprint={`${studySessions.length}:${data.attempts.length}`} /><WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} /></>} />
 }

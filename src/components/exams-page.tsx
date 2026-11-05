@@ -48,6 +48,7 @@ import { openProgressReport } from "../lib/progress-report"
 import { localDate } from "../lib/learning-workspace"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { count } from "../lib/utils"
+import { AIOverview } from "./ai-overview"
 
 const PerformanceTrendChart = lazy(() =>
   import("./performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
@@ -715,6 +716,7 @@ export function ExamsPage(props: ExamsPageProps) {
           Log exam
         </Button>
       </PageHeader>
+      <AIOverview area="exams" subject={scopedSubject} fingerprint={String(data.attempts.length)} />
 
       <Tabs value={section} onValueChange={(value) => setSection(value as "overview" | "insights")}>
         <TabsList aria-label="Exam sections">

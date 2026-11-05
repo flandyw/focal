@@ -45,6 +45,7 @@ import * as ops from "./lib/app-operations"
 import { routePath } from "./lib/routes"
 import { useAppRoute, useRouteUrl } from "./app/use-app-route"
 import { InstallNudge, OfflineChip } from "./components/shell-notices"
+import { AIOverviewContext, type OverviewAction } from "./lib/ai-overview"
 import { loadSidebarOpen, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
@@ -914,7 +915,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     </DropdownMenu>
   )
 
+  function runOverviewAction(action: OverviewAction) {
+    const subject = action.subject && pageSubjects.includes(action.subject) ? action.subject : undefined
+    if (action.kind === "review") return openMistakeQueue(subject ?? (subjectScoped ? selectedSubject : "all"))
+    if (action.kind === "focus") return startFocus(subject, action.intent ?? "")
+    if (subject) chooseSubject(subject)
+    if (action.view) setView(action.view)
+  }
+
   return (
+    <AIOverviewContext.Provider value={{ userId: sync.status === "sign-in-required" ? undefined : sync.user?.id, onAction: runOverviewAction }}>
     <SidebarProvider keyboardShortcut={!embedded} className={embedded ? "min-h-0" : undefined} defaultOpen={loadSidebarOpen(typeof document === "undefined" ? null : document.cookie)}>
       <a href="#main-content" className="fixed left-2 top-2 z-50 -translate-y-20 rounded-md bg-background px-3 py-2 text-sm shadow focus:translate-y-0">Skip to content</a>
       {!embedded && <AppSidebar
@@ -1115,5 +1125,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" offset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 1.5rem)" }} mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 0.75rem)" }} />}
     </SidebarProvider>
+    </AIOverviewContext.Provider>
   )
 }

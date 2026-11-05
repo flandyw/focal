@@ -71,6 +71,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collap
 import { Label } from "./ui/label"
 import { Textarea } from "./ui/textarea"
 import { Slider } from "./ui/slider"
+import { AIOverview } from "./ai-overview"
 
 
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
@@ -632,6 +633,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
+      <AIOverview area="mistakes" subject={activeSubject} fingerprint={String(visibleMistakes.length)} />
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       {tab !== "study" && data.mistakes.length ? <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You’re caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryProgress.matureCards} mature</p></div></div>

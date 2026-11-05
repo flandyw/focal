@@ -8,6 +8,7 @@ import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Data
 import { McpTokens } from "./mcp-tokens"
 import { toast } from "sonner"
 import { GatewaySettings } from "./gateway-settings"
+import { AIOverviewSettings } from "./ai-overview"
 import { AppearanceSettings } from "./appearance-settings"
 import { PushSettings } from "./push-settings"
 import { PageHeader } from "./page-header"
@@ -413,6 +414,10 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
           {active === "ai" ? <Section title="Study chat" description="Connect your Vercel AI Gateway account. Choose your model in Chat.">
             {sync.user && sync.status !== "sign-in-required" ? <GatewaySettings key={sync.user.id} userId={sync.user.id} /> : <p className="py-4 text-sm text-muted-foreground">Sign in under Account to save your Gateway API key.</p>}
+          </Section> : null}
+
+          {active === "ai" && sync.user && sync.status !== "sign-in-required" ? <Section title="AI overviews" description="Short reads of your data with suggested next steps, cached so they cost a few cents a month.">
+            <AIOverviewSettings key={sync.user.id} userId={sync.user.id} />
           </Section> : null}
 
           {active === "ai" && AI_ENABLED ? (

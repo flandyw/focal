@@ -257,8 +257,10 @@ export function AppSidebar({
             aria-label="Focal home"
             onClick={() => navigate("today")}
           >
-            <FocalMark className="size-[1.875rem]" />
-            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">focal</span>
+            <span className="font-heading text-[2.5rem] leading-none tracking-[-0.06em]">
+              {/* Sits on the baseline at Newsreader's f/l ascender height (1419/2000 em), so it spans the lettering exactly. */}
+              <FocalMark className="mr-2.5 inline-block size-[0.71em] align-baseline" />focal
+            </span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />
         </div>

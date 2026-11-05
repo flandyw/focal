@@ -1,4 +1,4 @@
-import { getMistakeSchedule, normalizeMistakeReviewPreferences, type Mistake, type MistakeReviewPreferences, type PracticeContext, type ReviewRating } from "./exam-data"
+import { getMistakeSchedule, normalizeMistakeReviewPreferences, type Mistake, type MistakeReviewPreferences, type PracticeContext, type ReviewRating } from "./exam-data.js"
 
 export const PRACTICE_FINISHES = [
   { id: "graphite", label: "Graphite", xp: 0, color: "#687582" },

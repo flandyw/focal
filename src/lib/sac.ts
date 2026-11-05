@@ -1,5 +1,5 @@
 import { isPerformanceContext, type PerformanceContext } from "./performance-context.js"
-import { localDate } from "./learning-workspace"
+import { localDate } from "./learning-workspace.js"
 
 export const SAC_UNITS = [1, 2, 3, 4] as const
 

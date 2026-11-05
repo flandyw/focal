@@ -76,6 +76,8 @@ import { Slider } from "./ui/slider"
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
 
 type MistakesPageProps = {
+  initialStatus?: string | null
+  skillId?: string | null
   workspaceSubject?: string
   subjects: string[]
   onSubjectChange: (subject: string) => void
@@ -453,10 +455,10 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ initialStatus, skillId, workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
-  const [tab, setTab] = useState<PageTab>("browse")
+  const [tab, setTab] = useState<PageTab>(initialStatus === "due" ? "study" : "browse")
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
   const [browserFilter, setBrowserFilter] = useState<BrowserFilter>("all")
@@ -491,8 +493,8 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
   const visibleMistakes = useMemo(() => data.mistakes.filter((mistake) => {
     const attempt = attemptMap.get(mistake.attemptId)
     const matchesSubject = activeSubject === "all" || sameStudySubject(attempt?.subject ?? mistake.subject, activeSubject)
-    return matchesSubject && matchesMathsExamFilter(attempt, activeMathsExamFilter)
-  }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter])
+    return matchesSubject && (!skillId || mistake.itemIds?.includes(skillId)) && matchesMathsExamFilter(attempt, activeMathsExamFilter)
+  }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter, skillId])
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
   const counts = useMemo(() => getMistakeQueueCounts(visibleMistakes, now), [visibleMistakes, now])
   const progress = useMemo(() => getMistakeProgress(visibleMistakes, now), [visibleMistakes, now])
@@ -615,6 +617,7 @@ export function MistakesPage({ workspaceSubject, subjects, onSubjectChange, onSa
 
   return (
     <div className="grid min-w-0 gap-5 lg:gap-6">
+      {skillId ? <div className="flex flex-wrap items-center gap-2 text-sm"><span>Related mistakes · {data.learning.curriculumAreas.find((item) => item.id === skillId)?.name ?? "Selected skill"}</span><Button variant="ghost" size="sm" onClick={() => onSubjectChange(activeSubject)}>Clear skill filter</Button></div> : null}
       <PageHeader title="Mistakes">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import from chatbot</Button>
         <Button onClick={onLog}><Plus />Add mistake</Button>

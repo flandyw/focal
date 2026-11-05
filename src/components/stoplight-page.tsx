@@ -52,7 +52,8 @@ function evidenceText(evidence: ItemEvidence) {
   ].filter(Boolean).join(" · ")
 }
 
-export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
+export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes }: {
+  onRelatedMistakes?: (subject: string, skill: string) => void
   data: AppData
   subjects: string[]
   onChange: (learning: LearningWorkspaceUpdate) => void
@@ -180,6 +181,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks }: {
                           {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
                           {isRecheckDue(item, now) ? <Badge variant="secondary">Re-check</Badge> : null}
                         </div>
+                        {item.rating === "red" && onRelatedMistakes ? <Button variant="link" size="xs" className="h-auto p-0" onClick={() => onRelatedMistakes(item.subject, item.id)}>See related mistakes</Button> : null}
                         {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
                         {text ? <Button variant="link" size="xs" className="h-auto p-0 text-muted-foreground" onClick={() => setViewing(item)}>{text}</Button> : null}
                       </div>

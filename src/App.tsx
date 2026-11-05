@@ -1,7 +1,7 @@
 import { isPaused, isRunning, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
-import { lazy, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { AlertCircle, ChevronDown, CloudOff, Search, UsersRound, X } from "lucide-react"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
@@ -20,7 +20,6 @@ import { Toaster } from "./components/ui/sonner"
 import {
   EMPTY_APP_DATA,
   getDueMistakes,
-  reduceMistakeReviews,
   mistakeReviewDayStart,
   normalizeMistakeReviewPreferences,
   type ReviewRating,
@@ -43,13 +42,15 @@ import type { ExamDifficultySettings } from "./lib/exam-difficulty"
 import type { SacRecord } from "./lib/sac"
 import type { FocusTimerSession } from "./lib/ongoing-timers"
 import * as ops from "./lib/app-operations"
-import { parseRoute, routePath } from "./lib/routes"
-import { loadAppView, loadSidebarOpen, saveAppView, type AppView } from "./lib/app-view"
+import { routePath } from "./lib/routes"
+import { useAppRoute, useRouteUrl } from "./app/use-app-route"
+import { InstallNudge, OfflineChip } from "./components/shell-notices"
+import { loadSidebarOpen, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
 import { ALL_NAVIGATION } from "./lib/navigation"
-import { canPromptInstall, clearDeliveredNotifications, clearPushForOtherAccount, notifyTimer, onInstallChange, promptInstall, resyncPush, scheduleTimerAlerts, watchDesktopNotifications, type TimerAlert } from "./lib/pwa"
-import { handleBack, isStandalone, setAppBadge, useWakeLock } from "./lib/mobile"
+import { clearDeliveredNotifications, clearPushForOtherAccount, notifyTimer, resyncPush, scheduleTimerAlerts, watchDesktopNotifications, type TimerAlert } from "./lib/pwa"
+import { setAppBadge, useWakeLock } from "./lib/mobile"
 import { loadNotificationPreferences } from "./lib/notification-preferences"
 import { useReferenceData } from "./hooks/use-reference-data"
 import { useTickingNow } from "./hooks/use-ticking-now"
@@ -131,70 +132,24 @@ const AppTour = lazy(() =>
   import("./components/app-tour").then((module) => ({ default: module.AppTour })),
 )
 const ONBOARDED_KEY = "examtrack:onboarded:v1"
+const SubjectOverview = lazy(() => import("./components/subject-overview").then((module) => ({ default: module.SubjectOverview })))
 const TodayPage = lazy(() => import("./components/today-page").then((module) => ({ default: module.TodayPage })))
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
 
-/** Phones hide the sidebar's sync status, so going offline would otherwise be invisible until something fails. */
-function OfflineChip({ status }: { status: string }) {
-  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine)
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine)
-    window.addEventListener("online", update)
-    window.addEventListener("offline", update)
-    return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update) }
-  }, [])
-  if (online && status !== "reconnecting" && status !== "error") return null
-  return <span role="status" title="Changes stay on this device and sync when you reconnect" className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><CloudOff aria-hidden className="size-3.5" />{online && status === "error" ? "Not synced" : "Offline"}</span>
-}
-
-const INSTALL_NUDGE_KEY = "focal:install-nudge:v1"
-
-/** Reminders and a full-screen window both need the Home Screen app, and iOS never suggests it. Asks once, from the second launch. */
-function InstallNudge() {
-  const [, refresh] = useState(0)
-  const [hidden, setHidden] = useState(() => {
-    if (import.meta.env.VITE_DESKTOP || typeof localStorage === "undefined" || !matchMedia("(pointer: coarse) and (max-width: 1023px)").matches || isStandalone()) return true
-    try {
-      const seen = Number(localStorage.getItem(INSTALL_NUDGE_KEY) ?? 0)
-      if (seen >= 0) localStorage.setItem(INSTALL_NUDGE_KEY, String(seen + 1))
-      return seen < 1
-    } catch { return true }
-  })
-  useEffect(() => onInstallChange(() => refresh((value) => value + 1)), [])
-  if (hidden) return null
-  const dismiss = () => { setHidden(true); try { localStorage.setItem(INSTALL_NUDGE_KEY, "-1") } catch { /* Shows again next launch. */ } }
-  return (
-    <div className="mb-3 flex items-center gap-3 rounded-md border bg-card p-3 text-sm">
-      <p className="min-w-0 flex-1 text-muted-foreground">{canPromptInstall() ? "Install Focal for reminders and a full-screen app." : "Add Focal to your Home Screen from the Share menu for reminders and a full-screen app."}</p>
-      {canPromptInstall() ? <Button size="sm" onClick={() => void promptInstall().then(dismiss)}>Install</Button> : null}
-      <Button size="icon-sm" variant="ghost" aria-label="Dismiss install suggestion" onClick={dismiss}><X aria-hidden /></Button>
-    </div>
-  )
-}
-
-const initialRoute = typeof location === "undefined" ? null : parseRoute(location.pathname)
-
 export default function App({ embedded = false }: { embedded?: boolean } = {}) {
-  const [view, commitView] = useState<AppView>(() => embedded ? "exams" : initialRoute?.view ?? loadAppView(
-    typeof localStorage === "undefined" ? null : localStorage,
-    typeof location === "undefined" ? "" : location.search,
-  ))
-  // The tab bar answers the tap at once; the page swaps in a transition, so a slow page or chunk never freezes the tap.
-  const [navView, setNavView] = useState(view)
-  const [recordId, setRecordId] = useState(initialRoute?.id)
-  const [routeSearch, setRouteSearch] = useState(() => location.search)
-  function setView(next: AppView, id?: string, search = "") {
-    setNavView(next)
-    startTransition(() => {
-      setRecordId(id)
-      setRouteSearch(search)
-      commitView(next)
-    })
-  }
-  const fromBack = useRef(false)
-  const scrollByView = useRef(new Map<AppView, number>())
+  const { view, navView, recordId, routeSearch, setRouteSearch, setView, closeRecord, consumeBack, initialRoute } = useAppRoute(embedded, (route, search) => {
+    const params = new URLSearchParams(search)
+    if (route?.subject) setChosenSubject(route.subject)
+    setTimerMode(params.get("timer") === "exam" ? "exam" : "focus")
+    setMistakesSubject(params.get("subject") ?? "all")
+    setExamOpen(false)
+    setMistakeOpen(false)
+    setEditingAttempt(null)
+    setEditingMistake(null)
+    setMarkingAttempt(null)
+  })
   const [data, setData] = useState<AppData>(() => (typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
   const [chosenSubject, setChosenSubject] = useState<string | null>(() => {
     if (initialRoute?.subject) return initialRoute.subject
@@ -227,10 +182,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setMistakeOpen(false)
     setView(next, id, search)
   }
-  function closeRecord() {
-    setRecordId(undefined)
-    setRouteSearch("")
-  }
   function openMistakeQueue(subject = "all", skill?: string) {
     setView("mistakes", undefined, `?${new URLSearchParams({ subject, ...(skill ? { skill } : { status: "due" }) })}`)
     setMistakesSubject(subject)
@@ -247,6 +198,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     // oxlint-disable-next-line react/set-state-in-effect
     setSettingsSection("account")
     setView("settings")
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- setView only touches stable state setters
   }, [sync.passwordRecovery])
   const notificationUserId = ["sign-in-required", "restoring"].includes(sync.status) ? undefined : sync.user?.id
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
@@ -444,46 +396,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     for (const scope of ["exam", "sac"] as const) void scheduleTimerAlerts(scope, upcoming.filter((alert) => alert.scope === scope))
     return () => timers.forEach(window.clearTimeout)
   }, [data.activeExamTimer, data.activeSacTimer])
-  useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
-  // Each page remembers its own scroll; without this a new tab opens part-way down.
-  useLayoutEffect(() => { window.scrollTo(0, scrollByView.current.get(view) ?? 0) }, [view])
-  useEffect(() => {
-    const remember = () => { scrollByView.current.set(view, window.scrollY) }
-    window.addEventListener("scroll", remember, { passive: true })
-    return () => window.removeEventListener("scroll", remember)
-  }, [view])
-  // Without history entries, Android's back button quits the installed app from any page.
-  useEffect(() => {
-    if (embedded) return
-    return handleBack<AppView>((next) => {
-      const route = parseRoute(location.pathname)
-      fromBack.current = true
-      setNavView(route?.view ?? next)
-      startTransition(() => {
-        if (route?.subject) setChosenSubject(route.subject)
-        setRecordId(route?.id)
-        setRouteSearch(location.search)
-        setTimerMode(new URLSearchParams(location.search).get("timer") === "exam" ? "exam" : "focus")
-        setMistakesSubject(new URLSearchParams(location.search).get("subject") ?? "all")
-        setExamOpen(false)
-        setMistakeOpen(false)
-        setEditingAttempt(null)
-        setEditingMistake(null)
-        setMarkingAttempt(null)
-        commitView(route?.view ?? next)
-      })
-    })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- setView only touches stable state setters
-  }, [embedded])
-  useLayoutEffect(() => {
-    if (embedded) return
-    if (fromBack.current) { fromBack.current = false; return }
-    const path = pendingMarkingAttempt
-      ? routePath({ view: "exams", id: pendingMarkingAttempt.id }) + "?marking=1"
-      : routePath({ view, subject: chosenSubject ?? selectedSubject, id: recordId }) + routeSearch + location.hash
-    if (!history.state?.view) history.replaceState({ ...history.state, view }, "", path)
-    else if (location.pathname + location.search + location.hash !== path) history.pushState({ view }, "", path)
-  }, [view, embedded, chosenSubject, selectedSubject, recordId, routeSearch, pendingMarkingAttempt])
+  useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
+  useRouteUrl(embedded, view, pendingMarkingAttempt
+    ? routePath({ view: "exams", id: pendingMarkingAttempt.id }) + "?marking=1"
+    : routePath({ view, subject: chosenSubject ?? selectedSubject, id: recordId }) + routeSearch + (typeof location === "undefined" ? "" : location.hash), consumeBack)
   // Consume one-shot launch links, so a reload lands on the saved page rather than replaying the link.
   const launchAction = useRef(typeof location === "undefined" ? null : new URLSearchParams(location.search).get("action"))
   useEffect(() => {
@@ -491,7 +407,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     for (const name of ["view", "action"]) url.searchParams.delete(name)
     if (url.href !== location.href) history.replaceState(history.state, "", url)
   }, [])
-  useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
   // The tab badges follow the chosen subject; the Home Screen icon counts everything waiting.
   const appBadge = useMemo(() => getDueMistakes(data.mistakes, now).length, [data.mistakes, now]) + dueStudyTaskCount
   useEffect(() => {
@@ -973,11 +888,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function planWeeklyTasks(drafts: TaskDraft[]) {
-    setData((current) => {
-      const existing = new Set(current.learning.tasks.filter((task) => !task.archivedAt).map((task) => task.sourceId))
-      const tasks = drafts.filter((draft) => !existing.has(draft.sourceId)).map((draft) => materialiseTask({ ...draft, title: draft.title.trim() }))
-      return { ...current, learning: { ...current.learning, tasks: [...current.learning.tasks, ...tasks], updatedAt: new Date().toISOString() } }
-    })
+    setData((current) => ops.addPlannedTasks(current, drafts))
     toast.success("Review tasks added to Calendar")
   }
 
@@ -1123,12 +1034,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               />
           ) : null}
           {view === "today" ? <TodayPage now={now.getTime()} data={pageData} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} /> : null}
-          {view === "subjects" ? <div className="grid gap-6">
-            <div><h1 className="text-2xl font-semibold">{selectedSubject === "all" ? "Subjects" : selectedSubject}</h1><p className="mt-1 text-sm text-muted-foreground">Skills, assessments and goals for your next study session.</p></div>
-            <div className="flex flex-wrap gap-2">{([ ["stoplight", "Skills"], ["sacs", "Assessments"], ["goals", "Goals"] ] as const).map(([destination, label]) => <Button key={destination} variant="outline" onClick={() => setView(destination)}>{label}</Button>)}</div>
-            <div className="rounded-xl border p-4"><p className="font-medium">{dueMistakeCount} mistakes due</p><Button className="mt-3" onClick={() => openMistakeQueue(selectedSubject)}>Review due mistakes</Button></div>
-            <section className="grid gap-3"><h2 className="font-semibold">Recent attempts</h2>{pageData.attempts.length ? pageData.attempts.toSorted((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 5).map((attempt) => <Button key={attempt.id} variant="outline" className="h-auto justify-between gap-3 whitespace-normal py-3 text-left" onClick={() => openRecord("exams", attempt.id)}><span>{attempt.title || `${attempt.provider} ${attempt.examYear} ${attempt.paper}`}<span className="block text-xs font-normal text-muted-foreground">{attempt.completedAt}</span></span><span>{attempt.rawScore}/{attempt.rawMax}</span></Button>) : <p className="text-sm text-muted-foreground">No attempts yet.</p>}</section>
-          </div> : null}
+          {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} dueMistakes={dueMistakeCount} onNavigate={setView} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
           {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
@@ -1147,8 +1053,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "mistakes" ? <MistakesPage key={routeSearch} initialStatus={new URLSearchParams(routeSearch).get("status")} skillId={new URLSearchParams(routeSearch).get("skill")} workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={(subject) => { setMistakesSubject(subject); setRouteSearch(`?${new URLSearchParams({ subject })}`) }} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
             setData((current) => {
               const now = Date.now()
-              const changes = reduceMistakeReviews(subjectScoped ? subjectWorkspace(current, selectedSubject).mistakes : current.mistakes, days, target, now)
-              return { ...current, mistakeReviewPreferences: { ...normalizeMistakeReviewPreferences(current.mistakeReviewPreferences), lighterUntil: new Date(mistakeReviewDayStart(now, days)).toISOString(), lighterDailyTarget: target, updatedAt: new Date(now).toISOString() }, mistakes: current.mistakes.map((m) => changes.has(m.id) ? { ...m, dueAt: changes.get(m.id)!, updatedAt: new Date(now).toISOString() } : m) }
+              const next = ops.postponeReviews(current, days, target, now, subjectScoped ? subjectWorkspace(current, selectedSubject).mistakes : current.mistakes)
+              return { ...next, mistakeReviewPreferences: { ...normalizeMistakeReviewPreferences(current.mistakeReviewPreferences), lighterUntil: new Date(mistakeReviewDayStart(now, days)).toISOString(), lighterDailyTarget: target, updatedAt: new Date(now).toISOString() } }
             })
             toast.success("Lighter review period started")
           }} data={pageData} studies={pageStudies} onLog={() => openNewMistake()} onEdit={(mistake) => openRecord("mistakes", mistake.id)} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights: { ...mistakeInsights, subject: subjectScoped ? selectedSubject : undefined } }))} onSaveAlternativeDeck={(deck) => setData((current) => {

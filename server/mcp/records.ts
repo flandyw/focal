@@ -1,9 +1,9 @@
 import { z } from "zod"
-import { deleteSacRecord, recordAttemptResult, saveSacRecord, setExamFlag } from "../../src/lib/app-operations.js"
+import { deleteSacRecord, postponeReviews, recordAttemptResult, saveSacRecord, setExamFlag, setMistakesSuspended } from "../../src/lib/app-operations.js"
 import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
 import {
   analyseAttempt, findAttemptReference, formatExamTitle, getMistakeSchedule, MISTAKE_CATEGORIES, MISTAKE_DIFFICULTIES, normalizeMistakeReviewPreferences,
-  recordMistakeReview, reduceMistakeReviews, removeAttempt, validateAttempt, validateMistakeMarks, validateQuestionResults,
+  recordMistakeReview, removeAttempt, validateAttempt, validateMistakeMarks, validateQuestionResults,
   type AppData, type ExamAttempt, type Mistake, type QuestionResult,
 } from "../../src/lib/exam-data.js"
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty.js"
@@ -382,9 +382,8 @@ export function recordTools(define: Define) {
 
   define("set_mistakes_suspended", "Pause cards (take them out of the review queue) or return them to it.",
     { ids: z.array(z.string()).min(1).max(200), suspended: z.boolean() }, "write", async ({ ids, suspended }) => {
-      const chosen = new Set(ids)
       const updatedAt = nowIso()
-      await updateApp((data) => ({ ...data, mistakes: data.mistakes.map((m) => chosen.has(m.id) ? { ...m, suspended, updatedAt } : m) }))
+      await updateApp((data) => setMistakesSuspended(data, ids, suspended, updatedAt))
     })
 
   define("reduce_review_load", "Postpone reviews due in the next `days` days so no day exceeds `dailyTarget` cards (0 = push them all past the window). Reviews are only ever delayed.",
@@ -392,9 +391,9 @@ export function recordTools(define: Define) {
       const updatedAt = nowIso()
       let moved = 0
       await updateApp((data) => {
-        const changes = reduceMistakeReviews(data.mistakes, days, dailyTarget)
-        moved = changes.size
-        return { ...data, mistakes: data.mistakes.map((m) => changes.has(m.id) ? { ...m, dueAt: changes.get(m.id), updatedAt } : m) }
+        const next = postponeReviews(data, days, dailyTarget, Date.parse(updatedAt))
+        moved = next.mistakes.filter((m, i) => m !== data.mistakes[i]).length
+        return next
       })
       return { postponed: moved }
     })

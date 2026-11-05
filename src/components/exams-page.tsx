@@ -548,12 +548,12 @@ function RecentExams({
               const analysis = analyseAttempt(attempt, reference)
               const performance = getAttemptPerformance(attempt, data.examDifficulty)
               return (
-                <li key={attempt.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <li key={attempt.id} className="flex flex-col gap-2 px-4 py-3">
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="text-sm font-medium text-pretty">{attempt.title} · {attempt.paper}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(attempt.completedAt)}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:shrink-0 sm:justify-end">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                     {reference && analysis.grade ? (
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge variant="secondary">{analysis.grade}</Badge>
@@ -565,7 +565,7 @@ function RecentExams({
                         </span>
                       </div>
                     ) : null}
-                    <span className="whitespace-nowrap text-sm font-medium tabular-nums">
+                    <span className="text-sm font-medium tabular-nums">
                       {reference ? `${analysis.scaledScore.toFixed(1)}/${reference.maxScore}` : `${attempt.rawScore}/${attempt.rawMax}`}
                       <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                         {reference ? "scaled" : `${analysis.percentage.toFixed(1)}%`}

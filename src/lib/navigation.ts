@@ -2,37 +2,39 @@ import type { AppView } from "./app-view"
 
 type NavigationItem = { id: AppView; label: string; description: string }
 
-const ACTION_NAVIGATION: NavigationItem[] = [
-  { id: "calendar" as const, label: "Calendar", description: "Day plan for any date" },
-  { id: "exams" as const, label: "Exams", description: "Practice results and analysis" },
-  { id: "focus" as const, label: "Study timer", description: "Focus blocks and timed practice papers" },
-  { id: "friends" as const, label: "Friends", description: "Live study and a study-time leaderboard" },
-  { id: "mistakes" as const, label: "Mistakes", description: "Review your revision queue" },
-  { id: "timetable" as const, label: "Timetable", description: "Your school class cycle" },
-  { id: "chat", label: "Chat", description: "Ask about your study and make changes" },
-]
+const item = (id: AppView, label: string, description: string): NavigationItem => ({ id, label, description })
 
-const ASSESSMENT_NAVIGATION: NavigationItem[] = [
-  { id: "sacs" as const, label: "SACs", description: "Plan, time, and record SACs" },
-  { id: "library" as const, label: "VCAA library", description: "Official papers, reports, and progression" },
-]
-
-const ANALYSIS_NAVIGATION: NavigationItem[] = [
-  { id: "progress", label: "Progress", description: "Study patterns and progress graphs" },
-  { id: "stoplight" as const, label: "Stoplight", description: "Rate every skill red, amber or green" },
-  { id: "goals" as const, label: "Goals", description: "Work backwards from score targets" },
-  { id: "predictor" as const, label: "Study score", description: "Predict raw and scaled study scores" },
-  { id: "atar" as const, label: "ATAR", description: "Estimate an ATAR from study scores" },
-  { id: "vcaa" as const, label: "VCAA data", description: "Compare grades and open matching papers" },
-]
-
+// Five destinations; tools such as ATAR, VCAA data and goals sit inside the one they serve.
 export const NAVIGATION_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
-  { label: "Study", items: ACTION_NAVIGATION },
-  { label: "Assessments", items: ASSESSMENT_NAVIGATION },
-  { label: "Analysis", items: ANALYSIS_NAVIGATION },
+  { label: "Today", items: [item("today", "Today", "Today’s plan, due reviews and what’s next")] },
+  { label: "Plan", items: [
+    item("calendar", "Calendar", "Day plan for any date"),
+    item("timetable", "Timetable", "Your school class cycle"),
+  ] },
+  { label: "Practice", items: [
+    item("exams", "Practice", "Practice results and analysis"),
+    item("library", "Papers", "Official papers, reports, and progression"),
+    item("mistakes", "Mistakes", "Review your revision queue"),
+    item("focus", "Study timer", "Focus blocks and timed practice papers"),
+  ] },
+  { label: "Subjects", items: [
+    item("stoplight", "Skills", "Rate every skill red, amber or green"),
+    item("sacs", "Assessments", "Plan, time, and record SACs"),
+    item("goals", "Goals", "Work backwards from score targets"),
+  ] },
+  { label: "Progress", items: [
+    item("progress", "Progress", "Study patterns and progress graphs"),
+    item("predictor", "Study score", "Predict raw and scaled study scores"),
+    item("atar", "ATAR", "Estimate an ATAR from study scores"),
+    item("vcaa", "Benchmarks", "Compare grades and open matching papers"),
+  ] },
+  { label: "Together", items: [
+    item("friends", "Friends", "Live study and a study-time leaderboard"),
+    item("chat", "Chat", "Ask about your study and make changes"),
+  ] },
 ]
 
-const APP_NAVIGATION: NavigationItem[] = [...ACTION_NAVIGATION, ...ASSESSMENT_NAVIGATION, ...ANALYSIS_NAVIGATION]
+const APP_NAVIGATION = NAVIGATION_GROUPS.flatMap((group) => group.items)
 
 export const SETTINGS_ITEM = {
   id: "settings" as const,

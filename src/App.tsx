@@ -131,6 +131,7 @@ const AppTour = lazy(() =>
   import("./components/app-tour").then((module) => ({ default: module.AppTour })),
 )
 const ONBOARDED_KEY = "examtrack:onboarded:v1"
+const TodayPage = lazy(() => import("./components/today-page").then((module) => ({ default: module.TodayPage })))
 const CalendarPage = lazy(() =>
   import("./components/calendar-page").then((module) => ({ default: module.CalendarPage })),
 )
@@ -260,7 +261,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     studiesStatus,
     scalingStatus,
     reload: reloadReferences,
-  } = useReferenceData(view === "predictor" || view === "atar", !["calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view))
+  } = useReferenceData(view === "predictor" || view === "atar", !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view))
   useDesktopWidgets(data, studySessionSync.sessions, timetable, sync.user?.id, sync.status, setView)
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
@@ -285,7 +286,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   // Mistakes picks its own subject on the page, so it runs through the same scoping without touching the global choice.
   const [mistakesSubject, setMistakesSubject] = useState("all")
   const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
-  const globalView = ["calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
+  const globalView = ["today", "calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const showSubjectMenu = !globalView && view !== "mistakes"
   const mistakeSubjects = useMemo(() => {
@@ -1124,6 +1125,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                 onDeleteExam={deleteAttempt}
               />
           ) : null}
+          {view === "today" ? <TodayPage now={now.getTime()} data={pageData} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
           {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.

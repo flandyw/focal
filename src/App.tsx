@@ -4,7 +4,7 @@ import { lazy, startTransition, Suspense, useEffect, useLayoutEffect, useMemo, u
 import { AlertCircle, ChevronDown, CloudOff, Search, UsersRound, X } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog"
 import { Button } from "./components/ui/button"
 import { CircleAccretionDiskLoader } from "./components/ui/circle-accretion-disk-loader"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
@@ -60,6 +60,13 @@ import { applyItemLinks, collectLinkRecords, demoteGreens, progressStoplight, re
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 import type { OnboardingFinish } from "./components/onboarding-dialog"
+import { useRecovery } from "./hooks/use-recovery"
+import { deletedSince, recoverySessionCandidates, replacementData, restoreMissing, saveRecovery, validateRecovery, type RecoveryEntry } from "./lib/recovery"
+import { questionKey, unloggedMistakes } from "./lib/marking"
+import type { TaskDraft } from "./lib/learning-workspace"
+
+const RecoveryPanel = lazy(() => import("./components/recovery-panel").then((module) => ({ default: module.RecoveryPanel })))
+const MarkingMistakesDialog = lazy(() => import("./components/marking-mistakes-dialog").then((module) => ({ default: module.MarkingMistakesDialog })))
 
 const PastStudyForm = lazy(() => import("./components/planning/PastStudyForm").then((module) => ({ default: module.PastStudyForm })))
 const ProgressPage = lazy(() => import("./components/progress-page").then((module) => ({ default: module.ProgressPage })))
@@ -195,6 +202,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const [sacTimerRequest, setSacTimerRequest] = useState(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("timer") === "sac" ? 1 : 0)
   const [examOpen, setExamOpen] = useState(false)
   const [editingAttempt, setEditingAttempt] = useState<ExamAttempt | null>(null)
+  const [markingAttempt, setMarkingAttempt] = useState<ExamAttempt | null>(null)
   const [mistakeOpen, setMistakeOpen] = useState(false)
   const [mistakeAttemptId, setMistakeAttemptId] = useState<string | null>(null)
   const [editingMistake, setEditingMistake] = useState<Mistake | null>(null)
@@ -213,8 +221,19 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }, [sync.passwordRecovery])
   const notificationUserId = ["sign-in-required", "restoring"].includes(sync.status) ? undefined : sync.user?.id
   const studySessionSync = useStudySessionSync(sync.user?.id, data, setData)
+  const recoveryOwner = (() => {
+    if (sync.status === "restoring" || sync.status === "reconnecting") return null
+    if (sync.user) return sync.user.id
+    try { return localStorage.getItem("examtrack:sync:owner:v1") ? null : "local" }
+    catch { return null }
+  })()
+  const recovery = useRecovery(data, studySessionSync.sessions, recoveryOwner)
+  const recoveryOwnerRef = useRef(recoveryOwner)
+  useEffect(() => { recoveryOwnerRef.current = recoveryOwner }, [recoveryOwner])
+  const [importing, setImporting] = useState(false)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
   const [pendingImport, setPendingImport] = useState<AppData | null>(null)
+  const pendingImportOwner = useRef<string | null>(null)
   // Timer moves queue durably and reach the server a moment later: "saved" means both outboxes are empty.
   const examSaveStatus = sync.status === "synced" && studySessionSync.queued === 0
     ? "Saved to your account. Open Focal on another device and sign in to the same account to continue."
@@ -299,7 +318,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function saveSubjectLearning(update: LearningWorkspaceUpdate) {
     if (!subjectScoped) return saveLearning(update)
-    setData((current) => ({ ...current, learning: updateSubjectLearning(current.learning, selectedSubject, update) }))
+    void commitRecoverable((current) => ({ ...current, learning: updateSubjectLearning(current.learning, selectedSubject, update) }))
   }
 
   const subjectExamIds = useMemo(() => {
@@ -491,6 +510,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       setEditingMistake(null)
       setMistakeAttemptId(attempt.id)
       setMistakeOpen(true)
+    } else if (unloggedMistakes(attempt, data.mistakes).length) {
+      setMarkingAttempt(attempt)
     }
 
     if (!isNew) {
@@ -537,7 +558,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function deleteAtarEstimate(id: string) {
-    setData((current) => ({
+    void commitRecoverable((current) => ({
       ...current,
       atarEstimates: current.atarEstimates.filter((estimate) => estimate.id !== id),
       atarEstimatesUpdatedAt: new Date().toISOString(),
@@ -549,7 +570,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function saveEvents(update: (events: CalendarEvent[]) => CalendarEvent[]) {
-    setData((current) => ({ ...current, events: update(current.events) }))
+    void commitRecoverable((current) => ({ ...current, events: update(current.events) }))
   }
 
   function startFocus(subject: string | undefined, intent: string, sessionId?: string) {
@@ -601,7 +622,27 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function saveLearning(update: LearningWorkspaceUpdate) {
-    setData((current) => ({ ...current, learning: typeof update === "function" ? update(current.learning) : update }))
+    void commitRecoverable((current) => ({ ...current, learning: typeof update === "function" ? update(current.learning) : update }))
+  }
+
+  async function commitRecoverable(update: (current: AppData) => AppData) {
+    const before = latestData.current
+    const next = update(before)
+    const deleted = deletedSince(before, next, [], [])
+    if (!deleted) { setData(update); return true }
+    try {
+      await recovery.preserve(deleted.data, deleted.sessions, deleted.count)
+      if (latestData.current !== before) throw new Error("Your data changed while the recovery copy was being saved. Try deleting again.")
+      setData(next)
+      return true
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save a recovery copy. Nothing was deleted."); return false }
+  }
+
+  async function removeStudySession(session: Parameters<typeof studySessionSync.remove>[0]) {
+    const deleted = deletedSince(data, data, [session], [])
+    if (!deleted) throw new Error("This session is already deleted.")
+    await recovery.preserve(deleted.data, deleted.sessions, deleted.count)
+    await studySessionSync.remove(session)
   }
 
   function planGoal(goal: StudyGoal) {
@@ -716,6 +757,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   function saveTimedAttempt(attempt: ExamAttempt) {
     setData((current) => ({ ...current, attempts: [...current.attempts, attempt] }))
     setView("exams")
+    if (unloggedMistakes(attempt, data.mistakes).length) setMarkingAttempt(attempt)
     if (attempt.provider.trim().toLowerCase() === "vcaa") {
       toast.success("Timed VCAA exam logged", {
         description: "Your mark is ready to compare with official grade distributions.",
@@ -749,13 +791,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     toast.success(exists ? "SAC updated" : "SAC saved")
   }
 
-  function deleteSac(record: SacRecord) {
-    setData((current) => ({ ...current, sacRecords: current.sacRecords.filter((item) => item.id !== record.id), sacRecordsUpdatedAt: new Date().toISOString() }))
+  async function deleteSac(record: SacRecord) {
+    if (!await commitRecoverable((current) => ({ ...current, sacRecords: current.sacRecords.filter((item) => item.id !== record.id), sacRecordsUpdatedAt: new Date().toISOString() }))) return
     toast("SAC deleted", {
       duration: 8000,
       action: {
         label: "Undo",
-        onClick: () => setData((current) => ({ ...current, sacRecords: [...current.sacRecords, { ...record, updatedAt: new Date().toISOString() }], sacRecordsUpdatedAt: new Date().toISOString() })),
+        onClick: () => setData((current) => restoreMissing(current, { ...EMPTY_APP_DATA, sacRecords: [record] })),
       },
     })
   }
@@ -788,22 +830,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setMistakeOpen(true)
   }, [])
 
-  function deleteAttempt(attempt: ExamAttempt) {
+  async function deleteAttempt(attempt: ExamAttempt) {
     const related = data.mistakes.filter((mistake) => mistake.attemptId === attempt.id)
-    // Local first, so it is gone on the next paint. The sync effect then pushes the delete
-    // to the server from the outbox (see pushAppChanges) — nothing waits on the retry loop.
-    setData((current) => removeAttempt(current, attempt.id))
+    // Save the recovery copy before letting the normal outbox deliver the deletion.
+    if (!await commitRecoverable((current) => removeAttempt(current, attempt.id))) return
     toast("Exam deleted", {
       duration: 8000,
       action: {
         label: "Undo",
         onClick: () => {
-          const updatedAt = new Date().toISOString()
-          setData((current) => ({
-            ...current,
-            attempts: [...current.attempts, { ...attempt, updatedAt }],
-            mistakes: [...current.mistakes, ...related.map((mistake) => ({ ...mistake, updatedAt }))],
-          }))
+          setData((current) => restoreMissing(current, { ...EMPTY_APP_DATA, attempts: [attempt], mistakes: related }))
         },
       },
     })
@@ -862,9 +898,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     }))
   }
 
-  function deleteMistake(mistake: Mistake) {
-    setData((current) => ({ ...current, mistakes: current.mistakes.filter((item) => item.id !== mistake.id) }))
-    toast("Mistake deleted", { duration: 8000, action: { label: "Undo", onClick: () => setData((current) => ({ ...current, mistakes: [...current.mistakes, { ...mistake, updatedAt: new Date().toISOString() }] })) } })
+  async function deleteMistake(mistake: Mistake) {
+    if (!await commitRecoverable((current) => ({ ...current, mistakes: current.mistakes.filter((item) => item.id !== mistake.id) }))) return
+    toast("Mistake deleted", { duration: 8000, action: { label: "Undo", onClick: () => setData((current) => restoreMissing(current, { ...EMPTY_APP_DATA, attempts: data.attempts.filter((attempt) => attempt.id === mistake.attemptId), mistakes: [mistake] })) } })
   }
 
   function toggleTrackedExam(id: string) {
@@ -896,11 +932,45 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   async function importData(file: File) {
+    const owner = recoveryOwner
     try {
-      setPendingImport(parseAppDataFile(await file.text()))
+      if (file.size > 50 * 1024 * 1024) throw new Error("Choose a backup smaller than 50 MB.")
+      const text = await file.text()
+      if (recoveryOwnerRef.current !== owner) throw new Error("The account changed. Choose the file again.")
+      const parsed: unknown = JSON.parse(text)
+      if (parsed && typeof parsed === "object" && "format" in parsed && parsed.format === "focal-recovery") {
+        if (!recoveryOwner || recoveryOwnerRef.current !== recoveryOwner) throw new Error("Sign in before importing an account recovery backup.")
+        const entry = validateRecovery(parsed)
+        await saveRecovery(recoveryOwner, "backup", "Imported backup", entry.data, entry.sessions)
+        window.dispatchEvent(new Event("focal:recovery-changed"))
+        toast.success("Backup imported", { description: "Use Preview restore under Dated backups to choose what to recover." })
+      } else { pendingImportOwner.current = owner; setPendingImport(parseAppDataFile(text)) }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not import this file.")
     }
+  }
+
+  async function restoreRecovery(entry: RecoveryEntry, replace: boolean) {
+    const owner = recoveryOwner
+    if (!owner || entry.owner !== owner) throw new Error("This recovery copy belongs to a different account.")
+    const saved = validateRecovery(entry)
+    await recovery.backup("Before recovery restore")
+    if (recoveryOwnerRef.current !== owner) throw new Error("The account changed. Reopen recovery before restoring.")
+    for (const session of recoverySessionCandidates(saved, studySessionSync.sessions)) {
+      if (recoveryOwnerRef.current !== owner) throw new Error("The account changed. Recovery stopped; reopen it to continue.")
+      await studySessionSync.restore(session, saved.sessionIds[session.id], saved.createdAt)
+    }
+    if (recoveryOwnerRef.current !== owner) throw new Error("The account changed. Reopen recovery before restoring.")
+    setData((current) => replace ? replacementData(saved.data, current, canonicalNow().toISOString()) : restoreMissing(current, saved.data, canonicalNow().toISOString()))
+  }
+
+  function planWeeklyTasks(drafts: TaskDraft[]) {
+    setData((current) => {
+      const existing = new Set(current.learning.tasks.filter((task) => !task.archivedAt).map((task) => task.sourceId))
+      const tasks = drafts.filter((draft) => !existing.has(draft.sourceId)).map((draft) => materialiseTask({ ...draft, title: draft.title.trim() }))
+      return { ...current, learning: { ...current.learning, tasks: [...current.learning.tasks, ...tasks], updatedAt: new Date().toISOString() } }
+    })
+    toast.success("Review tasks added to Calendar")
   }
 
   // One subject picker: the mobile top bar and, on desktop, a quiet control above the page heading.
@@ -967,15 +1037,27 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
             <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>
           </div> : null}
-          <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open) setPendingImport(null) }}>
+          <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open && !importing) setPendingImport(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Replace current data?</AlertDialogTitle>
-                <AlertDialogDescription>{pendingImport && `This replaces everything with ${count(pendingImport.attempts.length, "exam")}, ${count(pendingImport.sacRecords.length, "SAC")}, and ${count(pendingImport.mistakes.length, "mistake")}.`}</AlertDialogDescription>
+                <AlertDialogDescription>{pendingImport && `This replaces your app data with ${count(pendingImport.attempts.length, "exam")}, ${count(pendingImport.sacRecords.length, "SAC")}, and ${count(pendingImport.mistakes.length, "mistake")}. A dated safety backup is saved first. Study sessions are separate, and timers will not be restarted.`}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { if (pendingImport) { const previous = data; setData(pendingImport); toast.success("Focal data imported", { duration: 8000, action: { label: "Undo", onClick: () => setData(previous) } }) } setPendingImport(null) }}>Replace</AlertDialogAction>
+                <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
+                <Button disabled={importing} onClick={async () => {
+                  if (!pendingImport) return
+                  setImporting(true)
+                  try {
+                    if (pendingImportOwner.current !== recoveryOwnerRef.current) throw new Error("The account changed. Choose the file again.")
+                    await recovery.backup("Before importing replacement data")
+                    const previous = data
+                    setData((current) => replacementData(pendingImport, current))
+                    setPendingImport(null)
+                    toast.success("Focal data imported", { duration: 8000, action: { label: "Undo", onClick: () => { if (pendingImportOwner.current === recoveryOwnerRef.current) setData((current) => replacementData(previous, current)) } } })
+                  } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save the safety backup. Your data has not been replaced.") }
+                  finally { setImporting(false) }
+                }}>{importing ? "Saving backup…" : "Back up and replace"}</Button>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -1032,18 +1114,18 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               />
           ) : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
-          {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={studySessionSync.remove} onConvertSession={async (session, events) => {
+          {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
             const current = latestData.current
             const next = { ...current, events: [...current.events.filter((item) => !events.some((event) => event.id === item.id)), ...events] }
             saveAppData(next)
             latestData.current = next
             setData(next)
-            try { await studySessionSync.remove(session) }
+            try { await removeStudySession(session) }
             catch (error) { throw new Error(`Events saved, but the study session could not be removed. Retry conversion to finish. ${error instanceof Error ? error.message : ""}`) }
           }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={startFocus} /> : null}
-          {view === "progress" ? <ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} attempts={pageData.attempts} onLogExam={openNewExam} onNewSession={() => setView("focus")} /> : null}
-          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={studySessionSync} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
+          {view === "progress" ? <ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} data={pageData} onPlan={planWeeklyTasks} onLogExam={openNewExam} onNewSession={() => setView("focus")} /> : null}
+          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={setTimerMode} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={{ ...studySessionSync, remove: removeStudySession }} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => setTimerMode("focus"), onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
           {view === "stoplight" ? <StoplightPage data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /> : null}
           {view === "goals" ? <GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /> : null}
           {view === "mistakes" ? <MistakesPage workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={setMistakesSubject} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
@@ -1064,7 +1146,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus") }} />}</> : null}
           {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}
-          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} /> : null}
+          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
           </div>
           </Suspense>
         </main>
@@ -1072,7 +1154,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       </SidebarInset>
       {examOpen ? (
         <Suspense fallback={null}>
-          <ExamSheet references={pageReferences} preferredSubjects={selectedSubject === "all" ? data.subjects : [selectedSubject]} comparisonYear={comparisonYear} initialAttempt={editingAttempt} onOpenChange={setExamOpen} onSave={saveAttempt} />
+          <ExamSheet attempts={data.attempts} references={pageReferences} preferredSubjects={selectedSubject === "all" ? data.subjects : [selectedSubject]} comparisonYear={comparisonYear} initialAttempt={editingAttempt} onOpenChange={setExamOpen} onSave={saveAttempt} />
         </Suspense>
       ) : null}
       {mistakeOpen ? (
@@ -1080,6 +1162,16 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <MistakeSheet open initialSubject={selectedSubject === "all" ? undefined : selectedSubject} attempts={editingMistake ? data.attempts : workspace.attempts} studies={pageStudies} initialAttemptId={mistakeAttemptId} initialMistake={editingMistake} storageUserId={sync.user?.id} items={pageData.learning.curriculumAreas.filter((item) => item.group && !item.archivedAt)} onOpenChange={setMistakeOpen} onSave={saveMistake} />
         </Suspense>
       ) : null}
+      {markingAttempt && data.attempts.some((attempt) => attempt.id === markingAttempt.id) ? <Suspense fallback={null}><MarkingMistakesDialog key={markingAttempt.id} attempt={markingAttempt} results={unloggedMistakes(markingAttempt, data.mistakes)} onClose={() => setMarkingAttempt(null)} onSave={(incoming) => {
+        const allowed = new Set(unloggedMistakes(markingAttempt, latestData.current.mistakes).map((result) => questionKey(result.label)))
+        const mistakes = incoming.filter((mistake) => allowed.has(questionKey(mistake.question)))
+        if (mistakes.length) {
+          importMistakes(mistakes)
+          const demoted = demoteGreens(data.learning, mistakes)
+          if (demoted.previous.length) { saveLearning((current) => demoteGreens(current, mistakes).learning); notifyDemoted(demoted.previous) }
+        }
+        setMarkingAttempt(null)
+      }} /></Suspense> : null}
       {trackerOpen && timetable ? (
         <Suspense fallback={null}>
         <ExamPicker

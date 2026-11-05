@@ -20,6 +20,7 @@ import { localDate } from "../lib/learning-workspace"
 import { count } from "../lib/utils"
 
 type ExamEntryProps = {
+  attempts: ExamAttempt[]
   references: AssessmentReference[]
   preferredSubjects: string[]
   comparisonYear: number
@@ -34,7 +35,7 @@ function ExamSheetBack() {
   return <DialogPrimitive.Close ref={close} hidden aria-hidden tabIndex={-1} />
 }
 
-export function ExamSheet({ references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
+export function ExamSheet({ attempts, references, preferredSubjects, comparisonYear, initialAttempt, onOpenChange, onSave }: ExamEntryProps) {
   const subjects = useMemo(
     () => prioritiseSubjects([...preferredSubjects, ...references.map((item) => item.studyName)], preferredSubjects),
     [references, preferredSubjects],
@@ -115,6 +116,9 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
     }
     const questionError = validateQuestionResults(questionResults)
     if (questionError) return setError(questionError)
+    const questionMaximum = questionResults.reduce((sum, result) => sum + result.maxMarks, 0)
+    const questionScore = questionResults.reduce((sum, result) => sum + result.marksAwarded, 0)
+    if (questionResults.length && Math.abs(questionMaximum - rawMax) < 0.01 && Math.abs(questionScore - rawScore) >= 0.01) return setError("The question marks and overall mark do not match. Use the breakdown total or correct the overall mark.")
 
     const timestamp = new Date().toISOString()
     onSave({
@@ -217,7 +221,7 @@ export function ExamSheet({ references, preferredSubjects, comparisonYear, initi
               <div className="mt-3"><PerformanceContextFields value={performanceContext} onChange={setPerformanceContext} idPrefix="exam-context" /></div>
             </CollapsibleContent></Collapsible>
             <Collapsible className="rounded-lg border px-4 py-3"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left text-sm font-medium"><span className="min-w-0">Question breakdown <span className="font-normal text-muted-foreground">{questionResults.length ? `· ${count(questionResults.length, "item")}` : "reveal coverage gaps"}</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
-              <div className="mt-3"><QuestionResultsEditor value={questionResults} onChange={setQuestionResults} /></div>
+              <div className="mt-3"><QuestionResultsEditor value={questionResults} onChange={setQuestionResults} attempts={attempts} paper={{ subject, provider, examYear, paper: showPaper ? paper : "Exam" }} onUseTotal={(earned, maximum) => { setRawScore(earned); setRawMax(maximum) }} /></div>
             </CollapsibleContent></Collapsible>
           </section>
         </FieldGroup>

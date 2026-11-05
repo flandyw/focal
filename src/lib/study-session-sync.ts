@@ -717,7 +717,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; restore: (source: CanonicalStudySession, id: string, savedAt: string) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -985,6 +985,23 @@ export function useStudySessionSync(
       action: "cancel", app: "examtrack", device_id: deviceId() })
   }
 
+  async function restore(source: CanonicalStudySession, id: string, savedAt: string) {
+    const existing = overlaySessions(canonicalSessions.current, queue.current).find((session) => session.id === id)
+    if (existing && !isDeleted(existing)) return
+    const blocks = sessionBlocks(source, Date.parse(savedAt)).map(({ start, end }) => ({ start, end }))
+    if (!blocks.length) throw new Error(`“${source.title}” has no saved time blocks to restore.`)
+    const completed = source.completed || source.started_at !== null
+    const metadata = { ...source.metadata, recoveredFrom: source.id, recoveredKind: source.kind, recoveredAt: new Date().toISOString() }
+    const next = guestSession(id, { title: source.title, subjectId: source.subject_id ?? undefined, blocks, completed, metadata })
+    if (!userId || !supabase) {
+      saveGuest([...guestPastStudy().filter((session) => session.id !== id), next])
+      return acceptSessions([next])
+    }
+    await submit({ mutation_id: id, session_id: id, expected_revision: 0, action: completed ? "log" : "create",
+      app: "examtrack", kind: "focus", phase: "focus", device_id: deviceId(),
+      title: source.title, subject_id: source.subject_id, metadata, blocks })
+  }
+
   async function merge(chosen: CanonicalStudySession[]) {
     const first = chosen[0]
     const ids = new Set(chosen.map((session) => session.id))
@@ -1054,7 +1071,7 @@ export function useStudySessionSync(
     announce()
   }
 
-  return { sessions, queued, plan, edit, remove, merge, log, control: async (session, action) => {
+  return { sessions, queued, plan, edit, remove, restore, merge, log, control: async (session, action) => {
     const current = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id)
     if (!current) throw new Error("This session no longer exists. Refresh and try again.")
     if ((action === "start" || action === "resume") && current.kind === "focus" &&

@@ -5,11 +5,15 @@ import { analyticsSessions } from "../lib/progress-utils"
 import { toast } from "sonner"
 import { examHost } from "../lib/host"
 import { AnalyticsView } from "./analytics/AnalyticsView"
-import type { ExamAttempt } from "../lib/exam-data"
+import type { AppData } from "../lib/exam-data"
+import type { TaskDraft } from "../lib/learning-workspace"
+import { WeeklyReview } from "./weekly-review"
+import { sameStudySubject } from "../lib/studySubjects"
+import { studySessionSubjects } from "../lib/sync/sessionContract"
 
 const NO_PROJECTS: import("../lib/types").Project[] = []
 
-export function ProgressPage({ sessions, attempts, subject, onNewSession, onLogExam }: { sessions: CanonicalStudySession[]; attempts: ExamAttempt[]; subject?: string; onNewSession: () => void; onLogExam: () => void }) {
+export function ProgressPage({ sessions, data, subject, onPlan, onNewSession, onLogExam }: { sessions: CanonicalStudySession[]; data: AppData; subject?: string; onPlan: (tasks: TaskDraft[]) => void; onNewSession: () => void; onLogExam: () => void }) {
   const [localSessions, setLocalSessions] = useState<StudySession[]>([])
   useEffect(() => {
     let active = true
@@ -24,5 +28,5 @@ export function ProgressPage({ sessions, attempts, subject, onNewSession, onLogE
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} attempts={attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} />
+  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} />} />
 }

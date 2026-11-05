@@ -8,6 +8,7 @@ import {
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty.js"
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression.js"
 import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types.js"
+import { getPracticeProgress, practiceFeedback, practiceMissionCards } from "../../src/lib/mistake-practice.js"
 import { demoteGreens } from "../../src/lib/stoplight.js"
 import { applyMistakeChanges, diffMistake, planTopicBackfill, revertMistakes, validateTopic, type MistakeChange } from "../../src/lib/topics.js"
 import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac.js"
@@ -106,10 +107,15 @@ export function recordTools(define: Define) {
     return { id, warnings }
   })
 
-  define("delete_exam", "Delete an exam attempt AND every mistake logged against it.", { id: z.string() }, "delete", async ({ id }) => {
-    required((await readAll()).data.attempts.find((a) => a.id === id), "exam")
-    await updateApp((data) => removeAttempt(data, id))
-  })
+  define("delete_exam", "Delete an exam attempt AND every mistake logged against it. DRY RUN BY DEFAULT: it lists the exam and the mistakes that would go; call again with dryRun false to delete.",
+    { id: z.string(), dryRun: z.boolean().default(true) }, "delete", async ({ id, dryRun }) => {
+      const { data } = await readAll()
+      const exam = required(data.attempts.find((a) => a.id === id), "exam")
+      const mistakes = data.mistakes.filter((m) => m.attemptId === id).map((m) => ({ id: m.id, question: m.question, resolved: m.resolved, reviews: m.reviewHistory?.length ?? 0 }))
+      if (dryRun) return { dryRun: true, exam: { id, title: exam.title, paper: exam.paper, completedAt: exam.completedAt }, mistakes }
+      await updateApp((data) => removeAttempt(data, id))
+      return { deleted: id, mistakesDeleted: mistakes.length }
+    })
 
   define("set_exam_flag", "Tick or untick an exam in the VCAA library. `tracked`: id is a VCE exam-timetable entry id (see vce_exam_timetable) and adds it to the calendar/day plan. `completed`: id is a VCAA resource URL (see vcaa_exam_resources) marked done without logging a mark.",
     { list: z.enum(["tracked", "completed"]), id: z.string().min(1), on: z.boolean() }, "write", async ({ list, id, on }) => {
@@ -317,18 +323,64 @@ export function recordTools(define: Define) {
     await updateApp((data) => ({ ...data, mistakes: data.mistakes.filter((m) => !gone.has(m.id)) }))
   })
 
-  define("review_mistake", "Record a spaced-repetition review of a mistake card (again/hard/good/easy) and get its new schedule.",
-    { id: z.string(), rating }, "write", async ({ id, rating }) => {
+  define("review_mistake", "Record a spaced-repetition review of a mistake card (again/hard/good/easy) and get its new schedule. Ask the student how confident they are BEFORE revealing the answer and pass it as `confidence` (feeds calibration, like the app's practice hub). Set `challenge` when the card is in this week's challenge (get_practice_progress).",
+    { id: z.string(), rating, confidence: confidence.optional(), challenge: z.boolean().default(false) }, "write", async ({ id, rating, confidence, challenge }) => {
       const completedAt = nowIso()
       let reviewed: Mistake | undefined
+      let feedback = ""
       await updateApp((data) => {
         const old = required(data.mistakes.find((m) => m.id === id), "mistake")
-        reviewed = recordMistakeReview(old, rating, completedAt, data.mistakeReviewPreferences, data.mistakes)
+        const progress = challenge ? getPracticeProgress(data.mistakes) : undefined
+        const context = { confidence, ...(progress && { challengeWeek: progress.week, challengeSize: progress.challenge.length }) }
+        reviewed = recordMistakeReview(old, rating, completedAt, data.mistakeReviewPreferences, data.mistakes, context)
+        feedback = practiceFeedback(old, rating, context)
         return { ...data, mistakes: data.mistakes.map((m) => m.id === id ? reviewed! : m) }
       })
       const schedule = getMistakeSchedule(reviewed!)
-      return { state: schedule.state, dueAt: schedule.dueAt, intervalDays: schedule.intervalDays, resolved: schedule.resolved }
+      return { state: schedule.state, dueAt: schedule.dueAt, intervalDays: schedule.intervalDays, resolved: schedule.resolved, feedback }
     })
+
+  define("get_practice_progress", "The practice hub: XP and level, today's quests, this week's challenge cards, confidence calibration (% of predictions that matched the result), established cards, and the rematch list (cards whose last review was again/hard).",
+    { subject: z.string().optional() }, "read", async ({ subject }) => {
+      const { data } = await readAll()
+      const subjectOf = (m: Mistake) => m.subject ?? data.attempts.find((a) => a.id === m.attemptId)?.subject
+      const mistakes = subject ? data.mistakes.filter((m) => subjectOf(m) === subject) : data.mistakes
+      const brief = (m: Mistake) => ({ id: m.id, subject: subjectOf(m), question: m.question, topic: m.topic })
+      const { challenge, ...progress } = getPracticeProgress(mistakes)
+      return { ...progress, challenge: challenge.map(brief), rematches: practiceMissionCards(mistakes, "rematch", new Date()).map(brief) }
+    })
+
+  /* ------------------------------------------------- insights and alt deck */
+
+  define("get_mistake_insights", "The saved mistake analysis (summary, biggest errors, next step, practice questions) and the alternative-question deck, as shown in the app.",
+    {}, "read", async () => {
+      const { data } = await readAll()
+      return { insights: data.mistakeInsights ?? null, alternativeDeck: data.alternativeMistakeDeck ?? null }
+    })
+
+  define("save_mistake_insights", "Save a mistake analysis that the app shows on the Mistakes page (replaces the previous one). Base it on list_mistakes / get_exam_analytics; every biggest error needs evidence from real cards.", {
+    subject: z.string().optional(), summary: z.string().min(1),
+    biggestErrors: z.array(z.object({ title: z.string().min(1), evidence: z.string().min(1), action: z.string().min(1) })).min(1).max(5),
+    otherInsights: z.array(z.string().min(1)).max(10).default([]), nextStep: z.string().min(1),
+    practiceQuestions: z.string().optional().describe("Markdown practice set targeting the biggest errors"),
+  }, "write", async ({ practiceQuestions, subject, ...rest }) => {
+    const generatedAt = nowIso()
+    await updateApp((data) => ({ ...data, mistakeInsights: { ...rest, subject: text(subject), practiceQuestions: text(practiceQuestions), generatedAt, questionsGeneratedAt: practiceQuestions ? generatedAt : undefined } }))
+  })
+
+  define("save_alternative_cards", "Add original alternative questions to the alternative deck: each tests the same skill as its source mistake with new values/wording (never copy exam text). A new card replaces the existing card for the same source mistake; `replace` true clears the deck first.", {
+    cards: z.array(z.object({ sourceMistakeId: z.string(), skill: z.string().min(1), question: z.string().min(1), answer: z.string().min(1).describe("Model answer or worked solution"), marks: z.number().int().min(1).max(20) })).min(1).max(100),
+    replace: z.boolean().default(false),
+  }, "write", async ({ cards, replace }) => {
+    const generatedAt = nowIso()
+    await updateApp((data) => {
+      for (const card of cards) required(data.mistakes.find((m) => m.id === card.sourceMistakeId), `mistake ${card.sourceMistakeId}`)
+      const incoming = new Set(cards.map((c) => c.sourceMistakeId))
+      const kept = replace ? [] : (data.alternativeMistakeDeck?.cards ?? []).filter((c) => !incoming.has(c.sourceMistakeId))
+      return { ...data, alternativeMistakeDeck: { cards: [...kept, ...cards.map((c) => ({ ...c, generatedAt }))], updatedAt: generatedAt } }
+    })
+    return { saved: cards.length }
+  })
 
   define("set_mistakes_suspended", "Pause cards (take them out of the review queue) or return them to it.",
     { ids: z.array(z.string()).min(1).max(200), suspended: z.boolean() }, "write", async ({ ids, suspended }) => {

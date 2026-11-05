@@ -46,7 +46,8 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
+  recovery: ReactNode
   initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
@@ -404,6 +405,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                 <Button variant="outline" onClick={onReplayOnboarding}><RotateCcw />Replay welcome</Button>
                 <Button variant="outline" onClick={onStartTour}><Compass />Take tour</Button>
               </Row>
+              {recovery}
             </Section>
           ) : null}
 

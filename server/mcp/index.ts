@@ -1,3 +1,4 @@
+import { z } from "zod"
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import { TIMETABLE_SCREENSHOT_PROMPT } from "../../src/lib/class-timetable"
@@ -17,7 +18,41 @@ export function createMcpServer() {
     server.registerResource(name, uri, { description, mimeType: "text/plain" }, (url) => ({ contents: [{ uri: url.href, text }] }))
   format("timetable-format", "focal://formats/timetable", "Format for import_class_timetable (and how to extract it from a timetable screenshot).", TIMETABLE_SCREENSHOT_PROMPT)
   format("progression-format", "focal://formats/progression", "Format for import_exam_progression.", buildProgressionPrompt([], ""))
+  registerPrompts(server)
   return server
+}
+
+/** Canned workflows so agents call the tools in the right order instead of reinventing it. */
+function registerPrompts(server: McpServer) {
+  const prompt = <S extends z.ZodRawShape>(name: string, description: string, args: S, body: (a: { [K in keyof S]: string | undefined }) => string) =>
+    server.registerPrompt(name, { description, argsSchema: args }, ((a: unknown) => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: body(a as never) } }] })) as never)
+  const opt = (describe: string) => z.string().optional().describe(describe)
+
+  prompt("daily_briefing", "Morning brief: today's plan, due reviews, upcoming SACs and VCE exams.", { date: opt("YYYY-MM-DD, default today") }, ({ date }) =>
+    `Give me my Focal briefing for ${date ?? "today"}. Call get_overview, then get_day_plan${date ? ` for ${date}` : ""}, then list_mistakes with status "due" (compact), then get_practice_progress. Summarise in this order: the one thing to do first, the day's schedule, how many reviews are due (and which subjects), SACs/exams in the next 14 days with days to go, and today's practice quests. Keep it short. Do not write anything.`)
+
+  prompt("log_paper", "Log a marked practice paper end to end: exam, mistakes, topics, stoplight links, analysis, revision plan.", {
+    subject: opt("Subject name as in get_settings"), details: opt("Paper, marks, and what went wrong, in any form"),
+  }, ({ subject, details }) =>
+    `Log this marked paper${subject ? ` for ${subject}` : ""} in Focal.${details ? `\n\n${details}` : ""}
+1. get_settings to match the subject name; ask for anything missing (provider, year, paper, raw score/max, date).
+2. save_exam with questionResults when per-question marks are known. Read \`warnings\` and fix with save_exam (same id).
+3. add_mistakes for every lost-mark question, with attemptId, topic, category, marks and difficulty when known.
+4. backfill_topics (dry run), show me the preview, then apply only if I agree.
+5. list_stoplight for the subject and link_to_stoplight the new mistakes and questions.
+6. get_exam_analytics with subject, read dataQuality.warnings, and tell me what this paper changed.
+7. Offer plan_revision.`)
+
+  prompt("review_due_cards", "Quiz the due mistake cards one at a time with confidence calibration.", {
+    subject: opt("Limit to one subject"), count: opt("How many cards, default 10"),
+  }, ({ subject, count }) =>
+    `Quiz me on my due Focal mistakes${subject ? ` for ${subject}` : ""}. Call get_practice_progress, then list_mistakes status "due"${subject ? ` subject "${subject}"` : ""}, compact false, limit ${count ?? "10"}. For each card, one at a time: show the question only, ask how confident I am (low/medium/high), wait for my answer, then reveal the correction, ask me to rate again/hard/good/easy and call review_mistake with the rating, confidence, and challenge true if the card is in this week's challenge. Share its feedback. End with how many I did and my calibration.`)
+
+  prompt("weekly_review", "Look back over the week and plan the next one.", {}, () =>
+    `Run my Focal weekly review. Call get_progress with range 7, list_exams (limit 10), get_exam_analytics, get_practice_progress, list_goals and list_stoplight. Report: study time vs the week before, papers done and marks, where marks were lost, calibration and rematches, goal gaps. Then propose next week's priorities (max 3) and offer plan_revision and plan_study_session for them. Write nothing until I agree.`)
+
+  prompt("exam_week_plan", "Plan around upcoming exams: lighten reviews and fit study between papers.", { until: opt("Last exam date, YYYY-MM-DD") }, ({ until }) =>
+    `Help me plan exam week in Focal. Call vce_exam_timetable and list_events to find my exams${until ? ` up to ${until}` : ""}, and get_settings. Propose: update_settings lighterUntil the last exam with a small lighterDailyTarget, reduce_review_load over the period, and a plan_study_session for each subject in the days before its exam (no sessions on exam mornings). Show the plan and write it only after I confirm.`)
 }
 
 /**

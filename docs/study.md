@@ -21,6 +21,57 @@ and resumes retain order; account changes and edits based on an outdated revisio
 are rejected. Folio retains a refused plan draft for explicit review and resaving.
 No new Supabase migration or notebook format is required.
 
+## Faster marking
+
+The question breakdown in both exam entry and timed-paper marking accepts pasted
+spreadsheet tables (TSV or CSV). Use `item, earned, out of, topic, feedback`, with
+the last two columns optional, or just `earned, out of`. Preview the counts and
+total before adding rows. Enter and Shift+Enter move between earned marks;
+**Use as overall mark** copies the breakdown total into the result.
+
+**Use previous layout** reuses labels, maximum marks and topic links from the most
+recently logged copy of the same subject, provider, year and paper. It starts with
+blank earned marks. Layouts are learned from your logged papers, not an official
+question-mark dataset. After saving, lost-mark questions without an existing
+mistake card can become editable revision cards. Add a diagnosis and correction
+before saving them.
+
+## Weekly review
+
+Progress starts with a Monday–Sunday review, defaulting to the last complete week.
+It combines current calendar records, study sessions, exam results and mistake
+reviews. It shows recorded work, completed tasks, recurring mistake categories,
+topic improvements with evidence counts, and subjects without completed work.
+Historical desktop-only sessions remain available in the analytics below.
+
+**Plan from this review** offers a small set of follow-up tasks. Select tasks and
+edit their title, date and duration before adding them to Calendar. Repeated adds
+skip tasks already created from that review. Weekly totals use the current records,
+so moving or deleting an old plan changes that week's review.
+
+## Backups and recovery
+
+Settings → Data includes recently deleted records and dated backups, stored in a
+separate IndexedDB database on this device and scoped to the account. The app
+keeps the first backup each active day, up to 14 backups, and up to 100 deletion
+groups for 30 days. **Back up now** creates an additional dated copy. Local
+deletions save their recovery copy before committing; deletions arriving through
+sync are recorded when this device observes them.
+
+Restore previews show the records that will return. The default restores missing
+records without overwriting current edits. Dated backups also offer replacement
+of app data and preferences, with before/after counts. Both save a safety backup
+first. Exams, mistakes, SACs, events, tasks, skills, goals and ATAR estimates retain
+their IDs. Existing study sessions are kept; missing sessions return as ordinary
+study sessions with new IDs because cancelled sessions are terminal. Live timers
+are never restarted from backups. Open intervals are frozen at capture time.
+
+Dated backup exports include app data and saved study sessions. Importing one
+adds it to Dated backups for preview; importing an older app-data JSON export
+offers replacement after saving a safety copy. Recovery history is device-local,
+so export a backup to keep a copy outside browser storage. Remote changes made
+while this device is closed are only recoverable if a prior backup contains them.
+
 Manual verification: create a multi-block plan, edit/duplicate/reschedule it, start
 it from the calendar and timer, pause/resume, reload, and finish. Verify the ID,
 subject, notes, topics and original schedule survive, and only measured time is

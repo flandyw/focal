@@ -45,6 +45,7 @@ import { WeekdayStudyChart } from "./WeekdayStudyChart"
 import { MonthlyTrends } from "./MonthlyTrends"
 
 interface AnalyticsViewProps {
+ weeklyReview?: ReactNode
  subject?: string
  sessions: StudySession[]
  attempts: ExamAttempt[]
@@ -187,6 +188,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  projects,
  onNewSession,
  onLogExam,
+ weeklyReview,
 }: AnalyticsViewProps) {
  const reduceMotion = useReducedMotion() === true
  const [range, setRange] = useState<AnalyticsRange>(30)
@@ -322,6 +324,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  <div className="h-full">
  <div className="space-y-8">
  <PageHeader title="Progress" />
+ {weeklyReview}
  <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
  </div>
  </div>
@@ -379,6 +382,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </div>
  </PageHeader>
  </motion.div>
+ {weeklyReview}
  <motion.div variants={staggerItem}>
  <KpiStrip
  totalMinutes={filteredTotalMinutes}

@@ -502,7 +502,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                   <Input id="timer-completed" type="date" max={today()} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
                 </Field>
               </div>
-              <QuestionResultsEditor value={questionResults} onChange={(results) => {
+              <QuestionResultsEditor value={questionResults} attempts={attempts} paper={session} onUseTotal={(earned, maximum) => { setRawScore(earned); setRawMax(maximum); setMarkingError(null) }} onChange={(results) => {
                 setQuestionResults(results)
                 const maximum = results.reduce((total, result) => total + result.maxMarks, 0)
                 if (Math.abs(maximum - rawMax) < 0.01) setRawScore(results.reduce((total, result) => total + result.marksAwarded, 0))

@@ -233,9 +233,10 @@ Current UTC time: ${new Date().toISOString()}. Student time zone: ${JSON.stringi
       }, { headers })
     } catch (error) {
       const status = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined
-      // Name and status only: provider messages can echo request details.
-      console.error("Overview generation failed", error instanceof Error ? error.name : "", status ?? "", error && typeof error === "object" && "finishReason" in error ? error.finishReason : "")
-      return fail(status === 401 || status === 403 ? "Your Gateway key was rejected. Replace it in Settings > AI." : "Could not write an overview right now.", 502)
+      // Name, status and finish reason only: provider messages can echo request details.
+      const reason = [error instanceof Error ? error.name : "", status, error && typeof error === "object" && "finishReason" in error ? error.finishReason : ""].filter(Boolean).join(", ")
+      console.error("Overview generation failed", reason)
+      return fail(status === 401 || status === 403 ? "Your Gateway key was rejected. Replace it in Settings > AI." : `Could not write an overview right now.${reason ? ` (${reason})` : ""}`, 502)
     }
   }
 

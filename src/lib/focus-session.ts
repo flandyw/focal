@@ -60,13 +60,13 @@ export function decideFocusSession(
   const isCounting = isFocusCounting(next)
 
   if (wasFocus && !isFocus) return open ? { action: "complete", at } : null
-  // Parked either side of the boundary: the user is looking at a stopped timer.
-  if (!wasCounting && !isCounting) return null
   if (isCounting && !open) return { action: "start", at }
   if (!open) return null
-  // A subject or intent corrected mid-block has to reach the server too, or the
+  // A subject or intent corrected mid-block, even paused, has to reach the server too, or the
   // session stays filed under whatever was picked when it began.
-  if (open.subject !== identity.subject || open.title !== identity.title) return { action: "update", at }
+  if (isFocus && (open.subject !== identity.subject || open.title !== identity.title)) return { action: "update", at }
+  // Parked either side of the boundary: the user is looking at a stopped timer.
+  if (!wasCounting && !isCounting) return null
   // The session may already carry this boundary: another device crossed it first and
   // the countdown is only catching up. Re-sending it would fight that device.
   if (isCounting && !wasCounting) return open.pausedAt !== undefined ? { action: "resume", at } : null

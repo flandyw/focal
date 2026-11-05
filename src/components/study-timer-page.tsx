@@ -51,6 +51,7 @@ import type { StudyPlan } from "../lib/study-plan"
 import {
   DEFAULT_SETTINGS,
   loadFocusSession,
+  loadOpenBlock,
   MAX_DAILY_GOAL,
   MAX_DURATION_MINUTES,
   MAX_LONG_BREAK_INTERVAL,
@@ -162,8 +163,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const [continueError, setContinueError] = useState("")
   const [editingPlan, setEditingPlan] = useState<CanonicalStudySession | null>(null)
   const [creatingPlan, setCreatingPlan] = useState(false)
-  const [subject, setSubject] = useState(preset?.subject ?? "")
-  const [intent, setIntent] = useState(preset?.intent ?? "")
+  const [subject, setSubject] = useState(() => loadFocusSession()?.subject ?? preset?.subject ?? loadOpenBlock()?.subject ?? "")
+  const [intent, setIntent] = useState(() => loadFocusSession()?.title ?? preset?.intent ?? loadOpenBlock()?.intent ?? "")
 
   const localSessionId = loadFocusSession()?.id
   const activeSession = (sessions ?? [])

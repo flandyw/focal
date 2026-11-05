@@ -50,7 +50,7 @@ export function AIOverview({ area, subject = "all", fingerprint }: { area: Overv
 
   if (!active) return null
   const overview = entry?.overview
-  if (!overview && !loading) return null
+  if (!overview && !loading && !entry?.error) return null
   return (
     <section aria-label="AI overview" aria-busy={loading} className="rounded-md border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -63,7 +63,10 @@ export function AIOverview({ area, subject = "all", fingerprint }: { area: Overv
         {overview.actions.length ? <div className="mt-3 flex flex-wrap gap-2">
           {overview.actions.map((action, index) => <Button key={index} size="sm" variant={index ? "ghost" : "outline"} onClick={() => onAction(action)}>{action.label}</Button>)}
         </div> : null}
-      </> : <div className="mt-2 grid gap-2" role="status"><span className="sr-only">Writing your overview…</span><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-4/5" /></div>}
+      </> : !loading && entry?.error ? <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <p role="alert" className="text-sm text-muted-foreground">{entry.error}</p>
+        <Button size="sm" variant="outline" onClick={() => generate(true)}>Try again</Button>
+      </div> : <div className="mt-2 grid gap-2" role="status"><span className="sr-only">Writing your overview…</span><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-4/5" /></div>}
     </section>
   )
 }

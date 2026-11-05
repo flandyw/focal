@@ -42,7 +42,7 @@ export function saveOverviewSettings(settings: OverviewSettings) {
 }
 
 /** A cached overview, or a reason not to ask again today (no key, failure backoff). */
-type Entry = { day: string; fingerprint: string; at: number; overview?: Overview; blockedUntil?: number }
+type Entry = { day: string; fingerprint: string; at: number; overview?: Overview; blockedUntil?: number; error?: string }
 const cacheKey = (userId: string, area: OverviewArea, subject: string) => `focal:ai-overview:${userId}:${area}:${subject}`
 
 export function readOverview(userId: string, area: OverviewArea, subject: string): Entry | null {
@@ -81,12 +81,18 @@ export function generateOverview(userId: string, area: OverviewArea, subject: st
         headers: { ...await chatHeaders(userId), "content-type": "application/json" },
         body: JSON.stringify({ area, subject, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(model ? { model } : {}) }),
       })
-      // A daily limit (429) won't lift soon; a missing key or other failure retries in an hour.
+      // A daily limit (429) won't lift soon and a missing key (409) needs Settings; other failures retry in a few minutes.
       if (!response.ok) {
-        entry = { day: "", fingerprint, at: 0, ...previous, blockedUntil: Date.now() + (response.status === 429 ? 12 : 1) * 3_600_000 }
+        const text = await response.text().catch(() => "")
+        entry = {
+          day: "", fingerprint, at: 0, ...previous,
+          blockedUntil: Date.now() + (response.status === 429 ? 12 * 3_600_000 : response.status === 409 ? 3_600_000 : 5 * 60_000),
+          // A missing key stays silent: overviews are on by default for accounts that never set one up.
+          error: response.status === 409 ? undefined : text && text.length < 200 ? text : "Could not write an overview right now.",
+        }
       } else entry = { day, fingerprint, at: Date.now(), overview: overviewSchema.parse(await response.json()) }
     } catch {
-      entry = { day: "", fingerprint, at: 0, ...previous, blockedUntil: Date.now() + 3_600_000 }
+      entry = { day: "", fingerprint, at: 0, ...previous, blockedUntil: Date.now() + 5 * 60_000, error: "Could not reach the overview service." }
     }
     writeOverview(userId, area, subject, entry)
     return entry

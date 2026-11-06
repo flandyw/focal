@@ -294,19 +294,18 @@ export function useStudyTimer({
   const alertQueued = useRef(false)
   const pomodoroRunning = enabled && state.running && !state.studyOvertime && state.mode !== "free"
   useEffect(() => {
-    if (!pomodoroRunning) {
+    if (!pomodoroRunning || !settings.notificationsEnabled) {
       // Only retract our own alert: opening Focal here must not cancel a timer running on another device.
       if (alertQueued.current) void scheduleTimerAlerts("focus", [])
       alertQueued.current = false
       return
     }
     endsAtRef.current = Date.now() + state.secondsLeft * 1000
-    if (!settingsRef.current.notificationsEnabled) return
     alertQueued.current = true
     void scheduleTimerAlerts("focus", [{ at: endsAtRef.current, title: state.mode === "work" ? "Focus block complete" : "Break over", body: focusAlertBody(state.mode, settingsRef.current.workMinutes), type: state.mode === "work" ? "focus" : "breaks", path: "/?timer=focus" }])
     // Ticks don't move the end time; a new block, pause, resume or changed duration does.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [pomodoroRunning, state.mode, state.cycles, state.totalSeconds])
+  }, [pomodoroRunning, state.mode, state.cycles, state.totalSeconds, settings.notificationsEnabled])
 
   useEffect(() => {
     saveSettings(settings)

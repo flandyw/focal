@@ -1,8 +1,8 @@
-import { useState, type CSSProperties } from "react"
+import { useMemo, useState, type CSSProperties } from "react"
 import { Check, ChevronDown, Clock3, LockKeyhole, Trophy } from "lucide-react"
 import { normalizeMistakeReviewPreferences, type Mistake, type MistakeReviewPreferences } from "../lib/exam-data"
 import { count } from "../lib/utils"
-import { getPracticeProgress, nextPracticeWindow, practiceMissionCards, PRACTICE_FINISHES } from "../lib/mistake-practice"
+import { type getPracticeProgress, nextPracticeWindow, practiceMissionCards, PRACTICE_FINISHES } from "../lib/mistake-practice"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
@@ -15,10 +15,10 @@ export function PracticeCelebration({ event, enabled, finish }: { event: number;
   return event > 0 && enabled ? <div key={event} aria-hidden="true" className="practice-confetti pointer-events-none absolute inset-0 z-20 overflow-hidden">{Array.from({ length: 22 }, (_, i) => <i key={i} style={{ "--particle-x": `${(i * 37 % 101)}%`, "--particle-drift": `${(i % 2 ? 1 : -1) * (20 + i * 3)}px`, "--particle-turn": `${i * 43}deg`, backgroundColor: i % 3 ? color : "var(--foreground)", animationDelay: `${i % 5 * 25}ms` } as CSSProperties} />)}</div> : null
 }
 
-type Props = { allMistakes: Mistake[]; mistakes: Mistake[]; preferences?: MistakeReviewPreferences; now: Date; onSave: (preferences: MistakeReviewPreferences) => void; onStart: (cards: Mistake[], weekly?: boolean) => void }
+type Props = { progress: ReturnType<typeof getPracticeProgress>; allMistakes: Mistake[]; mistakes: Mistake[]; preferences?: MistakeReviewPreferences; now: Date; onSave: (preferences: MistakeReviewPreferences) => void; onStart: (cards: Mistake[], weekly?: boolean) => void }
 
-export function MistakePracticeHub({ allMistakes, mistakes, preferences, now, onSave, onStart }: Props) {
-  const progress = getPracticeProgress(allMistakes, now)
+export function MistakePracticeHub({ progress, allMistakes, mistakes, preferences, now, onSave, onStart }: Props) {
+  const missions = useMemo(() => progress.quests.map((quest) => ({ ...quest, cards: practiceMissionCards(mistakes, quest.id, now) })), [progress.quests, mistakes, now])
   const settings = normalizeMistakeReviewPreferences(preferences)
   const [time, setTime] = useState(settings.practiceTime!)
   const [days, setDays] = useState(settings.practiceDays!)
@@ -30,7 +30,7 @@ export function MistakePracticeHub({ allMistakes, mistakes, preferences, now, on
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">Your practice</p><p className="mt-1 text-xl font-semibold">Level {progress.level} <span className="ml-2 text-sm font-normal text-muted-foreground">{progress.xp} XP</span></p></div><span className="rounded-full border px-3 py-1 text-xs" style={{ borderColor: finish.color }}>{finish.label} finish</span></div>
     <Progress style={{ "--primary": finish.color } as CSSProperties} value={progress.xp % 100} aria-label={`${100 - progress.xp % 100} XP to the next level`} className="practice-level" />
     <p className="text-xs text-muted-foreground">10 XP per different card each day, whatever your rating. Each daily mission earns 20 extra. {count(progress.established, "card")} established through spaced recall.</p>
-    <div className="grid gap-3 sm:grid-cols-3">{progress.quests.map((quest) => <Button key={quest.id} variant="outline" className="grid h-auto justify-items-stretch gap-2 rounded-lg p-3 text-left font-normal whitespace-normal" disabled={quest.done >= quest.target || !practiceMissionCards(mistakes, quest.id, now).length} onClick={() => onStart(practiceMissionCards(mistakes, quest.id, now).slice(0, Math.max(1, quest.target - quest.done)))}><div className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{quest.label}</span>{quest.done >= quest.target ? <Check className="size-4" aria-label="Complete" /> : <span className="text-xs tabular-nums">{Math.min(quest.done, quest.target)}/{quest.target}</span>}</div><span className="text-xs text-muted-foreground">{quest.detail}</span><Progress value={Math.min(100, quest.done / quest.target * 100)} aria-label={`${quest.label}: ${Math.min(quest.done, quest.target)} of ${quest.target}`} /></Button>)}</div>
+    <div className="grid gap-3 sm:grid-cols-3">{missions.map((quest) => <Button key={quest.id} variant="outline" className="grid h-auto justify-items-stretch gap-2 rounded-lg p-3 text-left font-normal whitespace-normal" disabled={quest.done >= quest.target || !quest.cards.length} onClick={() => onStart(quest.cards.slice(0, Math.max(1, quest.target - quest.done)))}><div className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{quest.label}</span>{quest.done >= quest.target ? <Check className="size-4" aria-label="Complete" /> : <span className="text-xs tabular-nums">{Math.min(quest.done, quest.target)}/{quest.target}</span>}</div><span className="text-xs text-muted-foreground">{quest.detail}</span><Progress value={Math.min(100, quest.done / quest.target * 100)} aria-label={`${quest.label}: ${Math.min(quest.done, quest.target)} of ${quest.target}`} /></Button>)}</div>
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 p-4"><div className="flex items-center gap-3"><Trophy className="size-5 text-muted-foreground" /><div><p className="text-sm font-medium">Weekly challenge <span className="font-normal text-muted-foreground">· 75 XP</span></p><p className="text-xs text-muted-foreground">{progress.weeklyComplete ? "Complete. Your finish is earned." : progress.challenge.length ? `${progress.weeklyCount}/${progress.weeklyTarget} cards · a mixed revisit of earlier practice` : "Opens next week after you've practised some cards."}</p></div></div><Button size="sm" variant="outline" disabled={!progress.challenge.length || progress.weeklyComplete} onClick={() => {
       const completed = new Set(allMistakes.filter((mistake) => mistake.reviewHistory?.some((review) => review.challengeWeek === progress.week)).map((mistake) => mistake.id))
       onStart(progress.challenge.filter((mistake) => !completed.has(mistake.id)), true)

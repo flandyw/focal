@@ -138,14 +138,15 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
         if (action === "convert") {
           const now = new Date().toISOString()
           const description = [notes.trim(), topics.trim() ? `Topics:\n${topics.trim()}` : ""].filter(Boolean).join("\n\n")
-          const events = await Promise.all(changes.blocks!.map(async (block, index) => {
+          const eventBlocks = studySessionSubjectSpans({ subject_id: changes.subject_id ?? null, metadata: changes.metadata ?? {} }, changes.blocks!)
+          const events = await Promise.all(eventBlocks.map(async (block, index) => {
             // ponytail: stable ids make retries safe even after reopening; one event per block preserves breaks.
             const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`focal:study-event:${session.id}:${index}`)))
             const hex = Array.from(hash.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("")
             const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`
             return {
               id,
-              title: changes.title!, description: description || undefined, subjectId: lastSubject || undefined,
+              title: changes.title!, description: description || undefined, subjectId: block.subjectId || undefined,
               startTime: block.start, endTime: block.end, eventType, location: location.trim() || undefined,
               isFinished: false, created_at: now, updated_at: now,
             }

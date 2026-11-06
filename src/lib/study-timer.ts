@@ -1,5 +1,6 @@
 import { formatTimer } from "./exam-timer"
 import type { FocusTimerSession } from "./ongoing-timers"
+import { studySessionSwitches } from "./sync/sessionContract"
 
 export { formatTimer }
 
@@ -487,6 +488,7 @@ export function loadFocusSession(): FocusTimerSession | undefined {
     id: stored.id,
     ...(Number.isSafeInteger(stored.revision) ? { revision: stored.revision as number } : {}),
     subject: stored.subject,
+    subjectSwitches: studySessionSwitches({ subject_id: stored.subject, metadata: stored }),
     provider: typeof stored.provider === "string" ? stored.provider : "Focal",
     title: stored.title,
     ...(Number.isFinite(stored.cycleNumber) ? { cycleNumber: stored.cycleNumber as number } : {}),

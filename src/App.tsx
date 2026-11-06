@@ -330,7 +330,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }, [data])
   const latestData = useRef(data)
   useEffect(() => { latestData.current = data }, [data])
-  useEffect(() => () => saveAppData(latestData.current), [])
+  useEffect(() => () => { saveAppData(latestData.current) }, [])
   useEffect(() => {
     const save = () => saveAppData(latestData.current)
     const recover = (event: Event) => {
@@ -1050,7 +1050,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
             const current = latestData.current
             const next = { ...current, events: [...current.events.filter((item) => !events.some((event) => event.id === item.id)), ...events] }
-            saveAppData(next)
+            if (!saveAppData(next)) throw new Error("The events could not be saved on this device. Your study session has been kept. Free some storage and retry conversion.")
             latestData.current = next
             setData(next)
             try { await removeStudySession(session) }

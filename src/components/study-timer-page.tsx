@@ -472,8 +472,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             {continueError ? <p className="text-sm text-destructive" role="alert">{continueError}</p> : null}
             {!state.studyOvertime && !isFreeStudy ? (
               <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => actions.addTime(5)} variant="ghost"><Plus />5 min</Button>
-                <Button onClick={() => actions.addTime(10)} variant="ghost"><Plus />10 min</Button>
+                <Button disabled={state.totalSeconds >= MAX_DURATION_MINUTES * 60} onClick={() => actions.addTime(5)} variant="ghost"><Plus />5 min</Button>
+                <Button disabled={state.totalSeconds >= MAX_DURATION_MINUTES * 60} onClick={() => actions.addTime(10)} variant="ghost"><Plus />10 min</Button>
                 {onBreak ? <Button disabled={!subjectChosen} onClick={actions.startOvertime} variant="ghost"><Coffee />Keep studying</Button> : null}
               </div>
             ) : state.studyOvertime ? (

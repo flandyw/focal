@@ -12,10 +12,10 @@ export function loadAppData(): AppData {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return EMPTY_APP_DATA
-    const parsed: unknown = JSON.parse(stored)
-    return migrateAppData(parsed) ?? EMPTY_APP_DATA
-  } catch {
-    return EMPTY_APP_DATA
+    return parseAppDataFile(stored)
+  } catch (cause) {
+    // An empty fallback would be autosaved over the only copy of the unreadable data.
+    throw new Error("Focal could not read your saved data. Export a backup before trying to recover it. Your saved file has not been replaced.", { cause })
   }
 }
 
@@ -45,6 +45,9 @@ export function parseAppDataFile(text: string): AppData {
   return migrated
 }
 
-export function downloadAppData(data: AppData) {
-  return downloadExamFile(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), `focal-${localDate(new Date())}.json`)
+/** Without a snapshot, export the original bytes even if migration or parsing failed. */
+export function downloadAppData(data?: AppData) {
+  const text = data ? JSON.stringify(data, null, 2) : localStorage.getItem(STORAGE_KEY)
+  if (text === null) throw new Error("No saved Focal data was found on this device.")
+  return downloadExamFile(new Blob([text], { type: "application/json" }), `focal-${localDate(new Date())}.json`)
 }

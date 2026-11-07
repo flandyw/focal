@@ -78,7 +78,8 @@ export function getExamEnd(entry: TimetableEntry): Date {
 }
 
 export function isUpcoming(entry: TimetableEntry, now: Date = new Date()): boolean {
-  return getExamStart(entry).getTime() > now.getTime()
+  // Keep open examination windows visible until they finish.
+  return getExamEnd(entry).getTime() >= now.getTime()
 }
 
 export function isPast(entry: TimetableEntry, now: Date = new Date()): boolean {
@@ -86,9 +87,9 @@ export function isPast(entry: TimetableEntry, now: Date = new Date()): boolean {
 }
 
 export function daysUntil(entry: TimetableEntry, now: Date = new Date()): number {
-  const start = getExamStart(entry)
-  const diffMs = start.getTime() - now.getTime()
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const start = new Date(`${entry.date}T00:00:00Z`)
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.round((start.getTime() - today) / 86_400_000)
 }
 
 export function formatExamLabel(entry: TimetableEntry): string {

@@ -263,6 +263,7 @@ function workOf(item: DayItem): { minutes: number; done: boolean } | null {
  *  minutes are carried by that sitting. */
 export function isDayItemDone(item: DayItem) {
   if (item.kind === "task") return item.status === "completed" || item.covered === true
+  if (item.kind === "event") return item.completed
   return workOf(item)?.done ?? false
 }
 
@@ -322,7 +323,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
   // A sitting the timer ran from a day-plan task carries that task's title, so it is the
   // same work twice. The sitting wins: the task reads as covered and the minutes are
   // counted once, as the ones actually logged rather than the ones intended.
-  const sittings = new Set(items.filter((item) => item.kind === "session").map((item) => item.title))
+  const sittings = new Set(items.filter((item) => item.kind === "session" && item.done).map((item) => item.title))
   for (const item of items) {
     if (item.kind === "task" && sittings.has(item.title)) item.covered = true
   }

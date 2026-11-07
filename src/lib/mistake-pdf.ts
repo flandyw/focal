@@ -80,6 +80,7 @@ ${questionToTex(mistake.questionText?.trim() || mistake.question)}
 \\usepackage[T1]{fontenc}
 \\usepackage{mathptmx}
 \\usepackage{amsmath,amssymb}
+\\DeclareUnicodeCharacter{2212}{\\ensuremath{-}}
 \\usepackage{xcolor}
 \\usepackage{fancyhdr}
 \\usepackage{array}

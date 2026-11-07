@@ -263,6 +263,7 @@ function workOf(item: DayItem): { minutes: number; done: boolean } | null {
  *  minutes are carried by that sitting. */
 export function isDayItemDone(item: DayItem) {
   if (item.kind === "task") return item.status === "completed" || item.covered === true
+  if (item.kind === "event") return item.completed
   return workOf(item)?.done ?? false
 }
 

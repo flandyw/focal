@@ -1,3 +1,4 @@
+import { differenceInCalendarDays } from "date-fns"
 import { normaliseComparisonName } from "./exam-data.js"
 
 type TimetableComponent =
@@ -70,15 +71,15 @@ export function getExamStart(entry: TimetableEntry): Date {
 }
 
 export function getExamEnd(entry: TimetableEntry): Date {
-  if (entry.dateEnd) {
-    return new Date(`${entry.dateEnd}T23:59:00`)
+  if (entry.dateEnd || (!entry.endTime && !entry.startTime)) {
+    return new Date(`${entry.dateEnd ?? entry.date}T23:59:59.999`)
   }
-  const endTime = entry.endTime ?? entry.startTime ?? "23:59"
+  const endTime = entry.endTime ?? entry.startTime
   return new Date(`${entry.date}T${endTime}:00`)
 }
 
 export function isUpcoming(entry: TimetableEntry, now: Date = new Date()): boolean {
-  return getExamStart(entry).getTime() > now.getTime()
+  return getExamEnd(entry).getTime() >= now.getTime()
 }
 
 export function isPast(entry: TimetableEntry, now: Date = new Date()): boolean {
@@ -86,9 +87,7 @@ export function isPast(entry: TimetableEntry, now: Date = new Date()): boolean {
 }
 
 export function daysUntil(entry: TimetableEntry, now: Date = new Date()): number {
-  const start = getExamStart(entry)
-  const diffMs = start.getTime() - now.getTime()
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  return differenceInCalendarDays(getExamStart(entry), now)
 }
 
 export function formatExamLabel(entry: TimetableEntry): string {

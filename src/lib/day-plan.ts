@@ -156,14 +156,12 @@ function examItem(entry: TimetableEntry): DayItem {
   }
 }
 
-// Use the same scheduler as the mistakes page and the folio app: a card with no
-// explicit due date still lands on its computed day, and mastered or paused cards
-// never join the revision queue.
-function isDueOn(mistake: Mistake, date: string) {
+// Mature cards still need spaced reviews. Carry overdue cards into today while
+// keeping other calendar days on their scheduled dates.
+function isDueOn(mistake: Mistake, date: string, today: string) {
   if (mistake.suspended) return false
-  const schedule = getMistakeSchedule(mistake)
-  if (schedule.resolved) return false
-  return localDate(new Date(schedule.dueAt)) === date
+  const due = localDate(new Date(getMistakeSchedule(mistake).dueAt))
+  return due === date || date === today && due < today
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -307,7 +305,8 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
   }
 
   let dueMistakes = 0
-  for (const mistake of data.mistakes) if (isDueOn(mistake, date)) dueMistakes++
+  const today = localDate(new Date(now))
+  for (const mistake of data.mistakes) if (isDueOn(mistake, date, today)) dueMistakes++
   if (dueMistakes) {
     items.push({
       kind: "mistakes",

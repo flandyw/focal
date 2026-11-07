@@ -1,3 +1,4 @@
+import { parseISO } from "date-fns"
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data.js"
 import { isCompletedSac, type SacRecord } from "./sac.js"
 import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable.js"
@@ -285,7 +286,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     if (projected) items.push(projected.item)
   }
   for (const attempt of data.attempts) {
-    if (localDate(new Date(attempt.completedAt)) !== date) continue
+    if (localDate(parseISO(attempt.completedAt)) !== date) continue
     items.push({
       kind: "logged-exam",
       id: attempt.id,

@@ -1048,7 +1048,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                 onDeleteExam={deleteAttempt}
               />
           ) : null}
-          {view === "today" ? <TodayPage now={now.getTime()} data={pageData} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
+          {view === "today" ? <TodayPage now={now.getTime()} data={pageData} sessions={studySessionSync.sessions} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} dueMistakes={dueMistakeCount} onNavigate={setView} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
           {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {

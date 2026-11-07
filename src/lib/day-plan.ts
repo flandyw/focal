@@ -120,7 +120,7 @@ function eventTypeLabel(type: string) {
 function eventDays(event: CalendarEvent): { first: string; last: string } {
   const start = new Date(event.startTime)
   const end = event.endTime ? new Date(event.endTime) : start
-  const last = end.getTime() > start.getTime() ? new Date(end.getTime() - 60_000) : start
+  const last = end.getTime() > start.getTime() ? new Date(end.getTime() - 1) : start
   return { first: localDate(start), last: localDate(last) }
 }
 
@@ -263,6 +263,7 @@ function workOf(item: DayItem): { minutes: number; done: boolean } | null {
  *  minutes are carried by that sitting. */
 export function isDayItemDone(item: DayItem) {
   if (item.kind === "task") return item.status === "completed" || item.covered === true
+  if (item.kind === "event") return item.completed
   return workOf(item)?.done ?? false
 }
 
@@ -278,6 +279,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     items.push(sacItem(record))
   }
   for (const event of data.events ?? []) {
+    if (event.deleted_at) continue
     const days = eventDays(event)
     if (date < days.first || date > days.last) continue
     items.push(eventItem(event, date, days))

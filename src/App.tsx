@@ -276,6 +276,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }, [data.attempts, data.mistakes])
   const workspace = useMemo(() => selectedSubject === "all" ? data : subjectWorkspace(data, selectedSubject), [data, selectedSubject])
   const pageData = useMemo(() => subjectScoped ? workspace : data.mistakeInsights?.subject ? { ...data, mistakeInsights: undefined } : data, [subjectScoped, workspace, data])
+  // Exam and SAC time already has its own rows; include focus sessions without counting assessments twice.
+  const todayData = useMemo(() => ({ ...pageData, sessions: studySessionSync.sessions.filter((session) => session.kind === "focus") }), [pageData, studySessionSync.sessions])
   const pageReferences = useMemo(() => subjectScoped ? references.filter((reference) => sameStudySubject(reference.studyName, selectedSubject)) : references, [subjectScoped, references, selectedSubject])
   const pageStudies = useMemo(() => subjectScoped ? resourceStudies.filter((study) => sameStudySubject(study.studyName, selectedSubject)) : resourceStudies, [subjectScoped, resourceStudies, selectedSubject])
   const pageSubjects = useMemo(() => subjectScoped ? [selectedSubject] : [...new Set(references.map((reference) => reference.studyName))], [subjectScoped, selectedSubject, references])
@@ -1048,7 +1050,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                 onDeleteExam={deleteAttempt}
               />
           ) : null}
-          {view === "today" ? <TodayPage now={now.getTime()} data={pageData} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
+          {view === "today" ? <TodayPage now={now.getTime()} data={todayData} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} dueMistakes={dueMistakeCount} onNavigate={setView} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
           {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {

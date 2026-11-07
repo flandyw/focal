@@ -28,7 +28,8 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
 }) {
   const today = localDate(new Date(now))
   const plan = useMemo(() => buildDayPlan(today, data, timetable, now), [today, data, timetable, now])
-  const live = plan.items.find((item) => item.kind === "session" && (item.live || item.continuable))
+  const live = plan.items.find((item) => item.kind === "session" && item.live)
+    ?? plan.items.find((item) => item.kind === "session" && item.continuable)
   const items = plan.items.filter((item) => item.kind !== "mistakes")
   const done = items.filter(isDayItemDone).length
 

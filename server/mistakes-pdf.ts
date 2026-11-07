@@ -26,7 +26,10 @@ export async function handleMistakesPdf(request: Request) {
   try {
     const compiled = await fetch(COMPILER_URL, { method: "POST", body: form, signal: AbortSignal.any([request.signal, AbortSignal.timeout(55_000)]) })
     if (!compiled.ok || !compiled.headers.get("content-type")?.includes("application/pdf")) {
-      return new Response((await compiled.text()).slice(-4_000), { status: 422 })
+      const log = await compiled.text()
+      // Start with the compiler error so the export toast doesn't truncate it behind font messages.
+      const error = log.match(/^! [\s\S]*/m)?.[0] ?? log.slice(-4_000)
+      return new Response(error.slice(0, 500), { status: 422 })
     }
     return new Response(compiled.body, {
       headers: {

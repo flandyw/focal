@@ -1,4 +1,4 @@
-import type { AppData, AssessmentReference, ExamAttempt } from "./exam-data"
+import type { AppData, AssessmentReference } from "./exam-data"
 import { predictStudyScore } from "./study-score.js"
 
 type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
@@ -175,20 +175,16 @@ export function materialiseTask(draft: TaskDraft, now = new Date()): StudyTask {
   return { ...draft, id: crypto.randomUUID(), status: "planned", createdAt: timestamp, updatedAt: timestamp }
 }
 
-function averagePercent(attempts: ExamAttempt[], subject?: string) {
-  const matched = subject ? attempts.filter((attempt) => attempt.subject.toLowerCase() === subject.toLowerCase()) : attempts
-  if (!matched.length) return null
-  return matched.reduce((total, attempt) => total + attempt.rawScore / attempt.rawMax * 100, 0) / matched.length
-}
-
 export function getGoalProgress(goal: StudyGoal, data: AppData, references: AssessmentReference[]): GoalProgress {
   let current: number | null = null
   let label = "Current"
   let evidence = "No compatible evidence yet."
   if (goal.kind === "exam-percentage") {
-    current = averagePercent(data.attempts, goal.subject)
+    const subject = goal.subject?.toLowerCase()
+    const attempts = subject ? data.attempts.filter((attempt) => attempt.subject.toLowerCase() === subject) : data.attempts
+    current = attempts.length ? attempts.reduce((total, attempt) => total + attempt.rawScore / attempt.rawMax * 100, 0) / attempts.length : null
     label = "Average exam result"
-    evidence = current === null ? evidence : `Based on ${data.attempts.filter((attempt) => !goal.subject || attempt.subject.toLowerCase() === goal.subject.toLowerCase()).length} recorded paper(s).`
+    evidence = current === null ? evidence : `Based on ${attempts.length} recorded paper(s).`
   } else if (goal.kind === "study-score" && goal.subject) {
     const prediction = predictStudyScore({ subject: goal.subject, attempts: data.attempts, references })
     current = prediction?.studyScore ?? null

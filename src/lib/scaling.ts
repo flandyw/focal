@@ -86,7 +86,7 @@ export function predictScaledStudyScore(
       const scaledScore = interpolateScaledScore(rawScore, reference.points)
       return scaledScore === null ? [] : [{ year: reference.year, scaledScore, sourceUrl: reference.sourceUrl }]
     })
-    .toSorted((first, second) => first.year - second.year)
+    .sort((first, second) => first.year - second.year)
   if (yearEstimates.length === 0) return null
   const values = yearEstimates.map((estimate) => estimate.scaledScore)
   return {

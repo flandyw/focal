@@ -32,31 +32,12 @@ function suggestionKey(suggestion: Pick<ExamSuggestion, "subject" | "provider" |
   return `${normaliseComparisonName(suggestion.subject)}\u0000${normaliseComparisonName(suggestion.provider)}\u0000${suggestion.examYear}\u0000${normaliseComparisonName(suggestion.paper)}`
 }
 
-function isCompanySuggestionLogged(suggestion: ExamSuggestion, attempts: ExamAttempt[], providerOrder?: readonly string[]) {
-  return attempts.some((attempt) =>
-    attempt.examYear === suggestion.examYear &&
-    identifyDifficultyProvider(attempt, providerOrder) === suggestion.provider &&
-    normaliseComparisonName(attempt.subject) === normaliseComparisonName(suggestion.subject) &&
-    normaliseComparisonName(attempt.paper) === normaliseComparisonName(suggestion.paper),
-  )
-}
-
-function isLogged(suggestion: ExamSuggestion, attempts: ExamAttempt[]) {
-  const subject = normaliseComparisonName(suggestion.subject)
-  const paper = normaliseComparisonName(suggestion.paper)
-  return attempts.some((attempt) =>
-    attempt.examYear === suggestion.examYear &&
-    normaliseComparisonName(attempt.provider) === "vcaa" &&
-    normaliseComparisonName(attempt.subject) === subject &&
-    normaliseComparisonName(attempt.paper) === paper,
-  )
-}
-
 export function findLatestAttempt(attempts: ExamAttempt[]) {
-  return [...attempts].toSorted((first, second) =>
-    second.completedAt.localeCompare(first.completedAt) ||
-    second.createdAt.localeCompare(first.createdAt),
-  )[0] ?? null
+  let latest: ExamAttempt | null = null
+  for (const attempt of attempts) {
+    if (!latest || (attempt.completedAt.localeCompare(latest.completedAt) || attempt.createdAt.localeCompare(latest.createdAt)) > 0) latest = attempt
+  }
+  return latest
 }
 
 export function buildExamSuggestions(
@@ -69,13 +50,17 @@ export function buildExamSuggestions(
   if (limit <= 0) return []
 
   const unique = new Map<string, ExamSuggestion>()
+  const referenceMarks = new Map<string, number>()
   for (const reference of references) {
+    const paper = formatReferenceName(reference.name)
+    const referenceKey = `${normaliseComparisonName(reference.studyName)}\u0000${normaliseComparisonName(paper)}`
+    if (!referenceMarks.has(referenceKey)) referenceMarks.set(referenceKey, reference.maxScore)
     const suggestion: ExamSuggestion = {
       subject: reference.studyName,
       provider: "VCAA",
       examYear: reference.year,
-      paper: formatReferenceName(reference.name),
-      marks: suggestionMarks(reference.studyName, formatReferenceName(reference.name), reference.maxScore),
+      paper,
+      marks: suggestionMarks(reference.studyName, paper, reference.maxScore),
     }
     const key = suggestionKey(suggestion)
     if (!unique.has(key)) unique.set(key, suggestion)
@@ -83,22 +68,20 @@ export function buildExamSuggestions(
   for (const exam of getCachedVcaaExams(studies)) {
     if (exam.year === null) continue
     const paper = getVcaaExamPaper(exam)
-    const fallbackReference = references.find((reference) =>
-      normaliseComparisonName(reference.studyName) === normaliseComparisonName(exam.studyName) &&
-      normaliseComparisonName(formatReferenceName(reference.name)) === normaliseComparisonName(paper)
-    )
+    const fallbackMarks = referenceMarks.get(`${normaliseComparisonName(exam.studyName)}\u0000${normaliseComparisonName(paper)}`)
     const suggestion: ExamSuggestion = {
       subject: exam.studyName,
       provider: "VCAA",
       examYear: exam.year,
       paper,
-      marks: suggestionMarks(exam.studyName, paper, fallbackReference?.maxScore ?? 100),
+      marks: suggestionMarks(exam.studyName, paper, fallbackMarks ?? 100),
     }
     const key = suggestionKey(suggestion)
     if (!unique.has(key)) unique.set(key, suggestion)
   }
 
-  const available = [...unique.values()].filter((suggestion) => !isLogged(suggestion, attempts))
+  const logged = new Set(attempts.filter((attempt) => normaliseComparisonName(attempt.provider) === "vcaa").map(suggestionKey))
+  const available = [...unique.values()].filter((suggestion) => !logged.has(suggestionKey(suggestion)))
   const latest = findLatestAttempt(attempts)
   const chosen: ExamSuggestion[] = []
   const chosenKeys = new Set<string>()
@@ -122,16 +105,18 @@ export function buildExamSuggestions(
     const latestPaperOrder = paperOrder(latest.paper)
     add(sameSubject.filter((item) =>
       item.examYear === latest.examYear && paperOrder(item.paper) > latestPaperOrder
-    ).toSorted(byYearAscending))
-    add(sameSubject.filter((item) => item.examYear > latest.examYear).toSorted(byYearAscending))
+    ).sort(byYearAscending))
+    add(sameSubject.filter((item) => item.examYear > latest.examYear).sort(byYearAscending))
     add(sameSubject.filter((item) =>
       item.examYear === latest.examYear && paperOrder(item.paper) <= latestPaperOrder
-    ).toSorted(byYearAscending))
-    add(sameSubject.filter((item) => item.examYear < latest.examYear).toSorted(byYearDescending))
+    ).sort(byYearAscending))
+    add(sameSubject.filter((item) => item.examYear < latest.examYear).sort(byYearDescending))
   }
 
+  if (chosen.length >= limit) return chosen
+
   const preferences = new Map(preferredSubjects.map((subject, index) => [normaliseComparisonName(subject), index]))
-  add(available.toSorted((first, second) =>
+  add(available.sort((first, second) =>
     (preferences.get(normaliseComparisonName(first.subject)) ?? Number.MAX_SAFE_INTEGER) -
       (preferences.get(normaliseComparisonName(second.subject)) ?? Number.MAX_SAFE_INTEGER) ||
     byYearDescending(first, second) ||
@@ -147,14 +132,16 @@ function getCompanyPaperTemplates(
   references: AssessmentReference[],
   latest: ExamAttempt | null,
 ) {
+  const subjectKey = normaliseComparisonName(subject)
   const subjectReferences = references.filter((reference) =>
-    normaliseComparisonName(reference.studyName) === normaliseComparisonName(subject),
+    normaliseComparisonName(reference.studyName) === subjectKey,
   )
   const templateYear = subjectReferences.some((reference) => reference.year === examYear)
     ? examYear
     : Math.max(...subjectReferences.map((reference) => reference.year), 0)
   const templates = new Map<string, { paper: string; marks: number }>()
-  for (const reference of subjectReferences.filter((reference) => reference.year === templateYear)) {
+  for (const reference of subjectReferences) {
+    if (reference.year !== templateYear) continue
     const paper = formatReferenceName(reference.name)
     templates.set(normaliseComparisonName(paper), {
       paper,
@@ -170,7 +157,7 @@ function getCompanyPaperTemplates(
       templates.set("exam", { paper: "Exam", marks: latest?.rawMax ?? 100 })
     }
   }
-  return [...templates.values()].toSorted((first, second) =>
+  return [...templates.values()].sort((first, second) =>
     paperOrder(first.paper) - paperOrder(second.paper) || first.paper.localeCompare(second.paper),
   )
 }
@@ -198,11 +185,16 @@ export function buildCompanyExamSuggestions(
   ).toReversed()
   if (!providers.length) return []
 
-  const relevantCompanyAttempts = attempts.filter((attempt) =>
-    attempt.examYear === examYear &&
-    normaliseComparisonName(attempt.subject) === normaliseComparisonName(subject) &&
-    providers.includes(identifyDifficultyProvider(attempt, resolvedSettings.providerOrder) ?? ""),
-  )
+  const subjectKey = normaliseComparisonName(subject)
+  const providerSet = new Set(providers)
+  const logged = new Set<string>()
+  const relevantCompanyAttempts = attempts.filter((attempt) => {
+    if (attempt.examYear !== examYear || normaliseComparisonName(attempt.subject) !== subjectKey) return false
+    const provider = identifyDifficultyProvider(attempt, resolvedSettings.providerOrder)
+    if (!provider || !providerSet.has(provider)) return false
+    logged.add(suggestionKey({ ...attempt, provider }))
+    return true
+  })
   const latestCompany = findLatestAttempt(relevantCompanyAttempts)
   const latestProvider = latestCompany ? identifyDifficultyProvider(latestCompany, resolvedSettings.providerOrder) : null
   const startIndex = latestProvider ? Math.max(0, providers.indexOf(latestProvider)) : 0
@@ -216,7 +208,7 @@ export function buildCompanyExamSuggestions(
     for (const template of papers) {
       if (isCurrentCompany && paperOrder(template.paper) <= latestPaperRank) continue
       const suggestion: ExamSuggestion = { subject, provider: company, examYear, ...template }
-      if (isCompanySuggestionLogged(suggestion, attempts, resolvedSettings.providerOrder)) continue
+      if (logged.has(suggestionKey(suggestion))) continue
       suggestions.push(suggestion)
       if (suggestions.length >= limit) return suggestions
     }

@@ -19,17 +19,12 @@ export function compareExamRows(left: ExamRow, right: ExamRow, key: ExamSortKey,
       || examSetCollator.compare(left.attempt.paper, right.attempt.paper)
   }
 
-  const values = {
-    completedAt: [left.attempt.completedAt, right.attempt.completedAt],
-    mark: [left.reference ? left.analysis.scaledScore : left.attempt.rawScore, right.reference ? right.analysis.scaledScore : right.attempt.rawScore],
-    result: [left.analysis.percentage, right.analysis.percentage],
-    comparison: [left.analysis.percentile, right.analysis.percentile],
-  }[key]
-  const [leftValue, rightValue] = values
+  if (key === "completedAt") return left.attempt.completedAt.localeCompare(right.attempt.completedAt) * (direction === "asc" ? 1 : -1)
+  const leftValue = key === "mark" ? left.reference ? left.analysis.scaledScore : left.attempt.rawScore
+    : key === "result" ? left.analysis.percentage : left.analysis.percentile
+  const rightValue = key === "mark" ? right.reference ? right.analysis.scaledScore : right.attempt.rawScore
+    : key === "result" ? right.analysis.percentage : right.analysis.percentile
   if (leftValue == null) return rightValue == null ? 0 : 1
   if (rightValue == null) return -1
-  const comparison = typeof leftValue === "string"
-    ? leftValue.localeCompare(rightValue as string)
-    : leftValue - (rightValue as number)
-  return comparison * (direction === "asc" ? 1 : -1)
+  return (leftValue - rightValue) * (direction === "asc" ? 1 : -1)
 }

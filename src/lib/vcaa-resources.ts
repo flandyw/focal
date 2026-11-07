@@ -91,8 +91,9 @@ export function getVcaaExamPaper(exam: Pick<VcaaExamResource, "label">) {
 export function findVcaaExamReference(exam: VcaaExamResource, references: AssessmentReference[]) {
   if (exam.year === null) return undefined
   const paper = normaliseComparisonName(getVcaaExamPaper(exam))
+  const subject = normaliseComparisonName(exam.studyName)
   return references.find((reference) => reference.year === exam.year &&
-    normaliseComparisonName(reference.studyName) === normaliseComparisonName(exam.studyName) &&
+    normaliseComparisonName(reference.studyName) === subject &&
     normaliseComparisonName(reference.name) === paper)
 }
 
@@ -100,11 +101,15 @@ export function findVcaaExamAttempt(exam: VcaaExamResource, attempts: ExamAttemp
   if (exam.year === null) return undefined
   const paper = normaliseComparisonName(getVcaaExamPaper(exam))
   const provider = normaliseComparisonName(getVcaaExamProvider(exam))
-  return attempts.filter((attempt) => attempt.examYear === exam.year &&
-    normaliseComparisonName(attempt.provider) === provider &&
-    normaliseComparisonName(attempt.subject) === normaliseComparisonName(exam.studyName) &&
-    (paper === "exam" || normaliseComparisonName(attempt.paper) === paper))
-    .toSorted((first, second) => second.completedAt.localeCompare(first.completedAt) || second.updatedAt.localeCompare(first.updatedAt))[0]
+  const subject = normaliseComparisonName(exam.studyName)
+  let latest: ExamAttempt | undefined
+  for (const attempt of attempts) {
+    if (attempt.examYear !== exam.year || normaliseComparisonName(attempt.provider) !== provider ||
+      normaliseComparisonName(attempt.subject) !== subject ||
+      (paper !== "exam" && normaliseComparisonName(attempt.paper) !== paper)) continue
+    if (!latest || (attempt.completedAt.localeCompare(latest.completedAt) || attempt.updatedAt.localeCompare(latest.updatedAt)) > 0) latest = attempt
+  }
+  return latest
 }
 
 export function isVcaaExamLogged(exam: VcaaExamResource, attempts: ExamAttempt[]) {
@@ -132,10 +137,17 @@ function companionScore(resource: VcaaResource, exam: VcaaExamResource) {
 }
 
 function pickCompanion(resources: VcaaResource[], exam: VcaaExamResource, kind: VcaaResourceKind) {
-  return resources.filter((resource) => resource.kind === kind)
-    .map((resource) => ({ resource, score: companionScore(resource, exam) }))
-    .filter((candidate) => candidate.score > 0)
-    .toSorted((first, second) => second.score - first.score || (second.resource.year ?? 0) - (first.resource.year ?? 0))[0]?.resource
+  let best: VcaaResource | undefined
+  let bestScore = 0
+  for (const resource of resources) {
+    if (resource.kind !== kind) continue
+    const score = companionScore(resource, exam)
+    if (score > 0 && (!best || score > bestScore || score === bestScore && (resource.year ?? 0) > (best.year ?? 0))) {
+      best = resource
+      bestScore = score
+    }
+  }
+  return best
 }
 
 /** Match the marking and preparation material that belongs with one official paper. */
@@ -147,7 +159,7 @@ export function getVcaaExamCompanions(exam: VcaaExamResource, study?: VcaaStudyR
   const hasExactYearReport = reportCandidates.some((candidate) => candidate.resource.year === exam.year)
   const reports = reportCandidates
     .filter((candidate) => !hasExactYearReport || candidate.resource.year === exam.year)
-    .toSorted((first, second) => second.score - first.score || first.resource.label.localeCompare(second.resource.label))
+    .sort((first, second) => second.score - first.score || first.resource.label.localeCompare(second.resource.label))
     .slice(0, 2)
     .map((candidate) => candidate.resource)
   return {
@@ -161,8 +173,9 @@ export function findVcaaExamForAttempt(attempt: ExamAttempt, studies: VcaaStudyR
   const provider = normaliseComparisonName(attempt.provider)
   if (provider !== "vcaa" && provider !== "vcaa nht") return undefined
   const paper = normaliseComparisonName(attempt.paper)
-  const candidates = getVcaaExams(studies).filter((exam) => exam.year === attempt.examYear &&
-    normaliseComparisonName(exam.studyName) === normaliseComparisonName(attempt.subject) &&
+  const subject = normaliseComparisonName(attempt.subject)
+  const candidates = getCachedVcaaExams(studies).filter((exam) => exam.year === attempt.examYear &&
+    normaliseComparisonName(exam.studyName) === subject &&
     normaliseComparisonName(getVcaaExamProvider(exam)) === provider)
   return candidates.find((exam) => normaliseComparisonName(getVcaaExamPaper(exam)) === paper) ??
     (paper === "exam" && candidates.length === 1 ? candidates[0] : undefined)

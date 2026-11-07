@@ -1,4 +1,5 @@
 import { VCE_SUBJECTS, type Project, type StudySession } from "./types.js"
+import { mergedStudyMilliseconds } from "./utils.js"
 export { cn } from "./utils.js"
 import { studySubjectId } from "./studySubjects.js"
 import { isDeleted, studySessionSubjectSpans, type CanonicalStudySession } from "./sync/sessionContract.js"
@@ -12,8 +13,13 @@ export function analyticsSessions(sessions: readonly CanonicalStudySession[]): S
     const metadata = (session.metadata.legacy_metadata && typeof session.metadata.legacy_metadata === "object" ? session.metadata.legacy_metadata : session.metadata) as Record<string, unknown>
     const reflection = metadata.reflection as StudySession["reflection"]
     const pieces = studySessionSubjectSpans(session, blocks.length ? blocks : [{ start, end: session.completed_at ?? start }])
-    return [...new Set(pieces.map((piece) => piece.subjectId))].map((subjectId, index): StudySession => {
-      const own = pieces.filter((piece) => piece.subjectId === subjectId).map((piece) => ({ start: piece.start, end: piece.end }))
+    const bySubject = new Map<string | null, { start: string; end: string }[]>()
+    for (const piece of pieces) {
+      const own = bySubject.get(piece.subjectId) ?? []
+      own.push({ start: piece.start, end: piece.end })
+      bySubject.set(piece.subjectId, own)
+    }
+    return [...bySubject].map(([subjectId, own], index): StudySession => {
       return {
         schemaVersion: 2, createdVia: "examtrack", created_at: session.created_at, id: index ? `${session.id}:${subjectId}` : session.id, title: session.title,
         reflection: reflection && typeof reflection.confidence === "number" && Number.isInteger(reflection.confidence) && reflection.confidence >= 1 && reflection.confidence <= 5 ? { confidence: reflection.confidence } : undefined,
@@ -43,24 +49,5 @@ export function getSessionEffectiveMinutes(session: StudySession): number {
   const ranges = session.execution.state === "planned"
     ? session.schedule.blocks
     : session.execution.intervals.filter((interval): interval is typeof interval & { end: string } => Boolean(interval.end))
-  if (ranges.length > 0) {
-    const sorted = ranges
-      .map((range) => ({ start: new Date(range.start).getTime(), end: new Date(range.end).getTime() }))
-      .filter((range) => Number.isFinite(range.start) && Number.isFinite(range.end) && range.end > range.start)
-      .sort((a, b) => a.start - b.start)
-    let total = 0
-    let current = sorted[0]
-    for (const range of sorted.slice(1)) {
-      if (range.start > current.end) {
-        total += current.end - current.start
-        current = range
-      } else {
-        current.end = Math.max(current.end, range.end)
-      }
-    }
-    if (current) total += current.end - current.start
-    return Math.round(total / 60000)
-  }
-  return 0
+  return Math.round(mergedStudyMilliseconds(ranges.map((range) => ({ start: Date.parse(range.start), end: Date.parse(range.end) }))) / 60000)
 }
-

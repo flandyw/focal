@@ -8,7 +8,7 @@ import { Download, ArrowDown, ArrowUp, Bell, BookOpen, CheckCircle2, Cloud, Data
 import { McpTokens } from "./mcp-tokens"
 import { toast } from "sonner"
 import { GatewaySettings } from "./gateway-settings"
-import { AIOverviewSettings } from "./ai-overview"
+import { AIOverviewSettings } from "./ai-overview-settings"
 import { AppearanceSettings } from "./appearance-settings"
 import { PushSettings } from "./push-settings"
 import { PageHeader } from "./page-header"

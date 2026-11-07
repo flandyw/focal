@@ -14,7 +14,8 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
   const first = localDate(start), last = localDate(end)
   const inWeek = (date: string) => date >= first && date < last
   const days = Array.from({ length: 7 }, (_, i) => localDate(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)))
-  const plans = days.map((day) => buildDayPlan(day, { ...data, sessions }, null))
+  const source = { ...data, sessions }
+  const plans = days.map((day) => buildDayPlan(day, source, null))
   const planned = plans.reduce((sum, plan) => sum + plan.plannedMinutes + plan.completedMinutes, 0)
   const completed = plans.reduce((sum, plan) => sum + plan.completedMinutes, 0)
   const tasks = data.learning.tasks.filter((task) => !task.archivedAt && inWeek(task.plannedFor))
@@ -24,21 +25,25 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
   const neglected = subjects.filter((subject) => {
     const scoped = subjectWorkspace(data, subject)
     const ownSessions = sessions.filter((session) => !isDeleted(session) && studySessionSubjects(session).some((id) => sameStudySubject(id, subject)))
-    return days.every((day) => buildDayPlan(day, { ...scoped, sessions: ownSessions }, null).completedCount === 0)
+    const source = { ...scoped, sessions: ownSessions }
+    return days.every((day) => buildDayPlan(day, source, null).completedCount === 0)
   })
   const attemptMap = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
   const categories = new Map<string, { subject: string; category: string; cards: number }>()
+  const windowStart = start.getTime(), windowEnd = end.getTime()
   let reviews = 0, recalled = 0
   for (const mistake of data.mistakes) {
     if (mistake.suspended) continue
-    const history = (mistake.reviewHistory ?? []).filter((review) => {
+    let shaky = false
+    for (const review of mistake.reviewHistory ?? []) {
       const at = Date.parse(review.completedAt)
-      return at >= start.getTime() && at < end.getTime()
-    })
-    reviews += history.length
-    recalled += history.filter((review) => ["good", "easy", "correct"].includes(review.result)).length
+      if (!(at >= windowStart && at < windowEnd)) continue
+      reviews++
+      if (review.result === "good" || review.result === "easy" || review.result === "correct") recalled++
+      else if (["again", "hard", "incorrect", "assisted"].includes(review.result)) shaky = true
+    }
     const created = Date.parse(mistake.createdAt)
-    if (!(created >= start.getTime() && created < end.getTime()) && !history.some((review) => ["again", "hard", "incorrect", "assisted"].includes(review.result))) continue
+    if (!(created >= windowStart && created < windowEnd) && !shaky) continue
     const subject = attemptMap.get(mistake.attemptId)?.subject ?? mistake.subject ?? "Unassigned"
     const key = `${subject}\0${mistake.category}`
     const row = categories.get(key) ?? { subject, category: mistake.category, cards: 0 }
@@ -65,9 +70,10 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const date = localDate(end < today ? today : end)
+  const existingSources = new Set(data.learning.tasks.filter((task) => !task.archivedAt).map((task) => task.sourceId))
   const suggestions: TaskDraft[] = [
     ...repeated.slice(0, 2).map((row): TaskDraft => ({ kind: "mistake-review", title: `Review ${row.category.toLowerCase()} mistakes`, subject: row.subject === "Unassigned" ? undefined : row.subject, detail: `${row.cards} different mistakes appeared in the week of ${first}. Work through the correction, then retry without notes.`, durationMinutes: 20, plannedFor: date, sourceId: `weekly:${first}:${row.subject}:${row.category}` })),
     ...neglected.slice(0, 1).map((subject): TaskDraft => ({ kind: "topic-practice", title: `Check in on ${subject}`, subject, detail: `No completed study or assessment was recorded for this subject in the week of ${first}. Choose a topic and check what you remember.`, durationMinutes: 25, plannedFor: date, sourceId: `weekly:${first}:${subject}:check-in` })),
-  ].filter((draft) => !data.learning.tasks.some((task) => !task.archivedAt && task.sourceId === draft.sourceId))
+  ].filter((draft) => !existingSources.has(draft.sourceId))
   return { first, last: days[6], planned, completed, taskCount: tasks.length, done, papers: attempts.length, reviews, recalled, repeated, improved, neglected, suggestions }
 }

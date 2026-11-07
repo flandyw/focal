@@ -45,9 +45,17 @@ export function parseScoreTable(text: string): QuestionResult[] {
 export const questionKey = (label: string) => label.normalize("NFKC").toLowerCase().replace(/\bquestion(?=\s*\d)/g, "q").replace(/[^\p{L}\p{N}]/gu, "")
 
 export function findMarkingTemplate(attempts: ExamAttempt[], paper: Pick<ExamAttempt, "subject" | "provider" | "examYear" | "paper">): ExamAttempt | undefined {
-  return attempts.filter((attempt) => attempt.questionResults?.length && attempt.examYear === paper.examYear &&
-    ["subject", "provider", "paper"].every((key) => attempt[key as "subject" | "provider" | "paper"].trim().toLowerCase() === paper[key as "subject" | "provider" | "paper"].trim().toLowerCase()))
-    .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+  const subject = paper.subject.trim().toLowerCase()
+  const provider = paper.provider.trim().toLowerCase()
+  const name = paper.paper.trim().toLowerCase()
+  let latest: ExamAttempt | undefined
+  for (const attempt of attempts) {
+    if (!attempt.questionResults?.length || attempt.examYear !== paper.examYear ||
+      attempt.subject.trim().toLowerCase() !== subject || attempt.provider.trim().toLowerCase() !== provider ||
+      attempt.paper.trim().toLowerCase() !== name) continue
+    if (!latest || attempt.updatedAt.localeCompare(latest.updatedAt) > 0) latest = attempt
+  }
+  return latest
 }
 
 export function unloggedMistakes(attempt: ExamAttempt, mistakes: Mistake[]): QuestionResult[] {

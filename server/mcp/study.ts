@@ -3,7 +3,7 @@ import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/clas
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
 import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace.js"
 import {
-  applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRating,
+  applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
 } from "../../src/lib/stoplight.js"
 import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
 import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store.js"
@@ -175,7 +175,7 @@ export function studyTools(define: Define) {
         const known = new Set(data.learning.curriculumAreas.map((item) => item.id))
         const missing = ratings.find((r) => !known.has(r.id))
         if (missing) throw new Error(`No stoplight item with id ${missing.id}.`)
-        return { ...data, learning: ratings.reduce((learning, r) => setRating(learning, r.id, r.rating), data.learning) }
+        return { ...data, learning: setRatings(data.learning, new Map(ratings.map(({ id, rating }) => [id, rating]))) }
       })
     })
 

@@ -5,6 +5,7 @@ import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus
 import { canContinue, isDeleted, isPaused, isRunning, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
 import { subjectNameFor } from "./class-timetable.js"
 import { VCE_SUBJECTS, type CalendarEvent } from "./types.js"
+import { mergedStudyMilliseconds } from "./utils.js"
 
 /** The day plan reads the records the app already keeps. It never stores a
  *  second copy, so a task edited anywhere is edited on the calendar too. */
@@ -60,6 +61,7 @@ export type CalendarDay = {
 }
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+const DAY_ITEM_ORDER: Record<DayItem["kind"], number> = { task: 0, sac: 1, event: 2, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
 
 export function weekdayLabels() {
   return WEEKDAYS
@@ -76,7 +78,7 @@ function startOfWeek(date: Date) {
   return shiftDays(date, -((date.getDay() + 6) % 7))
 }
 
-function timeOf(iso: string) {
+function timeOf(iso: string | number) {
   const parsed = new Date(iso)
   if (!Number.isFinite(parsed.getTime())) return undefined
   return parsed.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
@@ -141,13 +143,14 @@ function eventItem(event: CalendarEvent, date: string, days: { first: string; la
 
 function examItem(entry: TimetableEntry): DayItem {
   const start = getExamStart(entry)
-  const multiDay = Math.round((getExamEnd(entry).getTime() - start.getTime()) / 86_400_000) > 0
+  const elapsed = getExamEnd(entry).getTime() - start.getTime()
+  const multiDay = Math.round(elapsed / 86_400_000) > 0
   return {
     kind: "exam",
     id: entry.id,
     title: formatExamLabel(entry),
     detail: multiDay ? "Examination period" : entry.paper ? "Examination" : "Examination period",
-    minutes: Math.max(0, Math.round((getExamEnd(entry).getTime() - start.getTime()) / 60_000)),
+    minutes: Math.max(0, Math.round(elapsed / 60_000)),
     startTime: entry.startTime ?? "",
     multiDay,
   }
@@ -173,34 +176,9 @@ function subjectLabel(id: string | undefined): string {
   return VCE_SUBJECTS.find((subject) => subject.id === id)?.name ?? id
 }
 
-/** Overlapping ranges count once, exactly as the desktop's effective minutes do. */
-function mergedMinutes(ranges: readonly { start: string; end: string }[]): number {
-  const sorted = ranges
-    .map((range) => ({ start: new Date(range.start).getTime(), end: new Date(range.end).getTime() }))
-    .filter((range) => Number.isFinite(range.start) && Number.isFinite(range.end) && range.end > range.start)
-    .sort((a, b) => a.start - b.start)
-  let total = 0
-  let current = sorted[0]
-  for (const range of sorted.slice(1)) {
-    if (range.start > current.end) {
-      total += current.end - current.start
-      current = range
-    } else {
-      current.end = Math.max(current.end, range.end)
-    }
-  }
-  if (current) total += current.end - current.start
-  return total / 60000
-}
-
 function sessionSchedule(session: CanonicalStudySession) {
-  const nested = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
-  const legacy = isRecord(nested) ? nested : {}
-  const subjectIds = studySessionSubjects(session)
-  // A session's blocks are its segments, done or not. Only a row with none (a timer still on its
-  // first interval, or an old row) falls back to a stored schedule, then to start plus an hour,
-  // which is where the desktop files such a sitting.
-  const closed = session.segments.flatMap((segment) => segment.ended_at ? [{ start: segment.started_at, end: segment.ended_at }] : [])
+  const legacy = isRecord(session.metadata.legacy_metadata) ? session.metadata.legacy_metadata : session.metadata
+  // Rows without segments fall back to their stored schedule, then to start plus an hour.
   const stored = isRecord(legacy.schedule) && Array.isArray(legacy.schedule.blocks)
     ? legacy.schedule.blocks.flatMap((block) => {
       if (!isRecord(block) || typeof block.start !== "string" || typeof block.end !== "string") return []
@@ -208,9 +186,7 @@ function sessionSchedule(session: CanonicalStudySession) {
     })
     : []
   const start = session.started_at ?? session.created_at
-  const schedule = closed.length > 0 ? closed : stored.length > 0 ? stored
-    : [{ start, end: new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString() }]
-  return { subjectIds, schedule, closed }
+  return stored.length > 0 ? stored : [{ start, end: new Date(Date.parse(start) + 60 * 60 * 1000).toISOString() }]
 }
 
 /** Where a session sits on a day's timeline. An open interval runs to `now`. `done` is the
@@ -222,29 +198,28 @@ export function sessionBlocks(session: CanonicalStudySession, now = Date.now()):
     const start = session.segment_started_at
     return isRunning(session) && start ? [{ start, end: new Date(Math.max(now, Date.parse(start))).toISOString(), done: false, live: true }] : []
   }
-  // A paused timer with all empty intervals pruned has no study to draw.
-  if (session.started_at !== null && session.segments.length === 0 && session.accumulated_active_ms === 0 && !isRunning(session)) return []
   const blocks = session.segments.map((segment) => ({
     start: segment.started_at,
     end: segment.ended_at ?? new Date(Math.max(now, Date.parse(segment.started_at))).toISOString(),
     done: session.completed,
     live: segment.ended_at === null,
   }))
-  return blocks.length > 0 ? blocks : sessionSchedule(session).schedule.map((block) => ({ ...block, done: session.completed, live: false }))
+  return blocks.length > 0 ? blocks : sessionSchedule(session).map((block) => ({ ...block, done: session.completed, live: false }))
 }
 
 /** Count only the blocks touching this local day, including work in an unfinished timer.
  *  Keep fractional minutes until the day's total is rounded, so short blocks add up. */
 export function sessionItem(session: CanonicalStudySession, date: string, now = Date.now()): { item: DayItem; date: string } | null {
   if (isDeleted(session)) return null
-  const { subjectIds } = sessionSchedule(session)
+  const subjectIds = studySessionSubjects(session)
   const dayStart = new Date(`${date}T00:00:00`)
   const dayEnd = new Date(dayStart)
   dayEnd.setDate(dayEnd.getDate() + 1)
+  const first = dayStart.getTime(), last = dayEnd.getTime()
   const blocks = sessionBlocks(session, now).flatMap((block) => {
-    const start = Math.max(dayStart.getTime(), Date.parse(block.start))
-    const end = Math.min(dayEnd.getTime(), Date.parse(block.end))
-    return end > start ? [{ start: new Date(start).toISOString(), end: new Date(end).toISOString() }] : []
+    const start = Math.max(first, Date.parse(block.start))
+    const end = Math.min(last, Date.parse(block.end))
+    return end > start ? [{ start, end }] : []
   })
   if (!blocks.length) return null
   return {
@@ -254,7 +229,7 @@ export function sessionItem(session: CanonicalStudySession, date: string, now = 
       id: session.id,
       title: session.title,
       detail: subjectIds.map(subjectLabel).filter(Boolean).join(" · ") || subjectLabel(session.subject_id ?? undefined),
-      minutes: mergedMinutes(blocks),
+      minutes: mergedStudyMilliseconds(blocks) / 60000,
       startTime: timeOf(blocks[0].start) ?? "",
       done: session.completed || session.started_at !== null,
       live: !session.completed && (isRunning(session) || isPaused(session)),
@@ -331,15 +306,16 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     items.push(examItem(entry))
   }
 
-  const dueMistakes = data.mistakes.filter((mistake) => isDueOn(mistake, date))
-  if (dueMistakes.length) {
+  let dueMistakes = 0
+  for (const mistake of data.mistakes) if (isDueOn(mistake, date)) dueMistakes++
+  if (dueMistakes) {
     items.push({
       kind: "mistakes",
       id: `mistakes:${date}`,
-      title: dueMistakes.length === 1 ? "1 mistake due for review" : `${dueMistakes.length} mistakes due for review`,
+      title: dueMistakes === 1 ? "1 mistake due for review" : `${dueMistakes} mistakes due for review`,
       detail: "From your spaced revision queue",
       minutes: 0,
-      count: dueMistakes.length,
+      count: dueMistakes,
     })
   }
 
@@ -350,20 +326,21 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
   for (const item of items) {
     if (item.kind === "task" && sittings.has(item.title)) item.covered = true
   }
-  const totals = items.reduce(
-    (total, item) => {
-      const work = workOf(item)
-      if (!work) return total
-      return work.done
-        ? { ...total, completedMinutes: total.completedMinutes + work.minutes, completedCount: total.completedCount + 1 }
-        : { ...total, plannedMinutes: total.plannedMinutes + work.minutes, plannedCount: total.plannedCount + 1 }
-    },
-    { plannedMinutes: 0, completedMinutes: 0, plannedCount: 0, completedCount: 0 },
-  )
+  const totals = { plannedMinutes: 0, completedMinutes: 0, plannedCount: 0, completedCount: 0 }
+  for (const item of items) {
+    const work = workOf(item)
+    if (!work) continue
+    if (work.done) {
+      totals.completedMinutes += work.minutes
+      totals.completedCount++
+    } else {
+      totals.plannedMinutes += work.minutes
+      totals.plannedCount++
+    }
+  }
 
   // Work first, then anything fixed in time, then what is already on record, then the queue.
-  const order: Record<DayItem["kind"], number> = { task: 0, sac: 1, event: 2, exam: 2, session: 3, "logged-exam": 4, mistakes: 5 }
-  items.sort((a, b) => order[a.kind] - order[b.kind] || b.minutes - a.minutes)
+  items.sort((a, b) => DAY_ITEM_ORDER[a.kind] - DAY_ITEM_ORDER[b.kind] || b.minutes - a.minutes)
   return {
     date,
     items,
@@ -371,7 +348,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     plannedMinutes: Math.round(totals.plannedMinutes),
     completedMinutes: Math.round(totals.completedMinutes),
     totalCount: totals.plannedCount + totals.completedCount,
-    dueMistakes: dueMistakes.length,
+    dueMistakes,
   }
 }
 
@@ -380,10 +357,11 @@ export function buildCalendarMonth(month: Date, data: DayPlanSource, timetable: 
   const first = new Date(month.getFullYear(), month.getMonth(), 1)
   const cursor = startOfWeek(first)
   const today = localDate(now)
+  const timestamp = now.getTime()
   const grid = Array.from({ length: 42 }, (_, index) => {
     const date = shiftDays(cursor, index)
     const key = localDate(date)
-    const plan = buildDayPlan(key, data, timetable, now.getTime())
+    const plan = buildDayPlan(key, data, timetable, timestamp)
     return {
       date: key,
       day: date.getDate(),
@@ -406,7 +384,7 @@ export function shiftMonth(month: Date, amount: number) {
 export function overdueTasks(tasks: StudyTask[], before: string): StudyTask[] {
   return tasks
     .filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor < before)
-    .toSorted((a, b) => a.plannedFor.localeCompare(b.plannedFor) || a.createdAt.localeCompare(b.createdAt))
+    .sort((a, b) => a.plannedFor.localeCompare(b.plannedFor) || a.createdAt.localeCompare(b.createdAt))
 }
 
 /* ------------------------------------------------------------------ */

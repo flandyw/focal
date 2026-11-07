@@ -314,7 +314,8 @@ function pacedMistakeDueAt(id: string, due: number, settings: MistakeReviewPrefe
   const until = settings.lighterUntil ? Date.parse(settings.lighterUntil) : 0
   if (until <= now || due >= until) return new Date(due).toISOString()
   const occupied = new Map<number, number>()
-  for (const m of mistakes.filter((m) => !m.suspended && m.id !== id)) {
+  for (const m of mistakes) {
+    if (m.suspended || m.id === id) continue
     const slot = reviewDaySlot(Date.parse(getMistakeSchedule(m).dueAt), now)
     occupied.set(slot, (occupied.get(slot) ?? 0) + 1)
   }
@@ -329,24 +330,26 @@ function pacedMistakeDueAt(id: string, due: number, settings: MistakeReviewPrefe
 export function reduceMistakeReviews(mistakes: Mistake[], days: number, dailyTarget: number, now = Date.now()): Map<string, string> {
   if (!Number.isInteger(days) || days < 1 || days > 90 || !Number.isInteger(dailyTarget) || dailyTarget < 0 || dailyTarget > 100) throw new Error("Invalid review reduction")
   const horizon = mistakeReviewDayStart(now, days)
-  const active = mistakes.filter((m) => !m.suspended)
-  const due = (m: Mistake) => Date.parse(getMistakeSchedule(m).dueAt)
-  const selected = active.filter((m) => due(m) < horizon).toSorted((a, b) => due(a) - due(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const active = mistakes.filter((mistake) => !mistake.suspended)
+    .map((mistake) => ({ id: mistake.id, due: Date.parse(getMistakeSchedule(mistake).dueAt) }))
+  const selected = active.filter(({ due }) => due < horizon)
+    .sort((a, b) => a.due - b.due || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   const occupied = new Map<number, number>()
-  for (const m of active.filter((m) => due(m) >= horizon)) {
-    const day = reviewDaySlot(due(m), now)
+  for (const { due } of active) {
+    if (!(due >= horizon)) continue
+    const day = reviewDaySlot(due, now)
     occupied.set(day, (occupied.get(day) ?? 0) + 1)
   }
   const changes = new Map<string, string>()
+  const capacity = dailyTarget === 0 ? 10 : dailyTarget
   let slot = 0
-  for (const m of selected) {
-    slot = Math.max(slot, reviewDaySlot(due(m), now))
+  for (const { id, due } of selected) {
+    slot = Math.max(slot, reviewDaySlot(due, now))
     if (dailyTarget === 0) slot = Math.max(slot, days)
-    const capacity = dailyTarget === 0 ? 10 : dailyTarget
     while ((occupied.get(slot) ?? 0) >= capacity) slot++
     occupied.set(slot, (occupied.get(slot) ?? 0) + 1)
-    const next = slot === 0 ? due(m) : Math.max(due(m), mistakeReviewDayStart(now, slot))
-    if (next > due(m)) changes.set(m.id, new Date(next).toISOString())
+    const next = slot === 0 ? due : Math.max(due, mistakeReviewDayStart(now, slot))
+    if (next > due) changes.set(id, new Date(next).toISOString())
   }
   return changes
 }
@@ -378,7 +381,12 @@ function inferReviewState(mistake: Mistake): MistakeReviewState {
   if (!history.length) return mistake.resolved ? "review" : "new"
   const latest = normalizeReviewRating(history.at(-1)!.result)
   if (latest === "again") return history.length === 1 ? "learning" : "relearning"
-  if (mistake.resolved || history.filter((review) => ["good", "easy"].includes(normalizeReviewRating(review.result))).length >= 2) return "review"
+  if (mistake.resolved) return "review"
+  let recalled = 0
+  for (const review of history) {
+    const rating = normalizeReviewRating(review.result)
+    if ((rating === "good" || rating === "easy") && ++recalled >= 2) return "review"
+  }
   return "learning"
 }
 
@@ -395,10 +403,10 @@ function inferIntervalDays(mistake: Mistake): number {
 function inferCount(mistake: Mistake, key: "repetitions" | "lapses") {
   const explicit = mistake[key]
   if (typeof explicit === "number" && Number.isInteger(explicit) && explicit >= 0) return explicit
-  return (mistake.reviewHistory ?? []).filter((review) => {
+  return (mistake.reviewHistory ?? []).reduce((total, review) => {
     const rating = normalizeReviewRating(review.result)
-    return key === "lapses" ? rating === "again" : rating !== "again"
-  }).length
+    return total + ((key === "lapses" ? rating === "again" : rating !== "again") ? 1 : 0)
+  }, 0)
 }
 
 export function getMistakeSchedule(mistake: Mistake): MistakeSchedule {
@@ -410,7 +418,7 @@ export function getMistakeSchedule(mistake: Mistake): MistakeSchedule {
   let dueAt = mistake.dueAt
   if (!dueAt) {
     const base = mistake.lastReviewedAt ?? mistake.reviewHistory?.at(-1)?.completedAt ?? mistake.updatedAt ?? mistake.createdAt
-    dueAt = new Date(new Date(base).getTime() + intervalDays * DAY_MS).toISOString()
+    dueAt = new Date(Date.parse(base) + intervalDays * DAY_MS).toISOString()
   }
   return {
     state,
@@ -470,7 +478,8 @@ export function previewMistakeReview(
     repetitions += 1
   }
 
-  const elapsed = mistake.lastReviewedAt ? Math.max(0, Date.parse(completedAt) - Date.parse(mistake.lastReviewedAt)) / DAY_MS : 0
+  const completedTime = Date.parse(completedAt)
+  const elapsed = mistake.lastReviewedAt ? Math.max(0, completedTime - Date.parse(mistake.lastReviewedAt)) / DAY_MS : 0
   if (rating === "good" || rating === "easy")
     intervalDays = Math.round(intervalDays * settings.spacingMultiplier + Math.max(0, elapsed - current.intervalDays) * 0.25)
   intervalDays = rating === "again" ? settings.retryHours / 24 : Math.min(settings.maximumIntervalDays, Math.max(1, intervalDays))
@@ -478,7 +487,7 @@ export function previewMistakeReview(
   return {
     rating,
     state,
-    dueAt: pacedMistakeDueAt(mistake.id, Date.parse(completedAt) + intervalDays * DAY_MS, settings, mistakes, Date.parse(completedAt)),
+    dueAt: pacedMistakeDueAt(mistake.id, completedTime + intervalDays * DAY_MS, settings, mistakes, completedTime),
     intervalDays,
     easeFactor: Math.round(easeFactor * 100) / 100,
     repetitions,
@@ -519,12 +528,22 @@ export function recordMistakeReview(
   }
 }
 
+/** Badges need a count, so skip constructing and sorting a review queue. */
+export function countDueMistakes(mistakes: Mistake[], now = new Date()): number {
+  const timestamp = now.getTime()
+  let count = 0
+  for (const mistake of mistakes) {
+    if (!mistake.suspended && Date.parse(mistake.dueAt || getMistakeSchedule(mistake).dueAt) <= timestamp) count++
+  }
+  return count
+}
+
 export function getDueMistakes(mistakes: Mistake[], now = new Date()): Mistake[] {
   const timestamp = now.getTime()
   return mistakes.filter((mistake) => !mistake.suspended)
     .map((mistake) => ({ mistake, dueAt: getMistakeSchedule(mistake).dueAt }))
-    .filter(({ dueAt }) => new Date(dueAt).getTime() <= timestamp)
-    .toSorted((first, second) => first.dueAt.localeCompare(second.dueAt))
+    .filter(({ dueAt }) => Date.parse(dueAt) <= timestamp)
+    .sort((first, second) => first.dueAt.localeCompare(second.dueAt))
     .map(({ mistake }) => mistake)
 }
 
@@ -565,7 +584,7 @@ export function buildCoverage(attempts: ExamAttempt[]): CoverageArea[] {
   return [...areas.values()].map((area) => ({
     ...area,
     percentage: area.available ? (area.earned / area.available) * 100 : 0,
-  })).toSorted((first, second) => first.percentage - second.percentage || first.areaOfStudy.localeCompare(second.areaOfStudy))
+  })).sort((first, second) => first.percentage - second.percentage || first.areaOfStudy.localeCompare(second.areaOfStudy))
 }
 
 export function formatExamTitle(provider: string, examYear: number, subject: string): string {
@@ -776,7 +795,7 @@ export function buildVcaaYearInsights(
       percentile: analysis.percentile,
       sourceUrl: reference.sourceUrl,
     }
-  }).toSorted((first, second) => first.year - second.year)
+  }).sort((first, second) => first.year - second.year)
 }
 
 type ReferenceIndex = {
@@ -865,7 +884,7 @@ export function buildAttemptBenchmarks(
       aPlusCutoffPercentage,
       gapToAPlus: aPlusCutoffPercentage === null ? null : analysis.percentage - aPlusCutoffPercentage,
     }]
-  }).toSorted((first, second) => first.attempt.completedAt.localeCompare(second.attempt.completedAt))
+  }).sort((first, second) => first.attempt.completedAt.localeCompare(second.attempt.completedAt))
 }
 
 export type SubjectBenchmark = {
@@ -924,7 +943,7 @@ export function buildSubjectBenchmarks(
       vcaaMeanPercentage: average(bucket.linked.map((item) => item.vcaaMeanPercentage)),
       aPlusCutoffPercentage: average(cutoffs),
     }
-  }).toSorted((first, second) => second.averageMark - first.averageMark)
+  }).sort((first, second) => second.averageMark - first.averageMark)
 }
 
 export function formatReferenceName(name: string): string {

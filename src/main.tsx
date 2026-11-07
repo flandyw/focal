@@ -51,17 +51,15 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-// Warm the page chunks once the app has settled, so the first visit to each tab doesn't wait on the network.
-// One at a time, in idle gaps, and never on slow or metered connections: a phone must not pay for pages it may not open.
+// Give startup and sync time to settle, then warm two common next stops instead of every optional page.
 const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
 if (!connection?.saveData && !/2g|3g/.test(connection?.effectiveType ?? '')) {
-  const pages = Object.values(import.meta.glob(['./components/{calendar,mistakes,exams,study-timer}-page.tsx', './components/{exam,mistake}-sheet.tsx']))
-  // A wide window shows every page in the sidebar, so the rest are one click away too.
-  if (matchMedia('(min-width: 1024px)').matches) pages.push(...Object.values(import.meta.glob('./components/{progress,stoplight,goals,sac,friends,settings}-page.tsx')))
-  const idle = (next: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(next, { timeout: 2000 }) : setTimeout(next, 200)
+  const pages = Object.values(import.meta.glob(['./components/calendar-page.tsx', './components/study-timer-page.tsx']))
+  const idle = (next: () => void) => 'requestIdleCallback' in window ? requestIdleCallback(next) : setTimeout(next, 500)
   const warm = () => {
+    if (document.hidden) return
     const load = pages.shift()
     if (load) void load().catch(() => undefined).finally(() => idle(warm))
   }
-  setTimeout(warm, 3000)
+  setTimeout(() => idle(warm), 8000)
 }

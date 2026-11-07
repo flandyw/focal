@@ -7,7 +7,7 @@ export function isPreferredSubject(subject: string, preferredSubjects: string[])
 
 export function prioritiseSubjects(subjects: string[], preferredSubjects: string[]) {
   const priorities = new Map(preferredSubjects.map((subject, index) => [key(subject), index]))
-  return [...new Set(subjects)].toSorted((first, second) =>
+  return [...new Set(subjects)].sort((first, second) =>
     (priorities.get(key(first)) ?? Infinity) - (priorities.get(key(second)) ?? Infinity) ||
     first.localeCompare(second),
   )

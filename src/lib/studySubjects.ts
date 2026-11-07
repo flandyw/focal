@@ -4,8 +4,8 @@ import { VCE_SUBJECTS, type Subject } from "./types.js"
 export function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJECTS): string {
   const key = value.trim().toLowerCase()
   const name = key === "mathematical methods cas" ? "mathematical methods" : key
-  return subjects.find((subject) => [subject.id, subject.name, subject.shortCode]
-    .some((alias) => alias.toLowerCase() === name))?.id ?? value
+  return subjects.find((subject) => subject.id.toLowerCase() === name ||
+    subject.name.toLowerCase() === name || subject.shortCode.toLowerCase() === name)?.id ?? value
 }
 
 export function sameStudySubject(first: string | null | undefined, second: string) {
@@ -28,7 +28,7 @@ export function subjectColor(subjectId: string | null | undefined, subjects: rea
   const id = studySubjectId(subjectId, subjects)
   const known = subjects.find((subject) => subject.id === id)
   let hash = 0
-  for (const char of id.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  if (!known) for (const char of id.toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
   const colour = known?.color ?? `hsl(${hash % 360} 65% 42%)`
   return `light-dark(oklch(from ${colour} 0.48 0.12 h), oklch(from ${colour} 0.78 0.10 h))`
 }

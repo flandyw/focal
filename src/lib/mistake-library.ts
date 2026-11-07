@@ -13,6 +13,8 @@ export type LibraryFilters = {
   resolution?: "all" | "unresolved" | "resolved"
 }
 
+const questionCollator = new Intl.Collator(undefined, { numeric: true })
+
 export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string, ExamAttempt>, dueIds: Set<string>, filters: LibraryFilters) {
   const { browserFilter, category, topic, sort, examId = "all", provider = "all", resolution = "all" } = filters
   const terms = filters.search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
@@ -32,6 +34,7 @@ export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string
         if (browserFilter === "learning" && schedule.state !== "learning" && schedule.state !== "relearning") return false
         if ((browserFilter === "new" || browserFilter === "review") && schedule.state !== browserFilter) return false
       }
+      if (!terms.length) return true
       const text = [mistake.question, mistake.questionText, mistake.explanation, mistake.correction, mistake.category, mistake.areaOfStudy, attempt?.title, attempt?.subject ?? mistake.subject, attempt?.provider, attempt?.paper].filter(Boolean).join(" ").toLocaleLowerCase()
       return terms.every((term) => text.includes(term))
     })
@@ -41,7 +44,7 @@ export function filterMistakeLibrary(mistakes: Mistake[], attemptMap: Map<string
         case "newest": difference = Date.parse(second.mistake.createdAt) - Date.parse(first.mistake.createdAt); break
         case "oldest": difference = Date.parse(first.mistake.createdAt) - Date.parse(second.mistake.createdAt); break
         case "marks": difference = (second.mistake.marksLost ?? 0) - (first.mistake.marksLost ?? 0); break
-        case "question": difference = first.mistake.question.localeCompare(second.mistake.question, undefined, { numeric: true }); break
+        case "question": difference = questionCollator.compare(first.mistake.question, second.mistake.question); break
         default: difference = Date.parse(first.schedule.dueAt) - Date.parse(second.schedule.dueAt)
       }
       return difference || first.mistake.id.localeCompare(second.mistake.id)

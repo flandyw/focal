@@ -27,7 +27,11 @@ export function setExamFlag(data: AppData, list: "tracked" | "completed", id: st
 }
 
 export function saveMistakes(data: AppData, mistakes: Mistake[]): AppData {
-  return { ...data, mistakes: mistakes.reduce(upsert, data.mistakes) }
+  if (!mistakes.length) return data
+  const pending = new Map(mistakes.map((mistake) => [mistake.id, mistake]))
+  const saved = data.mistakes.map((mistake) => pending.get(mistake.id) ?? mistake)
+  for (const mistake of data.mistakes) pending.delete(mistake.id)
+  return { ...data, mistakes: [...saved, ...pending.values()] }
 }
 
 export function reviewMistake(data: AppData, id: string, rating: ReviewRating, completedAt: string, context: PracticeContext = {}): AppData {
@@ -49,6 +53,11 @@ export function postponeReviews(data: AppData, days: number, target: number, now
 /** Adds drafted tasks, skipping any whose source already has a live task. */
 export function addPlannedTasks(data: AppData, drafts: TaskDraft[], now = new Date()): AppData {
   const existing = new Set(data.learning.tasks.filter((task) => !task.archivedAt).map((task) => task.sourceId))
-  const tasks = drafts.filter((draft) => !existing.has(draft.sourceId)).map((draft) => materialiseTask({ ...draft, title: draft.title.trim() }, now))
+  const tasks = drafts.filter((draft) => {
+    if (draft.sourceId === undefined) return true
+    if (existing.has(draft.sourceId)) return false
+    existing.add(draft.sourceId)
+    return true
+  }).map((draft) => materialiseTask({ ...draft, title: draft.title.trim() }, now))
   return { ...data, learning: { ...data.learning, tasks: [...data.learning.tasks, ...tasks], updatedAt: now.toISOString() } }
 }

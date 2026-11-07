@@ -19,7 +19,7 @@ import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from ".
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import {
   RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
-  mergeStoplightItems, planRevision, setRating, type ItemEvidence, type ItemLink,
+  mergeStoplightItems, planRevision, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { cn } from "../lib/utils"
 import { useTickingNow } from "../hooks/use-ticking-now"
@@ -96,7 +96,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
   }
 
   function applyRatings(ratings: Map<string, StoplightRating>) {
-    onChange((current) => [...ratings].reduce((learning, [id, rating]) => setRating(learning, id, rating), current))
+    onChange((current) => setRatings(current, ratings))
     toast.success(`Updated ${ratings.size} rating${ratings.size === 1 ? "" : "s"}`)
   }
 

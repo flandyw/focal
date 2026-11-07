@@ -103,7 +103,7 @@ export function buildSubjectOutlooks(attempts: ExamAttempt[], settings?: ExamDif
   }
   return [...grouped.entries()]
     .map(([subject, subjectAttempts]) => buildOutlook(subject, subjectAttempts, settings))
-    .toSorted((first, second) => first.projectedNext - second.projectedNext || second.attempts - first.attempts)
+    .sort((first, second) => first.projectedNext - second.projectedNext || second.attempts - first.attempts)
 }
 
 export type FocusPriority = {
@@ -210,7 +210,7 @@ export function buildFocusPriorities(
       lapses: bucket.lapses,
     }
   }).filter((priority) => priority.questionCount > 0 || priority.unresolvedMistakes > 0)
-    .toSorted((first, second) => second.priorityScore - first.priorityScore || second.missedMarks - first.missedMarks)
+    .sort((first, second) => second.priorityScore - first.priorityScore || second.missedMarks - first.missedMarks)
 }
 
 type PaperEvidenceConfidence = "low" | "medium" | "high"
@@ -350,7 +350,7 @@ function finishPaperCell(bucket: PaperCellBucket): PaperPerformanceCell {
   const signatureCounts = new Map<string, number>()
   for (const signature of bucket.mistakeSignatures) signatureCounts.set(signature, (signatureCounts.get(signature) ?? 0) + 1)
   const repeatMistakes = [...signatureCounts.values()].reduce((total, count) => total + Math.max(0, count - 1), 0)
-  const performances = [...bucket.performances.values()].toSorted((first, second) => first.completedAt.localeCompare(second.completedAt))
+  const performances = [...bucket.performances.values()].sort((first, second) => first.completedAt.localeCompare(second.completedAt))
   let trendPoints: number | null = null
   if (performances.length >= 2) {
     const split = Math.ceil(performances.length / 2)
@@ -370,7 +370,7 @@ function finishPaperCell(bucket: PaperCellBucket): PaperPerformanceCell {
         ? "deteriorating"
         : "flat"
   const lostByCategory = [...bucket.categoryTally].map(([category, tally]) => ({ category, ...tally }))
-    .toSorted((first, second) => second.marks - first.marks || second.cards - first.cards || first.category.localeCompare(second.category))
+    .sort((first, second) => second.marks - first.marks || second.cards - first.cards || first.category.localeCompare(second.category))
   return {
     paper: bucket.paper,
     mastery,
@@ -486,7 +486,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
       gap: exam1.mastery === null || exam2.mastery === null ? null : exam2.mastery - exam1.mastery,
       diagnosis: diagnosePaperGap(exam1, exam2),
     }
-  }).toSorted((first, second) => {
+  }).sort((first, second) => {
     const firstRisk = first.gap === null ? -1 : Math.abs(first.gap)
     const secondRisk = second.gap === null ? -1 : Math.abs(second.gap)
     return secondRisk - firstRisk || first.areaOfStudy.localeCompare(second.areaOfStudy)
@@ -590,7 +590,7 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
       gap: exam1.lostPer100 === null || exam2.lostPer100 === null ? null : exam2.lostPer100 - exam1.lostPer100,
       diagnosis: diagnoseMistakeLoss(exam1, exam2),
     }
-  }).toSorted((first, second) =>
+  }).sort((first, second) =>
     second.exam1.missedMarks + second.exam2.missedMarks - first.exam1.missedMarks - first.exam2.missedMarks ||
     first.areaOfStudy.localeCompare(second.areaOfStudy))
 }
@@ -622,6 +622,14 @@ export function buildPaperDataQuality(attempts: ExamAttempt[], mistakes: Mistake
   const attemptMap = new Map(subjectAttempts.map((attempt) => [attempt.id, attempt]))
   const cards = mistakes.filter((mistake) => attemptMap.has(mistake.attemptId) && !mistake.suspended)
   const config = topicConfigFor(subject)
+  const attributedByAttempt = new Map<string, number>()
+  let cardsWithoutTopic = 0, cardsWithoutMarksLost = 0, cardsOnOtherPapers = 0
+  for (const card of cards) {
+    attributedByAttempt.set(card.attemptId, (attributedByAttempt.get(card.attemptId) ?? 0) + (card.marksLost ?? 0))
+    if (!card.topic?.trim()) cardsWithoutTopic++
+    if (card.marksLost === undefined) cardsWithoutMarksLost++
+    if (!getAttemptMathsPaper(attemptMap.get(card.attemptId)!)) cardsOnOtherPapers++
+  }
   const mismatched = subjectAttempts.filter((attempt) => rawMaxWarning(attempt))
   const bad = new Set(mismatched.map((attempt) => attempt.id))
   const lostMarks = { exam1: emptyLostMarks(), exam2: emptyLostMarks(), other: emptyLostMarks() }
@@ -630,7 +638,7 @@ export function buildPaperDataQuality(attempts: ExamAttempt[], mistakes: Mistake
     const paper = getAttemptMathsPaper(attempt)
     const row = lostMarks[paper === 1 ? "exam1" : paper === 2 ? "exam2" : "other"]
     const lost = Math.max(0, attempt.rawMax - attempt.rawScore)
-    const attributed = cards.filter((card) => card.attemptId === attempt.id).reduce((total, card) => total + (card.marksLost ?? 0), 0)
+    const attributed = attributedByAttempt.get(attempt.id) ?? 0
     row.papers += 1
     row.marksLost += lost
     row.attributed += attributed
@@ -643,9 +651,9 @@ export function buildPaperDataQuality(attempts: ExamAttempt[], mistakes: Mistake
       id: attempt.id, title: attempt.title, paper: attempt.paper, rawMax: attempt.rawMax, expected: [...expectedRawMax(attempt.subject, paperTypeOf(attempt)!)!],
     })),
     cards: cards.length,
-    cardsWithoutTopic: config ? cards.filter((card) => !card.topic?.trim()).length : null,
-    cardsWithoutMarksLost: cards.filter((card) => card.marksLost === undefined).length,
-    cardsOnOtherPapers: cards.filter((card) => !getAttemptMathsPaper(attemptMap.get(card.attemptId)!)).length,
+    cardsWithoutTopic: config ? cardsWithoutTopic : null,
+    cardsWithoutMarksLost,
+    cardsOnOtherPapers,
     lostMarks,
     warnings: [],
   }
@@ -685,7 +693,7 @@ export type LostMarksAttribution = {
 export function buildLostMarksAttribution(attempts: ExamAttempt[], mistakes: Mistake[], subject: string, limit = 10): LostMarksAttribution {
   const recentAttempts = attempts
     .filter((attempt) => attempt.subject === subject)
-    .toSorted((first, second) => second.completedAt.localeCompare(first.completedAt))
+    .sort((first, second) => second.completedAt.localeCompare(first.completedAt))
     .slice(0, limit)
   const attemptMap = new Map(recentAttempts.map((attempt) => [attempt.id, attempt]))
   const mistakesByQuestion = new Map<string, Mistake[]>()
@@ -750,7 +758,7 @@ export function buildLostMarksAttribution(attempts: ExamAttempt[], mistakes: Mis
     totalLost: Math.max(totalLost, attributedMarks),
     attributedMarks,
     unattributedMarks,
-    categories: [...categories.values()].toSorted((first, second) => second.marks - first.marks || first.category.localeCompare(second.category)),
+    categories: [...categories.values()].sort((first, second) => second.marks - first.marks || first.category.localeCompare(second.category)),
   }
 }
 

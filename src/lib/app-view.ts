@@ -31,8 +31,9 @@ export function loadAppView(
   storage: Pick<Storage, "getItem"> | null | undefined,
   search = "",
 ): AppView {
-  const timer = new URLSearchParams(search).get("timer")
-  const linked = new URLSearchParams(search).get("view")
+  const params = new URLSearchParams(search)
+  const timer = params.get("timer")
+  const linked = params.get("view")
   if (isAppView(linked)) return linked
   // The timed paper is a mode of the study timer now, not a view of its own.
   if (timer === "exam") return "focus"

@@ -56,9 +56,10 @@ async function loadTimetableWithStatus(signal: AbortSignal): Promise<Timetable |
     .then((value: unknown) => (isTimetable(value) ? value : null))
 }
 
-export function useReferenceData(needScaling = false, needNow = true) {
+export function useReferenceData(needScaling = false, needNow = true, needResources = true) {
   const [reloadToken, setReloadToken] = useState(0)
   const [scalingRequested, setScalingRequested] = useState(needScaling)
+  const [resourcesRequested, setResourcesRequested] = useState(needResources)
   const [references, setReferences] = useState<AssessmentReference[]>([])
   const [referencesGeneratedAt, setReferencesGeneratedAt] = useState<string | null>(null)
   const [referencesStatus, setReferencesStatus] = useState<ResourceStatus>("loading")
@@ -71,8 +72,9 @@ export function useReferenceData(needScaling = false, needNow = true) {
   const [timetableStatus, setTimetableStatus] = useState<ResourceStatus>("loading")
   const needNowRef = useRef(needNow)
   useEffect(() => { needNowRef.current = needNow }, [needNow])
-  // Latch the first visit so leaving the predictor never aborts or repeats its request.
+  // Keep requested datasets loaded when navigating away.
   if (needScaling && !scalingRequested) setScalingRequested(true)
+  if (needResources && !resourcesRequested) setResourcesRequested(true)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -107,21 +109,6 @@ export function useReferenceData(needScaling = false, needNow = true) {
     if (needNowRef.current) fetchReferences()
     else fetchDeferred(fetchReferences)
 
-    fetchDeferred(() => {
-      if (!active) return
-      void fetchJson<{ generatedAt?: string; studies?: VcaaStudyResources[] }>(
-        "/vcaa-exam-resources.json",
-        controller.signal,
-      ).then((result) => {
-        if (!active) return
-        setResourceStudies(usableStudies(result.studies))
-        setResourcesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
-        setStudiesStatus("ready")
-      }).catch(() => {
-        if (active) setStudiesStatus("error")
-      })
-    })
-
     void loadTimetableWithStatus(controller.signal).then((result) => {
       if (!active) return
       setTimetable(result)
@@ -135,6 +122,24 @@ export function useReferenceData(needScaling = false, needNow = true) {
       controller.abort()
     }
   }, [reloadToken])
+
+  useEffect(() => {
+    if (!resourcesRequested) return
+    const controller = new AbortController()
+    void fetchJson<{ generatedAt?: string; studies?: VcaaStudyResources[] }>(
+      "/vcaa-exam-resources.json",
+      controller.signal,
+    ).then((result) => {
+      if (controller.signal.aborted) return
+      setResourceStudies(usableStudies(result.studies))
+      setResourcesGeneratedAt(typeof result.generatedAt === "string" ? result.generatedAt : null)
+      setStudiesStatus("ready")
+    }).catch(() => {
+      if (!controller.signal.aborted) setStudiesStatus("error")
+    })
+
+    return () => controller.abort()
+  }, [resourcesRequested, reloadToken])
 
   useEffect(() => {
     if (!scalingRequested) return

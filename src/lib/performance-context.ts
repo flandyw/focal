@@ -55,15 +55,6 @@ function average(values: number[]) {
   return values.reduce((total, value) => total + value, 0) / values.length
 }
 
-function pearson(first: number[], second: number[]) {
-  const firstMean = average(first)
-  const secondMean = average(second)
-  const numerator = first.reduce((total, value, index) => total + (value - firstMean) * (second[index] - secondMean), 0)
-  const firstSpread = Math.sqrt(first.reduce((total, value) => total + (value - firstMean) ** 2, 0))
-  const secondSpread = Math.sqrt(second.reduce((total, value) => total + (value - secondMean) ** 2, 0))
-  return firstSpread && secondSpread ? numerator / (firstSpread * secondSpread) : 0
-}
-
 const FACTORS: Array<{
   key: ContextFactorKey
   label: string
@@ -114,15 +105,18 @@ export function buildPerformanceContextAnalysis(
       return value === undefined ? [] : [{ value, score: item.score }]
     })
     if (observations.length < 3 || new Set(observations.map((item) => item.value)).size < 2) return []
-    const values = observations.map((item) => item.value)
-    const scores = observations.map((item) => item.score)
-    const correlation = pearson(values, scores)
-    const valueMean = average(values)
-    const scoreMean = average(scores)
-    const denominator = values.reduce((total, value) => total + (value - valueMean) ** 2, 0)
-    const slope = denominator
-      ? values.reduce((total, value, index) => total + (value - valueMean) * (scores[index] - scoreMean), 0) / denominator
-      : 0
+    const valueMean = observations.reduce((total, item) => total + item.value, 0) / observations.length
+    const scoreMean = observations.reduce((total, item) => total + item.score, 0) / observations.length
+    let covariance = 0, valueVariance = 0, scoreVariance = 0
+    for (const { value, score } of observations) {
+      const valueDelta = value - valueMean, scoreDelta = score - scoreMean
+      covariance += valueDelta * scoreDelta
+      valueVariance += valueDelta ** 2
+      scoreVariance += scoreDelta ** 2
+    }
+    const spread = Math.sqrt(valueVariance) * Math.sqrt(scoreVariance)
+    const correlation = spread ? covariance / spread : 0
+    const slope = valueVariance ? covariance / valueVariance : 0
     return [{
       key: factor.key,
       label: factor.label,
@@ -133,7 +127,7 @@ export function buildPerformanceContextAnalysis(
       condition: factor.condition,
       action: factor.action,
     }]
-  }).toSorted((first, second) => Math.abs(second.favourableChange) - Math.abs(first.favourableChange))
+  }).sort((first, second) => Math.abs(second.favourableChange) - Math.abs(first.favourableChange))
 
   return { completedAssessments: completed.length, recordedAssessments, insights }
 }

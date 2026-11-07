@@ -3,7 +3,7 @@ import {
   analyseAttempt,
   findAttemptReferenceForYear,
   formatOrdinal,
-  getDueMistakes,
+  countDueMistakes,
   type AppData,
   type AssessmentReference,
   type ExamAttempt,
@@ -33,7 +33,7 @@ type ReportRow = {
 
 function buildAttemptRows(attempts: ExamAttempt[], references: AssessmentReference[]): ReportRow[] {
   return [...attempts]
-    .toSorted((first, second) => second.completedAt.localeCompare(first.completedAt))
+    .sort((first, second) => second.completedAt.localeCompare(first.completedAt))
     .slice(0, 12)
     .map((attempt) => {
       const reference = findAttemptReferenceForYear(attempt, references, attempt.examYear)
@@ -55,7 +55,7 @@ function buildAttemptRows(attempts: ExamAttempt[], references: AssessmentReferen
 
 function buildReportHtml(data: AppData, references: AssessmentReference[], difficulty?: ExamDifficultySettings) {
   const progress = getMistakeProgress(data.mistakes)
-  const dueNow = getDueMistakes(data.mistakes).length
+  const dueNow = countDueMistakes(data.mistakes)
   const average = weightedPerformanceAverage(data.attempts, difficulty)
   const priorities: FocusPriority[] = buildFocusPriorities(data.attempts, data.mistakes).slice(0, 5)
   const rows = buildAttemptRows(data.attempts, references)

@@ -34,10 +34,15 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
 
   // Past days only change when the data does, so they skip the per-tick `now`.
   const { week, streak } = useMemo(() => {
+    const history = new Map<number, { date: Date; minutes: number }>()
     const minutesOn = (offset: number) => {
+      const cached = history.get(offset)
+      if (cached) return cached
       const date = new Date(`${today}T12:00:00`)
       date.setDate(date.getDate() - offset)
-      return { date, minutes: buildDayPlan(localDate(date), data, timetable).completedMinutes }
+      const result = { date, minutes: buildDayPlan(localDate(date), data, timetable).completedMinutes }
+      history.set(offset, result)
+      return result
     }
     const week = Array.from({ length: 7 }, (_, index) => minutesOn(6 - index))
     // shortcut: streak stops counting at 60 days, raise the cap if anyone notices.
@@ -60,7 +65,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
 
   // Latest papers with the change from the previous paper in the same subject.
   const papers = useMemo(() => {
-    const sorted = data.attempts.filter((attempt) => attempt.rawMax > 0).toSorted((a, b) => b.completedAt.localeCompare(a.completedAt))
+    const sorted = data.attempts.filter((attempt) => attempt.rawMax > 0).sort((a, b) => b.completedAt.localeCompare(a.completedAt))
     const percent = (attempt: (typeof sorted)[number]) => Math.round((attempt.rawScore / attempt.rawMax) * 100)
     return sorted.slice(0, 4).map((attempt, index) => {
       const previous = sorted.slice(index + 1).find((other) => other.subject === attempt.subject)

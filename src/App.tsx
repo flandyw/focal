@@ -19,7 +19,7 @@ import {
 import { Toaster } from "./components/ui/sonner"
 import {
   EMPTY_APP_DATA,
-  getDueMistakes,
+  countDueMistakes,
   mistakeReviewDayStart,
   normalizeMistakeReviewPreferences,
   type ReviewRating,
@@ -45,7 +45,7 @@ import * as ops from "./lib/app-operations"
 import { routePath } from "./lib/routes"
 import { useAppRoute, useRouteUrl } from "./app/use-app-route"
 import { InstallNudge, OfflineChip } from "./components/shell-notices"
-import { AIOverviewContext, type OverviewAction } from "./lib/ai-overview"
+import { AIOverviewContext, type OverviewAction } from "./lib/ai-overview-state"
 import { loadSidebarOpen, type AppView } from "./lib/app-view"
 import { subjectWorkspace, updateSubjectLearning } from "./lib/subject-workspace"
 import { AppSidebar, MobileTabBar } from "./components/app-navigation"
@@ -238,7 +238,11 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     studiesStatus,
     scalingStatus,
     reload: reloadReferences,
-  } = useReferenceData(view === "predictor" || view === "atar", !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view))
+  } = useReferenceData(
+    view === "predictor" || view === "atar",
+    !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view),
+    view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || mistakeOpen || Boolean(view === "mistakes" && recordId),
+  )
   useDesktopWidgets(data, studySessionSync.sessions, timetable, sync.user?.id, sync.status, setView)
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
@@ -288,7 +292,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const otherSubjects = useMemo(() => subjectOptions.filter((subject) => !mySubjects.includes(subject)).toSorted((first, second) => first.localeCompare(second)), [subjectOptions, mySubjects])
   // Cards fall due and days roll over while the app sits open, so the badges follow the clock as well as the data.
   const now = useTickingNow()
-  const dueMistakeCount = useMemo(() => getDueMistakes(workspace.mistakes, now).length, [workspace.mistakes, now])
+  const allDueMistakeCount = useMemo(() => countDueMistakes(data.mistakes, now), [data.mistakes, now])
+  const dueMistakeCount = useMemo(() => workspace.mistakes === data.mistakes ? allDueMistakeCount : countDueMistakes(workspace.mistakes, now), [workspace.mistakes, data.mistakes, allDueMistakeCount, now])
   const today = localDate(now)
   const dueStudyTaskCount = useMemo(() => data.learning.tasks.filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor <= today).length, [data.learning.tasks, today])
 
@@ -409,7 +414,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     if (url.href !== location.href) history.replaceState(history.state, "", url)
   }, [])
   // The tab badges follow the chosen subject; the Home Screen icon counts everything waiting.
-  const appBadge = useMemo(() => getDueMistakes(data.mistakes, now).length, [data.mistakes, now]) + dueStudyTaskCount
+  const appBadge = allDueMistakeCount + dueStudyTaskCount
   useEffect(() => {
     if (import.meta.env.VITE_DESKTOP) return
     const update = () => setAppBadge(loadNotificationPreferences().badge ? appBadge : 0)

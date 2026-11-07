@@ -9,6 +9,7 @@ import { isTimetableBreakLabel } from "./class-timetable-core"
 import { isCompletedSac } from "./sac"
 import { localDate } from "./learning-workspace"
 import { sessionBlocks } from "./day-plan"
+import { mergedStudyMilliseconds } from "./utils"
 import { isPlanned, type CanonicalStudySession } from "./sync/sessionContract"
 import type { SyncStatus } from "./sync"
 import { getExamEnd, getExamStart, type Timetable } from "./timetable"
@@ -38,7 +39,8 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
         start: Date.parse(`${day}T${period.startTime}:00`), end: Date.parse(`${day}T${period.endTime}:00`), view: "timetable" })
     }
   }
-  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => data.trackedExamIds.includes(exam.id) && !data.completedExamIds.includes(exam.id))
+  const tracked = new Set(data.trackedExamIds), completed = new Set(data.completedExamIds)
+  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => tracked.has(exam.id) && !completed.has(exam.id))
     .map((exam) => ({ id: exam.id, title: exam.subject, subtitle: exam.paper ?? "VCE exam", start: getExamStart(exam).getTime(), end: getExamEnd(exam).getTime(), view: "exams" }))
   for (const sac of data.sacRecords.filter((record) => !isCompletedSac(record) && !record.completedAt)) {
     const allDay = /^\d{4}-\d{2}-\d{2}$/.test(sac.scheduledAt)
@@ -52,17 +54,16 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
   const assessmentIds = new Set(data.events.filter((event) => ["exam", "sac", "practice-sac"].includes(event.eventType)).map((event) => event.id))
   exams.push(...agenda.filter((item) => assessmentIds.has(item.id)))
   const upcoming = (items: Item[]) => [...new Map(items.filter((item) => Number.isFinite(item.start) && Number.isFinite(item.end) && item.end >= now)
-    .toSorted((a, b) => a.start - b.start).map((item) => [`${item.start}:${item.title}`, { ...item, title: item.title.slice(0, 200), subtitle: item.subtitle.slice(0, 200) }])).values()].slice(0, 100)
+    .sort((a, b) => a.start - b.start).map((item) => [`${item.start}:${item.title}`, { ...item, title: item.title.slice(0, 200), subtitle: item.subtitle.slice(0, 200) }])).values()].slice(0, 100)
   const blocks = sessions.filter((session) => !isPlanned(session) && (session.cancelled_at === null || session.started_at !== null)).flatMap((session) => sessionBlocks(session, now))
+  const parsedBlocks = blocks.map((block) => ({ start: Date.parse(block.start), end: Date.parse(block.end) }))
   const days = Array.from({ length: 8 }, (_, index) => {
     const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() + index - 6)
     const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1).getTime()
     // Union overlapping sessions; concurrent timers and imported overlaps must not double-count study.
-    const ranges = blocks.map((block) => [Math.max(start.getTime(), Date.parse(block.start)), Math.min(end, now, Date.parse(block.end))])
-      .filter(([a, b]) => Number.isFinite(a) && b > a).toSorted((a, b) => a[0] - b[0])
-    let milliseconds = 0
-    let coveredUntil = start.getTime()
-    for (const [a, b] of ranges) { milliseconds += Math.max(0, b - Math.max(a, coveredUntil)); coveredUntil = Math.max(coveredUntil, b) }
+    const dayStart = start.getTime(), dayEnd = Math.min(end, now)
+    const ranges = parsedBlocks.map((block) => ({ start: Math.max(dayStart, block.start), end: Math.min(dayEnd, block.end) }))
+    const milliseconds = mergedStudyMilliseconds(ranges)
     return { date: localDate(start), minutes: Math.round(milliseconds / 60_000), target: data.learning.preferences.studyDays.includes(start.getDay()) ? data.learning.preferences.dailyMinutes : 0 }
   })
   const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt.subject]))
@@ -78,7 +79,7 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
   const navigation = useRef(navigate)
   useEffect(() => { navigation.current = navigate }, [navigate])
   useEffect(() => {
-    if (!macDesktop()) return
+    if (!import.meta.env.VITE_DESKTOP || !macDesktop()) return
     let disposed = false
     const open = (view: string) => {
       if (["calendar", "timetable", "exams", "sacs", "focus", "mistakes", "settings"].includes(view)) navigation.current(view as AppView)
@@ -88,7 +89,7 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
     return () => { disposed = true; void listener.then((unlisten) => unlisten()) }
   }, [])
   useEffect(() => {
-    if (!macDesktop()) return
+    if (!import.meta.env.VITE_DESKTOP || !macDesktop()) return
     // Only clear on a real account change; the first render has no user yet while the session restores.
     if ((owner.current && owner.current !== accountId) || ["signed-out", "sign-in-required", "unconfigured"].includes(status)) publish(null)
     owner.current = accountId

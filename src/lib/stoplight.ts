@@ -45,6 +45,7 @@ export type ItemEvidence = { mistakes: number; passed: number; open: number; due
 
 export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, now = new Date()) {
   const evidence = new Map<string, ItemEvidence>()
+  const timestamp = now.getTime()
   const at = (id: string) => {
     const current = evidence.get(id) ?? { mistakes: 0, passed: 0, open: 0, due: 0, awarded: 0, available: 0 }
     evidence.set(id, current)
@@ -52,13 +53,17 @@ export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, 
   }
   const seen = (entry: ItemEvidence, date: string) => { if (!entry.lastAt || date > entry.lastAt) entry.lastAt = date }
   for (const mistake of data.mistakes) {
+    if (!mistake.itemIds?.length) continue
     const schedule = getMistakeSchedule(mistake)
     const open = !schedule.resolved && !mistake.suspended
-    for (const id of mistake.itemIds ?? []) {
+    const passed = mistakeProgress(mistake).passed
+    const due = open && Date.parse(schedule.dueAt) <= timestamp
+    for (const id of mistake.itemIds) {
       const entry = at(id)
       entry.mistakes += 1
-      if (mistakeProgress(mistake).passed) entry.passed += 1
-      if (open) { entry.open += 1; if (new Date(schedule.dueAt) <= now) entry.due += 1 }
+      if (passed) entry.passed += 1
+      if (open) entry.open += 1
+      if (due) entry.due += 1
       seen(entry, mistake.createdAt.slice(0, 10))
     }
   }
@@ -78,10 +83,18 @@ export function buildItemEvidence(data: Pick<AppData, "attempts" | "mistakes">, 
 // --- Rating ---
 
 export function setRating(learning: LearningWorkspace, id: string, rating: StoplightRating, now = new Date()): LearningWorkspace {
+  return setRatings(learning, new Map([[id, rating]]), now)
+}
+
+export function setRatings(learning: LearningWorkspace, ratings: ReadonlyMap<string, StoplightRating>, now = new Date()): LearningWorkspace {
+  if (!ratings.size) return learning
   const timestamp = now.toISOString()
   return {
     ...learning,
-    curriculumAreas: learning.curriculumAreas.map((item) => item.id === id ? { ...item, rating, ratedAt: timestamp, updatedAt: timestamp } : item),
+    curriculumAreas: learning.curriculumAreas.map((item) => {
+      const rating = ratings.get(item.id)
+      return rating ? { ...item, rating, ratedAt: timestamp, updatedAt: timestamp } : item
+    }),
     updatedAt: timestamp,
   }
 }
@@ -99,23 +112,28 @@ function mistakeProgress(mistake: Mistake) {
 
 /** Apply newer practice evidence, preserving any later manual or chatbot rating. */
 export function progressStoplight(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()): LearningWorkspace {
-  const linked = new Map<string, ReturnType<typeof mistakeProgress>[]>()
+  const linked = new Map<string, { latest: ReturnType<typeof mistakeProgress>; timestamp: number; passed: boolean }>()
   for (const mistake of mistakes) {
+    if (!mistake.itemIds?.length) continue
     const progress = mistakeProgress(mistake)
+    const timestamp = Date.parse(progress.at)
     // ponytail: suspended cards still count; hiding an unpassed card must not earn green.
-    for (const id of new Set(mistake.itemIds ?? [])) {
-      const entries = linked.get(id) ?? []
-      entries.push(progress)
-      linked.set(id, entries)
+    for (const id of new Set(mistake.itemIds)) {
+      const entry = linked.get(id)
+      if (!entry) linked.set(id, { latest: progress, timestamp, passed: progress.passed })
+      else {
+        if (!(entry.timestamp > timestamp)) { entry.latest = progress; entry.timestamp = timestamp }
+        entry.passed &&= progress.passed
+      }
     }
   }
   const timestamp = now.toISOString()
   const curriculumAreas = learning.curriculumAreas.map((item) => {
-    const entries = linked.get(item.id)
-    if (item.archivedAt || !entries?.length) return item
-    const latest = entries.reduce((a, b) => Date.parse(a.at) > Date.parse(b.at) ? a : b)
-    if (Date.parse(latest.at) <= Date.parse(item.ratedAt ?? "1970-01-01T00:00:00.000Z")) return item
-    const rating: StoplightRating | undefined = entries.every((entry) => entry.passed) ? "green" : latest.reviewed || item.rating === "green" ? "amber" : item.rating
+    const entry = linked.get(item.id)
+    if (item.archivedAt || !entry) return item
+    const { latest } = entry
+    if (entry.timestamp <= Date.parse(item.ratedAt ?? "1970-01-01T00:00:00.000Z")) return item
+    const rating: StoplightRating | undefined = entry.passed ? "green" : latest.reviewed || item.rating === "green" ? "amber" : item.rating
     if (!rating) return item
     return { ...item, rating, ratedAt: latest.at, updatedAt: timestamp }
   })
@@ -164,14 +182,15 @@ export function planRevision(learning: LearningWorkspace, data: Pick<AppData, "a
   }
   const queue = activeItems(learning)
     .filter((item) => (!subject || item.subject === subject) && !planned.has(item.id) && (item.rating === "red" || item.rating === "amber" || isRecheckDue(item, now)))
-    .toSorted((a, b) => score(b) - score(a))
+    .map((item) => ({ item, score: score(item) }))
+    .sort((a, b) => b.score - a.score)
   const days: string[] = []
   for (let offset = 0; days.length < PLAN_DAYS && offset < 14; offset += 1) {
     const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
     if (learning.preferences.studyDays.includes(day.getDay())) days.push(localDate(day))
   }
   const perDay = Math.max(1, Math.floor(learning.preferences.dailyMinutes / TASK_MINUTES))
-  const tasks = queue.slice(0, days.length * perDay).map((item, index) => materialiseTask({
+  const tasks = queue.slice(0, days.length * perDay).map(({ item }, index) => materialiseTask({
     kind: "topic-practice",
     title: `Revise: ${item.name}`,
     subject: item.subject,
@@ -303,23 +322,26 @@ export function mergeStoplightItems(learning: LearningWorkspace, subject: string
   const changed = new Map<string, CurriculumArea>()
   let added = 0
   for (const entry of imported) {
-    const found = existing.get(key(subject, entry.group, entry.name))
+    const entryKey = key(subject, entry.group, entry.name)
+    const found = existing.get(entryKey)
     if (found) {
-      const next = { ...(changed.get(found.id) ?? found), archivedAt: undefined, check: entry.check ?? found.check, type: entry.type ?? found.type, updatedAt: timestamp }
+      const current = changed.get(found.id) ?? found
+      const next = { ...current, archivedAt: undefined, check: entry.check ?? current.check, type: entry.type ?? current.type, updatedAt: timestamp }
       changed.set(found.id, next)
     } else {
       added += 1
       const item: CurriculumArea = { id: crypto.randomUUID(), subject, name: entry.name, group: entry.group, check: entry.check, type: entry.type, createdAt: timestamp, updatedAt: timestamp }
-      existing.set(key(subject, entry.group, entry.name), item)
+      existing.set(entryKey, item)
       changed.set(item.id, item)
     }
   }
-  const known = new Set(learning.curriculumAreas.map((item) => item.id))
+  const curriculumAreas = learning.curriculumAreas.map((item) => changed.get(item.id) ?? item)
+  for (const item of learning.curriculumAreas) changed.delete(item.id)
   return {
     added,
     learning: {
       ...learning,
-      curriculumAreas: [...learning.curriculumAreas.map((item) => changed.get(item.id) ?? item), ...[...changed.values()].filter((item) => !known.has(item.id))],
+      curriculumAreas: [...curriculumAreas, ...changed.values()],
       updatedAt: timestamp,
     },
   }
@@ -352,8 +374,17 @@ export function collectLinkRecords(data: Pick<AppData, "attempts" | "mistakes" |
 
 /** Items worth sending for these records: their matching groups when every record names one, else the whole subject. */
 export function candidateItems(items: CurriculumArea[], records: LinkRecord[]) {
-  const matched = records.map((record) => items.filter((item) => record.areaOfStudy && label(item.group) && label(item.group) === label(record.areaOfStudy)))
-  return matched.every((group) => group.length) ? [...new Set(matched.flat())] : items
+  if (!records.length) return []
+  if (records.some((record) => !record.areaOfStudy)) return items
+  const byGroup = groupBy(items, (item) => label(item.group))
+  const matched = new Set<CurriculumArea>()
+  for (const record of records) {
+    const group = label(record.areaOfStudy)
+    const candidates = byGroup.get(group)
+    if (!group || !candidates?.length) return items
+    for (const item of candidates) matched.add(item)
+  }
+  return [...matched]
 }
 
 /** Writes AI links onto the latest data; manual (`user`) links are never overwritten. */

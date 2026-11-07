@@ -159,26 +159,37 @@ export function getSacTimerState(nowMs: number, startedAtMs: number, durationMin
 export function getUpcomingSacs(records: SacRecord[], today = localDate(new Date())): SacRecord[] {
   return records
     .filter((record) => !isCompletedSac(record) && record.scheduledAt >= today)
-    .toSorted((first, second) => first.scheduledAt.localeCompare(second.scheduledAt))
+    .sort((first, second) => first.scheduledAt.localeCompare(second.scheduledAt))
 }
 
 export function computeSacStats(records: SacRecord[], today = localDate(new Date())): SacStats {
-  const completed = records.filter(isCompletedSac)
-  const percentages = completed.map((record) => sacPercentage(record)!)
-  const totalWeight = completed.reduce((total, record) => total + (record.weighting ?? 1), 0)
-  const average = totalWeight
-    ? completed.reduce((total, record) => total + sacPercentage(record)! * (record.weighting ?? 1), 0) / totalWeight
-    : null
-  const sorted = completed.toSorted((first, second) => (first.completedAt ?? first.scheduledAt).localeCompare(second.completedAt ?? second.scheduledAt))
-  const trend = sorted.length >= 2 ? sacPercentage(sorted.at(-1)!)! - sacPercentage(sorted[0])! : null
+  let completed = 0, upcoming = 0, totalWeight = 0, weightedScore = 0, totalTimedSeconds = 0
+  let best: number | null = null
+  let earliest: SacRecord | undefined, latest: SacRecord | undefined
+  for (const record of records) {
+    if (!isCompletedSac(record)) {
+      if (record.scheduledAt >= today) upcoming++
+      continue
+    }
+    completed++
+    const percentage = sacPercentage(record)!
+    const weight = record.weighting ?? 1
+    totalWeight += weight
+    weightedScore += percentage * weight
+    totalTimedSeconds += record.timing?.actualSeconds ?? 0
+    best = Math.max(best ?? -Infinity, percentage)
+    const date = record.completedAt ?? record.scheduledAt
+    if (!earliest || date.localeCompare(earliest.completedAt ?? earliest.scheduledAt) < 0) earliest = record
+    if (!latest || date.localeCompare(latest.completedAt ?? latest.scheduledAt) >= 0) latest = record
+  }
   return {
     total: records.length,
-    completed: completed.length,
-    upcoming: getUpcomingSacs(records, today).length,
-    average,
-    best: percentages.length ? Math.max(...percentages) : null,
-    totalTimedSeconds: completed.reduce((total, record) => total + (record.timing?.actualSeconds ?? 0), 0),
-    trend,
+    completed,
+    upcoming,
+    average: totalWeight ? weightedScore / totalWeight : null,
+    best,
+    totalTimedSeconds,
+    trend: completed >= 2 ? sacPercentage(latest!)! - sacPercentage(earliest!)! : null,
   }
 }
 
@@ -190,15 +201,7 @@ export function buildSacSubjectStats(records: SacRecord[], today = localDate(new
     subjects.set(record.subject, bucket)
   }
   return [...subjects.entries()].map(([subject, subjectRecords]) => {
-    const completed = subjectRecords.filter(isCompletedSac)
-    const percentages = completed.map((record) => sacPercentage(record)!)
-    const totalWeight = completed.reduce((total, record) => total + (record.weighting ?? 1), 0)
-    return {
-      subject,
-      completed: completed.length,
-      upcoming: getUpcomingSacs(subjectRecords, today).length,
-      average: totalWeight ? completed.reduce((total, record) => total + sacPercentage(record)! * (record.weighting ?? 1), 0) / totalWeight : null,
-      best: percentages.length ? Math.max(...percentages) : null,
-    }
-  }).toSorted((first, second) => second.completed - first.completed || first.subject.localeCompare(second.subject))
+    const { completed, upcoming, average, best } = computeSacStats(subjectRecords, today)
+    return { subject, completed, upcoming, average, best }
+  }).sort((first, second) => second.completed - first.completed || first.subject.localeCompare(second.subject))
 }

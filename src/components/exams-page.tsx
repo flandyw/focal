@@ -32,7 +32,7 @@ import {
   type AssessmentReference,
   type ExamAttempt,
 } from "../lib/exam-data"
-import { getMistakeProgress } from "../lib/mistake-review"
+import { getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
 import { buildFocusPriorities, buildSubjectOutlooks } from "../lib/performance-insights"
 import type { Timetable } from "../lib/timetable"
 import { PageHeader } from "./page-header"
@@ -333,9 +333,8 @@ function StatRow({ data }: { data: AppData }) {
   const stats = useMemo(() => computeStats(data.attempts, data.examDifficulty), [data.attempts, data.examDifficulty])
   // Count mastery with the shared scheduler, so the exams page agrees with the
   // mistakes page, the calendar and the folio app rather than reading the raw flag.
-  const mature = useMemo(() => getMistakeProgress(data.mistakes).matureCards, [data.mistakes])
+  const { mature, due } = useMemo(() => getMistakeQueueCounts(data.mistakes), [data.mistakes])
   const total = data.mistakes.length
-  const due = useMemo(() => getDueMistakes(data.mistakes).length, [data.mistakes])
   const completion = total ? (mature / total) * 100 : 0
 
   return (

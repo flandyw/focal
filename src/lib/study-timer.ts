@@ -303,10 +303,10 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0,
       }
     case "ADD_TIME": {
-      if (state.studyOvertime || state.mode === "free") return state
+      if (state.studyOvertime || state.mode === "free" || !Number.isFinite(action.minutes)) return state
       const extraSeconds = Math.max(0, Math.round(action.minutes * 60))
       const totalSeconds = Math.min(MAX_DURATION_MINUTES * 60, state.totalSeconds + extraSeconds)
-      return { ...state, secondsLeft: Math.min(totalSeconds, state.secondsLeft + extraSeconds), totalSeconds }
+      return { ...state, secondsLeft: state.secondsLeft + (totalSeconds - state.totalSeconds), totalSeconds }
     }
     case "START_STUDY_OVERTIME": {
       if (state.mode === "work" || state.mode === "free") return state

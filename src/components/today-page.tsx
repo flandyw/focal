@@ -30,7 +30,8 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
   onOpenAttempt: (id: string) => void
 }) {
   const today = localDate(new Date(now))
-  const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
+  // Exam and SAC time already has its own rows; include focus sessions without counting assessments twice.
+  const source = useMemo(() => ({ ...data, sessions: sessions.filter((session) => session.kind === "focus") }), [data, sessions])
   const plan = useMemo(() => buildDayPlan(today, source, timetable, now), [today, source, timetable, now])
   const focusSession = sessions.filter((session) => session.kind === "focus" && (isRunning(session) || isPaused(session) || continuableToday(session, now)))
     .toSorted((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || Number(isPaused(b)) - Number(isPaused(a)) || b.updated_at.localeCompare(a.updated_at))[0]

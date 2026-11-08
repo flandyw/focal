@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { parseISO } from "date-fns"
 import { ArrowRight, Check, Flame } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
@@ -149,7 +150,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
                 <button type="button" className="flex w-full items-center gap-3 py-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpenAttempt(attempt.id)}>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{attempt.title || `${attempt.provider} ${attempt.examYear} ${attempt.paper}`}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{attempt.subject} · {new Date(attempt.completedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{attempt.subject} · {parseISO(attempt.completedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</span>
                   </span>
                   <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-muted sm:block" aria-hidden><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, score)}%` }} /></span>
                   <span className="w-10 shrink-0 text-right font-medium tabular-nums">{score}%</span>

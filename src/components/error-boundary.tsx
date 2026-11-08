@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Button } from "./ui/button"
-import { downloadAppData, loadAppData } from "../lib/storage"
+import { downloadAppData } from "../lib/storage"
 
 type ErrorBoundaryProps = { children: ReactNode }
 type ErrorBoundaryState = { error: Error | null; backupError: string | null }
@@ -16,9 +16,9 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
     console.error(error, info.componentStack)
   }
 
-  private exportBackup = () => {
+  private exportBackup = async () => {
     try {
-      downloadAppData(loadAppData())
+      await downloadAppData()
       this.setState({ backupError: null })
     } catch (exportError) {
       console.error(exportError)

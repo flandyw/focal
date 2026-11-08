@@ -22,15 +22,17 @@ export function loadAppData(): AppData {
 let storageFullWarned = false
 
 /** Runs from timers and pagehide, so a full disk must be said out loud here: nothing above can catch it. */
-export function saveAppData(data: AppData) {
+export function saveAppData(data: AppData): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
     storageFullWarned = false
+    return true
   } catch (error) {
     console.error("Could not save Focal data on this device:", error)
-    if (storageFullWarned) return
+    if (storageFullWarned) return false
     storageFullWarned = true
     toast.error("This device's storage is full", { description: "Recent changes may be lost on restart unless they have synced. Free some space, or export a backup from Settings." })
+    return false
   }
 }
 

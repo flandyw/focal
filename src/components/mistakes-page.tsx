@@ -100,11 +100,11 @@ type MistakesPageProps = {
   onSaveAlternativeDeck: (deck: NonNullable<AppData["alternativeMistakeDeck"]>) => void
 }
 
-const RATING_OPTIONS: { rating: ReviewRating; label: string; shortcut: string; variant: "destructive" | "outline" | "secondary" | "default" }[] = [
-  { rating: "again", label: "Again", shortcut: "1", variant: "destructive" },
-  { rating: "hard", label: "Hard", shortcut: "2", variant: "outline" },
-  { rating: "good", label: "Good", shortcut: "3", variant: "secondary" },
-  { rating: "easy", label: "Easy", shortcut: "4", variant: "default" },
+const RATING_OPTIONS: { rating: ReviewRating; label: string; description: string; shortcut: string; variant: "destructive" | "outline" | "secondary" | "default" }[] = [
+  { rating: "again", label: "Again", description: "Could not recall", shortcut: "1", variant: "destructive" },
+  { rating: "hard", label: "Hard", description: "Needed a hint", shortcut: "2", variant: "outline" },
+  { rating: "good", label: "Good", description: "Recalled it", shortcut: "3", variant: "secondary" },
+  { rating: "easy", label: "Easy", description: "Knew it straight away", shortcut: "4", variant: "default" },
 ]
 
 // Two columns start at the same 1024px the workspace grid does, so the reading
@@ -155,7 +155,7 @@ function ExamContext({ mistake, attempt, studies }: { preferences?: MistakeRevie
   const exam = attempt ? findCachedVcaaExamForAttempt(attempt, studies) : undefined
   return (
     <CardDescription>
-      {attempt ? <>{attempt.title} · {attempt.paper}{exam ? <> · <a className="font-medium text-foreground underline underline-offset-4" href={exam.url} target="_blank" rel="noreferrer">Exam PDF</a></> : null}</> : mistake.attemptId ? "Deleted exam" : "Uncategorised"}
+      {attempt ? <>{attempt.title} · {attempt.paper}{exam ? <> · <a className="font-medium text-foreground underline underline-offset-4" href={exam.url} target="_blank" rel="noreferrer">Exam PDF</a></> : null}</> : mistake.attemptId ? "Deleted exam" : "No linked exam"}
       {mistake.totalMarks !== undefined && mistake.marksLost !== undefined ? <> · {mistake.marksLost}/{mistake.totalMarks} marks lost</> : null}
     </CardDescription>
   )
@@ -228,7 +228,7 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
       <div className="flex flex-wrap gap-2"><Button onClick={() => start()} disabled={!queue.length}><Play />{queue.length ? `Start ${count(queue.length, "card")}` : scope === "due" ? "Nothing due" : "No cards"}</Button>{queue.length > settings.practiceTarget! && <Button variant="outline" onClick={() => start(queue.slice(0, settings.practiceTarget))}>Start {settings.practiceTarget} {settings.practiceTarget === 1 ? "card" : "cards"}</Button>}{!session && queue.length > 1 && <Button variant="outline" onClick={() => start(queue.slice(0, 1))}>Just one</Button>}<Button variant="ghost" onClick={onBrowse}>{session ? "Finish" : "Library"}</Button></div>
       {!session && <p className="text-xs text-muted-foreground">{queue.length ? scope === "all" ? `${queue.length} active ${queue.length === 1 ? "card" : "cards"}, earliest due first. Reviewing early reschedules a card.` : `${queue.length} due. Choose one round at a time.` : nextDue ? `Next card in ${formatReviewInterval(nextDue, now)}. Missions are available for early practice.` : mistakes.length ? "No cards match these conditions." : "Add a mistake to start practising."}</p>}
     </section>
-    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
+    <MistakePracticeHub key={preferences?.updatedAt ?? "default"} progress={progress} allMistakes={allMistakes} mistakes={mistakes} preferences={preferences} now={now} onSave={onSavePreferences} onStart={start} />
   </div>
 
   return <div className="relative mx-auto grid w-full max-w-4xl gap-5">
@@ -240,13 +240,14 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
 
 function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, onEdit, onReimport, onToggleSuspend }: { preferences?: MistakeReviewPreferences; mistakes: Mistake[]; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[]; onRate: (rating: ReviewRating, context?: PracticeContext) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void }) {
   const [revealed, setRevealed] = useState(false)
-  const [draft, setDraft] = useState("")
   const [confidence, setConfidence] = useState<QuestionConfidence>()
   const submitting = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const [reviewTime] = useState(() => new Date())
-  // Memoised: the scratch textarea re-renders this card on every keystroke, and each preview walks the whole deck.
+  // Keep deck-wide scheduling previews stable when confidence or reveal state changes.
   const previews = useMemo(() => RATING_OPTIONS.map((option) => ({ ...option, dueAt: previewMistakeReview(mistake, option.rating, reviewTime.toISOString(), preferences, mistakes).dueAt })), [mistake, reviewTime, preferences, mistakes])
+  const strength = useMemo(() => recallStrength(mistake), [mistake])
+  const rematch = useMemo(() => isRematch(mistake), [mistake])
   const answer = useRef<HTMLDivElement>(null)
   useEffect(() => { heading.current?.focus() }, [])
   // The reveal button disappears, so focus would fall to the page and a phone would still be looking at the question.
@@ -283,13 +284,13 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
           <div className="grid gap-2"><h2 ref={heading} tabIndex={-1} className="text-xl font-semibold outline-none"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></h2><ExamContext mistake={mistake} attempt={attempt} studies={studies} /></div>
           {mistake.questionText?.trim() ? <MarkdownPreview unframed>{mistake.questionText}</MarkdownPreview> : null}
           <MistakeAttachments attachments={mistake.attachments} />
-          <div className="grid gap-2"><p className="text-xs text-muted-foreground">Recall strength · {recallStrength(mistake)}/3 spaced recalls{isRematch(mistake) ? " · Rematch" : ""}</p><Progress value={recallStrength(mistake) / 3 * 100} aria-label="Recall strength across different days" /><fieldset disabled={revealed}><legend className="mb-2 text-sm font-medium">Before you reveal: how confident are you?</legend><div className="flex flex-wrap gap-2">{([['low', 'Guessing'], ['medium', 'Unsure'], ['high', 'Confident']] as const).map(([value, label]) => <Button key={value} size="sm" variant={confidence === value ? "secondary" : "outline"} aria-pressed={confidence === value} onClick={() => setConfidence(value)}>{label}</Button>)}</div></fieldset><p className="text-xs text-muted-foreground">Optional. Your prediction stays locked after revealing; every honest attempt earns the same XP.</p></div>
-          <div className="grid gap-2"><Label htmlFor="review-recall">Your approach <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="review-recall" value={draft} onChange={(event) => setDraft(event.target.value)} readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="resize-y" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
+          <div className="grid gap-2"><p className="text-xs text-muted-foreground">Recall strength · {strength}/3 spaced recalls{rematch ? " · Rematch" : ""}</p><Progress value={strength / 3 * 100} aria-label="Recall strength across different days" /><fieldset disabled={revealed}><legend className="mb-2 text-sm font-medium">Before you reveal: how confident are you?</legend><div className="flex flex-wrap gap-2">{([['low', 'Guessing'], ['medium', 'Unsure'], ['high', 'Confident']] as const).map(([value, label]) => <Button key={value} size="sm" variant={confidence === value ? "secondary" : "outline"} aria-pressed={confidence === value} onClick={() => setConfidence(value)}>{label}</Button>)}</div></fieldset><p className="text-xs text-muted-foreground">Optional. Your prediction stays locked after revealing; every honest attempt earns the same XP.</p></div>
+          <div className="grid gap-2"><Label htmlFor="review-recall">Your approach <span className="font-normal text-muted-foreground">(optional)</span></Label><Textarea id="review-recall" defaultValue="" readOnly={revealed} rows={3} placeholder="Try to recall the method before revealing the answer…" className="resize-y" /><p className="text-xs text-muted-foreground">Scratch notes are cleared when you move to another card.</p></div>
         </div>
       </div>
       {revealed ? <div ref={answer} tabIndex={-1} id="review-answer" className={preferences?.practiceEffects === false ? "grid gap-4 outline-none" : "practice-reveal grid gap-4 outline-none"}><AnswerPanel label="What went wrong" value={mistake.explanation} /><AnswerPanel label="Improved response or method" value={mistake.correction} /></div> : null}
-      <footer className="sticky bottom-[calc(var(--mobile-tabbar)+0.5rem)] z-10 grid gap-2 rounded-xl border bg-card p-3 shadow-lg">
-        {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-2 sm:py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60 pointer-coarse:hidden">{option.shortcut}</kbd></span><span className="text-xs font-normal">{formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70 pointer-coarse:hidden">Space</kbd></Button>}
+      <footer className="sticky bottom-[calc(max(var(--mobile-tabbar),var(--keyboard-inset))+0.5rem)] z-10 grid gap-2 rounded-xl border bg-card p-3 shadow-lg">
+        {revealed ? <><p className="text-center text-xs text-muted-foreground">How well did you recall the answer?</p><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{previews.map((option) => <Button key={option.rating} aria-keyshortcuts={option.shortcut} variant={option.variant} className="h-auto flex-col py-2 sm:py-3" onClick={() => rate(option.rating)}><span>{option.label} <kbd className="ml-1 text-xs opacity-60 pointer-coarse:hidden">{option.shortcut}</kbd></span><span className="text-xs font-normal">{option.description}</span><span className="text-xs font-normal opacity-75">Next: {formatReviewInterval(option.dueAt, reviewTime)}</span></Button>)}</div></> : <Button size="lg" aria-keyshortcuts="Space" aria-expanded={false} aria-controls="review-answer" onClick={() => setRevealed(true)}>Reveal answer <kbd className="ml-2 text-xs opacity-70 pointer-coarse:hidden">Space</kbd></Button>}
       </footer>
     </article>
   )
@@ -498,12 +499,11 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
   }), [data.mistakes, attemptMap, activeSubject, activeMathsExamFilter, skillId])
   const dueIds = useMemo(() => new Set(getDueMistakes(visibleMistakes, now).map((mistake) => mistake.id)), [visibleMistakes, now])
   const counts = useMemo(() => getMistakeQueueCounts(visibleMistakes, now), [visibleMistakes, now])
-  const progress = useMemo(() => getMistakeProgress(visibleMistakes, now), [visibleMistakes, now])
+  const progress = useMemo(() => tab === "insights" ? getMistakeProgress(visibleMistakes, now) : null, [tab, visibleMistakes, now])
   // The summary counts the whole collection, the way the Exams page, the sidebar badge
   // and the folio app do. The subject, paper and exam filters only narrow the library,
   // the tabs and the review queue below the summary.
   const summaryCounts = useMemo(() => getMistakeQueueCounts(data.mistakes, now), [data.mistakes, now])
-  const summaryProgress = useMemo(() => getMistakeProgress(data.mistakes, now), [data.mistakes, now])
   const topPriority = useMemo(() => buildRevisionPriorities(visibleMistakes).find((item) => item.unresolved > 0), [visibleMistakes])
   const alternativeCount = useMemo(() => {
     const visibleIds = new Set(visibleMistakes.map((mistake) => mistake.id))
@@ -563,6 +563,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
   </>
   function toggleSelected(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }) }
   const scheduleGroups = useMemo(() => {
+    if (tab !== "schedule") return []
     const startOfToday = new Date(now)
     startOfToday.setHours(0, 0, 0, 0)
     const upcoming = visibleMistakes
@@ -590,7 +591,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
       group.items.push(entry)
     }
     return [...groups.values()]
-  }, [visibleMistakes, now])
+  }, [tab, visibleMistakes, now])
   const dueThisWeekCount = useMemo(() => {
     const horizon = now.getTime() + 7 * 24 * 60 * 60 * 1000
     return visibleMistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= horizon).length
@@ -636,7 +637,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
       <AIOverview area="mistakes" subject={activeSubject} fingerprint={String(visibleMistakes.length)} />
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       {tab !== "study" && data.mistakes.length ? <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You’re caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryProgress.matureCards} mature</p></div></div>
+        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You’re caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryCounts.mature} well-spaced</p></div></div>
         <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
       </section> : null}
       <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
@@ -649,7 +650,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
         </TabsList>
         {tab !== "study" ? <div className="mt-4 flex flex-wrap items-end gap-3" role="group" aria-label="Mistake conditions">{conditions}</div> : null}
         <TabsContent value="insights" className="mt-4 grid gap-4">
-          <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card>
+          {progress ? <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card> : null}
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
         <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>

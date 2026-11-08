@@ -30,6 +30,7 @@ pub fn open(app: &tauri::AppHandle, urls: &[tauri::Url]) {
                 "focus",
                 "mistakes",
                 "settings",
+                "atar",
             ]
             .contains(&view)
         {

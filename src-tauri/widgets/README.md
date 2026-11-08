@@ -1,12 +1,13 @@
 # Focal macOS widgets
 
-Four native SwiftUI widgets for macOS 14+: **Up Next** (small, medium, large),
+Five native SwiftUI widgets for macOS 14+: **Up Next** and **ATAR** (small, medium, large),
 **Exam Countdown**, **Study Today**, and **Review Queue** (small, medium).
 Click a widget to open the corresponding Focal screen.
 
 Focal publishes a small snapshot from its existing Supabase-synced account data:
 classes and calendar events, tracked exams and SACs, actual study minutes with
-overlapping sessions merged, daily goals, and due spaced-repetition cards.
+overlapping sessions merged, daily goals, due spaced-repetition cards, and a live projection of the newest saved ATAR
+scenario (with the active ATAR goal as its target).
 The extension never receives a Supabase token or database credentials.
 Signing out clears the snapshot. Gallery previews use sample data only.
 

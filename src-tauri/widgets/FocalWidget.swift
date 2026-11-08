@@ -40,10 +40,10 @@ private extension Color {
     }
 }
 private enum WidgetStyle {
-    case next, exams, study, review
-    var label: String { switch self { case .next: "Up next"; case .exams: "Countdown"; case .study: "Study today"; case .review: "Review" } }
-    var icon: String { switch self { case .next: "calendar"; case .exams: "hourglass"; case .study: "scope"; case .review: "rectangle.on.rectangle" } }
-    var destination: String { switch self { case .next: "calendar"; case .exams: "exams"; case .study: "focus"; case .review: "mistakes" } }
+    case next, exams, study, review, atar
+    var label: String { switch self { case .next: "Up next"; case .exams: "Countdown"; case .study: "Study today"; case .review: "Review"; case .atar: "ATAR" } }
+    var icon: String { switch self { case .next: "calendar"; case .exams: "hourglass"; case .study: "scope"; case .review: "rectangle.on.rectangle"; case .atar: "chart.xyaxis.line" } }
+    var destination: String { switch self { case .next: "calendar"; case .exams: "exams"; case .study: "focus"; case .review: "mistakes"; case .atar: "atar" } }
 }
 private func daysUntil(_ date: Date, from now: Date) -> Int {
     let calendar = Calendar.current
@@ -82,6 +82,7 @@ private struct FocalWidgetView: View {
                 case .exams: examContent
                 case .study: studyContent
                 case .review: reviewContent
+                case .atar: atarContent
                 }
             }
             Spacer(minLength: 0)
@@ -270,6 +271,73 @@ private struct FocalWidgetView: View {
         }
     }
 
+    // MARK: ATAR
+    @ViewBuilder private var atarContent: some View {
+        if let atar = entry.snapshot?.atar {
+            let gap = atar.target.flatMap { target in atar.atar.map { target - $0 } }
+            VStack(alignment: .leading, spacing: small ? 6 : 8) {
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Estimated rank").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                        Text(atar.label).font(.system(size: large ? 48 : 40, weight: .semibold)).monospacedDigit()
+                            .foregroundStyle(Color.focal).widgetAccentable().minimumScaleFactor(0.6).lineLimit(1)
+                    }
+                    if !small, let target = atar.target {
+                        Spacer(minLength: 8)
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text("Target").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                            Text(target, format: .number.precision(.fractionLength(2))).font(.system(size: 20, weight: .medium)).monospacedDigit()
+                            if let gap { Text(gap > 0 ? String(format: "%.2f to go", gap) : "Target reached").font(.system(size: 9)).foregroundStyle(.secondary) }
+                        }.padding(.bottom, 6)
+                    }
+                }
+                if let target = atar.target, let value = atar.atar, target > 0 {
+                    ProgressView(value: min(value, target), total: target).tint(Color.focal).widgetAccentable()
+                        .accessibilityLabel("\(Int(min(1, value / target) * 100)) percent of target ATAR")
+                }
+                if small {
+                    HStack {
+                        Text(atar.target == nil ? "Aggregate" : "Target")
+                        Spacer(minLength: 4)
+                        Text(atar.target ?? atar.aggregate ?? 0, format: .number.precision(.fractionLength(2))).monospacedDigit()
+                    }.font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                } else {
+                    let primary = atar.subjects.filter { !$0.increment }.reduce(0) { $0 + $1.contribution }
+                    let increments = atar.subjects.filter(\.increment).reduce(0) { $0 + $1.contribution }
+                    HStack(alignment: .firstTextBaseline) {
+                        metric("Aggregate", atar.aggregate)
+                        Spacer()
+                        metric("Primary four", atar.subjects.isEmpty ? nil : primary)
+                        Spacer()
+                        metric("Increments", atar.subjects.isEmpty ? nil : increments)
+                    }
+                    if large && !atar.subjects.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack { Text("Subjects"); Spacer(); Text("Scaled · Weight") }.font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                            ForEach(Array(atar.subjects.enumerated()), id: \.offset) { _, subject in
+                                HStack(spacing: 8) {
+                                    Text(subject.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                                    Spacer(minLength: 4)
+                                    Text(subject.scaled, format: .number.precision(.fractionLength(1))).font(.system(size: 12)).monospacedDigit()
+                                    Text(subject.increment ? "10%" : "100%").font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary).frame(width: 32, alignment: .trailing)
+                                }.accessibilityElement(children: .combine)
+                            }
+                        }
+                    }
+                    if large { Text("\(String(atar.year)) VTAC conversion · estimate only").font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1) }
+                }
+            }
+        } else { message("No estimate yet", detail: "Save a scenario in the ATAR calculator.") }
+    }
+    private func metric(_ name: String, _ value: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(name).font(.system(size: 9)).foregroundStyle(.secondary)
+            Group { if let value { Text(value, format: .number.precision(.fractionLength(2))) } else { Text("—") } }
+                .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+        }.accessibilityElement(children: .combine)
+    }
+
     private func message(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.system(size: 15, weight: .semibold))
@@ -280,7 +348,7 @@ private struct FocalWidgetView: View {
 private func configuration(_ kind: String, _ title: String, _ detail: String, _ style: WidgetStyle) -> some WidgetConfiguration {
     StaticConfiguration(kind: kind, provider: FocalProvider()) { FocalWidgetView(entry: $0, style: style) }
         .configurationDisplayName(title).description(detail)
-        .supportedFamilies(style == .next ? [.systemSmall, .systemMedium, .systemLarge] : [.systemSmall, .systemMedium])
+        .supportedFamilies(style == .next || style == .atar ? [.systemSmall, .systemMedium, .systemLarge] : [.systemSmall, .systemMedium])
 }
 private struct UpNextWidget: Widget {
     var body: some WidgetConfiguration { configuration("com.andy.focal.widget", "Up Next", "Your next class, event, or assessment, at a glance.", .next) }
@@ -294,6 +362,9 @@ private struct StudyWidget: Widget {
 private struct ReviewWidget: Widget {
     var body: some WidgetConfiguration { configuration("com.andy.focal.review", "Review Queue", "Spaced repetition cards ready for review, by subject.", .review) }
 }
+private struct AtarWidget: Widget {
+    var body: some WidgetConfiguration { configuration("com.andy.focal.atar", "ATAR", "Your projected ATAR, target and scaled subjects.", .atar) }
+}
 @main
 struct FocalWidgets: WidgetBundle {
     var body: some Widget {
@@ -301,5 +372,6 @@ struct FocalWidgets: WidgetBundle {
         ExamWidget()
         StudyWidget()
         ReviewWidget()
+        AtarWidget()
     }
 }

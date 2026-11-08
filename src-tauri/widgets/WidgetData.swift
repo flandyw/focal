@@ -17,12 +17,25 @@ struct ReviewCard: Codable {
     let subject: String
     let due: Double
 }
+struct AtarSubject: Codable {
+    let name: String
+    let scaled, contribution: Double
+    let increment: Bool
+}
+struct AtarSummary: Codable {
+    let label: String
+    let atar, aggregate, target: Double?
+    let year: Int
+    let subjects: [AtarSubject]
+}
 struct WidgetSnapshot: Codable {
     let version: Int
     let updatedAt: Double
     let agenda, exams: [AgendaItem]
     let days: [StudyDay]
     let reviews: [ReviewCard]
+    // Optional so snapshots written by older builds still decode.
+    var atar: AtarSummary? = nil
 
     static func fileURL() throws -> URL {
         guard let home = getpwuid(getuid())?.pointee.pw_dir else { throw CocoaError(.fileReadNoSuchFile) }
@@ -46,6 +59,13 @@ struct WidgetSnapshot: Codable {
         let exam = AgendaItem(id: "exam", title: "Chemistry", subtitle: "VCE examination", start: now.addingTimeInterval(8 * 86400).timeIntervalSince1970 * 1000, end: now.addingTimeInterval(8 * 86400 + 7200).timeIntervalSince1970 * 1000, view: "exams", allDay: nil)
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: now)
         let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-        return Self(version: 1, updatedAt: now.timeIntervalSince1970 * 1000, agenda: [next, exam], exams: [exam], days: [StudyDay(date: day, minutes: 42, target: 60)], reviews: (0..<12).map { ReviewCard(subject: $0 < 7 ? "Chemistry" : "Methods", due: 0) })
+        return Self(version: 1, updatedAt: now.timeIntervalSince1970 * 1000, agenda: [next, exam], exams: [exam], days: [StudyDay(date: day, minutes: 42, target: 60)], reviews: (0..<12).map { ReviewCard(subject: $0 < 7 ? "Chemistry" : "Methods", due: 0) },
+                    atar: AtarSummary(label: "92.45", atar: 92.45, aggregate: 161.51, target: 95, year: 2025, subjects: [
+                        AtarSubject(name: "English", scaled: 38.2, contribution: 38.2, increment: false),
+                        AtarSubject(name: "Mathematical Methods", scaled: 41.5, contribution: 41.5, increment: false),
+                        AtarSubject(name: "Chemistry", scaled: 39.8, contribution: 39.8, increment: false),
+                        AtarSubject(name: "Physics", scaled: 37.4, contribution: 37.4, increment: false),
+                        AtarSubject(name: "Specialist Mathematics", scaled: 46.1, contribution: 4.61, increment: true),
+                    ]))
     }
 }

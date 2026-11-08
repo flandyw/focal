@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-import type { AppData } from "./exam-data"
+import type { AppData, AssessmentReference } from "./exam-data"
+import { estimateAtar } from "./atar"
+import { interpolateScaledScore, type ScalingReference } from "./scaling"
+import { predictStudyScore } from "./study-score"
 import { getMistakeSchedule } from "./exam-data"
 import type { AppView } from "./app-view"
 import { classPeriodsOn, periodSubjectName, subjectNameFor } from "./class-timetable"
@@ -23,7 +26,31 @@ function publish(snapshot: unknown) {
   void publishing.catch((error) => console.warn("Could not refresh Focal widgets:", error))
 }
 
-function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null) {
+// Live projection of the newest saved scenario, recomputed like the ATAR page does when it is loaded.
+function atar(data: AppData, references: AssessmentReference[], scaling: ScalingReference[]) {
+  const saved = data.atarEstimates[0]
+  if (!saved) return null
+  const target = data.learning.goals.find((goal) => goal.kind === "atar" && !goal.archivedAt)?.target ?? null
+  const results = saved.rows.flatMap((row) => {
+    const reference = scaling.find((study) => study.year === saved.year && study.code === row.code)
+    if (!reference) return []
+    const predicted = row.usePrediction ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
+    const rawScore = predicted ?? Number(row.raw)
+    const scaledScore = interpolateScaledScore(rawScore, reference.points)
+    return scaledScore === null ? [] : [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
+  })
+  const estimate = estimateAtar(results, saved.year)
+  // Scaling data loads after startup; until then publish the saved headline without a breakdown.
+  if (!estimate) return { label: saved.atarLabel, atar: Number.parseFloat(saved.atarLabel) || null, aggregate: saved.aggregate, year: saved.year, target, subjects: [] }
+  return {
+    label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year: saved.year, target,
+    subjects: [...estimate.primaryFour, ...estimate.increments].map((item) => ({
+      name: item.studyName.slice(0, 200), scaled: item.scaledScore, contribution: item.contribution, increment: item.role === "Increment",
+    })),
+  }
+}
+
+function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null, references: AssessmentReference[], scaling: ScalingReference[]) {
   const now = Date.now()
   const today = new Date()
   const agenda: Item[] = data.events.filter((event) => !event.deleted_at && !event.isFinished).map((event) => ({
@@ -70,11 +97,11 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
   const reviews = data.mistakes.filter((mistake) => !mistake.suspended).map((mistake) => ({
     subject: attempts.get(mistake.attemptId) ?? mistake.subject ?? "General", due: Date.parse(getMistakeSchedule(mistake).dueAt),
   })).filter((item) => Number.isFinite(item.due))
-  return { version: 1, updatedAt: now, agenda: upcoming([...agenda, ...exams]), exams: upcoming(exams), days, reviews }
+  return { version: 1, updatedAt: now, agenda: upcoming([...agenda, ...exams]), exams: upcoming(exams), days, reviews, atar: atar(data, references, scaling) }
 }
 
 export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null,
-  accountId: string | undefined, status: SyncStatus, navigate: (view: AppView) => void) {
+  references: AssessmentReference[], scaling: ScalingReference[], accountId: string | undefined, status: SyncStatus, navigate: (view: AppView) => void) {
   const owner = useRef(accountId)
   const navigation = useRef(navigate)
   useEffect(() => { navigation.current = navigate }, [navigate])
@@ -82,7 +109,7 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
     if (!import.meta.env.VITE_DESKTOP || !macDesktop()) return
     let disposed = false
     const open = (view: string) => {
-      if (["calendar", "timetable", "exams", "sacs", "focus", "mistakes", "settings"].includes(view)) navigation.current(view as AppView)
+      if (["calendar", "timetable", "exams", "sacs", "focus", "mistakes", "settings", "atar"].includes(view)) navigation.current(view as AppView)
     }
     const listener = listen<string>("focal:widget-open", (event) => open(event.payload))
     void listener.then(() => invoke<string | null>("take_widget_navigation")).then((view) => { if (!disposed && view) open(view) }).catch(console.warn)
@@ -95,9 +122,9 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
     owner.current = accountId
     // Local data is still the account's own while offline or with unpushed changes.
     if (!accountId || !["synced", "pending", "error"].includes(status)) return
-    const update = () => publish(snapshot(data, sessions, timetable))
+    const update = () => publish(snapshot(data, sessions, timetable, references, scaling))
     const timer = window.setTimeout(update, 1200)
     const interval = window.setInterval(update, 60_000)
     return () => { clearTimeout(timer); clearInterval(interval) }
-  }, [data, sessions, timetable, accountId, status])
+  }, [data, sessions, timetable, references, scaling, accountId, status])
 }

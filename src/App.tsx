@@ -239,11 +239,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     scalingStatus,
     reload: reloadReferences,
   } = useReferenceData(
-    view === "predictor" || view === "atar",
+    // The macOS ATAR widget needs scaling data to break down the latest saved scenario.
+    view === "predictor" || view === "atar" || Boolean(import.meta.env.VITE_DESKTOP && data.atarEstimates.length),
     !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view),
     view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || mistakeOpen || Boolean(view === "mistakes" && recordId),
   )
-  useDesktopWidgets(data, studySessionSync.sessions, timetable, sync.user?.id, sync.status, setView)
+  useDesktopWidgets(data, studySessionSync.sessions, timetable, references, scalingReferences, sync.user?.id, sync.status, setView)
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
   const [onboarding, setOnboarding] = useState(false)

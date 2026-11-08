@@ -5,8 +5,9 @@ import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { PageHeader } from "./page-header"
 import { AIOverview } from "./ai-overview"
-import { buildDayPlan, isDayItemDone, type DayPlanSource } from "../lib/day-plan"
+import { buildDayPlan, continuableToday, isDayItemDone, type DayPlanSource } from "../lib/day-plan"
 import { isCompletedSac } from "../lib/sac"
+import { isPaused, isRunning, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { localDate } from "../lib/learning-workspace"
 import { formatExamLabel, getExamStart, type Timetable } from "../lib/timetable"
 import type { AppView } from "../lib/app-view"
@@ -18,9 +19,10 @@ const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) 
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
 /** The personal starting page: a read-only view over the same day plan the calendar uses, with one way into each kind of work. */
-export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt }: {
+export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt }: {
   now: number
   data: DayPlanSource
+  sessions: CanonicalStudySession[]
   timetable: Timetable | null
   dueMistakes: number
   onNavigate: (view: AppView) => void
@@ -28,8 +30,10 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
   onOpenAttempt: (id: string) => void
 }) {
   const today = localDate(new Date(now))
-  const plan = useMemo(() => buildDayPlan(today, data, timetable, now), [today, data, timetable, now])
-  const live = plan.items.find((item) => item.kind === "session" && (item.live || item.continuable))
+  const source = useMemo(() => ({ ...data, sessions }), [data, sessions])
+  const plan = useMemo(() => buildDayPlan(today, source, timetable, now), [today, source, timetable, now])
+  const focusSession = sessions.filter((session) => session.kind === "focus" && (isRunning(session) || isPaused(session) || continuableToday(session, now)))
+    .toSorted((a, b) => Number(isRunning(b)) - Number(isRunning(a)) || Number(isPaused(b)) - Number(isPaused(a)) || b.updated_at.localeCompare(a.updated_at))[0]
   const items = plan.items.filter((item) => item.kind !== "mistakes")
   const done = items.filter(isDayItemDone).length
 
@@ -41,7 +45,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
       if (cached) return cached
       const date = new Date(`${today}T12:00:00`)
       date.setDate(date.getDate() - offset)
-      const result = { date, minutes: buildDayPlan(localDate(date), data, timetable).completedMinutes }
+      const result = { date, minutes: buildDayPlan(localDate(date), source, timetable).completedMinutes }
       history.set(offset, result)
       return result
     }
@@ -50,7 +54,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
     let streak = 0
     for (let offset = 1; offset <= 60 && minutesOn(offset).minutes > 0; offset++) streak++
     return { week, streak }
-  }, [today, data, timetable])
+  }, [today, source, timetable])
   const todayMinutes = plan.completedMinutes
   const days = week.map((day, index) => index === 6 ? { ...day, minutes: todayMinutes } : day)
   const weekMinutes = days.reduce((sum, day) => sum + day.minutes, 0)
@@ -85,7 +89,7 @@ export function TodayPage({ now, data, timetable, dueMistakes, onNavigate, onSta
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={greeting(new Date(now).getHours())} description={new Date(now).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}>
-        <Button onClick={() => live ? onStartFocus(undefined, live.title, live.id) : onStartFocus(undefined, "")}>{live ? `Resume ${live.title}` : "Start studying"}</Button>
+        <Button onClick={() => focusSession ? onStartFocus(undefined, focusSession.title, focusSession.id) : onStartFocus(undefined, "")}>{focusSession ? `Resume ${focusSession.title}` : "Start studying"}</Button>
       </PageHeader>
 
       <section aria-label="Study stats" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border lg:grid-cols-4">

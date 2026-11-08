@@ -18,11 +18,6 @@ function equalAppData(first: AppData, second: AppData) {
   return sameValue(first, second)
 }
 
-/** A projection started from an older snapshot must not overwrite a local edit queued while it ran. */
-function isSupersededSync(startedFrom: AppData, queuedLatest: AppData): boolean {
-  return queuedLatest !== startedFrom
-}
-
 export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<AppData>>) {
   const [user, setUser] = useState<User | null>(null)
   const [status, setStatus] = useState<SyncStatus>(supabase ? "restoring" : "unconfigured")
@@ -30,11 +25,6 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
   const [pendingCount, setPendingCount] = useState(0)
   const [passwordRecovery, setPasswordRecovery] = useState<"checking" | "ready" | "invalid" | null>(passwordRecoveryRequested ? "checking" : null)
   const previous = useRef(data)
-  // previous only advances once the change is durably queued, which is async. A
-  // projection that started from an older snapshot must compare against the
-  // latest render, or it overwrites the edit made while it was in flight.
-  const latest = useRef(data)
-  useEffect(() => { latest.current = data })
   const activeAccount = useRef<string | null>(null)
   const queueTask = useRef<Promise<void>>(Promise.resolve())
   const queueFailed = useRef(false)
@@ -105,9 +95,12 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (cancelled || activeAccount.current !== user.id) return null
       setPendingCount(health.pending)
       setStatus(health.pending || health.cursor < health.head ? "pending" : "synced")
-      if (isSupersededSync(data, latest.current)) return null
-      previous.current = merged
-      setData((current) => equalAppData(current, merged) ? current : merged)
+      // Decide against React's real current state: a ref updated after render misses an edit still waiting to render.
+      setData((current) => {
+        if (current !== data) return current // Edited while this sync ran; the next sync merges it.
+        previous.current = merged
+        return equalAppData(current, merged) ? current : merged
+      })
       return merged
     })
     syncTask.current = task

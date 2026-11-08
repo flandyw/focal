@@ -64,7 +64,7 @@ import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, t
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 import type { OnboardingFinish } from "./components/onboarding-dialog"
 import { useRecovery } from "./hooks/use-recovery"
-import { deletedSince, recoverySessionCandidates, replacementData, restoreMissing, saveRecovery, validateRecovery, type RecoveryEntry } from "./lib/recovery"
+import { deletedIds, deletedSince, recoverySessionCandidates, replacementData, restoreMissing, saveRecovery, validateRecovery, type RecoveryEntry } from "./lib/recovery"
 import { questionKey, unloggedMistakes } from "./lib/marking"
 import type { TaskDraft } from "./lib/learning-workspace"
 
@@ -599,8 +599,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     if (!deleted) { setData(update); return true }
     try {
       await recovery.preserve(deleted.data, deleted.sessions, deleted.count)
-      if (latestData.current !== before) throw new Error("Your data changed while the recovery copy was being saved. Try deleting again.")
-      setData(next)
+      // Other edits (a second quick delete, a sync) may land meanwhile: reapply to the latest data, and only refuse if it now deletes something the copy lacks.
+      const now = latestData.current
+      const again = now === before ? null : deletedSince(now, update(now), [], [])
+      const saved = new Set(deletedIds(deleted.data))
+      if (again && deletedIds(again.data).some((id) => !saved.has(id))) throw new Error("Your data changed while the recovery copy was being saved. Try deleting again.")
+      setData(update)
       return true
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save a recovery copy. Nothing was deleted."); return false }
   }

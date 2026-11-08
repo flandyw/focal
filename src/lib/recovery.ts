@@ -90,6 +90,10 @@ export function deletedSince(before: AppData, after: AppData, beforeSessions: Ca
   return count ? { data, sessions, count } : null
 }
 
+/** Every record id in a deletedSince() copy. */
+export const deletedIds = (data: AppData) => [data.attempts, data.mistakes, data.sacRecords, data.events, data.atarEstimates,
+  data.learning.tasks, data.learning.curriculumAreas, data.learning.goals].flat().map((item) => item.id)
+
 export function validateRecovery(value: unknown): RecoveryEntry {
   if (!value || typeof value !== "object") throw new Error("This is not a valid Focal recovery backup.")
   const entry = value as Partial<RecoveryEntry>

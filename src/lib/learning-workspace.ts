@@ -191,10 +191,11 @@ export function getGoalProgress(goal: StudyGoal, data: AppData, references: Asse
     label = "Predicted raw study score"
     evidence = prediction ? `${prediction.confidence} confidence · likely ${prediction.low}–${prediction.high}.` : evidence
   } else if (goal.kind === "atar") {
-    const saved = data.atarEstimates[0]
-    current = saved ? Number.parseFloat(saved.atarLabel.replace(/[^0-9.]/g, "")) : null
+    const saved = data.atarEstimates.toSorted((first, second) => second.savedAt.localeCompare(first.savedAt))[0]
+    const value = saved?.atarLabel.trim() ? Number(saved.atarLabel) : Number.NaN
+    current = Number.isFinite(value) && value >= 0 && value <= 99.95 ? value : null
     label = "Latest saved ATAR estimate"
-    evidence = saved ? `Saved ${new Date(saved.savedAt).toLocaleDateString("en-AU")}.` : "Save an ATAR estimate to establish a baseline."
+    evidence = saved ? `Saved ${saved.atarLabel} on ${new Date(saved.savedAt).toLocaleDateString("en-AU")}.` : "Save an ATAR estimate to establish a baseline."
   }
   const gap = current === null ? null : Math.max(0, goal.target - current)
   return { current, target: goal.target, progress: current === null ? 0 : Math.max(0, Math.min(100, current / goal.target * 100)), gap, label, evidence }

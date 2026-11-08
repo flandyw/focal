@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useMemo, useRef, useState, useCallback } from "react"
 import type { KeyboardEvent, MouseEvent } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, useMotionValue, useReducedMotion } from "framer-motion"
@@ -99,13 +99,6 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
     return null
   })()
 
-  // When the focus state changes, move actual DOM focus to that cell
-  useEffect(() => {
-    if (!focus) return
-    const el = cellRefs.current.get(`${focus.weekIdx}-${focus.dayIdx}`)
-    el?.focus({ preventScroll: true })
-  }, [focus])
-
   const findAdjacent = useCallback(
     (
       from: { weekIdx: number; dayIdx: number },
@@ -125,13 +118,13 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>, weekIdx: number, dayIdx: number) => {
       let next: { weekIdx: number; dayIdx: number } | null = null
-      if (e.key === "ArrowRight") next = findAdjacent({ weekIdx, dayIdx }, 0, 1)
+      if (e.key === "ArrowRight") next = findAdjacent({ weekIdx, dayIdx }, 1, 0)
       else if (e.key === "ArrowLeft")
-        next = findAdjacent({ weekIdx, dayIdx }, 0, -1)
-      else if (e.key === "ArrowDown")
-        next = findAdjacent({ weekIdx, dayIdx }, 1, 0)
-      else if (e.key === "ArrowUp")
         next = findAdjacent({ weekIdx, dayIdx }, -1, 0)
+      else if (e.key === "ArrowDown")
+        next = findAdjacent({ weekIdx, dayIdx }, 0, 1)
+      else if (e.key === "ArrowUp")
+        next = findAdjacent({ weekIdx, dayIdx }, 0, -1)
       else if (e.key === "Home") {
         for (let d = 0; d < 7; d++) {
           if (weeks[weekIdx][d]) {
@@ -150,6 +143,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
       if (next) {
         e.preventDefault()
         setFocusOverride(next)
+        cellRefs.current.get(`${next.weekIdx}-${next.dayIdx}`)?.focus({ preventScroll: true })
       }
     },
     [findAdjacent, weeks],

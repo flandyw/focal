@@ -221,6 +221,8 @@ export type AppData = {
   sacRecordsUpdatedAt: string
   subjects: string[]
   subjectsUpdatedAt: string
+  completedSubjects: string[]
+  completedSubjectsUpdatedAt: string
   trackedExamIds: string[]
   trackedExamIdsUpdatedAt: string
   completedExamIds: string[]
@@ -245,6 +247,8 @@ export const EMPTY_APP_DATA: AppData = {
   mistakes: [],
   sacRecords: [],
   sacRecordsUpdatedAt: "1970-01-01T00:00:00.000Z",
+  completedSubjects: [],
+  completedSubjectsUpdatedAt: "1970-01-01T00:00:00.000Z",
   subjects: [],
   subjectsUpdatedAt: "1970-01-01T00:00:00.000Z",
   trackedExamIds: [],
@@ -1058,6 +1062,8 @@ function isAppData(value: unknown): value is AppData {
     sacRecordsValid &&
     typeof data.sacRecordsUpdatedAt === "string" &&
     subjectsValid &&
+    Array.isArray(data.completedSubjects) && data.completedSubjects.every((value) => typeof value === "string") &&
+    typeof data.completedSubjectsUpdatedAt === "string" &&
     typeof data.subjectsUpdatedAt === "string" &&
     trackedExamIdsValid &&
     typeof data.trackedExamIdsUpdatedAt === "string" &&
@@ -1186,6 +1192,8 @@ export function migrateAppData(value: unknown): AppData | null {
   const migrated = {
     ...data,
     schemaVersion: 5 as const,
+    completedSubjects: data.completedSubjects === undefined ? [] : data.completedSubjects,
+    completedSubjectsUpdatedAt: typeof data.completedSubjectsUpdatedAt === "string" ? data.completedSubjectsUpdatedAt : "1970-01-01T00:00:00.000Z",
     subjects: Array.isArray(data.subjects) ? data.subjects : [],
     subjectsUpdatedAt: typeof data.subjectsUpdatedAt === "string" ? data.subjectsUpdatedAt : "1970-01-01T00:00:00.000Z",
     trackedExamIds: Array.isArray(data.trackedExamIds) ? data.trackedExamIds : [],

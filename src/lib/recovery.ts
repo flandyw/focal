@@ -119,7 +119,7 @@ export function replacementData(saved: AppData, current: AppData, now = new Date
   }
   return {
     ...saved, attempts: stamp(saved.attempts), mistakes: stamp(saved.mistakes), sacRecords: stamp(saved.sacRecords),
-    subjectsUpdatedAt: now, sacRecordsUpdatedAt: now, trackedExamIdsUpdatedAt: now, completedExamIdsUpdatedAt: now, atarEstimatesUpdatedAt: now,
+    completedSubjectsUpdatedAt: now, subjectsUpdatedAt: now, sacRecordsUpdatedAt: now, trackedExamIdsUpdatedAt: now, completedExamIdsUpdatedAt: now, atarEstimatesUpdatedAt: now,
     learning: { ...saved.learning, tasks: restoreLearning(saved.learning.tasks, current.learning.tasks), goals: restoreLearning(saved.learning.goals, current.learning.goals), curriculumAreas: restoreLearning(saved.learning.curriculumAreas, current.learning.curriculumAreas), preferencesUpdatedAt: now, updatedAt: now },
     events: saved.events.map((event) => ({ ...event, updated_at: now })),
     examDifficulty: saved.examDifficulty ? { ...saved.examDifficulty, updatedAt: now } : undefined,

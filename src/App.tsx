@@ -1,4 +1,4 @@
-import { isPaused, isRunning, studySessionSubjects } from "./lib/sync/sessionContract"
+import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
@@ -267,7 +267,22 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   // Mistakes picks its own subject on the page, so it runs through the same scoping without touching the global choice.
   const [mistakesSubject, setMistakesSubject] = useState(() => new URLSearchParams(location.search).get("subject") ?? "all")
-  const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? data.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
+  const currentWork = useMemo(() => {
+    const active = (subject?: string | null) => !subject || !data.completedSubjects.some((completed) => sameStudySubject(completed, subject))
+    const attemptSubjects = new Map(data.attempts.map((attempt) => [attempt.id, attempt.subject]))
+    return {
+      ...data,
+      subjects: data.subjects.filter(active),
+      mistakes: data.mistakes.filter((mistake) => active(attemptSubjects.get(mistake.attemptId) ?? mistake.subject)),
+      sacRecords: data.sacRecords.filter((record) => active(record.subject)),
+      events: data.events.filter((event) => active(event.subjectId)),
+      learning: { ...data.learning, tasks: data.learning.tasks.filter((task) => active(task.subject)), goals: data.learning.goals.filter((goal) => active(goal.subject)) },
+      classTimetable: data.classTimetable && { ...data.classTimetable, entries: data.classTimetable.entries.map((entry) => ({ ...entry, periods: entry.periods.filter((period) => active(period.subject)) })) },
+    }
+  }, [data])
+  const activeSubject = (subject?: string | null) => !subject || !data.completedSubjects.some((completed) => sameStudySubject(completed, subject))
+  const currentSessions = studySessionSync.sessions.filter((session) => activeSubject(session.subject_id) || !isPlanned(session))
+  const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? currentWork.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
   const globalView = ["today", "calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const showSubjectMenu = !globalView && view !== "mistakes"
@@ -293,10 +308,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const otherSubjects = useMemo(() => subjectOptions.filter((subject) => !mySubjects.includes(subject)).toSorted((first, second) => first.localeCompare(second)), [subjectOptions, mySubjects])
   // Cards fall due and days roll over while the app sits open, so the badges follow the clock as well as the data.
   const now = useTickingNow()
-  const allDueMistakeCount = useMemo(() => countDueMistakes(data.mistakes, now), [data.mistakes, now])
-  const dueMistakeCount = useMemo(() => workspace.mistakes === data.mistakes ? allDueMistakeCount : countDueMistakes(workspace.mistakes, now), [workspace.mistakes, data.mistakes, allDueMistakeCount, now])
+  const allDueMistakeCount = useMemo(() => countDueMistakes(currentWork.mistakes, now), [currentWork.mistakes, now])
+  const dueMistakeCount = useMemo(() => workspace.mistakes === data.mistakes ? allDueMistakeCount : countDueMistakes(workspace.mistakes.filter((mistake) => currentWork.mistakes.includes(mistake)), now), [workspace.mistakes, data.mistakes, currentWork.mistakes, allDueMistakeCount, now])
   const today = localDate(now)
-  const dueStudyTaskCount = useMemo(() => data.learning.tasks.filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor <= today).length, [data.learning.tasks, today])
+  const dueStudyTaskCount = useMemo(() => currentWork.learning.tasks.filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor <= today).length, [currentWork.learning.tasks, today])
 
   function chooseSubject(subject: string) {
     if (!subject) return
@@ -541,6 +556,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function startFocus(subject: string | undefined, intent: string, sessionId?: string) {
+    if (!activeSubject(subject)) { toast.error("Resume this subject in Settings before starting new study."); return }
     if (!sessionId) { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus"); return }
     const session = studySessionSync.sessions.find((row) => row.id === sessionId)
     if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }
@@ -588,6 +604,13 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       .catch(() => {})
   }
 
+  function saveCurrentLearning(update: LearningWorkspaceUpdate) {
+    saveLearning((current) => {
+      const next = typeof update === "function" ? update({ ...current, tasks: current.tasks.filter((task) => activeSubject(task.subject)), goals: current.goals.filter((goal) => activeSubject(goal.subject)) }) : update
+      return { ...next, tasks: [...current.tasks.filter((task) => !activeSubject(task.subject)), ...next.tasks], goals: [...current.goals.filter((goal) => !activeSubject(goal.subject)), ...next.goals] }
+    })
+  }
+
   function saveLearning(update: LearningWorkspaceUpdate) {
     void commitRecoverable((current) => ({ ...current, learning: typeof update === "function" ? update(current.learning) : update }))
   }
@@ -617,6 +640,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function planGoal(goal: StudyGoal) {
+    if (!activeSubject(goal.subject)) { toast.error("Resume this subject in Settings before planning study."); return }
     const sourceId = `goal:${goal.id}`
     if (data.learning.tasks.some((task) => !task.archivedAt && task.status === "planned" && task.sourceId === sourceId)) {
       setView("calendar")
@@ -691,6 +715,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     action?: "cancel" | "complete",
   ): Promise<FocusTimerSession | undefined> {
     try {
+      if (!previous && next && !activeSubject(next.subject)) throw new Error("Resume this subject in Settings before starting new study.")
       return await saveTimerSessionChange(previous, next, "focus", action)
     } catch (error) {
       reportSessionFailure(action ?? "save", error)
@@ -899,7 +924,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function planWeeklyTasks(drafts: TaskDraft[]) {
-    setData((current) => ops.addPlannedTasks(current, drafts))
+    setData((current) => ops.addPlannedTasks(current, drafts.filter((draft) => activeSubject(draft.subject))))
     toast.success("Review tasks added to Calendar")
   }
 
@@ -1053,10 +1078,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                 onDeleteExam={deleteAttempt}
               />
           ) : null}
-          {view === "today" ? <TodayPage now={now.getTime()} data={pageData} sessions={studySessionSync.sessions} timetable={pageTimetable} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
+          {view === "today" ? <TodayPage now={now.getTime()} data={currentWork} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} dueMistakes={dueMistakeCount} onNavigate={setView} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
-          {view === "calendar" ? <CalendarPage data={pageData} subjects={data.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
+          {view === "calendar" ? <CalendarPage data={{ ...data, sacRecords: currentWork.sacRecords, mistakes: currentWork.mistakes, learning: currentWork.learning }} subjects={currentWork.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
             const current = latestData.current
             const next = { ...current, events: [...current.events.filter((item) => !events.some((event) => event.id === item.id)), ...events] }
@@ -1065,9 +1090,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
             setData(next)
             try { await removeStudySession(session) }
             catch (error) { throw new Error(`Events saved, but the study session could not be removed. Retry conversion to finish. ${error instanceof Error ? error.message : ""}`) }
-          }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={studySessionSync.sessions} timetable={pageTimetable} onChange={saveLearning} onNavigate={setView} onStartFocus={startFocus} /> : null}
+          }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} onChange={saveCurrentLearning} onNavigate={setView} onStartFocus={startFocus} /> : null}
           {view === "progress" ? <ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} data={pageData} onPlan={planWeeklyTasks} onLogExam={openNewExam} onNewSession={() => setView("focus")} /> : null}
-          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects} preferredSubjects={pageData.subjects} mode={timerMode} onModeChange={(mode) => { setTimerMode(mode); setRouteSearch(mode === "exam" ? "?timer=exam" : "") }} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={studySessionSync.sessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={{ ...studySessionSync, remove: removeStudySession }} events={data.events} classTimetable={data.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => { setTimerMode("focus"); setRouteSearch("") }, onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
+          {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects.filter(activeSubject)} preferredSubjects={currentWork.subjects} mode={timerMode} onModeChange={(mode) => { setTimerMode(mode); setRouteSearch(mode === "exam" ? "?timer=exam" : "") }} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={currentSessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={{ ...studySessionSync, remove: removeStudySession }} events={currentWork.events} classTimetable={currentWork.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: data.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => { setTimerMode("focus"); setRouteSearch("") }, onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
           {view === "stoplight" ? <StoplightPage onRelatedMistakes={openMistakeQueue} data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /> : null}
           {view === "goals" ? <GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} /> : null}
           {view === "mistakes" ? <MistakesPage key={routeSearch} initialStatus={new URLSearchParams(routeSearch).get("status")} skillId={new URLSearchParams(routeSearch).get("skill")} workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={(subject) => { setMistakesSubject(subject); setRouteSearch(`?${new URLSearchParams({ subject })}`) }} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
@@ -1088,7 +1113,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }} />}</> : null}
           {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}
-          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
+          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} onCompletedSubjectsChange={(completedSubjects) => setData((current) => ({ ...current, completedSubjects, completedSubjectsUpdatedAt: new Date().toISOString() }))} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
           </div>
           </Suspense>
         </main>

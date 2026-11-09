@@ -47,12 +47,14 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjects, onCompletedSubjectsChange, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
   recovery: ReactNode
   initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
+  completedSubjects: string[]
+  onCompletedSubjectsChange: (subjects: string[]) => void
   providers: string[]
   examDifficulty?: ExamDifficultySettings
   onSubjectsChange: (subjects: string[]) => void
@@ -164,7 +166,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
 
         <div className="min-w-0 max-w-3xl">
           {active === "subjects" ? (
-            <Section title="Subjects" description="Your first subject is the default. Selected subjects appear first and bold in subject searches.">
+            <Section title="Subjects" description="Complete a subject to keep its records and ATAR context while removing it from current work. Resume it at any time.">
               <div className="grid gap-2 py-4 sm:grid-cols-2">
                 <SubjectCombobox
                   subjects={subjects.filter((subject) => !selectedSubjects.includes(subject))}
@@ -196,7 +198,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, providers, exam
                     <li key={subject} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={subject}>{subject}</span>
-                      {index === 0 ? <Badge variant="secondary">Default</Badge> : null}
+                      <Button type="button" variant="outline" size="sm" onClick={() => onCompletedSubjectsChange(completedSubjects.includes(subject) ? completedSubjects.filter((item) => item !== subject) : [...completedSubjects, subject])}>{completedSubjects.includes(subject) ? "Resume subject" : "Mark completed"}</Button>
+                      {completedSubjects.includes(subject) ? <Badge variant="secondary">Completed</Badge> : null}
+                      {subject === selectedSubjects.find((item) => !completedSubjects.includes(item)) ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${subject} up`} disabled={index === 0} onClick={() => {
                         const next = [...selectedSubjects]
                         ;[next[index - 1], next[index]] = [next[index], next[index - 1]]

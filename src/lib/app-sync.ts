@@ -596,6 +596,7 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
     examProgression: isExamProgression(remoteProgression) ? remoteProgression : undefined,
     trackedExamIds, trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
     completedExamIds, completedExamIdsUpdatedAt: stamp("completedExamIds"),
+    completedSubjects: stringArray(value("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
     subjects, subjectsUpdatedAt: stamp("subjects"),
     sacRecords, sacRecordsUpdatedAt: stamp("sacRecords"),
     mistakeInsights: remoteInsights,

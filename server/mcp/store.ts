@@ -176,6 +176,7 @@ function project(rows: Map<string, Row>): AppData {
     examProgression: isExamProgression(progression) ? progression : undefined,
     trackedExamIds: strings(value("trackedExamIds")), trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
     completedExamIds: strings(value("completedExamIds")), completedExamIdsUpdatedAt: stamp("completedExamIds"),
+    completedSubjects: strings(value("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
     subjects: strings(value("subjects")), subjectsUpdatedAt: stamp("subjects"),
     sacRecords: migrateSacRecords(value("sacRecords")) ?? [], sacRecordsUpdatedAt: stamp("sacRecords"),
     mistakeReviewPreferences: isRecord(reviewPreferences) ? normalizeMistakeReviewPreferences(reviewPreferences) : undefined,

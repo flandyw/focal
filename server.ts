@@ -18,7 +18,13 @@ function cacheControl(pathname: string) {
 
 async function serveFile(request: Request, path: string, pathname: string) {
   const file = Bun.file(path)
-  const headers = new Headers({ "Cache-Control": cacheControl(pathname), "Content-Type": file.type, Vary: "Accept-Encoding" })
+  const headers = new Headers({
+    "Cache-Control": cacheControl(pathname), "Content-Type": file.type, Vary: "Accept-Encoding",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+  })
   if (!COMPRESSIBLE.test(path) || !request.headers.get("accept-encoding")?.includes("gzip")) return new Response(file, { headers })
   // shortcut: compressed copies stay in memory, keyed by build; fine while dist holds one deploy, restart after many rebuilds.
   const key = `${path}:${file.lastModified}`

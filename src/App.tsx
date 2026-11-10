@@ -134,6 +134,7 @@ const AppTour = lazy(() =>
   import("./components/app-tour").then((module) => ({ default: module.AppTour })),
 )
 const ONBOARDED_KEY = "examtrack:onboarded:v1"
+type Sheet = { kind: "exam" } | { kind: "mistake"; attemptId: string | null } | { kind: "marking"; attempt: ExamAttempt } | null
 const SubjectOverview = lazy(() => import("./components/subject-overview").then((module) => ({ default: module.SubjectOverview })))
 const TodayPage = lazy(() => import("./components/today-page").then((module) => ({ default: module.TodayPage })))
 const CalendarPage = lazy(() =>
@@ -146,11 +147,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     if (route?.subject) setChosenSubject(route.subject)
     setTimerMode(params.get("timer") === "exam" ? "exam" : "focus")
     setMistakesSubject(params.get("subject") ?? "all")
-    setExamOpen(false)
-    setMistakeOpen(false)
-    setEditingAttempt(null)
-    setEditingMistake(null)
-    setMarkingAttempt(null)
+    setSheet(null)
   })
   // Every app-data change, local or synced, picks up stoplight evidence before it renders or syncs.
   const [data, setData] = useReducer((current: AppData, update: SetStateAction<AppData>) => withStoplightProgress(typeof update === "function" ? update(current) : update),
@@ -170,20 +167,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const [settingsSection, setSettingsSection] = useState<"ai" | "account">()
   // A SAC alert opens the running timer, whether it launches Focal or lands in an open app.
   const [sacTimerRequest, setSacTimerRequest] = useState(() => typeof location !== "undefined" && new URLSearchParams(location.search).get("timer") === "sac" ? 1 : 0)
-  const [examOpen, setExamOpen] = useState(false)
-  const [draftAttempt, setEditingAttempt] = useState<ExamAttempt | null>(null)
-  const [pendingMarkingAttempt, setMarkingAttempt] = useState<ExamAttempt | null>(null)
-  const [mistakeOpen, setMistakeOpen] = useState(false)
-  const [mistakeAttemptId, setMistakeAttemptId] = useState<string | null>(null)
-  const [draftMistake, setEditingMistake] = useState<Mistake | null>(null)
-  const editingAttempt = view === "exams" && recordId ? data.attempts.find((attempt) => attempt.id === recordId) ?? null : draftAttempt
-  const editingMistake = view === "mistakes" && recordId ? data.mistakes.find((mistake) => mistake.id === recordId) ?? null : draftMistake
-  const markingAttempt = view === "exams" && recordId && new URLSearchParams(routeSearch).has("marking") ? editingAttempt : pendingMarkingAttempt
+  // At most one sheet is open. Editing an existing record is routed (recordId), so only new records live here.
+  const [sheet, setSheet] = useState<Sheet>(null)
+  const closeSheet = (kind: NonNullable<Sheet>["kind"]) => setSheet((current) => current?.kind === kind ? null : current)
+  const editingAttempt = view === "exams" && recordId ? data.attempts.find((attempt) => attempt.id === recordId) ?? null : null
+  const editingMistake = view === "mistakes" && recordId ? data.mistakes.find((mistake) => mistake.id === recordId) ?? null : null
+  const markingAttempt = view === "exams" && recordId && new URLSearchParams(routeSearch).has("marking") ? editingAttempt : sheet?.kind === "marking" ? sheet.attempt : null
   function openRecord(next: AppView, id: string, search = "") {
-    setEditingAttempt(null)
-    setEditingMistake(null)
-    setExamOpen(false)
-    setMistakeOpen(false)
+    setSheet(null)
     setView(next, id, search)
   }
   function openMistakeQueue(subject = "all", skill?: string) {
@@ -245,24 +236,23 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     // The macOS ATAR widget needs scaling data to break down the latest saved scenario.
     view === "predictor" || view === "atar" || Boolean(import.meta.env.VITE_DESKTOP && data.atarEstimates.length),
     !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view),
-    view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || mistakeOpen || Boolean(view === "mistakes" && recordId),
+    view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || sheet?.kind === "mistake" || Boolean(view === "mistakes" && recordId),
   )
   useDesktopWidgets(data, studySessionSync.sessions, timetable, references, scalingReferences, sync.user?.id, sync.status, setView)
 
   // Latch on a genuinely empty account, once sync has settled, so adding subjects mid-flow doesn't close it.
-  const [onboarding, setOnboarding] = useState(false)
-  const [touring, setTouring] = useState(false)
+  const [guide, setGuide] = useState<"onboarding" | "tour" | null>(null)
   const accountEmpty = !data.subjects.length && !data.attempts.length && !data.mistakes.length && !data.sacRecords.length && !studySessionSync.sessions.length
-  if (!onboarding && !embedded && accountEmpty && ["unconfigured", "signed-out", "synced"].includes(sync.status) && !(() => { try { return localStorage.getItem(ONBOARDED_KEY) } catch { return "1" } })()) setOnboarding(true)
+  if (guide === null && !embedded && accountEmpty && ["unconfigured", "signed-out", "synced"].includes(sync.status) && !(() => { try { return localStorage.getItem(ONBOARDED_KEY) } catch { return "1" } })()) setGuide("onboarding")
 
   function finishOnboarding(next: OnboardingFinish) {
     try { localStorage.setItem(ONBOARDED_KEY, "1") } catch { /* Shows again next visit without storage. */ }
-    setOnboarding(false)
+    setGuide(null)
     if (next === "sign-in") { setSettingsSection("account"); setView("settings") }
-    else if (next === "exam") { setEditingAttempt(null); setExamOpen(true) }
+    else if (next === "exam") setSheet({ kind: "exam" })
     else if (next === "focus") { setTimerMode("focus"); setView("focus") }
     else if (next === "calendar") setView("calendar")
-    else if (next === "tour") setTouring(true)
+    else if (next === "tour") setGuide("tour")
   }
 
   const referenceLoadFailed = [referencesStatus, studiesStatus, scalingStatus, timetableStatus].includes("error")
@@ -402,8 +392,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     return () => timers.forEach(window.clearTimeout)
   }, [data.activeExamTimer, data.activeSacTimer])
   useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
-  useRouteUrl(embedded, view, pendingMarkingAttempt
-    ? routePath({ view: "exams", id: pendingMarkingAttempt.id }) + "?marking=1"
+  useRouteUrl(embedded, view, sheet?.kind === "marking"
+    ? routePath({ view: "exams", id: sheet.attempt.id }) + "?marking=1"
     : routePath({ view, subject: chosenSubject ?? selectedSubject, id: recordId }) + routeSearch + (typeof location === "undefined" ? "" : location.hash), consumeBack)
   // Consume one-shot launch links, so a reload lands on the saved page rather than replaying the link.
   const launchAction = useRef(typeof location === "undefined" ? null : new URLSearchParams(location.search).get("action"))
@@ -471,13 +461,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setView(logMistake ? "mistakes" : "exams")
     linkInBackground({ ...data, attempts: [...data.attempts.filter((item) => item.id !== attempt.id), attempt] }, (attempt.questionResults ?? []).map((result) => result.id))
     setData((current) => ops.recordAttemptResult(current, attempt))
-    if (logMistake) {
-      setEditingMistake(null)
-      setMistakeAttemptId(attempt.id)
-      setMistakeOpen(true)
-    } else if (unloggedMistakes(attempt, data.mistakes).length) {
-      setMarkingAttempt(attempt)
-    }
+    if (logMistake) setSheet({ kind: "mistake", attemptId: attempt.id })
+    else if (unloggedMistakes(attempt, data.mistakes).length) setSheet({ kind: "marking", attempt })
 
     if (!isNew) {
       toast.success("Exam updated")
@@ -766,28 +751,22 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     const latest = [...workspace.attempts].toSorted((first, second) =>
       second.completedAt.localeCompare(first.completedAt),
     )[0]
-    if (!latest) return
-    setEditingMistake(null)
-    setMistakeAttemptId(latest.id)
-    setMistakeOpen(true)
+    if (latest) setSheet({ kind: "mistake", attemptId: latest.id })
   }
 
   function openNewExam() {
-    setEditingAttempt(null)
-    setExamOpen(true)
+    setSheet({ kind: "exam" })
   }
 
   function openNewMistake(attemptId: string | null = null) {
-    setEditingMistake(null)
-    setMistakeAttemptId(attemptId)
-    setMistakeOpen(true)
+    setSheet({ kind: "mistake", attemptId })
   }
 
   useEffect(() => {
     if (launchAction.current !== "log-mistake") return
     launchAction.current = null
     // oxlint-disable-next-line react/set-state-in-effect -- a Home Screen shortcut asked for this sheet
-    setMistakeOpen(true)
+    setSheet({ kind: "mistake", attemptId: null })
   }, [])
 
   async function deleteAttempt(attempt: ExamAttempt) {
@@ -1096,23 +1075,23 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }} />}</> : null}
           {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}
-          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} onCompleteYear={(year, subjects) => setData((current) => completeSubjectYear(current, year, subjects))} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setOnboarding(true)} onStartTour={() => setTouring(true)} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
+          {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} onCompleteYear={(year, subjects) => setData((current) => completeSubjectYear(current, year, subjects))} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setGuide("onboarding")} onStartTour={() => setGuide("tour")} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
           </div>
           </Suspense>
         </main>
         {!embedded && <MobileTabBar view={navView} dueMistakes={dueMistakeCount} plannedTasks={dueStudyTaskCount} onViewChange={setView} />}
       </SidebarInset>
-      {(examOpen || view === "exams" && recordId && editingAttempt) && !markingAttempt ? (
+      {(sheet?.kind === "exam" || view === "exams" && recordId && editingAttempt) && !markingAttempt ? (
         <Suspense fallback={null}>
-          <ExamSheet key={editingAttempt?.id ?? "new"} attempts={data.attempts} references={references} preferredSubjects={selectedSubject === "all" ? data.subjects : [selectedSubject]} comparisonYear={comparisonYear} initialAttempt={editingAttempt} onOpenChange={(open) => { setExamOpen(open); if (!open) closeRecord() }} onSave={saveAttempt} />
+          <ExamSheet key={editingAttempt?.id ?? "new"} attempts={data.attempts} references={references} preferredSubjects={selectedSubject === "all" ? data.subjects : [selectedSubject]} comparisonYear={comparisonYear} initialAttempt={editingAttempt} onOpenChange={(open) => { if (!open) { closeSheet("exam"); closeRecord() } }} onSave={saveAttempt} />
         </Suspense>
       ) : null}
-      {mistakeOpen || view === "mistakes" && recordId && editingMistake ? (
+      {sheet?.kind === "mistake" || view === "mistakes" && recordId && editingMistake ? (
         <Suspense fallback={null}>
-          <MistakeSheet key={editingMistake?.id ?? "new"} open initialSubject={selectedSubject === "all" ? undefined : selectedSubject} attempts={editingMistake ? data.attempts : workspace.attempts} studies={editingMistake ? resourceStudies : pageStudies} initialAttemptId={mistakeAttemptId} initialMistake={editingMistake} storageUserId={sync.user?.id} items={(editingMistake ? data : pageData).learning.curriculumAreas.filter((item) => item.group && !item.archivedAt)} onOpenChange={(open) => { setMistakeOpen(open); if (!open) closeRecord() }} onSave={saveMistake} />
+          <MistakeSheet key={editingMistake?.id ?? "new"} open initialSubject={selectedSubject === "all" ? undefined : selectedSubject} attempts={editingMistake ? data.attempts : workspace.attempts} studies={editingMistake ? resourceStudies : pageStudies} initialAttemptId={sheet?.kind === "mistake" ? sheet.attemptId : null} initialMistake={editingMistake} storageUserId={sync.user?.id} items={(editingMistake ? data : pageData).learning.curriculumAreas.filter((item) => item.group && !item.archivedAt)} onOpenChange={(open) => { if (!open) { closeSheet("mistake"); closeRecord() } }} onSave={saveMistake} />
         </Suspense>
       ) : null}
-      {markingAttempt && data.attempts.some((attempt) => attempt.id === markingAttempt.id) ? <Suspense fallback={null}><MarkingMistakesDialog key={markingAttempt.id} attempt={markingAttempt} results={unloggedMistakes(markingAttempt, data.mistakes)} onClose={() => { closeRecord(); setMarkingAttempt(null) }} onSave={(incoming) => {
+      {markingAttempt && data.attempts.some((attempt) => attempt.id === markingAttempt.id) ? <Suspense fallback={null}><MarkingMistakesDialog key={markingAttempt.id} attempt={markingAttempt} results={unloggedMistakes(markingAttempt, data.mistakes)} onClose={() => { closeRecord(); closeSheet("marking") }} onSave={(incoming) => {
         const allowed = new Set(unloggedMistakes(markingAttempt, latestData.current.mistakes).map((result) => questionKey(result.label)))
         const mistakes = incoming.filter((mistake) => allowed.has(questionKey(mistake.question)))
         if (mistakes.length) {
@@ -1121,7 +1100,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           if (demoted.previous.length) { saveLearning((current) => demoteGreens(current, mistakes).learning); notifyDemoted(demoted.previous) }
         }
         closeRecord()
-        setMarkingAttempt(null)
+        closeSheet("marking")
         if (mistakes.length) toast.success("Mistakes ready to review", { action: { label: "Review now", onClick: () => openMistakeQueue(markingAttempt.subject) } })
       }} /></Suspense> : null}
       {trackerOpen && timetable ? (
@@ -1139,8 +1118,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         />
         </Suspense>
       ) : null}
-      {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
-      {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
+      {guide === "tour" ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setGuide(null)} /></Suspense> : null}
+      {guide === "onboarding" && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" offset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 1.5rem)" }} mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 0.75rem)" }} />}
     </SidebarProvider>
     </AIOverviewContext.Provider>

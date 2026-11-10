@@ -64,6 +64,7 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
         .map_err(|error| format!("could not configure ChatGPT sidecar: {error}"))?
         .env("FOCAL_CHATGPT_DATA_DIR", data_directory)
         .env("FOCAL_CHATGPT_MANAGED", "1")
+        .env("FOCAL_CHATGPT_DEV", if cfg!(debug_assertions) { "1" } else { "0" })
         .spawn()
         .map_err(|error| format!("could not start ChatGPT sidecar: {error}"))?;
 

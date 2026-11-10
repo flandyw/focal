@@ -7,7 +7,9 @@ import { handleMistakesPdf } from "./mistakes-pdf"
 
 const DEFAULT_PORT = 41_731
 const ALLOWED_ORIGINS = [
-  "http://localhost:1420",
+  // Only developer launches should trust the Vite dev-server origin.
+  ...(process.env.FOCAL_CHATGPT_MANAGED !== "1" || process.env.FOCAL_CHATGPT_DEV === "1"
+    ? ["http://localhost:1420"] : []),
   "http://tauri.localhost",
   "https://tauri.localhost",
   "tauri://localhost",

@@ -1146,7 +1146,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         </Suspense>
       ) : null}
       {touring ? <Suspense fallback={null}><AppTour onNavigate={setView} onClose={() => setTouring(false)} /></Suspense> : null}
-      {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
+      {onboarding && !sync.passwordRecovery ? <Suspense fallback={null}><OnboardingDialog subjects={[...new Set(references.map((reference) => reference.studyName))]} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} onCompletedSubjectsChange={(completedSubjects) => setData((current) => ({ ...current, completedSubjects, completedSubjectsUpdatedAt: new Date().toISOString() }))} signedIn={Boolean(sync.user)} onSubjectsChange={saveSubjects} onFinish={finishOnboarding} /></Suspense> : null}
       {!embedded && <Toaster position="bottom-right" offset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 1.5rem)" }} mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 0.75rem)" }} />}
     </SidebarProvider>
     </AIOverviewContext.Provider>

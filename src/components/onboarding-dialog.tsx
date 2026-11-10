@@ -6,6 +6,7 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { FocalMark } from "./focal-mark"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
+import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { Progress } from "./ui/progress"
 
 const FEATURES = [
@@ -18,15 +19,24 @@ const FEATURES = [
 
 export type OnboardingFinish = "exam" | "focus" | "calendar" | "sign-in" | "tour" | null
 
-export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubjectsChange, onFinish }: {
+export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects, signedIn, onSubjectsChange, onCompletedSubjectsChange, completionYears = {}, onCompletionYearChange, onFinish }: {
   subjects: string[]
   selectedSubjects: string[]
+  completedSubjects: string[]
+  onCompletedSubjectsChange: (subjects: string[]) => void
+  // TODO(completion-model): supply these props once completion years can be persisted.
+  completionYears?: Record<string, number>
+  onCompletionYearChange?: (subject: string, year: number | undefined) => void
   signedIn: boolean
   onSubjectsChange: (subjects: string[]) => void
   onFinish: (next: OnboardingFinish) => void
 }) {
   const [step, setStep] = useState(0)
   const [subjectToAdd, setSubjectToAdd] = useState("")
+  const [addingCompleted, setAddingCompleted] = useState(false)
+  const currentSubjects = selectedSubjects.filter((subject) => !completedSubjects.includes(subject))
+  const finishedSubjects = selectedSubjects.filter((subject) => completedSubjects.includes(subject))
+  const [year] = useState(() => new Date().getFullYear())
   const steps = [
     {
       title: "Welcome to Focal",
@@ -44,32 +54,65 @@ export function OnboardingDialog({ subjects, selectedSubjects, signedIn, onSubje
     },
     {
       title: "Choose your subjects",
-      description: "Add them in priority order. The first is your default. Reorder them or add custom subjects later in Settings.",
+      description: "Choose what you’re studying now and anything you’ve already finished, including subjects completed in Year 11. Change these later in Settings → Subjects.",
       body: (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Add subject as">
+            <Button className="flex-1 basis-36" variant={addingCompleted ? "outline" : "default"} aria-pressed={!addingCompleted} onClick={() => setAddingCompleted(false)}>Studying now</Button>
+            <Button className="flex-1 basis-36" variant={addingCompleted ? "default" : "outline"} aria-pressed={addingCompleted} onClick={() => setAddingCompleted(true)}>Already completed</Button>
+          </div>
           <SubjectCombobox
             subjects={subjects.filter((subject) => !selectedSubjects.includes(subject))}
             preferredSubjects={[]}
             value={subjectToAdd}
             onValueChange={(subject) => {
-              if (!subject) return
+              if (!subject || selectedSubjects.includes(subject)) return
               onSubjectsChange([...selectedSubjects, subject])
+              onCompletedSubjectsChange(addingCompleted
+                ? [...new Set([...completedSubjects, subject])]
+                : completedSubjects.filter((item) => item !== subject))
               setSubjectToAdd("")
             }}
             className="w-full"
-            placeholder="Search and add a subject"
+            placeholder={addingCompleted ? "Search to add a completed subject" : "Search to add a current subject"}
           />
-          {selectedSubjects.length ? (
-            <ol className="divide-y">
-              {selectedSubjects.map((subject, index) => (
-                <li key={subject} className="flex items-center gap-2 py-1.5">
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{subject}</span>
-                  {index === 0 ? <Badge variant="secondary">Default</Badge> : null}
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => onSubjectsChange(selectedSubjects.filter((item) => item !== subject))}><X /></Button>
-                </li>
-              ))}
-            </ol>
-          ) : <p className="text-sm text-muted-foreground">No subjects yet.</p>}
+          <p className="text-sm text-muted-foreground" role="status">{currentSubjects.length} studying now · {finishedSubjects.length} completed</p>
+          {[
+            { title: "Studying now", items: currentSubjects, completed: false },
+            { title: "Already completed", items: finishedSubjects, completed: true },
+          ].map(({ title, items, completed }) => (
+            <section key={title} className="grid gap-2" aria-label={title}>
+              <h3 className="text-sm font-semibold">{title}</h3>
+              {items.length ? <ul className="divide-y">
+                {items.map((subject, index) => (
+                  <li key={subject} className="grid gap-2 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 break-words text-sm font-medium">{subject}</span>
+                      {!completed && index === 0 ? <Badge variant="secondary">Default</Badge> : null}
+                      <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${subject}`} onClick={() => {
+                        onSubjectsChange(selectedSubjects.filter((item) => item !== subject))
+                        onCompletedSubjectsChange(completedSubjects.filter((item) => item !== subject))
+                        onCompletionYearChange?.(subject, undefined)
+                      }}><X /></Button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" aria-label={`${completed ? "Studying again:" : "Mark completed:"} ${subject}`} onClick={() => {
+                        onCompletedSubjectsChange(completed ? completedSubjects.filter((item) => item !== subject) : [...completedSubjects, subject])
+                        if (completed) onCompletionYearChange?.(subject, undefined)
+                      }}>{completed ? "Studying again" : "Mark completed"}</Button>
+                      {completed ? <NativeSelect aria-label={`Completion year for ${subject}`} disabled={!onCompletionYearChange} value={completionYears[subject] ?? ""} onChange={(event) => onCompletionYearChange?.(subject, event.target.value ? Number(event.target.value) : undefined)}>
+                        <NativeSelectOption value="">Completion year (optional)</NativeSelectOption>
+                        {/* ponytail: offer the last ten years; expand for older returning students if needed. */}
+                        {Array.from({ length: 10 }, (_, index) => year - index).map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}
+                      </NativeSelect> : null}
+                    </div>
+                  </li>
+                ))}
+              </ul> : <p className="text-sm text-muted-foreground">{completed ? "Finished a subject early? Add it above." : "Add your current subjects above. You can also do this later."}</p>}
+            </section>
+          ))}
+          <p className="text-xs text-muted-foreground">Your first current subject is the default. Reorder subjects or resume a completed subject in Settings → Subjects.</p>
+          {finishedSubjects.length > 0 && !onCompletionYearChange ? <p className="text-xs text-muted-foreground">Completed status is saved. Completion years aren’t supported yet.</p> : null}
         </div>
       ),
     },

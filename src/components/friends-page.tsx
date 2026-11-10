@@ -43,6 +43,7 @@ type Person = {
   exams: SharedExam[] | null
 }
 type Profile = { username: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
+type BlockedPerson = { user_id: string; username: string | null; display_name: string | null }
 type Period = "today" | "week" | "month"
 type Ranking = "time" | "days"
 type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string; message?: string | null }
@@ -212,6 +213,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
   const [period, setPeriod] = useState<Period>("today")
   const [ranking, setRanking] = useState<Ranking>("time")
   const [cheers, setCheers] = useState(cache.cheers ?? [])
+  const [blocked, setBlocked] = useState<BlockedPerson[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [groupId, setGroupId] = useState("all")
   const [editing, setEditing] = useState<GroupDraft | null>(null)
@@ -249,11 +251,12 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
     }
   }, [])
 
-  // Groups, exam countdowns: optional extras, so a failure just leaves them empty.
+  // Groups, exam countdowns, blocked people: optional extras, so a failure just leaves them empty.
   const loadExtras = useCallback(async () => {
-    const [g, c] = await Promise.all([supabase!.rpc("friends_groups"), supabase!.rpc("friends_countdowns")])
+    const [g, c, b] = await Promise.all([supabase!.rpc("friends_groups"), supabase!.rpc("friends_countdowns"), supabase!.rpc("friends_blocked")])
     if (!g.error) setGroups((g.data ?? []) as Group[])
     if (!c.error) setCountdowns((c.data ?? []) as Countdown[])
+    if (!b.error) setBlocked((b.data ?? []) as BlockedPerson[])
   }, [])
 
   const load = useCallback(async () => {
@@ -425,6 +428,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
               <div className="flex gap-2">
                 {person.status === "incoming" ? <Button size="sm" disabled={!!pending} aria-label={`Accept ${personName(person)}'s friend request`} onClick={() => void call("friends_accept", { p_user_id: person.user_id }, "Could not accept the request.").then((ok) => { if (ok) toast.success("Friend request accepted") })}>Accept</Button> : null}
                 <Button size="sm" variant="outline" disabled={!!pending} aria-label={`${person.status === "incoming" ? "Decline" : "Cancel"} ${personName(person)}'s friend request`} onClick={() => void call("friends_remove", { p_user_id: person.user_id }, "Could not update the request.").then((ok) => { if (ok) toast.success(person.status === "incoming" ? "Request declined" : "Request cancelled") })}>{person.status === "incoming" ? "Decline" : "Cancel"}</Button>
+                {person.status === "incoming" ? <Button size="sm" variant="outline" disabled={!!pending} aria-label={`Block ${personName(person)}`} onClick={() => void call("friends_block", { p_user_id: person.user_id }, "Could not block this person.").then((ok) => { if (ok) toast.success("Blocked") })}>Block</Button> : null}
               </div>
             </div>)}
           </div> : null)}
@@ -732,6 +736,16 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
                   <Checkbox checked={profile?.require_requests ?? false} onCheckedChange={(checked) => { if (profile) void saveProfile({ ...profile, require_requests: checked }) }} />
                   Require my approval when someone adds me
                 </Label>
+                {blocked.length ? <section aria-label="Blocked people" className="grid gap-3">
+                  <h3 className="text-sm font-medium">Blocked people</h3>
+                  {blocked.map((person) => {
+                    const name = person.display_name || (person.username ? `@${person.username}` : "Deleted account")
+                    return <div key={person.user_id} className="flex items-center gap-3 text-sm">
+                      <span className="min-w-0 flex-1 truncate">{name}</span>
+                      <Button size="sm" variant="outline" disabled={!!pending} aria-label={`Unblock ${name}`} onClick={() => void call("friends_unblock", { p_user_id: person.user_id }, "Could not unblock this person.").then((ok) => { if (ok) toast.success("Unblocked") })}>Unblock</Button>
+                    </div>
+                  })}
+                </section> : null}
               </fieldset>
               <p className="text-xs text-muted-foreground">Subject and exam comparisons only use data each friend has chosen to share. Friend requests cannot see your study activity.</p>
             </CardContent>
@@ -794,6 +808,12 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
                 if (ok) { setRemoving(false); setSelectedId(null); toast.success("Friend removed") }
               })
             }}>{pending === "friends_remove" ? "Removing…" : "Remove friend"}</Button>
+            <Button variant="outline" disabled={!!pending} aria-label={`Block ${selected ? personName(selected.person) : "friend"}`} onClick={() => {
+              if (!selected) return
+              void call("friends_block", { p_user_id: selected.person.user_id }, "Could not block this person.").then((ok) => {
+                if (ok) { setRemoving(false); setSelectedId(null); toast.success("Blocked") }
+              })
+            }}>{pending === "friends_block" ? "Blocking…" : "Block"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

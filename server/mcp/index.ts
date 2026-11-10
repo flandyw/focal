@@ -65,7 +65,10 @@ export async function handleMcp(request: Request): Promise<Response> {
   const unauthorized = (why: string) => { console.warn(`mcp 401: ${why}`); return new Response("Unauthorized", { status: 401, headers: { "www-authenticate": "Bearer" } }) }
   if (!token.startsWith("focal_")) return unauthorized(token ? "bearer token without focal_ prefix" : "no Bearer authorization header")
   let userId: string | null
-  try { userId = await resolveToken(token) } catch (error) { return new Response(error instanceof Error ? error.message : "Token lookup failed", { status: 503 }) }
+  try { userId = await resolveToken(token) } catch (error) {
+    console.error("mcp token lookup failed:", error instanceof Error ? error.message : "Unknown error")
+    return new Response("Service unavailable", { status: 503 })
+  }
   if (!userId) return unauthorized("unknown or revoked token")
   return asUser(userId, async () => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })

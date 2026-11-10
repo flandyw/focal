@@ -14,6 +14,8 @@ Deploy from the repository root. `vercel.json` builds with `bun run build`, serv
 
 For a Bun host, build first and run `bun run start`. Use HTTPS for public deployments. Review the API and secrets configuration before exposing the server.
 
+Worksheet PDF export sends the worksheet's LaTeX (including mistake text) to the public compiler at texlive.net through `/api/mistakes-pdf`. The endpoint is rate-limited per address. Operators who need to keep content in-house must point `COMPILER_URL` in `server/mistakes-pdf.ts` at their own compiler.
+
 ## Desktop
 
 `bun run tauri build` packages the shared frontend with the native shell and sidecar. Set the frontend Supabase variables at build time. Packaged desktop Gateway chat also needs `VITE_CHAT_API_URL` pointing to the hosted `/api/chat` endpoint. The release workflow in `.github/workflows/release.yml` builds platform artifacts and publishes them to GitHub Releases.

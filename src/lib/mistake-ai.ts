@@ -1,7 +1,7 @@
 import { createChatGPTProvider } from "./chatgpt-client"
 import { count } from "./utils"
 import { jsonSchema, Output, streamText } from "ai"
-import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
+import { getMistakeSchedule, MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
 import { candidateItems, itemGroup, type ItemLink, type LinkRecord } from "./stoplight"
 import type { CurriculumArea } from "./learning-workspace"
 import { loadAISettings, supportsStreamedAnalysis } from "./ai-settings"
@@ -116,7 +116,7 @@ function mistakeContext(mistakes: Mistake[], attempts: ExamAttempt[]) {
         totalMarks: assessmentResult.maxMarks,
         examinerNote: assessmentResult.examinerNote,
       } : undefined,
-      resolved: mistake.resolved,
+      resolved: getMistakeSchedule(mistake).resolved,
       reviewState: mistake.reviewState,
       dueAt: mistake.dueAt,
       intervalDays: mistake.intervalDays,

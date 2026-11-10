@@ -264,7 +264,7 @@ export function useStudyTimer({
     }
     if (state.studyOvertime || state.mode === "free") {
       // Pomodoro overtime begins after its block has closed; free study owns a block.
-      if (state.freeStudy) {
+      if (state.mode === "free") {
         // Keep pause/resume inside one free-study block, with pauses excluded.
         if (openBlockRef.current?.source !== "free-study") closeBlock(at)
         if (state.running) openBlock("free-study", state.cycles, at)
@@ -283,7 +283,7 @@ export function useStudyTimer({
       return
     }
     closeBlock(at)
-  }, [enabled, state.mode, state.running, state.studyOvertime, state.freeStudy, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
+  }, [enabled, state.mode, state.running, state.studyOvertime, state.cycles, openBlock, closeBlock, pauseBlock, openBlockRef])
 
   // Reconcile the logged session with either timer mode after every state change.
   useEffect(() => {
@@ -348,7 +348,7 @@ export function useStudyTimer({
 
   // Only Pomodoro has measurable progress towards an end.
   const progress = state.studyOvertime || state.mode === "free"
-    ? state.freeStudy ? 0 : 1
+    ? state.mode === "free" ? 0 : 1
     : state.totalSeconds > 0
       ? Math.min(100, Math.max(0, ((state.totalSeconds - state.secondsLeft) / state.totalSeconds) * 100))
       : 0

@@ -66,7 +66,6 @@ export interface TimerState {
   cycles: number
   studyOvertime: boolean
   overtimeSeconds: number
-  freeStudy: boolean
   breakSeconds: number
 }
 
@@ -247,7 +246,6 @@ function advanceTimer(state: TimerState, settings: TimerSettings, elapsedSeconds
         cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
-        freeStudy: false,
         breakSeconds: 0,
       }
     } else {
@@ -260,7 +258,6 @@ function advanceTimer(state: TimerState, settings: TimerSettings, elapsedSeconds
         cycles: next.cycles,
         studyOvertime: false,
         overtimeSeconds: 0,
-        freeStudy: false,
         breakSeconds: 0,
       }
     }
@@ -273,23 +270,23 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
   switch (action.type) {
     case "SELECT_MODE":
       if (state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds) return state
-      return { running: false, mode: action.mode, secondsLeft: getDurationSeconds(action.mode, action.settings), totalSeconds: getDurationSeconds(action.mode, action.settings), cycles: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: action.mode === "free", breakSeconds: 0 }
+      return { running: false, mode: action.mode, secondsLeft: getDurationSeconds(action.mode, action.settings), totalSeconds: getDurationSeconds(action.mode, action.settings), cycles: 0, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     case "TICK":
       return advanceTimer(state, action.settings, action.seconds)
     case "TOGGLE":
-      return { ...state, running: !state.running, breakSeconds: state.freeStudy ? 0 : state.breakSeconds }
+      return { ...state, running: !state.running, breakSeconds: state.mode === "free" ? 0 : state.breakSeconds }
     case "SET_RUNNING":
       // Another device moved the session, so the countdown follows it: a countdown
       // that disagrees with its session owes a boundary that would undo the change.
       return state.running === action.running
         ? state
-        : { ...state, running: action.running, breakSeconds: state.freeStudy ? 0 : state.breakSeconds }
+        : { ...state, running: action.running, breakSeconds: state.mode === "free" ? 0 : state.breakSeconds }
     case "RESET": {
-      if (state.freeStudy) return { running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
+      if (state.mode === "free") return { running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
       const totalSeconds = getDurationSeconds("work", action.settings)
       return {
         running: false, mode: "work", secondsLeft: totalSeconds, totalSeconds, cycles: 0,
-        studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0,
+        studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0,
       }
     }
     case "SKIP_BREAK":
@@ -300,7 +297,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         secondsLeft: getDurationSeconds("work", action.settings),
         totalSeconds: getDurationSeconds("work", action.settings),
         cycles: state.cycles,
-        studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0,
+        studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0,
       }
     case "ADD_TIME": {
       if (state.studyOvertime || state.mode === "free" || !Number.isFinite(action.minutes)) return state
@@ -315,21 +312,20 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
         running: true,
         studyOvertime: true,
         overtimeSeconds: Math.max(0, state.totalSeconds - state.secondsLeft),
-        freeStudy: false,
         breakSeconds: 0,
       }
     }
     case "START_FREE_STUDY": {
       if (state.running || state.mode !== "work") return state
-      return { ...state, running: true, mode: "free", secondsLeft: 0, totalSeconds: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
+      return { ...state, running: true, mode: "free", secondsLeft: 0, totalSeconds: 0, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     }
     case "END_FREE_STUDY": {
-      if (!state.freeStudy) return state
-      return { running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0, studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0 }
+      if (state.mode !== "free") return state
+      return { running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     }
     case "RETURN_TO_BREAK":
       if (!state.studyOvertime) return state
-      return { ...state, running: true, studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0 }
+      return { ...state, running: true, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     case "SYNC_SETTINGS": {
       if (state.mode === "free") return state
       const oldDuration = getDurationSeconds(state.mode, action.previousSettings)
@@ -346,7 +342,7 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
 function freshState(): TimerState {
   return {
     running: false, mode: "free", secondsLeft: 0, totalSeconds: 0, cycles: 0,
-    studyOvertime: false, overtimeSeconds: 0, freeStudy: true, breakSeconds: 0,
+    studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0,
   }
 }
 
@@ -355,9 +351,9 @@ export function loadTimerState(settings: TimerSettings, now = Date.now(), onWork
   const parsed = readJson<Record<string, unknown>>(STATE_KEY)
   if (!parsed || typeof parsed !== "object") return fallback
 
-  if (parsed.version !== 2 && !parsed.freeStudy && !parsed.running && !parsed.studyOvertime && parsed.secondsLeft === parsed.totalSeconds && !readJson(OPEN_BLOCK_KEY) && !readJson(FOCUS_SESSION_KEY)) return fallback
+  if (parsed.version !== 2 && parsed.mode !== "free" && !parsed.running && !parsed.studyOvertime && parsed.secondsLeft === parsed.totalSeconds && !readJson(OPEN_BLOCK_KEY) && !readJson(FOCUS_SESSION_KEY)) return fallback
   const mode = isValidMode(parsed.mode) ? parsed.mode : fallback.mode
-  if (mode === "free" || parsed.freeStudy === true) {
+  if (mode === "free") {
     return advanceTimer({ ...fallback, running: parsed.running === true, overtimeSeconds: safeNonNegativeInteger(parsed.overtimeSeconds) }, settings,
       parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.min(MAX_RESTORE_ELAPSED_SECONDS, Math.max(0, Math.floor((now - parsed.updatedAt) / 1000))) : 0)
   }
@@ -384,14 +380,13 @@ export function loadTimerState(settings: TimerSettings, now = Date.now(), onWork
     return {
       running, mode, secondsLeft, totalSeconds, cycles, studyOvertime,
       overtimeSeconds: running ? overtimeSeconds + elapsedSeconds : overtimeSeconds,
-      freeStudy: false,
       breakSeconds,
     }
   }
 
   const restored: TimerState = {
     running, mode, secondsLeft, totalSeconds, cycles,
-    studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0,
+    studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0,
   }
   if (running && mode === "work" && elapsedSeconds >= secondsLeft) onWorkEnded?.(updatedAt + secondsLeft * 1000)
   return running ? advanceTimer(restored, settings, elapsedSeconds) : restored

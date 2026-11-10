@@ -8,6 +8,7 @@ import {
 } from "../../src/lib/exam-data.js"
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty.js"
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression.js"
+import { localDate } from "../../src/lib/learning-workspace.js"
 import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types.js"
 import { getPracticeProgress, practiceFeedback, practiceMissionCards } from "../../src/lib/mistake-practice.js"
 import { demoteGreens } from "../../src/lib/stoplight.js"
@@ -442,8 +443,8 @@ export function recordTools(define: Define) {
   define("list_events", "List calendar events (SACs, exams, assignments, homework, other) in a date range.",
     { from: day.optional(), to: day.optional(), limit }, "read", async ({ from, to, limit }) => {
       const { data } = await readAll()
-      return data.events.filter((e) => (!from || e.startTime.slice(0, 10) >= from) && (!to || e.startTime.slice(0, 10) <= to))
-        .toSorted((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, limit)
+      return data.events.filter((e) => (!from || localDate(new Date(e.startTime)) >= from) && (!to || localDate(new Date(e.startTime)) <= to))
+        .toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, limit)
     })
 
   define("save_event", "Create a calendar event, or update one when `id` is given. Give the time either as `date` + `startClock` (+ `endClock`, and `endDate` if it ends on another day), all in local time, e.g. an exam on 2026-10-06 from 09:00 to 11:15; or as full timestamps `startTime` / `endTime` with a UTC offset. The result returns the timestamps stored.", {

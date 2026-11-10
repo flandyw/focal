@@ -54,12 +54,14 @@ Put TLS in front, e.g. Caddy: `mcp.example.com { reverse_proxy 127.0.0.1:4174 }`
 claude mcp add --transport http focal https://mcp.example.com/mcp --header "Authorization: Bearer <token>"
 ```
 
-Claude Desktop (stdio):
+Claude Desktop stdio is for the operator's own machine only. The stdio transport needs
+`SUPABASE_SERVICE_ROLE_KEY`, which belongs only on the server that runs the MCP service,
+never in an end user's MCP client config. End users should connect to the hosted HTTP service
+with the Authorization bearer header shown above.
 
-```json
-{ "mcpServers": { "focal": { "command": "bun", "args": ["server/mcp/stdio.ts"], "cwd": "/path/to/focal",
-  "env": { "VITE_SUPABASE_URL": "...", "VITE_SUPABASE_PUBLISHABLE_KEY": "...", "SUPABASE_SERVICE_ROLE_KEY": "...", "FOCAL_MCP_TOKEN": "...", "TZ": "Australia/Melbourne" } } } }
-```
+For connectors that cannot send headers, `/mcp/<token>` is also supported. A token in the URL
+path is written to proxy and access logs; prefer the Authorization header, and configure the
+reverse proxy not to log request paths for `/mcp/` if the path form is used.
 
 The claude.ai web "custom connector" needs OAuth, which this does not implement (a static bearer token is not enough there).
 

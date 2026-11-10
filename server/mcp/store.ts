@@ -159,12 +159,29 @@ function project(rows: Map<string, Row>): AppData {
   }
   const value = (key: string) => state.get(key)?.value
   const stamp = (key: string) => state.get(key)?.updatedAt || EPOCH
-  const migrated = migrateAppData({
+  let migrated = migrateAppData({
     ...EMPTY_APP_DATA,
     attempts: live(rows, "attempts").map((row) => row.payload),
     mistakes: live(rows, "mistakes").map((row) => row.payload),
   })
-  if (!migrated) throw new Error("Synced attempts or mistakes failed validation")
+  if (!migrated) {
+    // shortcut: invalid rows are hidden, not repaired; they stay on the server until fixed in the app.
+    const omittedAttempts: string[] = []
+    const omittedMistakes: string[] = []
+    const attempts = live(rows, "attempts").flatMap((row) => {
+      const valid = migrateAppData({ ...EMPTY_APP_DATA, attempts: [row.payload] })
+      if (!valid) omittedAttempts.push(row.rowId)
+      return valid?.attempts ?? []
+    })
+    const mistakes = live(rows, "mistakes").flatMap((row) => {
+      const valid = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes: [row.payload] })
+      if (!valid) omittedMistakes.push(row.rowId)
+      return valid?.mistakes ?? []
+    })
+    migrated = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes })
+    if (!migrated) throw new Error("Synced attempts or mistakes failed validation")
+    console.warn(`mcp projection omitted ${omittedAttempts.length} attempts ${JSON.stringify(omittedAttempts)} and ${omittedMistakes.length} mistakes ${JSON.stringify(omittedMistakes)}`)
+  }
   const timetable = rows.get(rowKey("timetable_config", TIMETABLE_ROW))
   const progression = value("examProgression")
   const difficulty = value("examDifficulty")

@@ -1,11 +1,15 @@
 /// <reference types="bun-types" />
 import { beforeEach, expect, mock, test } from "bun:test"
 import { z } from "zod"
+import reports from "../../public/vtac-scaling-reports.json"
+import type { ScalingReference } from "../../src/lib/scaling"
+import { setSubjectCompletion } from "../../src/lib/subject-completion"
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "../../src/lib/exam-data"
 import { failingCase } from "../../src/lib/fixtures/failing-case"
 
 // The tools run against an in-memory account. updateApp runs the same validity check the real store does.
 let data: AppData
+let scaling: ScalingReference[] = []
 mock.module("./store", () => ({
   readAll: async () => ({ data, sessions: [] }),
   updateApp: async (edit: (current: AppData) => AppData) => {
@@ -14,7 +18,7 @@ mock.module("./store", () => ({
     data = next
     return data
   },
-  gradeReferences: async () => [], examResources: async () => [], scalingReferences: async () => [], vceTimetable: async () => null,
+  gradeReferences: async () => [], examResources: async () => [], scalingReferences: async () => scaling, vceTimetable: async () => null,
 }))
 
 type Run = (args: Record<string, unknown>) => Promise<any>
@@ -30,7 +34,7 @@ const call = (name: string, args: Record<string, unknown> = {}) => tools.get(nam
 // Bulk writes log one JSON line to stderr; keep it out of the test output but check it is written.
 const logs: string[] = []
 console.error = (line: string) => void logs.push(line)
-beforeEach(() => { data = { ...EMPTY_APP_DATA, ...failingCase() }; logs.length = 0 })
+beforeEach(() => { data = { ...EMPTY_APP_DATA, ...failingCase() }; logs.length = 0; scaling = [] })
 
 const exam = { subject: "Mathematical Methods", provider: "Neap", examYear: 2025, completedAt: "2026-05-01", rawScore: 30 }
 
@@ -209,4 +213,17 @@ test("MCP subject removal prunes completion metadata and aliases do not duplicat
   await call("update_settings", { subjects: ["Methods", "Mathematical Methods"] })
   expect(data.subjects).toEqual(["Mathematical Methods"])
   expect(data.completedSubjects).toEqual([])
+})
+
+test("estimate_atar includes completed subjects with fallback scaling and saves manual score sources", async () => {
+  scaling = reports.references
+  data = setSubjectCompletion(data, "Mathematical Methods", 2026)
+  data = setSubjectCompletion(data, "Physical Education", 2026)
+  const studies = ["English Language", "Chemistry", "Specialist Mathematics", "Chinese Second Language", "Mathematical Methods", "Physical Education"].map((study) => ({ study, rawScore: 40 }))
+  const result = await call("estimate_atar", { year: 2025, studies, save: true })
+  expect(result.primaryFour.length + result.increments.length).toBe(6)
+  expect([...result.primaryFour, ...result.increments].map((r: { study: string }) => r.study)).toContain("Mathematical Methods")
+  expect([...result.primaryFour, ...result.increments].map((r: { study: string }) => r.study)).toContain("Physical Education")
+  expect(data.atarEstimates[0].rows.every((row) => row.raw === "40" && !row.usePrediction)).toBe(true)
+  expect((await call("list_atar_estimates"))[0].aggregate).toBe(result.aggregate)
 })

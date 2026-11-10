@@ -11,9 +11,9 @@ import { Input } from "./ui/input"
 import { Toggle } from "./ui/toggle"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { ATAR_AGGREGATE_REFERENCES } from "../lib/atar-data"
-import { estimateAtar, isEnglishStudy, type AtarStudyResult } from "../lib/atar"
+import { atarRawScore, estimateAtar, isEnglishStudy, type AtarStudyResult } from "../lib/atar"
 import { type AppData, type AssessmentReference, type AtarEstimatorRow, type SavedAtarEstimate } from "../lib/exam-data"
-import { interpolateScaledScore, normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
+import { atarScalingReference, interpolateScaledScore, normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
 import { predictStudyScore } from "../lib/study-score"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 
@@ -46,7 +46,7 @@ export function AtarEstimator({
   )
   const [year, setYear] = useState(years[0] ?? 2025)
   const studies = useMemo(() => {
-    const available = scalingReferences.filter((reference) => reference.year === year)
+    const available = [...new Set(scalingReferences.map((reference) => reference.code))].flatMap((code) => atarScalingReference(scalingReferences, code, year) ?? [])
     const order = new Map(prioritiseSubjects(available.map((study) => study.studyName), data.subjects).map((subject, index) => [subject, index]))
     return available.toSorted((first, second) => (order.get(first.studyName) ?? 0) - (order.get(second.studyName) ?? 0))
   }, [data.subjects, scalingReferences, year])
@@ -55,7 +55,7 @@ export function AtarEstimator({
   // Start from the student's own subjects, not a single blank row to fill in six times.
   const [rows, setRows] = useState<Row[]>(() => {
     const codes = data.subjects.flatMap((subject) => studies.find((study) => normaliseScalingStudyName(study.studyName) === normaliseScalingStudyName(subject))?.code ?? [])
-    return codes.length ? codes.slice(0, 6).map((code) => newRow(code)) : [newRow(firstStudyCode)]
+    return codes.length ? codes.map((code) => newRow(code)) : [newRow(firstStudyCode)]
   })
 
   const predictions = useMemo(() => {
@@ -71,14 +71,14 @@ export function AtarEstimator({
     const reference = studies.find((item) => item.code === row.code)
     if (!reference) return []
     const predicted = predictions.get(normaliseScalingStudyName(reference.studyName))
-    const rawScore = row.usePrediction && predicted !== undefined ? predicted : Number(row.raw)
+    const rawScore = atarRawScore(row, predicted)
     const completedYear = subjectCompletionYear(data, reference.studyName)
-    const scaling = completedYear === undefined ? reference : scalingReferences.find((item) => item.year === completedYear && item.code === reference.code)
+    const scaling = atarScalingReference(scalingReferences, reference.code, year, completedYear)
     if (!scaling) return []
     const scaledScore = interpolateScaledScore(rawScore, scaling.points)
     if (scaledScore === null) return []
     return [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
-  }), [predictions, rows, studies, data, scalingReferences])
+  }), [predictions, rows, studies, data, scalingReferences, year])
 
   const estimate = useMemo(() => estimateAtar(results, year), [results, year])
 
@@ -137,6 +137,7 @@ export function AtarEstimator({
         <Card>
           <CardHeader><CardTitle>Studies</CardTitle><CardDescription>The best combination is chosen for you under VTAC rules.</CardDescription></CardHeader>
           <CardContent className="grid gap-4">
+            {data.subjects.filter((subject) => !studies.some((study) => normaliseScalingStudyName(study.studyName) === normaliseScalingStudyName(subject))).map((subject) => <p key={subject} className="text-xs text-destructive">{subject}: no published scaling data in any year. Choose a matching study with Add study to include it.</p>)}
             <div role="table" aria-label="Studies" className="grid">
               <div role="row" className="grid grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem] gap-3 border-b pb-2 text-xs font-medium text-muted-foreground max-md:hidden">
                 <span role="columnheader">Subject</span><span role="columnheader">Raw score</span><span role="columnheader" className="text-right">Scaled</span><span role="columnheader">Counts as</span><span role="columnheader" className="sr-only">Remove</span>
@@ -150,10 +151,12 @@ export function AtarEstimator({
                 const role = roles.get(row.id)
                 const name = reference?.studyName ?? "subject"
                 const completedYear = subjectCompletionYear(data, name)
+                const scaling = atarScalingReference(scalingReferences, row.code, year, completedYear)
                 return (
                   <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
                     <div role="cell" className="max-md:col-span-3">
-                      {completedYear !== undefined ? <p className="text-xs text-muted-foreground">Completed {completedYear} · {scalingReferences.some((item) => item.year === completedYear && item.code === row.code) ? `${completedYear} scaling` : "scaling unavailable; excluded from estimate"}</p> : null}
+                      {completedYear !== undefined ? <p className="text-xs text-muted-foreground">Completed {completedYear} · {scaling ? `${scaling.year} scaling${scaling.year !== completedYear ? " (fallback)" : ""}` : "No published scaling data for this study"}</p> : null}
+                      {!reference && row.code ? <p className="text-xs text-destructive">No published scaling data for study {row.code}; choose a matching study to include it.</p> : null}
                       <SubjectCombobox subjects={studies.filter((study) => study.code === row.code || !rows.some((other) => other.code === study.code)).map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
                     <div role="cell" className="flex items-center gap-1.5">

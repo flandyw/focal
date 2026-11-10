@@ -1,10 +1,10 @@
-import { currentSubjectWork, isCurrentSubject } from "./subject-completion"
+import { currentSubjectWork, isCurrentSubject, subjectCompletionYear } from "./subject-completion"
 import { useEffect, useRef } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import type { AppData, AssessmentReference } from "./exam-data"
-import { estimateAtar } from "./atar"
-import { interpolateScaledScore, type ScalingReference } from "./scaling"
+import { atarRawScore, estimateAtar } from "./atar"
+import { atarScalingReference, interpolateScaledScore, type ScalingReference } from "./scaling"
 import { predictStudyScore } from "./study-score"
 import { getMistakeSchedule } from "./exam-data"
 import type { AppView } from "./app-view"
@@ -33,10 +33,11 @@ function atar(data: AppData, references: AssessmentReference[], scaling: Scaling
   if (!saved) return null
   const target = data.learning.goals.find((goal) => goal.kind === "atar" && !goal.archivedAt)?.target ?? null
   const results = saved.rows.flatMap((row) => {
-    const reference = scaling.find((study) => study.year === saved.year && study.code === row.code)
+    const study = atarScalingReference(scaling, row.code, saved.year)
+    const reference = study && atarScalingReference(scaling, row.code, saved.year, subjectCompletionYear(data, study.studyName))
     if (!reference) return []
     const predicted = row.usePrediction ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
-    const rawScore = predicted ?? Number(row.raw)
+    const rawScore = atarRawScore(row, predicted)
     const scaledScore = interpolateScaledScore(rawScore, reference.points)
     return scaledScore === null ? [] : [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
   })
@@ -52,6 +53,7 @@ function atar(data: AppData, references: AssessmentReference[], scaling: Scaling
 }
 
 function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null, references: AssessmentReference[], scaling: ScalingReference[]) {
+  const atarEstimate = atar(data, references, scaling)
   data = currentSubjectWork(data)
   const now = Date.now()
   const today = new Date()
@@ -99,7 +101,7 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
   const reviews = data.mistakes.filter((mistake) => !mistake.suspended).map((mistake) => ({
     subject: attempts.get(mistake.attemptId) ?? mistake.subject ?? "General", due: Date.parse(getMistakeSchedule(mistake).dueAt),
   })).filter((item) => Number.isFinite(item.due))
-  return { version: 1, updatedAt: now, agenda: upcoming([...agenda, ...exams]), exams: upcoming(exams), days, reviews, atar: atar(data, references, scaling) }
+  return { version: 1, updatedAt: now, agenda: upcoming([...agenda, ...exams]), exams: upcoming(exams), days, reviews, atar: atarEstimate }
 }
 
 export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null,

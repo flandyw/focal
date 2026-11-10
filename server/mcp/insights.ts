@@ -15,7 +15,7 @@ import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality,
 import { getAnalyticsData } from "../../src/lib/progress-analytics.js"
 import { analyticsSessions } from "../../src/lib/progress-utils.js"
 import { getUpcomingSacs } from "../../src/lib/sac.js"
-import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
+import { atarScalingReference, interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
 import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score.js"
 import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable.js"
 import { isPaused, isRunning, isPlanned } from "../../src/lib/sync/sessionContract.js"
@@ -129,8 +129,8 @@ export function insightTools(define: Define) {
     const years = ATAR_AGGREGATE_REFERENCES.map((r) => r.year).filter((y) => scaling.some((s) => s.year === y)).toSorted((a, b) => b - a)
     const reportYear = year ?? years[0]
     const rows = studies.map((entry, index) => {
-      const reference = scaling.find((s) => s.year === reportYear && (s.code === entry.study || normaliseScalingStudyName(s.studyName) === normaliseScalingStudyName(entry.study)))
-      if (!reference) throw new Error(`No ${reportYear} VTAC scaling data for "${entry.study}". Use the exact study name or code.`)
+      const reference = scaling.find((s) => s.code === entry.study || normaliseScalingStudyName(s.studyName) === normaliseScalingStudyName(entry.study))
+      if (!reference) throw new Error(`No VTAC scaling data in any year for "${entry.study}". Use the exact study name or code.`)
       const predicted = entry.rawScore === undefined ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
       const rawScore = entry.rawScore ?? predicted
       if (rawScore === undefined) throw new Error(`Give a rawScore for "${entry.study}"; it has no Focal prediction.`)
@@ -138,8 +138,8 @@ export function insightTools(define: Define) {
     })
     const results = rows.flatMap((row): AtarStudyResult[] => {
       const completionYear = subjectCompletionYear(data, row.reference.studyName)
-      const reference = completionYear === undefined ? row.reference : scaling.find((item) => item.year === completionYear && item.code === row.reference.code)
-      if (!reference) throw new Error(`No ${completionYear} scaling for completed subject ${row.reference.studyName}`)
+      const reference = atarScalingReference(scaling, row.reference.code, reportYear, completionYear)
+      if (!reference) throw new Error(`No published scaling for ${row.reference.studyName}`)
       const scaledScore = interpolateScaledScore(row.rawScore, reference.points)
       return scaledScore === null ? [] : [{ id: row.id, code: row.reference.code, studyName: row.reference.studyName, rawScore: row.rawScore, scaledScore }]
     })

@@ -1,3 +1,4 @@
+import type { AtarEstimatorRow } from "./exam-data.js"
 import { ATAR_AGGREGATE_REFERENCES, type AtarAggregateReference } from "./atar-data.js"
 
 export type AtarStudyResult = {
@@ -78,6 +79,7 @@ function languageEquivalenceKey(studyName: string): string | null {
 }
 
 function equivalenceKey(result: Pick<AtarStudyResult, "code" | "studyName">): string {
+  if (result.code === "LEGACY_ACCOUNTING") return "study:AC"
   if (result.code === "EN" || result.code === "EF") return "english-or-eal"
   return languageEquivalenceKey(result.studyName) ?? `study:${result.code}`
 }
@@ -207,4 +209,8 @@ export function estimateAtar(results: AtarStudyResult[], year: number): AtarEsti
     excluded: valid.filter((result) => !selectedIds.has(result.id)),
     reference,
   }
+}
+
+export function atarRawScore(row: AtarEstimatorRow, prediction?: number): number {
+  return row.usePrediction && prediction !== undefined ? prediction : Number(row.raw)
 }

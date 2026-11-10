@@ -33,6 +33,8 @@ import type { FocusTimerSession } from "../lib/ongoing-timers"
 import { buzz } from "../lib/mobile"
 import { notifyTimer, scheduleTimerAlerts } from "../lib/pwa"
 
+import { useTickingNow } from "./use-ticking-now"
+
 const TICK_MS = 1000
 const focusAlertBody = (mode: string, workMinutes: number) => mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${workMinutes} minutes of focus.`
 
@@ -101,7 +103,7 @@ export function useStudyTimer({
   const [settings, setSettings] = useState<TimerSettings>(loadSettings)
   const [state, dispatch] = useReducer(timerReducer, undefined, () => loadTimerState(loadSettings()))
   const [blocks, setBlocks] = useState<FocusBlock[]>(loadBlocks)
-  const [now, setNow] = useState(() => Date.now())
+  const now = useTickingNow(state.running ? 15_000 : 60_000).getTime()
 
   const settingsRef = useRef(settings)
   // `useState` gives the one stable ref object a lazy `useRef` initializer cannot.
@@ -314,13 +316,6 @@ export function useStudyTimer({
   useEffect(() => {
     saveTimerState(state, Date.now())
   }, [state])
-
-  // Re-render once a second so "focused for 24m" style labels stay honest.
-  useEffect(() => {
-    if (!enabled || !state.running) return
-    const interval = window.setInterval(() => setNow(Date.now()), 15_000)
-    return () => window.clearInterval(interval)
-  }, [enabled, state.running])
 
   const updateSettings = useCallback((patch: Partial<TimerSettings>) => {
     setSettings((current) => {

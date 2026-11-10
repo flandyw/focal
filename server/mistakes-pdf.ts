@@ -2,8 +2,19 @@ import { readRequestText } from "./request.js"
 
 const COMPILER_URL = "https://texlive.net/cgi-bin/latexcgi"
 
+// shortcut: limits are per server instance; use a shared rate limiter when running multiple instances.
+const requests = new Map<string, { since: number; count: number }>()
+
 export async function handleMistakesPdf(request: Request) {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 })
+
+  const caller = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local"
+  const now = Date.now()
+  for (const [id, value] of requests) if (now - value.since >= 60_000) requests.delete(id)
+  const usage = requests.get(caller) ?? { since: now, count: 0 }
+  if (usage.count >= 10) return new Response("Too many worksheet exports. Try again in a minute.", { status: 429, headers: { "retry-after": "60" } })
+  usage.count++
+  requests.set(caller, usage)
 
   let tex: unknown
   try {

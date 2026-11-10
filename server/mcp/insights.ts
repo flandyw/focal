@@ -64,7 +64,7 @@ export function insightTools(define: Define) {
       timer: running && { id: running.id, title: running.title, state: isRunning(running) ? "running" : "paused" },
       todayPlan: { plannedMinutes: plan.plannedMinutes, completedMinutes: plan.completedMinutes, dueMistakes: plan.dueMistakes, items: plan.items.map((i) => ({ kind: i.kind, title: i.title, minutes: i.minutes })) },
       upcomingSacs: getUpcomingSacs(data.sacRecords).slice(0, 5).map((r) => ({ id: r.id, title: r.title, subject: r.subject, scheduledAt: r.scheduledAt })),
-      upcomingEvents: data.events.filter((e) => !e.isFinished && e.startTime >= now.toISOString()).toSorted((a, b) => a.startTime.localeCompare(b.startTime)).slice(0, 5)
+      upcomingEvents: data.events.filter((e) => !e.isFinished && Date.parse(e.startTime) >= now.getTime()).toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, 5)
         .map((e) => ({ id: e.id, title: e.title, type: e.eventType, startTime: e.startTime })),
       trackedVceExams: (timetable?.exams ?? []).filter((e) => tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
       goals: data.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),

@@ -104,7 +104,7 @@ function sacItem(record: SacRecord): DayItem {
     title: record.title,
     detail: [record.subject, record.unit, record.sacNumber].filter(Boolean).join(" · "),
     minutes: record.durationMinutes,
-    startTime: timeOf(record.scheduledAt) ?? "",
+    startTime: record.scheduledAt.length > 10 ? timeOf(record.scheduledAt) ?? "" : "",
     completed: isCompletedSac(record),
   }
 }
@@ -274,7 +274,7 @@ export function buildDayPlan(date: string, data: DayPlanSource, timetable: Timet
     items.push(taskItem(task))
   }
   for (const record of data.sacRecords) {
-    if (localDate(new Date(record.scheduledAt)) !== date) continue
+    if (record.scheduledAt.slice(0, 10) !== date) continue
     items.push(sacItem(record))
   }
   for (const event of data.events ?? []) {

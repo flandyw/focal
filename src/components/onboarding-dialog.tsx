@@ -6,7 +6,8 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { FocalMark } from "./focal-mark"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
-import { NativeSelect, NativeSelectOption } from "./ui/native-select"
+import { Input } from "./ui/input"
+import { validCompletionYear } from "../lib/subject-completion"
 import { Progress } from "./ui/progress"
 
 const FEATURES = [
@@ -19,14 +20,12 @@ const FEATURES = [
 
 export type OnboardingFinish = "exam" | "focus" | "calendar" | "sign-in" | "tour" | null
 
-export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects, signedIn, onSubjectsChange, onCompletedSubjectsChange, completionYears = {}, onCompletionYearChange, onFinish }: {
+export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects, signedIn, onSubjectsChange, onSubjectCompletion, subjectCompletionYears, onFinish }: {
   subjects: string[]
   selectedSubjects: string[]
   completedSubjects: string[]
-  onCompletedSubjectsChange: (subjects: string[]) => void
-  // TODO(completion-model): supply these props once completion years can be persisted.
-  completionYears?: Record<string, number>
-  onCompletionYearChange?: (subject: string, year: number | undefined) => void
+  subjectCompletionYears: Record<string, number>
+  onSubjectCompletion: (subject: string, year: number | null) => void
   signedIn: boolean
   onSubjectsChange: (subjects: string[]) => void
   onFinish: (next: OnboardingFinish) => void
@@ -68,9 +67,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
             onValueChange={(subject) => {
               if (!subject || selectedSubjects.includes(subject)) return
               onSubjectsChange([...selectedSubjects, subject])
-              onCompletedSubjectsChange(addingCompleted
-                ? [...new Set([...completedSubjects, subject])]
-                : completedSubjects.filter((item) => item !== subject))
+              if (addingCompleted || completedSubjects.includes(subject)) onSubjectCompletion(subject, addingCompleted ? year : null)
               setSubjectToAdd("")
             }}
             className="w-full"
@@ -91,20 +88,29 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
                       {!completed && index === 0 ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${subject}`} onClick={() => {
                         onSubjectsChange(selectedSubjects.filter((item) => item !== subject))
-                        onCompletedSubjectsChange(completedSubjects.filter((item) => item !== subject))
-                        onCompletionYearChange?.(subject, undefined)
+                        if (completed) onSubjectCompletion(subject, null)
                       }}><X /></Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button type="button" variant="outline" size="sm" aria-label={`${completed ? "Studying again:" : "Mark completed:"} ${subject}`} onClick={() => {
-                        onCompletedSubjectsChange(completed ? completedSubjects.filter((item) => item !== subject) : [...completedSubjects, subject])
-                        if (completed) onCompletionYearChange?.(subject, undefined)
+                        onSubjectCompletion(subject, completed ? null : year)
                       }}>{completed ? "Studying again" : "Mark completed"}</Button>
-                      {completed ? <NativeSelect aria-label={`Completion year for ${subject}`} disabled={!onCompletionYearChange} value={completionYears[subject] ?? ""} onChange={(event) => onCompletionYearChange?.(subject, event.target.value ? Number(event.target.value) : undefined)}>
-                        <NativeSelectOption value="">Completion year (optional)</NativeSelectOption>
-                        {/* ponytail: offer the last ten years; expand for older returning students if needed. */}
-                        {Array.from({ length: 10 }, (_, index) => year - index).map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}
-                      </NativeSelect> : null}
+                      {completed ? <Input
+                        key={subjectCompletionYears[subject]}
+                        className="w-28"
+                        aria-label={`Completion year for ${subject}`}
+                        type="number"
+                        min={1900}
+                        max={9999}
+                        defaultValue={subjectCompletionYears[subject]}
+                        onBlur={(event) => {
+                          const next = Number(event.target.value)
+                          if (validCompletionYear(next)) {
+                            if (next !== subjectCompletionYears[subject]) onSubjectCompletion(subject, next)
+                          }
+                          else event.target.value = String(subjectCompletionYears[subject])
+                        }}
+                      /> : null}
                     </div>
                   </li>
                 ))}
@@ -112,7 +118,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
             </section>
           ))}
           <p className="text-xs text-muted-foreground">Your first current subject is the default. Reorder subjects or resume a completed subject in Settings → Subjects.</p>
-          {finishedSubjects.length > 0 && !onCompletionYearChange ? <p className="text-xs text-muted-foreground">Completed status is saved. Completion years aren’t supported yet.</p> : null}
+          {finishedSubjects.length > 0 ? <p className="text-xs text-muted-foreground">Completed subjects start with {year} as their completion year. Change the year beside each subject if you finished earlier.</p> : null}
         </div>
       ),
     },

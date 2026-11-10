@@ -3,6 +3,7 @@ import { isExamDifficultySettings } from "./exam-difficulty.js"
 import { isExamProgression } from "./exam-progression.js"
 import { EMPTY_LEARNING_WORKSPACE, migrateLearningWorkspace } from "./learning-workspace.js"
 import { migrateSacRecords } from "./sac.js"
+import { withStoplightProgress } from "./stoplight.js"
 import { readSubjectCompletions } from "./subject-completion.js"
 
 export const TIMETABLE_ROW = "timetable_config"
@@ -84,7 +85,7 @@ const strings = (value: unknown) => Array.isArray(value) && value.every((item) =
 /**
  * The one projection from synced rows to AppData, shared by the app (feed + local outbox) and MCP.
  * `rows` must hold at most one row per entity/rowId. Fields the feed does not carry come from `base`.
- * An invalid attempt or mistake is skipped, not fatal, so one bad row from another client cannot stall sync.
+ * Stoplight ratings include practice evidence. An invalid attempt or mistake is skipped, not fatal, so one bad row from another client cannot stall sync.
  */
 export function projectRows(rows: Iterable<FeedRow>, base: AppData = EMPTY_APP_DATA): { data: AppData; omitted: string[] } {
   const all = [...rows]
@@ -127,7 +128,7 @@ export function projectRows(rows: Iterable<FeedRow>, base: AppData = EMPTY_APP_D
   const difficulty = value("examDifficulty")
   const reviewPreferences = value("mistakeReviewPreferences")
   const parsed = (patch: Partial<AppData>) => migrateAppData({ ...EMPTY_APP_DATA, ...patch })
-  return { omitted, data: {
+  return { omitted, data: withStoplightProgress({
     ...base,
     attempts: migrated.attempts,
     mistakes: migrated.mistakes,
@@ -145,5 +146,5 @@ export function projectRows(rows: Iterable<FeedRow>, base: AppData = EMPTY_APP_D
     examDifficulty: isExamDifficultySettings(difficulty) ? difficulty : undefined,
     atarEstimates: parsed({ atarEstimates: value("atarEstimates") as AppData["atarEstimates"] })?.atarEstimates ?? [], atarEstimatesUpdatedAt: stamp("atarEstimates"),
     learning: migrateLearningWorkspace(value("learning")),
-  } }
+  }) }
 }

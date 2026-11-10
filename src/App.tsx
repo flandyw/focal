@@ -1,7 +1,7 @@
 import { setSubjects, setSubjectCompletion, completeSubjectYear, currentSubjectWork } from "./lib/subject-completion"
 import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
 import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
@@ -60,7 +60,7 @@ import { count } from "./lib/utils"
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
 import { AI_ENABLED } from "./lib/host"
 import { useDesktopWidgets } from "./lib/widgets"
-import { applyItemLinks, collectLinkRecords, demoteGreens, progressStoplight, restoreItems, type ItemLink } from "./lib/stoplight"
+import { applyItemLinks, collectLinkRecords, demoteGreens, restoreItems, withStoplightProgress, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
 import type { OnboardingFinish } from "./components/onboarding-dialog"
@@ -152,7 +152,9 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setEditingMistake(null)
     setMarkingAttempt(null)
   })
-  const [data, setData] = useState<AppData>(() => (typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
+  // Every app-data change, local or synced, picks up stoplight evidence before it renders or syncs.
+  const [data, setData] = useReducer((current: AppData, update: SetStateAction<AppData>) => withStoplightProgress(typeof update === "function" ? update(current) : update),
+    undefined, () => withStoplightProgress(typeof localStorage === "undefined" ? EMPTY_APP_DATA : loadAppData()))
   const [chosenSubject, setChosenSubject] = useState<string | null>(() => {
     if (initialRoute?.subject) return initialRoute.subject
     try { return localStorage.getItem("examtrack:subject:v1") } catch { return null }
@@ -323,14 +325,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     }
     return [...ids]
   }, [workspace.attempts, data.trackedExamIds, timetable])
-
-  // Reconcile saved, imported and synced reviews too; timestamps keep manual ratings authoritative until new practice.
-  useEffect(() => {
-    setData((current) => {
-      const learning = progressStoplight(current.learning, current.mistakes)
-      return learning === current.learning ? current : { ...current, learning }
-    })
-  }, [data.mistakes, data.learning])
 
   useEffect(() => {
     // Serialize the full store off the critical path: a keystroke currently

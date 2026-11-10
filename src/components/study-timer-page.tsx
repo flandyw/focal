@@ -246,7 +246,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   // The canonical intervals own shared time; viewing a session never creates a second local log.
   const state = sharedSession ? {
-    ...local.state, mode: "free" as const, freeStudy: true, studyOvertime: false,
+    ...local.state, mode: "free" as const, studyOvertime: false,
     running: isRunning(sharedSession), secondsLeft: 0, totalSeconds: 0, cycles: 0,
     overtimeSeconds: Math.floor(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 1000),
   } : local.state
@@ -448,7 +448,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             marks={isFreeStudy ? undefined : { total: settings.longBreakEvery, filled: inSet, label: `Set ${Math.min(inSet + 1, settings.longBreakEvery)} of ${settings.longBreakEvery}` }}
             mode={displayMode}
             onCaption={announcement}
-            overtime={countdown ? pastPlan : state.studyOvertime && !state.freeStudy}
+            overtime={countdown ? pastPlan : state.studyOvertime && state.mode !== "free"}
             progress={progress}
             status={statusLabel}
           >

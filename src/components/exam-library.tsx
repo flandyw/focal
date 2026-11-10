@@ -24,7 +24,7 @@ import {
   getVcaaExamPaper,
   getVcaaExamProvider,
   getVcaaExamResourcesUrl,
-  isVcaaExamLogged,
+  isExamDone,
   type VcaaExamResource,
   type VcaaResource,
   type VcaaStudyResources,
@@ -93,7 +93,7 @@ export function ExamLibrary({
   const [completion, setCompletion] = useState<CompletionFilter>("all")
   const [visibleCount, setVisibleCount] = useState(40)
   const resourcesByStudy = useMemo(() => new Map(studies.map((study) => [normaliseComparisonName(study.studyName), study])), [studies])
-  const completedUrls = useMemo(() => new Set([...completedExamIds, ...exams.filter((exam) => isVcaaExamLogged(exam, attempts)).map((exam) => exam.url)]), [completedExamIds, exams, attempts])
+  const completedUrls = useMemo(() => new Set(exams.filter((exam) => isExamDone(exam.url, { completedExamIds, attempts, exam })).map((exam) => exam.url)), [completedExamIds, exams, attempts])
   const isCompleted = (exam: VcaaExamResource) => completedUrls.has(exam.url)
   const filtered = useMemo(() => {
     const priorities = new Map(preferredSubjects.map((item, index) => [normaliseComparisonName(item), index]))

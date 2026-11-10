@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip } from "./ui/chart"
 import {
+  getMistakeSchedule,
   buildSubjectBenchmarks,
   type AssessmentReference,
   type ExamAttempt,
@@ -37,7 +38,7 @@ export function SubjectBenchmarkChart({
   const unresolvedByAttempt = useMemo(() => {
     const counts = new Map<string, number>()
     for (const mistake of mistakes) {
-      if (!mistake.resolved) counts.set(mistake.attemptId, (counts.get(mistake.attemptId) ?? 0) + 1)
+      if (!getMistakeSchedule(mistake).resolved) counts.set(mistake.attemptId, (counts.get(mistake.attemptId) ?? 0) + 1)
     }
     return counts
   }, [mistakes])

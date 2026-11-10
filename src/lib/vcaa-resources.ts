@@ -112,6 +112,10 @@ export function findVcaaExamAttempt(exam: VcaaExamResource, attempts: ExamAttemp
   return latest
 }
 
+export function isExamDone(url: string, data: { completedExamIds: string[]; attempts: ExamAttempt[]; exam: VcaaExamResource }): boolean {
+  return data.completedExamIds.includes(url) || data.exam.url === url && isVcaaExamLogged(data.exam, data.attempts)
+}
+
 export function isVcaaExamLogged(exam: VcaaExamResource, attempts: ExamAttempt[]) {
   if (exam.year === null) return false
   const paper = normaliseComparisonName(getVcaaExamPaper(exam))

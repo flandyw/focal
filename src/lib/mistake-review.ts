@@ -116,7 +116,7 @@ export function buildRevisionPriorities(mistakes: Mistake[]) {
   const counts = new Map<string, { category: string; unresolved: number; resolved: number }>()
   for (const mistake of mistakes) {
     const entry = counts.get(mistake.category) ?? { category: mistake.category, unresolved: 0, resolved: 0 }
-    entry[mistake.resolved ? "resolved" : "unresolved"] += 1
+    entry[getMistakeSchedule(mistake).resolved ? "resolved" : "unresolved"] += 1
     counts.set(mistake.category, entry)
   }
   return [...counts.values()].sort(

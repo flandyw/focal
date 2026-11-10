@@ -68,10 +68,10 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
         start: Date.parse(`${day}T${period.startTime}:00`), end: Date.parse(`${day}T${period.endTime}:00`), view: "timetable" })
     }
   }
-  const tracked = new Set(data.trackedExamIds), completed = new Set(data.completedExamIds)
-  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => isCurrentSubject(data, exam.subject) && tracked.has(exam.id) && !completed.has(exam.id))
+  const tracked = new Set(data.trackedExamIds)
+  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => isCurrentSubject(data, exam.subject) && tracked.has(exam.id))
     .map((exam) => ({ id: exam.id, title: exam.subject, subtitle: exam.paper ?? "VCE exam", start: getExamStart(exam).getTime(), end: getExamEnd(exam).getTime(), view: "exams" }))
-  for (const sac of data.sacRecords.filter((record) => !isCompletedSac(record) && !record.completedAt)) {
+  for (const sac of data.sacRecords.filter((record) => !isCompletedSac(record))) {
     const allDay = /^\d{4}-\d{2}-\d{2}$/.test(sac.scheduledAt)
     const start = Date.parse(allDay ? `${sac.scheduledAt}T00:00:00` : sac.scheduledAt)
     const end = new Date(start)

@@ -104,9 +104,9 @@ function mistakeProgress(mistake: Mistake) {
   const review = mistake.reviewHistory?.at(-1)
   const rating = review ? normalizeReviewRating(review.result) : undefined
   return {
-    passed: rating ? rating === "good" || rating === "easy" : mistake.resolved,
-    reviewed: Boolean(review) || mistake.resolved,
-    at: review?.completedAt ?? (mistake.resolved ? mistake.lastReviewedAt ?? mistake.updatedAt : mistake.createdAt),
+    passed: rating ? rating === "good" || rating === "easy" : getMistakeSchedule(mistake).resolved,
+    reviewed: Boolean(review) || getMistakeSchedule(mistake).resolved,
+    at: review?.completedAt ?? (getMistakeSchedule(mistake).resolved ? mistake.lastReviewedAt ?? mistake.updatedAt : mistake.createdAt),
   }
 }
 

@@ -19,7 +19,7 @@ import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudySc
 import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score.js"
 import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable.js"
 import { isPaused, isRunning, isPlanned } from "../../src/lib/sync/sessionContract.js"
-import { getCachedVcaaExams, getVcaaExamCompanions, isVcaaExamLogged } from "../../src/lib/vcaa-resources.js"
+import { getCachedVcaaExams, isExamDone, getVcaaExamCompanions, isVcaaExamLogged } from "../../src/lib/vcaa-resources.js"
 import { examResources, gradeReferences, readAll, scalingReferences, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
 import { day, limit, nowIso, round } from "./util.js"
@@ -184,7 +184,7 @@ export function insightTools(define: Define) {
       const matched = studies.filter((s) => contains(s.studyName, study))
       const exams = getCachedVcaaExams(matched).filter((e) => year === undefined || e.year === year).toSorted((a, b) => (b.year ?? 0) - (a.year ?? 0))
       return exams.slice(0, limit).map((exam) => ({
-        study: exam.studyName, label: exam.label, year: exam.year, url: exam.url, logged: isVcaaExamLogged(exam, data.attempts), completed: data.completedExamIds.includes(exam.url),
+        study: exam.studyName, label: exam.label, year: exam.year, url: exam.url, logged: isVcaaExamLogged(exam, data.attempts), completed: isExamDone(exam.url, { ...data, exam }),
         reports: getVcaaExamCompanions(exam, matched.find((s) => s.studyName === exam.studyName)).reports.map((r) => ({ label: r.label, url: r.url })),
       }))
     })

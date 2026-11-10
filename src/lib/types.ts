@@ -2,11 +2,7 @@ export type DeadlineType = "sac" | "exam" | "assignment";
 
 export type EventType = DeadlineType | "event" | "homework" | "other" | "practice-sac";
 
-export type FileTag = "sac" | "notes" | "past-paper" | "exam" | "resource" | "other";
-
 export type Unit = "1" | "2" | "3" | "4";
-
-export type StudySessionStatus = "planned" | "in-progress" | "completed";
 
 export type ConfidenceScore = 1 | 2 | 3 | 4 | 5;
 
@@ -248,18 +244,6 @@ export interface Project {
   last_modified_device_id?: string | null;
 }
 
-export interface FileInfo {
-  name: string;
-  path: string;
-  size: number;
-  modified: number;
-  extension: string;
-  tag?: FileTag; // Legacy field for backward compatibility
-  tags?: FileTag[];
-  subfolder?: string;
-  isFavorite?: boolean;
-}
-
 // --- Timetable ---
 
 /**
@@ -286,35 +270,6 @@ export interface SchoolHoliday {
   name: string
   startDate: string // YYYY-MM-DD
   endDate: string   // YYYY-MM-DD
-}
-
-export interface UserSettings {
-  openrouter_api_key: string
-  openrouter_model: string
-  reasoning_effort: string
-  reasoning_max_tokens: number
-  reasoning_exclude: boolean
-  notion_token: string
-  notion_data_source_id: string
-  notion_title_property: string
-  notion_date_property: string
-  notion_type_property: string
-  notion_completed_property: string
-  notion_subject_property: string
-  provider?: string
-  ollama_base_url?: string
-  ollama_model?: string
-  assistant_personality?: string
-  assistant_custom_instructions?: string
-  quick_links?: QuickLink[]
-}
-
-export interface QuickLink {
-  id: string
-  label: string
-  url: string
-  icon: string
-  color: string
 }
 
 export interface TimetableViewSettings {
@@ -358,13 +313,3 @@ export interface TimetableConfig {
   /** View-level display preferences. */
   viewSettings?: TimetableViewSettings
 }
-
-export type PriorityItemKind =
-  | "overdue-project"
-  | "upcoming-assessment"
-  | "pinned-event"
-  | "planned-session"
-  | "plan-prep"
-  | "weak-topic";
-
-export type PriorityUrgency = "critical" | "high" | "medium" | "low";

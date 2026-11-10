@@ -15,7 +15,7 @@
       "identifier": "opener:allow-open-path",
       "allow": [
         {
-          "path": "$HOME/**"
+          "path": "$HOME/**/*.html"
         }
       ]
     },
@@ -27,14 +27,6 @@
     "fs:scope-download",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
-    {
-      "identifier": "fs:allow-watch",
-      "allow": [
-        {
-          "path": "$HOME/**"
-        }
-      ]
-    },
     "notification:default",
     "os:default",
     "sql:default",

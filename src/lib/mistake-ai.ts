@@ -1,4 +1,5 @@
 import { createChatGPTProvider } from "./chatgpt-client"
+import { count } from "./utils"
 import { jsonSchema, Output, streamText } from "ai"
 import { MISTAKE_CATEGORIES, type AlternativeMistakeCard, type ExamAttempt, type Mistake, type MistakeInsights } from "./exam-data"
 import { candidateItems, itemGroup, type ItemLink, type LinkRecord } from "./stoplight"
@@ -194,7 +195,8 @@ export async function autofillMistakeFields(
       }
     } catch (error) {
       const cause = streamError ?? error
-      throw new Error(`${autofills.length} mistakes completed before autofill failed. ${formatMistakeAIError(cause)}`, { cause })
+      const prefix = autofills.length ? `${count(autofills.length, "mistake")} ${autofills.length === 1 ? "was" : "were"} autofilled before this failed. ` : ""
+      throw new Error(`${prefix}${formatMistakeAIError(cause)}`, { cause })
     }
     autofills.push(...batchAutofills)
     onBatch?.(batchAutofills)

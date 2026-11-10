@@ -27,6 +27,7 @@ export function rowsFromAppData(data: AppData): AppRow[] {
     ["trackedExamIds", data.trackedExamIds, data.trackedExamIdsUpdatedAt],
     ["completedExamIds", data.completedExamIds, data.completedExamIdsUpdatedAt],
     ["completedSubjects", data.completedSubjects, data.completedSubjectsUpdatedAt],
+    ["subjectCompletionYears", data.subjectCompletionYears, data.completedSubjectsUpdatedAt],
     ["subjects", data.subjects, data.subjectsUpdatedAt],
     ["sacRecords", data.sacRecords, data.sacRecordsUpdatedAt],
     ["mistakeInsights", data.mistakeInsights, data.mistakeInsights?.questionsGeneratedAt ?? data.mistakeInsights?.generatedAt ?? EPOCH],

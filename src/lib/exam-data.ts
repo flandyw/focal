@@ -1,3 +1,4 @@
+import { readSubjectCompletions, validCompletionYear } from "./subject-completion.js"
 import type { CalendarEvent, TimetableConfig } from "./types"
 import { isExamProgression, type ExamProgression } from "./exam-progression.js"
 import { isExamDifficultySettings, type ExamDifficultySettings } from "./exam-difficulty.js"
@@ -221,6 +222,7 @@ export type AppData = {
   sacRecordsUpdatedAt: string
   subjects: string[]
   subjectsUpdatedAt: string
+  subjectCompletionYears: Record<string, number>
   completedSubjects: string[]
   completedSubjectsUpdatedAt: string
   trackedExamIds: string[]
@@ -247,6 +249,7 @@ export const EMPTY_APP_DATA: AppData = {
   mistakes: [],
   sacRecords: [],
   sacRecordsUpdatedAt: "1970-01-01T00:00:00.000Z",
+  subjectCompletionYears: {},
   completedSubjects: [],
   completedSubjectsUpdatedAt: "1970-01-01T00:00:00.000Z",
   subjects: [],
@@ -1064,6 +1067,7 @@ function isAppData(value: unknown): value is AppData {
     typeof data.sacRecordsUpdatedAt === "string" &&
     subjectsValid &&
     Array.isArray(data.completedSubjects) && data.completedSubjects.every((value) => typeof value === "string") &&
+    !!data.subjectCompletionYears && typeof data.subjectCompletionYears === "object" && Object.values(data.subjectCompletionYears).every(validCompletionYear) &&
     typeof data.completedSubjectsUpdatedAt === "string" &&
     typeof data.subjectsUpdatedAt === "string" &&
     trackedExamIdsValid &&
@@ -1193,7 +1197,7 @@ export function migrateAppData(value: unknown): AppData | null {
   const migrated = {
     ...data,
     schemaVersion: 5 as const,
-    completedSubjects: data.completedSubjects === undefined ? [] : data.completedSubjects,
+    ...readSubjectCompletions({ subjects: data.completedSubjects, years: data.subjectCompletionYears }, typeof data.completedSubjectsUpdatedAt === "string" ? data.completedSubjectsUpdatedAt : ""),
     completedSubjectsUpdatedAt: typeof data.completedSubjectsUpdatedAt === "string" ? data.completedSubjectsUpdatedAt : "1970-01-01T00:00:00.000Z",
     subjects: Array.isArray(data.subjects) ? data.subjects : [],
     subjectsUpdatedAt: typeof data.subjectsUpdatedAt === "string" ? data.subjectsUpdatedAt : "1970-01-01T00:00:00.000Z",

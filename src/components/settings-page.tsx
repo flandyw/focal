@@ -1,3 +1,4 @@
+import { validCompletionYear } from "@/lib/subject-completion"
 import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { ChatGPTConnection } from "./chatgpt-connection"
@@ -47,14 +48,16 @@ function getModelAccent(model: string) {
   if (model.endsWith("-luna")) return "var(--chart-3)"
   return "var(--chart-2)"
 }
-export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjects, onCompletedSubjectsChange, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjects, subjectCompletionYears, onSubjectCompletion, onCompleteYear, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
   recovery: ReactNode
   initialSection?: "ai" | "account"
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
   completedSubjects: string[]
-  onCompletedSubjectsChange: (subjects: string[]) => void
+  subjectCompletionYears: Record<string, number>
+  onSubjectCompletion: (subject: string, year: number | null) => void
+  onCompleteYear: (year: number, subjects: string[]) => void
   providers: string[]
   examDifficulty?: ExamDifficultySettings
   onSubjectsChange: (subjects: string[]) => void
@@ -78,6 +81,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
   const [models, setModels] = useState<ChatGPTModel[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
+  const [completionYear, setCompletionYear] = useState(() => new Date().getFullYear())
+  const [finishingSubjects, setFinishingSubjects] = useState<string[]>([])
   const [subjectToAdd, setSubjectToAdd] = useState("")
   const [customSubject, setCustomSubject] = useState("")
   const [providerToAdd, setProviderToAdd] = useState("")
@@ -192,13 +197,20 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                   <Button type="submit" variant="outline" disabled={!customSubject.trim()}><Plus />Add</Button>
                 </form>
               </div>
+              <div className="space-y-2 py-3">
+                <label htmlFor="completion-year">Completion year</label>
+                <Input id="completion-year" type="number" min={1900} max={9999} value={completionYear} onChange={(event) => setCompletionYear(Number(event.target.value))} />
+                <p className="text-sm text-muted-foreground">Select subjects finishing this year. Leave continuing subjects unchecked.</p>
+                {selectedSubjects.filter((subject) => !completedSubjects.includes(subject)).map((subject) => <label key={subject} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={finishingSubjects.includes(subject)} onChange={(event) => setFinishingSubjects(event.target.checked ? [...finishingSubjects, subject] : finishingSubjects.filter((item) => item !== subject))} />{subject}</label>)}
+                <Button variant="outline" disabled={!validCompletionYear(completionYear) || !finishingSubjects.length} onClick={() => { onCompleteYear(completionYear, finishingSubjects.filter((subject) => selectedSubjects.includes(subject) && !completedSubjects.includes(subject))); setFinishingSubjects([]) }}>Complete selected year</Button>
+              </div>
               {selectedSubjects.length ? (
                 <ol className="divide-y">
-                  {selectedSubjects.map((subject, index) => (
+                  {selectedSubjects.filter((subject) => !completedSubjects.includes(subject)).map((subject) => { const index = selectedSubjects.indexOf(subject); return (
                     <li key={subject} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={subject}>{subject}</span>
-                      <Button type="button" variant="outline" size="sm" onClick={() => onCompletedSubjectsChange(completedSubjects.includes(subject) ? completedSubjects.filter((item) => item !== subject) : [...completedSubjects, subject])}>{completedSubjects.includes(subject) ? "Resume subject" : "Mark completed"}</Button>
+                      <Button type="button" variant="outline" size="sm" disabled={!completedSubjects.includes(subject) && !validCompletionYear(completionYear)} onClick={() => onSubjectCompletion(subject, completedSubjects.includes(subject) ? null : completionYear)}>{completedSubjects.includes(subject) ? "Resume subject" : "Mark completed"}</Button>
                       {completedSubjects.includes(subject) ? <Badge variant="secondary">Completed</Badge> : null}
                       {subject === selectedSubjects.find((item) => !completedSubjects.includes(item)) ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${subject} up`} disabled={index === 0} onClick={() => {
@@ -213,9 +225,17 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                       }}><ArrowDown /></Button>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => { const previous = selectedSubjects; onSubjectsChange(previous.filter((item) => item !== subject)); toast(`${subject} removed`, { duration: 8000, action: { label: "Undo", onClick: () => onSubjectsChange(previous) } }) }}><X /></Button>
                     </li>
-                  ))}
+                  )})}
                 </ol>
               ) : <p className="py-4 text-sm text-muted-foreground">Add your subjects in priority order.</p>}
+              {[...new Set(completedSubjects.map((subject) => subjectCompletionYears[subject]))].sort((a, b) => b - a).map((year) => <div key={year} className="space-y-2 py-3">
+                <h3 className="font-medium">Completed in {year}</h3>
+                {completedSubjects.filter((subject) => subjectCompletionYears[subject] === year).map((subject) => <div key={subject} className="flex items-center gap-2">
+                  <span className="flex-1 text-sm">{subject}</span>
+                  <Input className="w-28" aria-label={`Completion year for ${subject}`} type="number" min={1900} max={9999} defaultValue={year} onBlur={(event) => { const next = Number(event.target.value); if (validCompletionYear(next)) onSubjectCompletion(subject, next); else event.target.value = String(year) }} />
+                  <Button variant="outline" size="sm" onClick={() => onSubjectCompletion(subject, null)}>Resume subject</Button>
+                </div>)}
+              </div>)}
             </Section>
           ) : null}
 

@@ -1,3 +1,5 @@
+import { sameStudySubject } from "../../src/lib/studySubjects.js"
+import { currentSubjectWork } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/class-timetable.js"
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
@@ -139,7 +141,7 @@ export function studyTools(define: Define) {
     { date: day.optional().describe("Defaults to today") }, "read", async ({ date }) => {
       const { data, sessions } = await readAll()
       const on = date ?? localDate(new Date())
-      return { ...buildDayPlan(on, { ...data, sessions }, await vceTimetable()), classPeriods: classPeriodsOn(on, data.classTimetable) }
+      return { ...buildDayPlan(on, { ...currentSubjectWork(data), sessions: sessions.filter((session) => !isPlanned(session) || !data.completedSubjects.some((subject) => sameStudySubject(session.subject_id, subject))) }, await vceTimetable()), classPeriods: classPeriodsOn(on, currentSubjectWork(data).classTimetable) }
     })
 
   /* ------------------------------------------------------------ stoplight */

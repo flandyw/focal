@@ -1,3 +1,5 @@
+import { sameStudySubject } from "../../src/lib/studySubjects.js"
+import { currentSubjectWork, subjectCompletionYear } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { ATAR_AGGREGATE_REFERENCES } from "../../src/lib/atar-data.js"
 import { estimateAtar, type AtarStudyResult } from "../../src/lib/atar.js"
@@ -16,7 +18,7 @@ import { getUpcomingSacs } from "../../src/lib/sac.js"
 import { interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
 import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score.js"
 import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable.js"
-import { isPaused, isRunning } from "../../src/lib/sync/sessionContract.js"
+import { isPaused, isRunning, isPlanned } from "../../src/lib/sync/sessionContract.js"
 import { getCachedVcaaExams, getVcaaExamCompanions, isVcaaExamLogged } from "../../src/lib/vcaa-resources.js"
 import { examResources, gradeReferences, readAll, scalingReferences, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
@@ -55,16 +57,17 @@ export function insightTools(define: Define) {
     const [{ data, sessions }, references, timetable] = await Promise.all([readAll(), gradeReferences(), vceTimetable()])
     const now = new Date()
     const today = localDate(now)
-    const plan = buildDayPlan(today, { ...data, sessions }, timetable)
+    const plan = buildDayPlan(today, { ...currentSubjectWork(data), sessions: sessions.filter((session) => !isPlanned(session) || !data.completedSubjects.some((subject) => sameStudySubject(session.subject_id, subject))) }, timetable && { ...timetable, exams: timetable.exams.filter((exam) => !data.completedSubjects.some((subject) => sameStudySubject(exam.subject, subject))) })
+    const current = currentSubjectWork(data)
     const running = sessions.find((s) => isRunning(s) || isPaused(s))
     const tracked = new Set(data.trackedExamIds)
     return {
       today, counts: { exams: data.attempts.length, mistakes: data.mistakes.length, sacs: data.sacRecords.length, subjects: data.subjects },
-      mistakeQueue: getMistakeQueueCounts(data.mistakes), mistakeProgress: getMistakeProgress(data.mistakes),
+      mistakeQueue: getMistakeQueueCounts(current.mistakes), mistakeProgress: getMistakeProgress(data.mistakes),
       timer: running && { id: running.id, title: running.title, state: isRunning(running) ? "running" : "paused" },
       todayPlan: { plannedMinutes: plan.plannedMinutes, completedMinutes: plan.completedMinutes, dueMistakes: plan.dueMistakes, items: plan.items.map((i) => ({ kind: i.kind, title: i.title, minutes: i.minutes })) },
-      upcomingSacs: getUpcomingSacs(data.sacRecords).slice(0, 5).map((r) => ({ id: r.id, title: r.title, subject: r.subject, scheduledAt: r.scheduledAt })),
-      upcomingEvents: data.events.filter((e) => !e.isFinished && Date.parse(e.startTime) >= now.getTime()).toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, 5)
+      upcomingSacs: getUpcomingSacs(current.sacRecords).slice(0, 5).map((r) => ({ id: r.id, title: r.title, subject: r.subject, scheduledAt: r.scheduledAt })),
+      upcomingEvents: current.events.filter((e) => !e.isFinished && Date.parse(e.startTime) >= now.getTime()).toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, 5)
         .map((e) => ({ id: e.id, title: e.title, type: e.eventType, startTime: e.startTime })),
       trackedVceExams: (timetable?.exams ?? []).filter((e) => tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
       goals: data.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),
@@ -134,7 +137,10 @@ export function insightTools(define: Define) {
       return { reference, rawScore, usePrediction: entry.rawScore === undefined, id: String(index) }
     })
     const results = rows.flatMap((row): AtarStudyResult[] => {
-      const scaledScore = interpolateScaledScore(row.rawScore, row.reference.points)
+      const completionYear = subjectCompletionYear(data, row.reference.studyName)
+      const reference = completionYear === undefined ? row.reference : scaling.find((item) => item.year === completionYear && item.code === row.reference.code)
+      if (!reference) throw new Error(`No ${completionYear} scaling for completed subject ${row.reference.studyName}`)
+      const scaledScore = interpolateScaledScore(row.rawScore, reference.points)
       return scaledScore === null ? [] : [{ id: row.id, code: row.reference.code, studyName: row.reference.studyName, rawScore: row.rawScore, scaledScore }]
     })
     const estimate = estimateAtar(results, reportYear)

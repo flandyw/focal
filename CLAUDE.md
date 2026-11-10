@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Focal is a VCE study app: practice exams, mistakes, calendar, study timer, progress. It ships as a browser app and a Tauri desktop app. `AGENTS.md` sets the working style (minimal code) and **forbids writing tests**; it also records the web/desktop architecture rules, so read it too.
+Focal is a VCE study app: practice exams, mistakes, calendar, study timer, progress. It ships as a browser app and a Tauri desktop app. `AGENTS.md` sets the working style (minimal code) and **forbids writing new tests**; it also records the web/desktop architecture rules, so read it too.
 
 ## Commands
 
@@ -14,14 +14,15 @@ bun run dev:desktop          # desktop-mode frontend, port 1420
 bun run tauri dev            # desktop shell + local ChatGPT sidecar + frontend
 bun run check                # typecheck + lint (CI gate); `make check` is the same
 bun run typecheck            # tsc for tsconfig.json and tsconfig.node.json
-bun run lint[:fix]           # oxlint src scripts
+bun run lint[:fix]           # oxlint src scripts server api server.ts vite.config.ts
+bun test                     # the four existing test files; do not add more
 bun run build                # typecheck + browser build
 bun run build:desktop        # typecheck + `vite build --mode desktop` into dist/
 bun run start                # production server.ts (serves build + /api/mistakes-pdf + /api/mcp)
 bun run mcp[:http]           # MCP server over stdio / HTTP (docs/mcp.md)
 ```
 
-There is no test suite. Verify with `check`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually. Some Makefile `dev` help text still mentions port 1420, but `make dev` runs the browser build (`bun run dev`).
+The small existing `bun test` suite (four files) must keep passing; do not add new tests. Verify with `check`, `bun test`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually.
 
 ## Architecture
 

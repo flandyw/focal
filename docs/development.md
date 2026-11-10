@@ -24,13 +24,14 @@ The browser app runs at `http://localhost:5173`. Add `VITE_SUPABASE_URL` and `VI
 | `bun run dev:desktop` | Desktop-mode frontend on port 1420; does not launch the native shell. |
 | `bun run tauri dev` | Native shell and desktop frontend; builds the local ChatGPT sidecar first. |
 | `bun run check` | Typecheck and lint the frontend, server, API, and scripts. |
+| `bun test` | Run the four existing test files; do not add new tests. |
 | `bun run build` | Typecheck and build the web frontend. |
 | `bun run build:desktop` | Typecheck and build the desktop frontend; does not package the native app. |
 | `bun run tauri build` | Build a native bundle; requires the Tauri toolchain. |
 | `bun run build:chatgpt-sidecar` | Build the desktop sidecar. |
 | `bun run start` | Serve the built app and API using Bun. |
 
-Verify changes with `bun run check`, `bun run build`, and `bun run build:desktop`. This repository does not maintain a test suite; exercise affected behavior in the app when appropriate.
+Verify changes with `bun run check`, `bun test`, `bun run build`, and `bun run build:desktop`. The small existing test suite (four files) must keep passing; do not add new tests. Exercise affected behavior in the app when appropriate.
 
 ## Repository map
 

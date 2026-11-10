@@ -16,7 +16,7 @@ Rules:
 - No abstractions that weren't explicitly requested.
 - No new dependency if it can be avoided.
 - No boilerplate nobody asked for.
-- **Do not write tests.** No unit tests, no integration tests, no `bun test` files, no `#[cfg(test)]` modules, no self-check scripts. There is no test suite in this repo and none should be added. Verify a change by building, typechecking, linting, or running the app.
+- **Do not write new tests.** The small existing `bun test` suite (four files) must keep passing. Verify changes with typechecking, linting, `bun test`, builds, or running the app.
 - Deletion over addition. Boring over clever. Fewest files possible.
 - Question complex requests: "Do you actually need X, or does Y cover it?"
 - Pick the edge-case-correct option when two stdlib approaches are the same size — lazy means less code, not the flimsier algorithm.
@@ -33,5 +33,5 @@ Not lazy about: input validation at trust boundaries, error handling that preven
 - `src/lib/class-timetable-core.ts` implements school timetable cycles; `src/lib/timetable.ts` handles exam scheduling. They are distinct modules.
 - Browser assets and reference datasets are in root `public/`; the PDF endpoint is in `api/` and `server/mistakes-pdf.ts`. Reference import tools are in `vcaa/` and `vtac/`. Web deployment configuration is root `vercel.json`; configure the hosting project to use the repository root.
 - Run `bun run dev` / `bun run build` for web. Run `bun run dev:desktop` / `bun run build:desktop` for the desktop frontend, or `bun run tauri dev` for the native app. Vite's `desktop` mode enables native integration and AI; the browser build disables them. `VITE_DESKTOP` is the internal flag for this distinction.
-- Validate with `bun run check`, `bun run build`, and `bun run build:desktop`. Do not add tests.
+- Validate with `bun run check`, `bun test`, `bun run build`, and `bun run build:desktop`. Do not add tests.
 - Preserve historical `examtrack` storage keys and sync identifiers: existing saved data and Folio depend on them.

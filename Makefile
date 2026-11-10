@@ -7,7 +7,7 @@ help:
 	@echo "Focal — VCE study management app"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev            Vite dev server (port 1420)"
+	@echo "  make dev            Vite dev server (port 5173)"
 	@echo "  make tauri-dev      Full Tauri desktop app in dev mode"
 	@echo ""
 	@echo "Build:"
@@ -62,7 +62,7 @@ bump-version:
 
 build: lint-fix bump-version
 	VERSION=$$(bun -e "const fs = require('fs'); console.log(JSON.parse(fs.readFileSync('package.json', 'utf8')).version)") && \
-	git add package.json src-tauri/tauri.conf.json && \
+	git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml && \
 	git commit -m "chore: bump version to v$$VERSION" && \
 	bun run tauri build && \
 	ditto "$(APP_SRC)" "$(APP_DST)" && \

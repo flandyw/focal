@@ -115,9 +115,12 @@ export async function handlePush(request: Request): Promise<Response> {
     if (!keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string" ||
         !/^[A-Za-z0-9_-]{87}$/.test(keys.p256dh) || !/^[A-Za-z0-9_-]{22}$/.test(keys.auth) ||
         typeof input.planned !== "boolean" || typeof input.friends !== "boolean") return json({ error: "Invalid push subscription" }, 400)
-    const { data: existing, error: existingError } = await db.from("push_subscriptions").select("preferences,enabled_at")
-      .eq("user_id", user.id).eq("endpoint", input.endpoint).maybeSingle()
+    const { data: existing, error: existingError } = await db.from("push_subscriptions").select("user_id,p256dh,auth,preferences,enabled_at")
+      .eq("endpoint", input.endpoint).maybeSingle()
     if (existingError) throw existingError
+    if (existing && existing.user_id !== user.id && (keys.p256dh !== existing.p256dh || keys.auth !== existing.auth)) {
+      return json({ error: "This device is registered to another account. Disable reminders there first." }, 409)
+    }
     const preferences = parseNotificationPreferences({ cheers: input.friends, ...existing?.preferences, ...input })
     if (!preferences) return json({ error: "Invalid notification preferences. Check the times and timezone." }, 400)
     const { count, error: countError } = await db.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", user.id)

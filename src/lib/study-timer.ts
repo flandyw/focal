@@ -359,7 +359,7 @@ export function loadTimerState(settings: TimerSettings, now = Date.now()): Timer
   const mode = isValidMode(parsed.mode) ? parsed.mode : fallback.mode
   if (mode === "free" || parsed.freeStudy === true) {
     return advanceTimer({ ...fallback, running: parsed.running === true, overtimeSeconds: safeNonNegativeInteger(parsed.overtimeSeconds) }, settings,
-      parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.max(0, Math.floor((now - parsed.updatedAt) / 1000)) : 0)
+      parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.min(MAX_RESTORE_ELAPSED_SECONDS, Math.max(0, Math.floor((now - parsed.updatedAt) / 1000))) : 0)
   }
 
   const duration = getDurationSeconds(mode, settings)

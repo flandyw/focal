@@ -79,6 +79,7 @@ function languageEquivalenceKey(studyName: string): string | null {
 }
 
 function equivalenceKey(result: Pick<AtarStudyResult, "code" | "studyName">): string {
+  if (result.code === "LEGACY_ACCOUNTING") return "study:AC"
   if (result.code === "EN" || result.code === "EF") return "english-or-eal"
   return languageEquivalenceKey(result.studyName) ?? `study:${result.code}`
 }

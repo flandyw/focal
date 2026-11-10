@@ -130,7 +130,7 @@ export function insightTools(define: Define) {
     const reportYear = year ?? years[0]
     const rows = studies.map((entry, index) => {
       const reference = scaling.find((s) => s.code === entry.study || normaliseScalingStudyName(s.studyName) === normaliseScalingStudyName(entry.study))
-      if (!reference) throw new Error(`No ${reportYear} VTAC scaling data for "${entry.study}". Use the exact study name or code.`)
+      if (!reference) throw new Error(`No VTAC scaling data in any year for "${entry.study}". Use the exact study name or code.`)
       const predicted = entry.rawScore === undefined ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
       const rawScore = entry.rawScore ?? predicted
       if (rawScore === undefined) throw new Error(`Give a rawScore for "${entry.study}"; it has no Focal prediction.`)

@@ -47,3 +47,17 @@ test("completed-subject Focal/manual selection survives saved scenario serializa
   }
   expect(atarRawScore(row)).toBe(40)
 })
+
+test("legacy and current Accounting codes contribute only once in every ATAR consumer", () => {
+  const results = [
+    { id: "en", code: "EN", studyName: "English", rawScore: 40, scaledScore: 40 },
+    { id: "ch", code: "CH", studyName: "Chemistry", rawScore: 40, scaledScore: 40 },
+    { id: "pe", code: "PE", studyName: "Physical Education", rawScore: 40, scaledScore: 40 },
+    { id: "ac", code: "AC", studyName: "Accounting", rawScore: 40, scaledScore: 40 },
+    { id: "legacy", code: "LEGACY_ACCOUNTING", studyName: "Accounting", rawScore: 45, scaledScore: 45 },
+  ]
+  const estimate = estimateAtar(results, 2025)!
+  const counted = [...estimate.primaryFour, ...estimate.increments]
+  expect(counted.filter((r) => r.studyName === "Accounting").map((r) => r.id)).toEqual(["legacy"])
+  expect(estimate.aggregate).toBe(165)
+})

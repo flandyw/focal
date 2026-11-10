@@ -252,11 +252,11 @@ export function useStudyTimer({
   // Both study modes use the same logged start/pause/resume/finish lifecycle.
   // Server-clock stamps keep devices with different clocks in agreement.
   useEffect(() => {
-    const at = workEndedAtRef.current ?? serverNow()
     if (workEndedAtRef.current !== null) {
-      closeBlock(at)
+      closeBlock(workEndedAtRef.current)
       workEndedAtRef.current = null
     }
+    const at = serverNow()
     if (!enabled) {
       pauseBlock(false, at)
       if (state.running) dispatch({ type: "SET_RUNNING", running: false })

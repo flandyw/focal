@@ -263,6 +263,27 @@ function readLegacyTombstones(): Record<string, Record<string, string>> {
 }
 
 /**
+ * Retention: a local tombstone only exists to hide, and bootstrap-delete, an older live copy of the row.
+ * Once this bootstrapped, fully pulled account has no such copy (the server holds the delete, a newer
+ * put, or never had the row), the entry can do nothing more. The server keeps its own delete rows
+ * forever, so dropping the local entry cannot let a stale device resurrect the item.
+ */
+function pruneLegacyTombstones(tombstones: Record<string, Record<string, string>>, rows: AppliedRow[]): void {
+  const live = new Map(rows.filter((row) => row.operation === "put").map((row) => [logicalKey(row.entity, row.rowId), row.updatedAt]))
+  let changed = false
+  for (const [entity, entries] of Object.entries(tombstones)) {
+    for (const [id, deletedAt] of Object.entries(entries)) {
+      const updatedAt = live.get(logicalKey(entity, id))
+      if (updatedAt !== undefined && deletedAt > updatedAt) continue
+      delete entries[id]
+      changed = true
+    }
+  }
+  if (!changed) return
+  try { localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(tombstones)) } catch { /* the next projection retries */ }
+}
+
+/**
  * A delete is final until something newer than it lands. The projection drops any row the
  * user deleted on this device, so no stale server copy or late sync page can bring it back;
  * an undo elsewhere (a remote write stamped after the delete) still wins.
@@ -564,6 +585,8 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
   await transactionDone(transaction)
   const pendingKeys = new Set(allPending.filter((entry) => entry.accountId === accountId).map((entry) => logicalKey(entry.entity, entry.rowId)))
   const tombstones = readLegacyTombstones()
+  const meta = await readMeta(accountId)
+  if (meta.bootstrapped && meta.cursor >= meta.head) pruneLegacyTombstones(tombstones, allRows.filter((row) => row.accountId === accountId))
   // Rows with unsent local changes keep the local value; everything else comes from the feed.
   const remote = allRows.filter((row) => row.accountId === accountId && !pendingKeys.has(logicalKey(row.entity, row.rowId)) &&
     !(row.operation === "put" && isTombstoned(row.entity, row.rowId, row.updatedAt, tombstones)))
@@ -585,7 +608,7 @@ export function recordLocalChanges(previous: AppData, next: AppData, now = new D
       for (const id of previousIds) if (!nextIds.has(id)) tombstones[entity][id] = now
       for (const id of nextIds) if (!previousIds.has(id)) delete tombstones[entity][id]
     }
-    localStorage.setItem("examtrack:sync:tombstones:v1", JSON.stringify(tombstones))
+    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(tombstones))
   } catch {
     // ponytail: localStorage tombstones are only a bootstrap bridge; IndexedDB is authoritative after sign-in.
   }

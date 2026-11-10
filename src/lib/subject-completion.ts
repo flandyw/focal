@@ -1,5 +1,5 @@
 import type { AppData } from "./exam-data.js"
-import { sameStudySubject } from "./studySubjects.js"
+import { sameStudySubject, subjectKey } from "./studySubjects.js"
 
 export const validCompletionYear = (year: unknown): year is number => typeof year === "number" && Number.isInteger(year) && year >= 1900 && year <= 9999
 
@@ -33,8 +33,20 @@ export function completeSubjectYear(data: AppData, year: number, subjects: strin
   return subjects.reduce((next, subject) => setSubjectCompletion(next, subject, year, at), data)
 }
 
+export function setSubjects(data: AppData, subjects: string[], at = new Date().toISOString()): AppData {
+  subjects = [...new Map(subjects.map((subject) => [subjectKey(subject), subject])).values()]
+  const selected = new Set(subjects.map(subjectKey))
+  const completedSubjects = data.completedSubjects.filter((subject) => selected.has(subjectKey(subject)))
+  const subjectCompletionYears = Object.fromEntries(Object.entries(data.subjectCompletionYears).filter(([subject]) => selected.has(subjectKey(subject))))
+  return { ...data, subjects, completedSubjects, subjectCompletionYears, subjectsUpdatedAt: at, completedSubjectsUpdatedAt: at }
+}
+
+export function isCurrentSubject(data: Pick<AppData, "completedSubjects">, subject?: string | null) {
+  return !subject || !data.completedSubjects.some((completed) => sameStudySubject(completed, subject))
+}
+
 export function currentSubjectWork(data: AppData): AppData {
-  const active = (subject?: string | null) => !subject || !data.completedSubjects.some((completed) => sameStudySubject(completed, subject))
+  const active = (subject?: string | null) => isCurrentSubject(data, subject)
   const attemptSubjects = new Map(data.attempts.map((attempt) => [attempt.id, attempt.subject]))
   return {
     ...data,
@@ -42,7 +54,7 @@ export function currentSubjectWork(data: AppData): AppData {
     mistakes: data.mistakes.filter((mistake) => active(attemptSubjects.get(mistake.attemptId) ?? mistake.subject)),
     sacRecords: data.sacRecords.filter((record) => active(record.subject)),
     events: data.events.filter((event) => active(event.subjectId)),
-    learning: { ...data.learning, tasks: data.learning.tasks.filter((task) => active(task.subject)), goals: data.learning.goals.filter((goal) => active(goal.subject)) },
+    learning: { ...data.learning, curriculumAreas: data.learning.curriculumAreas.filter((item) => active(item.subject)), tasks: data.learning.tasks.filter((task) => active(task.subject)), goals: data.learning.goals.filter((goal) => active(goal.subject)) },
     classTimetable: data.classTimetable && { ...data.classTimetable, entries: data.classTimetable.entries.map((entry) => ({ ...entry, periods: entry.periods.filter((period) => active(period.subject)) })) },
   }
 }

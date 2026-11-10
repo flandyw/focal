@@ -1,4 +1,4 @@
-import { setSubjectCompletion, completeSubjectYear, currentSubjectWork } from "./lib/subject-completion"
+import { setSubjects, setSubjectCompletion, completeSubjectYear, currentSubjectWork } from "./lib/subject-completion"
 import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
@@ -515,7 +515,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function saveSubjects(subjects: string[]) {
-    setData((current) => ({ ...current, subjects, subjectsUpdatedAt: new Date().toISOString() }))
+    setData((current) => setSubjects(current, subjects))
   }
 
   function saveAtarEstimate(estimate: SavedAtarEstimate) {

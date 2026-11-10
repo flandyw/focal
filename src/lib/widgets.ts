@@ -1,3 +1,4 @@
+import { currentSubjectWork, isCurrentSubject } from "./subject-completion"
 import { useEffect, useRef } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
@@ -51,6 +52,7 @@ function atar(data: AppData, references: AssessmentReference[], scaling: Scaling
 }
 
 function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null, references: AssessmentReference[], scaling: ScalingReference[]) {
+  data = currentSubjectWork(data)
   const now = Date.now()
   const today = new Date()
   const agenda: Item[] = data.events.filter((event) => !event.deleted_at && !event.isFinished).map((event) => ({
@@ -67,7 +69,7 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
     }
   }
   const tracked = new Set(data.trackedExamIds), completed = new Set(data.completedExamIds)
-  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => tracked.has(exam.id) && !completed.has(exam.id))
+  const exams: Item[] = (timetable?.exams ?? []).filter((exam) => isCurrentSubject(data, exam.subject) && tracked.has(exam.id) && !completed.has(exam.id))
     .map((exam) => ({ id: exam.id, title: exam.subject, subtitle: exam.paper ?? "VCE exam", start: getExamStart(exam).getTime(), end: getExamEnd(exam).getTime(), view: "exams" }))
   for (const sac of data.sacRecords.filter((record) => !isCompletedSac(record) && !record.completedAt)) {
     const allDay = /^\d{4}-\d{2}-\d{2}$/.test(sac.scheduledAt)

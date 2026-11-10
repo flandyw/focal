@@ -1,5 +1,5 @@
 import { sameStudySubject } from "../../src/lib/studySubjects.js"
-import { currentSubjectWork, subjectCompletionYear } from "../../src/lib/subject-completion.js"
+import { currentSubjectWork, isCurrentSubject, subjectCompletionYear } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { ATAR_AGGREGATE_REFERENCES } from "../../src/lib/atar-data.js"
 import { estimateAtar, type AtarStudyResult } from "../../src/lib/atar.js"
@@ -62,16 +62,16 @@ export function insightTools(define: Define) {
     const running = sessions.find((s) => isRunning(s) || isPaused(s))
     const tracked = new Set(data.trackedExamIds)
     return {
-      today, counts: { exams: data.attempts.length, mistakes: data.mistakes.length, sacs: data.sacRecords.length, subjects: data.subjects },
+      today, counts: { exams: data.attempts.length, mistakes: data.mistakes.length, sacs: data.sacRecords.length, subjects: current.subjects },
       mistakeQueue: getMistakeQueueCounts(current.mistakes), mistakeProgress: getMistakeProgress(data.mistakes),
       timer: running && { id: running.id, title: running.title, state: isRunning(running) ? "running" : "paused" },
       todayPlan: { plannedMinutes: plan.plannedMinutes, completedMinutes: plan.completedMinutes, dueMistakes: plan.dueMistakes, items: plan.items.map((i) => ({ kind: i.kind, title: i.title, minutes: i.minutes })) },
       upcomingSacs: getUpcomingSacs(current.sacRecords).slice(0, 5).map((r) => ({ id: r.id, title: r.title, subject: r.subject, scheduledAt: r.scheduledAt })),
       upcomingEvents: current.events.filter((e) => !e.isFinished && Date.parse(e.startTime) >= now.getTime()).toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, 5)
         .map((e) => ({ id: e.id, title: e.title, type: e.eventType, startTime: e.startTime })),
-      trackedVceExams: (timetable?.exams ?? []).filter((e) => tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
-      goals: data.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),
-      studyScores: [...new Set(data.attempts.map((a) => a.subject))].flatMap((subject) => {
+      trackedVceExams: (timetable?.exams ?? []).filter((e) => isCurrentSubject(data, e.subject) && tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
+      goals: current.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),
+      studyScores: [...new Set(data.attempts.filter((a) => isCurrentSubject(data, a.subject)).map((a) => a.subject))].flatMap((subject) => {
         const p = predictStudyScore({ subject, attempts: data.attempts, references })
         return p ? [{ subject, studyScore: p.studyScore, low: p.low, high: p.high, confidence: p.confidence }] : []
       }),
@@ -93,7 +93,7 @@ export function insightTools(define: Define) {
   define("suggest_exams", "Suggest which official/company practice papers to do next, based on what is logged and your subjects.",
     { limit: z.number().int().min(1).max(20).default(4) }, "read", async ({ limit }) => {
       const [{ data }, references, studies] = await Promise.all([readAll(), gradeReferences(), examResources()])
-      return buildExamSuggestions(data.attempts, references, data.subjects, limit, studies)
+      return buildExamSuggestions(data.attempts.filter((attempt) => isCurrentSubject(data, attempt.subject)), references.filter((reference) => isCurrentSubject(data, reference.studyName)), currentSubjectWork(data).subjects, limit, studies.filter((study) => isCurrentSubject(data, study.studyName)))
     })
 
   /* ----------------------------------------------------------- predictions */
@@ -196,7 +196,7 @@ export function insightTools(define: Define) {
       const now = new Date()
       return {
         year: timetable.year, source: timetable.sourceUrl,
-        exams: timetable.exams.filter((e) => (!subject || contains(e.subject, subject)) && (!upcomingOnly || isUpcoming(e, now)) && (!from || e.date >= from))
+        exams: timetable.exams.filter((e) => (isCurrentSubject(data, e.subject) || !upcomingOnly) && (!subject || contains(e.subject, subject)) && (!upcomingOnly || isUpcoming(e, now)) && (!from || e.date >= from))
           .map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, dateEnd: e.dateEnd, time: formatExamTime(e), readingMinutes: e.readingMinutes, component: e.component, daysUntil: daysUntil(e, now), tracked: data.trackedExamIds.includes(e.id) })),
       }
     })

@@ -1,5 +1,5 @@
 import { sameStudySubject } from "../../src/lib/studySubjects.js"
-import { currentSubjectWork } from "../../src/lib/subject-completion.js"
+import { currentSubjectWork, isCurrentSubject } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/class-timetable.js"
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
@@ -49,9 +49,9 @@ export function studyTools(define: Define) {
   define("list_study_sessions", "List study sessions: planned (scheduled), running or paused timers, and completed/logged study. Filter by the dates of their blocks.",
     { from: day.optional(), to: day.optional(), state: z.enum(["planned", "running", "paused", "completed", "all"]).default("all"), limit },
     "read", async ({ from, to, state, limit }) => {
-      const { sessions } = await readAll()
+      const { data, sessions } = await readAll()
       const now = Date.now()
-      return sessions.filter((s) => state === "all" || stateOf(s) === state)
+      return sessions.filter((s) => (!isPlanned(s) || isCurrentSubject(data, s.subject_id)) && (state === "all" || stateOf(s) === state))
         .map((s) => ({ view: sessionView(s, now) }))
         .filter(({ view }) => view.blocks.length === 0 || view.blocks.some((b) => (!from || localDate(new Date(b.start)) >= from) && (!to || localDate(new Date(b.start)) <= to)))
         .toSorted((a, b) => (b.view.blocks[0]?.start ?? "").localeCompare(a.view.blocks[0]?.start ?? "")).slice(0, limit).map(({ view }) => view)
@@ -141,7 +141,7 @@ export function studyTools(define: Define) {
     { date: day.optional().describe("Defaults to today") }, "read", async ({ date }) => {
       const { data, sessions } = await readAll()
       const on = date ?? localDate(new Date())
-      return { ...buildDayPlan(on, { ...currentSubjectWork(data), sessions: sessions.filter((session) => !isPlanned(session) || !data.completedSubjects.some((subject) => sameStudySubject(session.subject_id, subject))) }, await vceTimetable()), classPeriods: classPeriodsOn(on, currentSubjectWork(data).classTimetable) }
+      return { ...buildDayPlan(on, { ...currentSubjectWork(data), sessions: sessions.filter((session) => !isPlanned(session) || !data.completedSubjects.some((subject) => sameStudySubject(session.subject_id, subject))) }, await vceTimetable().then((timetable) => timetable && ({ ...timetable, exams: timetable.exams.filter((exam) => isCurrentSubject(data, exam.subject)) }))), classPeriods: classPeriodsOn(on, currentSubjectWork(data).classTimetable) }
     })
 
   /* ------------------------------------------------------------ stoplight */
@@ -149,8 +149,9 @@ export function studyTools(define: Define) {
   define("list_stoplight", "The stoplight checklist: every skill rated red/amber/green, with the evidence from your mistakes and marked questions, practice progression and whether a re-check is due.",
     { subject: z.string().optional(), includeArchived: z.boolean().default(false) }, "read", async ({ subject, includeArchived }) => {
       const { data } = await readAll()
-      const evidence = buildItemEvidence(data)
-      const items = progressStoplight(data.learning, data.mistakes).curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
+      const current = currentSubjectWork(data)
+      const evidence = buildItemEvidence(current)
+      const items = progressStoplight(current.learning, current.mistakes).curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
       return items.map((item) => ({
         id: item.id, subject: item.subject, group: itemGroup(item), name: item.name, rating: item.rating ?? "unrated", ratedAt: item.ratedAt,
         check: item.check, type: item.type, archived: Boolean(item.archivedAt), recheckDue: isRecheckDue(item),
@@ -223,7 +224,7 @@ export function studyTools(define: Define) {
   define("list_goals", "Score goals (study score, exam average, ATAR) with current progress and the gap to the target.",
     { includeArchived: z.boolean().default(false) }, "read", async ({ includeArchived }) => {
       const { data, references } = await goalView()
-      return data.learning.goals.filter((g) => includeArchived || !g.archivedAt)
+      return currentSubjectWork(data).learning.goals.filter((g) => includeArchived || !g.archivedAt)
         .map((goal) => ({ ...goal, progress: getGoalProgress(goal, data, references) }))
     })
 
@@ -259,7 +260,7 @@ export function studyTools(define: Define) {
     { from: day.optional(), to: day.optional(), status: z.enum(["planned", "completed", "skipped", "all"]).default("all"), includeArchived: z.boolean().default(false), limit },
     "read", async ({ from, to, status, includeArchived, limit }) => {
       const { data } = await readAll()
-      return data.learning.tasks.filter((t) => (includeArchived || !t.archivedAt) && (status === "all" || t.status === status) && (!from || t.plannedFor >= from) && (!to || t.plannedFor <= to))
+      return currentSubjectWork(data).learning.tasks.filter((t) => (includeArchived || !t.archivedAt) && (status === "all" || t.status === status) && (!from || t.plannedFor >= from) && (!to || t.plannedFor <= to))
         .toSorted((a, b) => a.plannedFor.localeCompare(b.plannedFor)).slice(0, limit)
     })
 

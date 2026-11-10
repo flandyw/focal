@@ -63,8 +63,11 @@ export function useSupabaseSync(data: AppData, setData: Dispatch<SetStateAction<
       if (old === data) return
       const accountId = user?.id ?? null
       if (activeAccount.current !== accountId) return
-      recordLocalChanges(old, data)
-      if (!accountId) return
+      // Signed in, deletes are durable in the outbox and then on the server; tombstones only bridge signed-out edits to the first sync.
+      if (!accountId) {
+        recordLocalChanges(old, data)
+        return
+      }
       // Write-ahead: durable in the outbox first, then sent at once. Whatever the server does not
       // take stays queued and the sync loop below retries it.
       await pushAppChanges(accountId, diffAppData(old, data))

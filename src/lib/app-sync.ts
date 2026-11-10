@@ -458,7 +458,21 @@ async function rebaseOutbox(change: PendingRow, remote: AppliedRow | null): Prom
   await transactionDone(transaction)
 }
 
-function mergeConcurrentValue(entity: Entity, rowId: string, base: unknown, local: unknown, remote: unknown): unknown {
+export function mergeConcurrentValue(entity: Entity, rowId: string, base: unknown, local: unknown, remote: unknown): unknown {
+  if (entity === "user_state" && isRecord(local) && isRecord(remote)) {
+    const before = isRecord(base) ? base.value : undefined
+    if (["subjects", "completedSubjects", "trackedExamIds", "completedExamIds"].includes(rowId) &&
+      Array.isArray(local.value) && Array.isArray(remote.value) &&
+      [...(Array.isArray(before) ? before : []), ...local.value, ...remote.value].every((item) => typeof item === "string")) {
+      const original = new Set(Array.isArray(before) ? before : [])
+      const left = new Set(local.value)
+      const right = new Set(remote.value)
+      return { ...remote, value: [...new Set([...left, ...right])].filter((item) => !original.has(item) || left.has(item) && right.has(item)) }
+    }
+    if (rowId === "subjectCompletionYears" && isRecord(local.value) && isRecord(remote.value)) {
+      return { ...remote, value: mergeObject(isRecord(before) ? before : {}, local.value, remote.value) }
+    }
+  }
   if (entity === "user_state" && rowId === "learning" &&
     isRecord(base) && isRecord(local) && isRecord(remote) &&
     isRecord(base.value) && isRecord(local.value) && isRecord(remote.value)) {

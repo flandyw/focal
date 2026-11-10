@@ -96,3 +96,11 @@ export function predictScaledStudyScore(
     yearEstimates,
   }
 }
+
+/** Prefer actual completion-year scaling, then the estimate's report, then the latest published study data. */
+export function atarScalingReference(references: ScalingReference[], code: string, reportYear: number, completionYear?: number): ScalingReference | undefined {
+  const studies = references.filter((reference) => reference.code === code)
+  return studies.find((reference) => reference.year === completionYear)
+    ?? studies.find((reference) => reference.year === reportYear)
+    ?? studies.toSorted((a, b) => b.year - a.year)[0]
+}

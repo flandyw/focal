@@ -1,3 +1,4 @@
+import type { AtarEstimatorRow } from "./exam-data.js"
 import { ATAR_AGGREGATE_REFERENCES, type AtarAggregateReference } from "./atar-data.js"
 
 export type AtarStudyResult = {
@@ -207,4 +208,8 @@ export function estimateAtar(results: AtarStudyResult[], year: number): AtarEsti
     excluded: valid.filter((result) => !selectedIds.has(result.id)),
     reference,
   }
+}
+
+export function atarRawScore(row: AtarEstimatorRow, prediction?: number): number {
+  return row.usePrediction && prediction !== undefined ? prediction : Number(row.raw)
 }

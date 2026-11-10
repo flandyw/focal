@@ -1,11 +1,6 @@
-import { readSubjectCompletions } from "./subject-completion.js"
 import type { AppData } from "./exam-data"
-import { EPOCH, TIMETABLE_ROW, rowsFromAppData, type AppRow, type Entity } from "./app-rows"
-import { EMPTY_APP_DATA, normalizeMistakeReviewPreferences, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
-import { isExamDifficultySettings } from "./exam-difficulty"
-import { isExamProgression } from "./exam-progression"
-import { mergeLearningWorkspace, migrateLearningWorkspace } from "./learning-workspace"
-import { migrateSacRecords } from "./sac"
+import { projectRows, rowsFromAppData, type AppRow, type Entity } from "./app-rows"
+import { mergeLearningWorkspace } from "./learning-workspace"
 import { announce, classifyFailure, openIndexedDb, requestResult, transactionDone, withFlushLock } from "./outbox"
 import { supabase, withSupabaseSession } from "./supabase"
 
@@ -569,94 +564,14 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
   await transactionDone(transaction)
   const pendingKeys = new Set(allPending.filter((entry) => entry.accountId === accountId).map((entry) => logicalKey(entry.entity, entry.rowId)))
   const tombstones = readLegacyTombstones()
-  const rows = allRows.filter((row) => row.accountId === accountId && !pendingKeys.has(logicalKey(row.entity, row.rowId)))
-  const byEntity = (entity: Entity) => rows.filter((row) => row.entity === entity)
-  const live = (entity: Entity) => (row: AppliedRow) => row.operation === "put" && !isTombstoned(entity, row.rowId, row.updatedAt, tombstones)
-  const remoteAttempts = byEntity("attempts").filter(live("attempts")).map((row) => row.payload)
-  const remoteMistakes = byEntity("mistakes").filter(live("mistakes")).map((row) => row.payload)
-  const localPending = rowsFromAppData(data).filter((row) => pendingKeys.has(logicalKey(row.entity, row.rowId)))
-  const attempts = [
-    ...remoteAttempts,
-    ...localPending.filter((row) => row.entity === "attempts" && row.operation === "put").map((row) => row.payload),
-  ]
-  const mistakes = [
-    ...remoteMistakes,
-    ...localPending.filter((row) => row.entity === "mistakes" && row.operation === "put").map((row) => row.payload),
-  ]
-  const remoteEvents = byEntity("events").filter(live("events")).map((row) => row.payload)
-  const events = [
-    ...remoteEvents,
-    ...localPending.filter((row) => row.entity === "events" && row.operation === "put").map((row) => row.payload),
-  ]
-  const timetableRow = byEntity(TIMETABLE_ROW).find((row) => row.rowId === TIMETABLE_ROW)
-  const migrated = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes })
-  if (!migrated) throw new Error("Synced attempts or mistakes failed validation")
-
-  const state = new Map<string, { value: unknown; updatedAt: string; seq: number }>()
-  for (const row of byEntity("user_state").toSorted((a, b) => a.seq - b.seq)) {
-    if (row.operation === "delete") { state.delete(row.rowId); continue }
-    if (row.rowId === "user_state" && isRecord(row.payload)) {
-      for (const [key, value] of Object.entries(row.payload)) {
-        if (key.endsWith("UpdatedAt") || key === "activeExamTimer" || key === "activeSacTimer") continue
-        const marker = row.payload[`${key}UpdatedAt`]
-        state.set(key, { value, updatedAt: typeof marker === "string" ? marker : "", seq: row.seq })
-      }
-    } else if (isRecord(row.payload) && "value" in row.payload) {
-      state.set(row.rowId, { value: row.payload.value, updatedAt: typeof row.payload.updated_at === "string" ? row.payload.updated_at : "", seq: row.seq })
-    }
-  }
-  for (const item of localPending) {
-    if (item.entity !== "user_state") continue
-    if (item.operation === "delete") state.delete(item.rowId)
-    else if (isRecord(item.payload) && "value" in item.payload)
-      state.set(item.rowId, { value: item.payload.value, updatedAt: typeof item.payload.updated_at === "string" ? item.payload.updated_at : "", seq: Number.MAX_SAFE_INTEGER })
-  }
-  const value = (key: string) => state.get(key)?.value
-  const stamp = (key: string) => state.get(key)?.updatedAt || EPOCH
-  const trackedExamIds = stringArray(value("trackedExamIds"))
-  const completedExamIds = stringArray(value("completedExamIds"))
-  const subjects = stringArray(value("subjects"))
-  const sacRecords = migrateSacRecords(value("sacRecords")) ?? []
-  const remoteInsights = migrateAppData({ ...EMPTY_APP_DATA, mistakeInsights: value("mistakeInsights") })?.mistakeInsights
-  const remoteDeck = migrateAppData({ ...EMPTY_APP_DATA, alternativeMistakeDeck: value("alternativeMistakeDeck") })?.alternativeMistakeDeck
-  const remoteAtarEstimates = migrateAppData({ ...EMPTY_APP_DATA, atarEstimates: value("atarEstimates") })?.atarEstimates ?? []
-  const remoteProgression = value("examProgression")
-  const remoteDifficulty = value("examDifficulty")
-  return {
-    ...data,
-    attempts: mergePendingCollection(migrated.attempts, localPending, "attempts"),
-    mistakes: mergePendingCollection(migrated.mistakes, localPending, "mistakes"),
-    events: mergePendingCollection(migrateCalendarEvents(events), localPending, "events"),
-    classTimetable: localPending.some((row) => row.entity === TIMETABLE_ROW)
-      ? data.classTimetable
-      : timetableRow?.operation === "put" && isTimetableConfig(timetableRow.payload) ? timetableRow.payload : undefined,
-    examProgression: isExamProgression(remoteProgression) ? remoteProgression : undefined,
-    trackedExamIds, trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
-    completedExamIds, completedExamIdsUpdatedAt: stamp("completedExamIds"),
-    ...readSubjectCompletions({ subjects: value("completedSubjects"), years: value("subjectCompletionYears") }, stamp("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
-    subjects, subjectsUpdatedAt: stamp("subjects"),
-    sacRecords, sacRecordsUpdatedAt: stamp("sacRecords"),
-    mistakeInsights: remoteInsights,
-    alternativeMistakeDeck: remoteDeck,
-    mistakeReviewPreferences: isRecord(value("mistakeReviewPreferences")) ? normalizeMistakeReviewPreferences(value("mistakeReviewPreferences") as Partial<NonNullable<AppData["mistakeReviewPreferences"]>>) : undefined,
-    examDifficulty: isExamDifficultySettings(remoteDifficulty) ? remoteDifficulty : undefined,
-    atarEstimates: remoteAtarEstimates, atarEstimatesUpdatedAt: stamp("atarEstimates"),
-    learning: migrateLearningWorkspace(value("learning")),
-  }
-}
-
-function mergePendingCollection<T extends { id: string }>(remote: T[], pending: AppRow[], entity: "attempts" | "mistakes" | "events"): T[] {
-  const result = new Map(remote.map((item) => [item.id, item]))
-  for (const row of pending) {
-    if (row.entity !== entity) continue
-    if (row.operation === "delete") result.delete(row.rowId)
-    else if (isRecord(row.payload) && typeof row.payload.id === "string") result.set(row.rowId, row.payload as T)
-  }
-  return [...result.values()]
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : []
+  // Rows with unsent local changes keep the local value; everything else comes from the feed.
+  const remote = allRows.filter((row) => row.accountId === accountId && !pendingKeys.has(logicalKey(row.entity, row.rowId)) &&
+    !(row.operation === "put" && isTombstoned(row.entity, row.rowId, row.updatedAt, tombstones)))
+  const local = rowsFromAppData(data).filter((row) => pendingKeys.has(logicalKey(row.entity, row.rowId)))
+    .map((row) => ({ ...row, seq: Number.MAX_SAFE_INTEGER }))
+  const { data: projected, omitted } = projectRows([...remote, ...local], data)
+  if (omitted.length) console.warn("Skipped invalid synced rows:", omitted)
+  return projected
 }
 
 export function recordLocalChanges(previous: AppData, next: AppData, now = new Date().toISOString()): void {

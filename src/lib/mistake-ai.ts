@@ -130,6 +130,7 @@ export async function autofillMistakeFields(
   mistakes: Mistake[],
   attempts: ExamAttempt[],
   onProgress?: (progress: ChatGPTProgress) => void,
+  onBatch?: (autofills: MistakeAutofill[]) => void,
 ): Promise<MistakeAutofill[]> {
   const candidates = mistakes.filter((mistake) => getEmptyMistakeFields(mistake).length > 0)
   if (!candidates.length) return []
@@ -187,15 +188,16 @@ export async function autofillMistakeFields(
     let batchAutofills: MistakeAutofill[]
     try {
       batchAutofills = (await result.output).autofills
+      const returnedIds = new Set(batchAutofills.map((autofill) => autofill.id))
+      if (batchAutofills.length !== ids.length || returnedIds.size !== ids.length || ids.some((id) => !returnedIds.has(id))) {
+        throw new Error("ChatGPT did not return one autofill result for every mistake. Try again.")
+      }
     } catch (error) {
       const cause = streamError ?? error
-      throw new Error(formatMistakeAIError(cause), { cause })
-    }
-    const returnedIds = new Set(batchAutofills.map((autofill) => autofill.id))
-    if (batchAutofills.length !== ids.length || returnedIds.size !== ids.length || ids.some((id) => !returnedIds.has(id))) {
-      throw new Error("ChatGPT did not return one autofill result for every mistake. Try again.")
+      throw new Error(`${autofills.length} mistakes completed before autofill failed. ${formatMistakeAIError(cause)}`, { cause })
     }
     autofills.push(...batchAutofills)
+    onBatch?.(batchAutofills)
   }
 
   return autofills
@@ -536,6 +538,7 @@ export async function analyseMistakeImageBatch(
   selectedAttemptId: string,
   studies: VcaaStudyResources[],
   onProgress?: (progress: ChatGPTProgress) => void,
+  onBatch?: (drafts: MistakeDraft[]) => void,
 ): Promise<MistakeDraft[]> {
   const validationError = validateMistakeBatchImages(files)
   if (validationError) throw new Error(validationError)
@@ -546,6 +549,7 @@ export async function analyseMistakeImageBatch(
         onProgress?.({ ...progress, itemIndex: index + 1, itemCount: files.length })
       })
       drafts.push({ ...draft, attemptId: selectedAttemptId })
+      onBatch?.([...drafts])
     } catch (error) {
       throw new Error(`Question ${index + 1}: ${formatMistakeAIError(error)}`, { cause: error })
     }

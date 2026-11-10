@@ -5,7 +5,7 @@ import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/clas
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
 import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace.js"
 import {
-  applyItemLinks, buildItemEvidence, progressStoplight, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
+  applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
 } from "../../src/lib/stoplight.js"
 import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
 import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store.js"
@@ -151,7 +151,7 @@ export function studyTools(define: Define) {
       const { data } = await readAll()
       const current = currentSubjectWork(data)
       const evidence = buildItemEvidence(current)
-      const items = progressStoplight(current.learning, current.mistakes).curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
+      const items = current.learning.curriculumAreas.filter((item) => (includeArchived || !item.archivedAt) && (!subject || item.subject.toLowerCase() === subject.toLowerCase()))
       return items.map((item) => ({
         id: item.id, subject: item.subject, group: itemGroup(item), name: item.name, rating: item.rating ?? "unrated", ratedAt: item.ratedAt,
         check: item.check, type: item.type, archived: Boolean(item.archivedAt), recheckDue: isRecheckDue(item),

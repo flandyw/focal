@@ -10,6 +10,7 @@ import {
   parseCanonicalStudySession, parseStudySessionMutationResult,
   type CanonicalStudySession, type StudySessionCommand, type StudySessionMutationResult,
 } from "../../src/lib/sync/sessionContract.js"
+import { withStoplightProgress } from "../../src/lib/stoplight.js"
 import { isTimetable, type Timetable } from "../../src/lib/timetable.js"
 import type { VcaaStudyResources } from "../../src/lib/vcaa-resources"
 
@@ -172,7 +173,8 @@ export async function updateApp(edit: (data: AppData) => AppData): Promise<AppDa
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const rows = await snapshot(pass > 0)
     const before = project(rows)
-    const after = edit(before)
+    // Evidence from the edit (a review, a new mistake) moves the stoplight in the same write, as in the app.
+    const after = withStoplightProgress(edit(before))
     // The apps run this same check on every synced row; an invalid one would break them all.
     if (!migrateAppData(after)) throw new Error("That change would leave Focal data invalid, so nothing was saved.")
     const changes = diffAppData(before, after).filter((change) => !only || only.has(rowKey(change.entity, change.rowId)))

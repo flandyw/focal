@@ -140,6 +140,12 @@ export function progressStoplight(learning: LearningWorkspace, mistakes: Mistake
   return curriculumAreas.every((item, index) => item === learning.curriculumAreas[index]) ? learning : { ...learning, curriculumAreas, updatedAt: timestamp }
 }
 
+/** The one place stored AppData gets its evidence-driven ratings: the app state setter, the sync projection and MCP writes. */
+export function withStoplightProgress(data: AppData, now = new Date()): AppData {
+  const learning = progressStoplight(data.learning, data.mistakes, now)
+  return learning === data.learning ? data : { ...data, learning }
+}
+
 /** A new unpassed mistake on a green item drops it to amber. */
 export function demoteGreens(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()) {
   const hit = new Set(mistakes.filter((mistake) => !mistakeProgress(mistake).passed && (mistake.marksLost ?? 1) > 0).flatMap((mistake) => mistake.itemIds ?? []))

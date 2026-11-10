@@ -121,7 +121,8 @@ export async function handlePush(request: Request): Promise<Response> {
     if (existing && existing.user_id !== user.id && (keys.p256dh !== existing.p256dh || keys.auth !== existing.auth)) {
       return json({ error: "This device is registered to another account. Disable reminders there first." }, 409)
     }
-    const preferences = parseNotificationPreferences({ cheers: input.friends, ...existing?.preferences, ...input })
+    const own = existing?.user_id === user.id ? existing : null
+    const preferences = parseNotificationPreferences({ cheers: input.friends, ...own?.preferences, ...input })
     if (!preferences) return json({ error: "Invalid notification preferences. Check the times and timezone." }, 400)
     const { count, error: countError } = await db.from("push_subscriptions").select("id", { count: "exact", head: true }).eq("user_id", user.id)
     if (countError) throw countError
@@ -131,7 +132,7 @@ export async function handlePush(request: Request): Promise<Response> {
     }
     await db.from("push_subscriptions").upsert({ user_id: user.id, endpoint: input.endpoint,
       p256dh: keys.p256dh, auth: keys.auth, planned: input.planned, friends: input.friends,
-      preferences, enabled_at: existing?.enabled_at ?? new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
+      preferences, enabled_at: own?.enabled_at ?? new Date().toISOString() }, { onConflict: "endpoint" }).throwOnError()
     return json({ ok: true })
   } catch {
     return json({ error: "Push reminders are temporarily unavailable. Try again later." }, 503)

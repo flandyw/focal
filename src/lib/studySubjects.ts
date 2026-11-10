@@ -1,15 +1,17 @@
 import { VCE_SUBJECTS, type Subject } from "./types.js"
 
+export const subjectKey = (value: string) => studySubjectId(value).trim().toLowerCase()
+
 /** Match exact identities only: e.g. English Language must never become English. */
 export function studySubjectId(value: string, subjects: readonly Subject[] = VCE_SUBJECTS): string {
   const key = value.trim().toLowerCase()
-  const name = key === "mathematical methods cas" ? "mathematical methods" : key
+  const name = ["methods", "mathematical methods cas"].includes(key) ? "mathematical methods" : key
   return subjects.find((subject) => subject.id.toLowerCase() === name ||
     subject.name.toLowerCase() === name || subject.shortCode.toLowerCase() === name)?.id ?? value
 }
 
 export function sameStudySubject(first: string | null | undefined, second: string) {
-  return !!first?.trim() && studySubjectId(first).trim().toLowerCase() === studySubjectId(second).trim().toLowerCase()
+  return !!first?.trim() && subjectKey(first) === subjectKey(second)
 }
 
 export function studySubjectOptions(names: string[], subjects: readonly Subject[] = VCE_SUBJECTS) {

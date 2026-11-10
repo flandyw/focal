@@ -1,4 +1,4 @@
-const key = (subject: string) => subject.trim().toLowerCase()
+import { subjectKey as key } from "./studySubjects"
 
 export function isPreferredSubject(subject: string, preferredSubjects: string[]) {
   const subjectKey = key(subject)

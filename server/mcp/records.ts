@@ -1,4 +1,4 @@
-import { currentSubjectWork } from "../../src/lib/subject-completion.js"
+import { currentSubjectWork, isCurrentSubject, setSubjects } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { deleteSacRecord, postponeReviews, recordAttemptResult, saveSacRecord, setExamFlag, setMistakesSuspended } from "../../src/lib/app-operations.js"
 import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
@@ -42,7 +42,7 @@ export function recordTools(define: Define) {
   define("list_exams", "List logged practice exam attempts, newest first, with percentage and the VCAA grade/percentile when a matching official distribution exists.",
     { subject: z.string().optional(), limit }, "read", async ({ subject, limit }) => {
       const [{ data }, references] = await Promise.all([readAll(), gradeReferences()])
-      return data.attempts.filter((a) => !subject || a.subject.toLowerCase() === subject.toLowerCase())
+      return data.attempts.filter((a) => isCurrentSubject(data, a.subject) && (!subject || a.subject.toLowerCase() === subject.toLowerCase()))
         .toSorted((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, limit).map((attempt) => {
           const analysis = analyseAttempt(attempt, findAttemptReference(attempt, references))
           return {
@@ -159,7 +159,7 @@ export function recordTools(define: Define) {
     const needle = search?.toLowerCase()
     const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
     const schedules = new Map(data.mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
-    const rows = (status === "due" || status === "open" ? currentSubjectWork(data).mistakes : data.mistakes).filter((mistake) => {
+    const rows = currentSubjectWork(data).mistakes.filter((mistake) => {
       const schedule = schedules.get(mistake.id)!
       if (status === "suspended" ? !mistake.suspended : status !== "all" && mistake.suspended) return false
       if (status === "due" && Date.parse(schedule.dueAt) > now) return false
@@ -405,9 +405,9 @@ export function recordTools(define: Define) {
   define("list_sacs", "List SACs (school assessed coursework) with percentages, plus overall and per-status stats.",
     { subject: z.string().optional(), status: z.enum(["upcoming", "completed", "all"]).default("all") }, "read", async ({ subject, status }) => {
       const { data } = await readAll()
-      const records = data.sacRecords.filter((r) => (!subject || r.subject.toLowerCase() === subject.toLowerCase()) &&
+      const records = currentSubjectWork(data).sacRecords.filter((r) => (!subject || r.subject.toLowerCase() === subject.toLowerCase()) &&
         (status === "all" || isCompletedSac(r) === (status === "completed"))).toSorted((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
-      return { stats: computeSacStats(data.sacRecords), sacs: records.map((r) => ({ ...r, percentage: sacPercentage(r) === null ? null : round(sacPercentage(r)!) })) }
+      return { stats: computeSacStats(currentSubjectWork(data).sacRecords), sacs: records.map((r) => ({ ...r, percentage: sacPercentage(r) === null ? null : round(sacPercentage(r)!) })) }
     })
 
   define("save_sac", "Plan a SAC, log its result, or update one when `id` is given. Give score and maxScore together once it is marked.", {
@@ -444,7 +444,7 @@ export function recordTools(define: Define) {
   define("list_events", "List calendar events (SACs, exams, assignments, homework, other) in a date range.",
     { from: day.optional(), to: day.optional(), limit }, "read", async ({ from, to, limit }) => {
       const { data } = await readAll()
-      return data.events.filter((e) => (!from || localDate(new Date(e.startTime)) >= from) && (!to || localDate(new Date(e.startTime)) <= to))
+      return currentSubjectWork(data).events.filter((e) => (!from || localDate(new Date(e.startTime)) >= from) && (!to || localDate(new Date(e.startTime)) <= to))
         .toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, limit)
     })
 
@@ -489,7 +489,7 @@ export function recordTools(define: Define) {
   define("get_class_timetable", "The school class timetable (day cycle, holidays, periods) and what is on for a date.",
     { date: day.optional().describe("Defaults to today") }, "read", async ({ date }) => {
       const { data } = await readAll()
-      const config = data.classTimetable
+      const config = currentSubjectWork(data).classTimetable
       if (!config) return { configured: false }
       const on = date ?? new Date().toLocaleDateString("en-CA")
       const [y, m, d] = on.split("-").map(Number)
@@ -525,7 +525,7 @@ export function recordTools(define: Define) {
     const stamp = nowIso()
     await updateApp((data) => {
       let next = data
-      if (subjects) next = { ...next, subjects: [...new Set(subjects.map((s) => s.trim()))], subjectsUpdatedAt: stamp }
+      if (subjects) next = setSubjects(next, subjects.map((s) => s.trim()), stamp)
       if (studyPreferences) {
         const preferences = { ...next.learning.preferences, ...studyPreferences, studyDays: [...new Set(studyPreferences.studyDays ?? next.learning.preferences.studyDays)] }
         next = { ...next, learning: { ...next.learning, preferences, preferencesUpdatedAt: stamp, updatedAt: stamp } }

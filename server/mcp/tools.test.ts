@@ -200,3 +200,13 @@ test("save_event takes a local date and clock time and stores the UTC timestamp 
   await expect(call("save_event", { ...exam, endClock: "08:00" })).rejects.toThrow("after the start")
   await expect(call("save_event", { ...exam, startClock: "9am" })).rejects.toThrow()
 })
+
+test("MCP subject removal prunes completion metadata and aliases do not duplicate", async () => {
+  data = { ...data, subjects: ["Methods", "English"], completedSubjects: ["Mathematical Methods"], subjectCompletionYears: { "Mathematical Methods": 2025 } }
+  await call("update_settings", { subjects: ["English"] })
+  expect(data.completedSubjects).toEqual([])
+  expect(data.subjectCompletionYears).toEqual({})
+  await call("update_settings", { subjects: ["Methods", "Mathematical Methods"] })
+  expect(data.subjects).toEqual(["Mathematical Methods"])
+  expect(data.completedSubjects).toEqual([])
+})

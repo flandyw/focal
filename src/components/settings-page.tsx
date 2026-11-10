@@ -1,3 +1,4 @@
+import { sameStudySubject } from "../lib/studySubjects"
 import { validCompletionYear } from "@/lib/subject-completion"
 import "./settings-page.css"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
@@ -174,7 +175,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
             <Section title="Subjects" description="Complete a subject to keep its records and ATAR context while removing it from current work. Resume it at any time.">
               <div className="grid gap-2 py-4 sm:grid-cols-2">
                 <SubjectCombobox
-                  subjects={subjects.filter((subject) => !selectedSubjects.includes(subject))}
+                  subjects={subjects.filter((subject) => !selectedSubjects.some((name) => sameStudySubject(name, subject)))}
                   preferredSubjects={[]}
                   value={subjectToAdd}
                   onValueChange={(subject) => {
@@ -189,7 +190,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                   event.preventDefault()
                   const next = customSubject.trim()
                   if (!next) return
-                  if (selectedSubjects.some((subject) => subject.toLowerCase() === next.toLowerCase())) { toast(`${next} is already in your subjects`); return }
+                  if (selectedSubjects.some((subject) => sameStudySubject(subject, next))) { toast(`${next} is already in your subjects`); return }
                   onSubjectsChange([...selectedSubjects, next])
                   setCustomSubject("")
                 }}>
@@ -201,18 +202,18 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                 <label htmlFor="completion-year">Completion year</label>
                 <Input id="completion-year" type="number" min={1900} max={9999} value={completionYear} onChange={(event) => setCompletionYear(Number(event.target.value))} />
                 <p className="text-sm text-muted-foreground">Select subjects finishing this year. Leave continuing subjects unchecked.</p>
-                {selectedSubjects.filter((subject) => !completedSubjects.includes(subject)).map((subject) => <label key={subject} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={finishingSubjects.includes(subject)} onChange={(event) => setFinishingSubjects(event.target.checked ? [...finishingSubjects, subject] : finishingSubjects.filter((item) => item !== subject))} />{subject}</label>)}
-                <Button variant="outline" disabled={!validCompletionYear(completionYear) || !finishingSubjects.length} onClick={() => { onCompleteYear(completionYear, finishingSubjects.filter((subject) => selectedSubjects.includes(subject) && !completedSubjects.includes(subject))); setFinishingSubjects([]) }}>Complete selected year</Button>
+                {selectedSubjects.filter((subject) => !completedSubjects.some((name) => sameStudySubject(name, subject))).map((subject) => <label key={subject} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={finishingSubjects.some((name) => sameStudySubject(name, subject))} onChange={(event) => setFinishingSubjects(event.target.checked ? [...finishingSubjects, subject] : finishingSubjects.filter((item) => !sameStudySubject(item, subject)))} />{subject}</label>)}
+                <Button variant="outline" disabled={!validCompletionYear(completionYear) || !finishingSubjects.length} onClick={() => { onCompleteYear(completionYear, finishingSubjects.filter((subject) => selectedSubjects.some((name) => sameStudySubject(name, subject)) && !completedSubjects.some((name) => sameStudySubject(name, subject)))); setFinishingSubjects([]) }}>Complete selected year</Button>
               </div>
               {selectedSubjects.length ? (
                 <ol className="divide-y">
-                  {selectedSubjects.filter((subject) => !completedSubjects.includes(subject)).map((subject) => { const index = selectedSubjects.indexOf(subject); return (
+                  {selectedSubjects.filter((subject) => !completedSubjects.some((name) => sameStudySubject(name, subject))).map((subject) => { const index = selectedSubjects.indexOf(subject); return (
                     <li key={subject} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={subject}>{subject}</span>
-                      <Button type="button" variant="outline" size="sm" disabled={!completedSubjects.includes(subject) && !validCompletionYear(completionYear)} onClick={() => onSubjectCompletion(subject, completedSubjects.includes(subject) ? null : completionYear)}>{completedSubjects.includes(subject) ? "Resume subject" : "Mark completed"}</Button>
-                      {completedSubjects.includes(subject) ? <Badge variant="secondary">Completed</Badge> : null}
-                      {subject === selectedSubjects.find((item) => !completedSubjects.includes(item)) ? <Badge variant="secondary">Default</Badge> : null}
+                      <Button type="button" variant="outline" size="sm" disabled={!completedSubjects.some((name) => sameStudySubject(name, subject)) && !validCompletionYear(completionYear)} onClick={() => onSubjectCompletion(subject, completedSubjects.some((name) => sameStudySubject(name, subject)) ? null : completionYear)}>{completedSubjects.some((name) => sameStudySubject(name, subject)) ? "Resume subject" : "Mark completed"}</Button>
+                      {completedSubjects.some((name) => sameStudySubject(name, subject)) ? <Badge variant="secondary">Completed</Badge> : null}
+                      {subject === selectedSubjects.find((item) => !completedSubjects.some((name) => sameStudySubject(name, item))) ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${subject} up`} disabled={index === 0} onClick={() => {
                         const next = [...selectedSubjects]
                         ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
@@ -223,7 +224,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                         ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
                         onSubjectsChange(next)
                       }}><ArrowDown /></Button>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => { const previous = selectedSubjects; onSubjectsChange(previous.filter((item) => item !== subject)); toast(`${subject} removed`, { duration: 8000, action: { label: "Undo", onClick: () => onSubjectsChange(previous) } }) }}><X /></Button>
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${subject}`} onClick={() => { const previous = selectedSubjects; onSubjectsChange(previous.filter((item) => !sameStudySubject(item, subject))); toast(`${subject} removed`, { duration: 8000, action: { label: "Undo", onClick: () => onSubjectsChange(previous) } }) }}><X /></Button>
                     </li>
                   )})}
                 </ol>

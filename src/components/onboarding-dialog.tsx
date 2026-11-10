@@ -1,3 +1,4 @@
+import { sameStudySubject } from "../lib/studySubjects"
 import { useState } from "react"
 import { CalendarDays, ClipboardList, Cloud, LineChart, RotateCcw, Timer, X } from "lucide-react"
 import { NAVIGATION_GROUPS } from "../lib/navigation"
@@ -33,8 +34,8 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
   const [step, setStep] = useState(0)
   const [subjectToAdd, setSubjectToAdd] = useState("")
   const [addingCompleted, setAddingCompleted] = useState(false)
-  const currentSubjects = selectedSubjects.filter((subject) => !completedSubjects.includes(subject))
-  const finishedSubjects = selectedSubjects.filter((subject) => completedSubjects.includes(subject))
+  const currentSubjects = selectedSubjects.filter((subject) => !completedSubjects.some((name) => sameStudySubject(name, subject)))
+  const finishedSubjects = selectedSubjects.filter((subject) => completedSubjects.some((name) => sameStudySubject(name, subject)))
   const [year] = useState(() => new Date().getFullYear())
   const steps = [
     {
@@ -61,13 +62,13 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
             <Button className="flex-1 basis-36" variant={addingCompleted ? "default" : "outline"} aria-pressed={addingCompleted} onClick={() => setAddingCompleted(true)}>Already completed</Button>
           </div>
           <SubjectCombobox
-            subjects={subjects.filter((subject) => !selectedSubjects.includes(subject))}
+            subjects={subjects.filter((subject) => !selectedSubjects.some((name) => sameStudySubject(name, subject)))}
             preferredSubjects={[]}
             value={subjectToAdd}
             onValueChange={(subject) => {
-              if (!subject || selectedSubjects.includes(subject)) return
+              if (!subject || selectedSubjects.some((name) => sameStudySubject(name, subject))) return
               onSubjectsChange([...selectedSubjects, subject])
-              if (addingCompleted || completedSubjects.includes(subject)) onSubjectCompletion(subject, addingCompleted ? year : null)
+              if (addingCompleted || completedSubjects.some((name) => sameStudySubject(name, subject))) onSubjectCompletion(subject, addingCompleted ? year : null)
               setSubjectToAdd("")
             }}
             className="w-full"
@@ -87,7 +88,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
                       <span className="min-w-0 flex-1 break-words text-sm font-medium">{subject}</span>
                       {!completed && index === 0 ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon" aria-label={`Remove ${subject}`} onClick={() => {
-                        onSubjectsChange(selectedSubjects.filter((item) => item !== subject))
+                        onSubjectsChange(selectedSubjects.filter((item) => !sameStudySubject(item, subject)))
                         if (completed) onSubjectCompletion(subject, null)
                       }}><X /></Button>
                     </div>

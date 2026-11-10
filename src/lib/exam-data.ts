@@ -486,12 +486,13 @@ export function previewMistakeReview(
   const elapsed = mistake.lastReviewedAt ? Math.max(0, completedTime - Date.parse(mistake.lastReviewedAt)) / DAY_MS : 0
   if (rating === "good" || rating === "easy")
     intervalDays = Math.round(intervalDays * settings.spacingMultiplier + Math.max(0, elapsed - current.intervalDays) * 0.25)
-  intervalDays = rating === "again" ? settings.retryHours / 24 : Math.min(settings.maximumIntervalDays, Math.max(1, intervalDays))
+  intervalDays = Math.min(settings.maximumIntervalDays, Math.max(rating === "again" ? 0 : 1, intervalDays))
+  const dueInDays = rating === "again" ? settings.retryHours / 24 : intervalDays
 
   return {
     rating,
     state,
-    dueAt: pacedMistakeDueAt(mistake.id, completedTime + intervalDays * DAY_MS, settings, mistakes, completedTime),
+    dueAt: pacedMistakeDueAt(mistake.id, completedTime + dueInDays * DAY_MS, settings, mistakes, completedTime),
     intervalDays,
     easeFactor: Math.round(easeFactor * 100) / 100,
     repetitions,

@@ -1,3 +1,4 @@
+import { subjectCompletionYear } from "../lib/subject-completion"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Check, Circle, Plus, RotateCcw, Save, Trash2 } from "lucide-react"
@@ -71,10 +72,13 @@ export function AtarEstimator({
     if (!reference) return []
     const predicted = predictions.get(normaliseScalingStudyName(reference.studyName))
     const rawScore = row.usePrediction && predicted !== undefined ? predicted : Number(row.raw)
-    const scaledScore = interpolateScaledScore(rawScore, reference.points)
+    const completedYear = subjectCompletionYear(data, reference.studyName)
+    const scaling = completedYear === undefined ? reference : scalingReferences.find((item) => item.year === completedYear && item.code === reference.code)
+    if (!scaling) return []
+    const scaledScore = interpolateScaledScore(rawScore, scaling.points)
     if (scaledScore === null) return []
     return [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
-  }), [predictions, rows, studies])
+  }), [predictions, rows, studies, data, scalingReferences])
 
   const estimate = useMemo(() => estimateAtar(results, year), [results, year])
 
@@ -145,9 +149,11 @@ export function AtarEstimator({
                 const invalidScore = !usePrediction && row.raw !== "" && (!Number.isInteger(Number(row.raw)) || Number(row.raw) < 20 || Number(row.raw) > 50)
                 const role = roles.get(row.id)
                 const name = reference?.studyName ?? "subject"
+                const completedYear = subjectCompletionYear(data, name)
                 return (
                   <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
                     <div role="cell" className="max-md:col-span-3">
+                      {completedYear !== undefined ? <p className="text-xs text-muted-foreground">Completed {completedYear} · {scalingReferences.some((item) => item.year === completedYear && item.code === row.code) ? `${completedYear} scaling` : "scaling unavailable; excluded from estimate"}</p> : null}
                       <SubjectCombobox subjects={studies.filter((study) => study.code === row.code || !rows.some((other) => other.code === study.code)).map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
                     <div role="cell" className="flex items-center gap-1.5">

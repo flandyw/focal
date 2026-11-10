@@ -1,3 +1,4 @@
+import { currentSubjectWork } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
 import { deleteSacRecord, postponeReviews, recordAttemptResult, saveSacRecord, setExamFlag, setMistakesSuspended } from "../../src/lib/app-operations.js"
 import { defaultClassTimetable, classPeriodsOn, getDayLabelForDate, parseTimetableImport, subjectIdFor } from "../../src/lib/class-timetable.js"
@@ -158,7 +159,7 @@ export function recordTools(define: Define) {
     const needle = search?.toLowerCase()
     const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
     const schedules = new Map(data.mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
-    const rows = data.mistakes.filter((mistake) => {
+    const rows = (status === "due" || status === "open" ? currentSubjectWork(data).mistakes : data.mistakes).filter((mistake) => {
       const schedule = schedules.get(mistake.id)!
       if (status === "suspended" ? !mistake.suspended : status !== "all" && mistake.suspended) return false
       if (status === "due" && Date.parse(schedule.dueAt) > now) return false

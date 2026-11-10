@@ -1,3 +1,4 @@
+import { readSubjectCompletions } from "./subject-completion.js"
 import type { AppData } from "./exam-data"
 import { EPOCH, TIMETABLE_ROW, rowsFromAppData, type AppRow, type Entity } from "./app-rows"
 import { EMPTY_APP_DATA, normalizeMistakeReviewPreferences, isTimetableConfig, migrateAppData, migrateCalendarEvents } from "./exam-data"
@@ -618,7 +619,7 @@ async function projectAppRows(data: AppData, accountId: string): Promise<AppData
     examProgression: isExamProgression(remoteProgression) ? remoteProgression : undefined,
     trackedExamIds, trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
     completedExamIds, completedExamIdsUpdatedAt: stamp("completedExamIds"),
-    completedSubjects: stringArray(value("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
+    ...readSubjectCompletions({ subjects: value("completedSubjects"), years: value("subjectCompletionYears") }, stamp("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
     subjects, subjectsUpdatedAt: stamp("subjects"),
     sacRecords, sacRecordsUpdatedAt: stamp("sacRecords"),
     mistakeInsights: remoteInsights,

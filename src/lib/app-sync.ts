@@ -480,8 +480,30 @@ function mergeConcurrentValue(entity: Entity, rowId: string, base: unknown, loca
     }
     return merged
   }
+  if (entity === "user_state" && (rowId === "sacRecords" || rowId === "atarEstimates") &&
+    isRecord(local) && isRecord(remote) && Array.isArray(local.value) && Array.isArray(remote.value)) {
+    const merged = mergeById(isRecord(base) && Array.isArray(base.value) ? base.value : [], local.value, remote.value, rowId === "atarEstimates")
+    if (merged) return { ...remote, value: merged, updated_at: String(local.updated_at) > String(remote.updated_at) ? String(local.updated_at) : String(remote.updated_at) }
+  }
   if (isRecord(base) && isRecord(local) && isRecord(remote)) return mergeObject(base, local, remote)
   return sameValue(remote, base) ? local : remote
+}
+
+function mergeById(base: unknown[], local: unknown[], remote: unknown[], prepend: boolean): unknown[] | undefined {
+  if (![...base, ...local, ...remote].every((item) => isRecord(item) && typeof item.id === "string")) return
+  const baseById = new Map(base.map((item) => [(item as Record<string, unknown>).id, item]))
+  const localById = new Map(local.map((item) => [(item as Record<string, unknown>).id, item]))
+  const merged = remote.flatMap((item) => {
+    const id = (item as Record<string, unknown>).id
+    if (!baseById.has(id) || !sameValue(item, baseById.get(id))) return [item]
+    return localById.has(id) ? [localById.get(id)] : []
+  })
+  const remoteIds = new Set(remote.map((item) => (item as Record<string, unknown>).id))
+  const added = local.filter((item) => {
+    const id = (item as Record<string, unknown>).id
+    return !baseById.has(id) && !remoteIds.has(id)
+  })
+  return prepend ? [...added, ...merged] : [...merged, ...added]
 }
 
 function mergeObject(base: Record<string, unknown>, local: Record<string, unknown>, remote: Record<string, unknown>): Record<string, unknown> {

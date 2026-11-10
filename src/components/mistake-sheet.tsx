@@ -282,12 +282,13 @@ export function MistakeSheet({
     const validationError = importMode === "batch" ? validateMistakeBatchImages(images) : validateMistakeImages(images)
     if (validationError) return setError(validationError)
 
+    let completedDrafts: MistakeDraft[] = []
     setAnalysing(true)
     setError(null)
     try {
       const { analyseMistakeImageBatch, analyseMistakeImages } = await import("../lib/mistake-ai")
       if (importMode === "batch") {
-        const drafts = await analyseMistakeImageBatch(images, attempts, selectedAttempt, studies, setProgress)
+        const drafts = await analyseMistakeImageBatch(images, attempts, selectedAttempt, studies, setProgress, (drafts) => { completedDrafts = drafts })
         setBatchDrafts(drafts)
         setActiveBatchIndex(null)
       } else {
@@ -295,6 +296,10 @@ export function MistakeSheet({
         applyDraft({ ...await analyseMistakeImages(images, attempts, selectedAttempt, studies, setProgress), difficulty })
       }
     } catch (error) {
+      if (completedDrafts.length) {
+        setBatchDrafts(completedDrafts)
+        setActiveBatchIndex(null)
+      }
       setError(error instanceof Error ? error.message : "Could not analyse this image.")
     } finally {
       setAnalysing(false)
@@ -648,7 +653,7 @@ export function MistakeSheet({
         )}
 
         <SheetFooter>
-          {error && !(isBatchReview && !isEditingBatchDraft) ? <FieldError className="sm:mr-auto sm:self-center">{error}</FieldError> : null}
+          {error ? <FieldError className="sm:mr-auto sm:self-center">{error}</FieldError> : null}
           <Button type="button" variant="outline" disabled={saving || analysing} onClick={() => handleOpenChange(false)}>Cancel</Button>
           {isBatchReview && !isEditingBatchDraft ? (
             <Button type="button" onClick={() => void saveBatch()} disabled={analysing || saving}>{saving ? "Saving…" : `Save all ${count(batchDrafts.length, "mistake")}`}</Button>

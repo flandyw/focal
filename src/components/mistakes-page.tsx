@@ -602,13 +602,12 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
     setAutofillProgress(null)
     try {
       const { autofillMistakeFields } = await import("../lib/mistake-ai")
-      const autofills = await autofillMistakeFields(autofillCandidates, data.attempts, setAutofillProgress)
+      const autofills = await autofillMistakeFields(autofillCandidates, data.attempts, setAutofillProgress, onApplyAutofills)
       const summary = summarizeMistakeAutofills(data.mistakes, autofills)
       if (!summary.fieldCount) {
         toast("ChatGPT could not infer any of the empty fields from the available mistake and exam details.")
         return
       }
-      onApplyAutofills(autofills)
       toast.success(`Autofilled ${summary.fieldCount} field${summary.fieldCount === 1 ? "" : "s"} across ${summary.mistakeCount} mistake${summary.mistakeCount === 1 ? "" : "s"}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not autofill mistake fields.")

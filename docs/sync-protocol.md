@@ -98,7 +98,7 @@ Study-session feed rows carry the current canonical session DTO, including its s
 ordinary entities keep their own merge behavior. Focal Web attempts and mistakes are stable
 `row_id` records; settings use one `user_state` row per setting key. Web changes include
 `expected_seq`, so the server either commits against the version the client read or returns
-the canonical row for a field-aware rebase. Mistake rebases preserve non-overlapping question
+the canonical row for a field-aware rebase. SAC records and ATAR estimates rebase per record id. Mistake rebases preserve non-overlapping question
 content and union review-history entries by ID. Generic changes use `sync_apply_changes`
 receipts for idempotency. Realtime messages contain no state that clients need to trust:
 they wake a cursor pull. Clients also pull on reconnect, foreground return, and a low-rate

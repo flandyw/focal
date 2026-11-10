@@ -1,15 +1,10 @@
-import { readSubjectCompletions } from "../../src/lib/subject-completion.js"
 import { createHash } from "node:crypto"
 import { AsyncLocalStorage } from "node:async_hooks"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { diffAppData, TIMETABLE_ROW } from "../../src/lib/app-rows.js"
-import { EMPTY_APP_DATA, isTimetableConfig, migrateAppData, migrateCalendarEvents, normalizeMistakeReviewPreferences, type AppData, type AssessmentReference } from "../../src/lib/exam-data.js"
-import { isExamDifficultySettings } from "../../src/lib/exam-difficulty.js"
-import { isExamProgression } from "../../src/lib/exam-progression.js"
-import { migrateLearningWorkspace } from "../../src/lib/learning-workspace.js"
-import { migrateSacRecords } from "../../src/lib/sac.js"
+import { diffAppData, projectRows } from "../../src/lib/app-rows.js"
+import { migrateAppData, type AppData, type AssessmentReference } from "../../src/lib/exam-data.js"
 import type { ScalingReference } from "../../src/lib/scaling"
 import {
   parseCanonicalStudySession, parseStudySessionMutationResult,
@@ -21,7 +16,6 @@ import type { VcaaStudyResources } from "../../src/lib/vcaa-resources"
 // Each request runs as the user its access token belongs to (see index.ts), through the same RPCs the
 // apps use, so RLS and the sync protocol stay the only authority.
 const DEVICE_ID = crypto.randomUUID()
-const EPOCH = "1970-01-01T00:00:00.000Z"
 const MAX_PASSES = 5
 const SNAPSHOT_TTL_MS = 5000
 const CONNECTION_TTL_MS = 5 * 60_000
@@ -148,61 +142,12 @@ async function readSnapshot(): Promise<Map<string, Row>> {
 const live = (rows: Map<string, Row>, entity: string) =>
   [...rows.values()].filter((row) => row.entity === entity && row.operation === "put")
 
-const strings = (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === "string") ? value as string[] : []
-
-/** The same projection the apps build from the feed, minus the local outbox. */
+/** The shared projection the apps use, minus the local outbox. */
 function project(rows: Map<string, Row>): AppData {
-  const state = new Map<string, { value: unknown; updatedAt: string }>()
-  for (const row of live(rows, "user_state")) {
-    if (isRecord(row.payload) && "value" in row.payload) {
-      state.set(row.rowId, { value: row.payload.value, updatedAt: typeof row.payload.updated_at === "string" ? row.payload.updated_at : "" })
-    }
-  }
-  const value = (key: string) => state.get(key)?.value
-  const stamp = (key: string) => state.get(key)?.updatedAt || EPOCH
-  let migrated = migrateAppData({
-    ...EMPTY_APP_DATA,
-    attempts: live(rows, "attempts").map((row) => row.payload),
-    mistakes: live(rows, "mistakes").map((row) => row.payload),
-  })
-  if (!migrated) {
-    // shortcut: invalid rows are hidden, not repaired; they stay on the server until fixed in the app.
-    const omittedAttempts: string[] = []
-    const omittedMistakes: string[] = []
-    const attempts = live(rows, "attempts").flatMap((row) => {
-      const valid = migrateAppData({ ...EMPTY_APP_DATA, attempts: [row.payload] })
-      if (!valid) omittedAttempts.push(row.rowId)
-      return valid?.attempts ?? []
-    })
-    const mistakes = live(rows, "mistakes").flatMap((row) => {
-      const valid = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes: [row.payload] })
-      if (!valid) omittedMistakes.push(row.rowId)
-      return valid?.mistakes ?? []
-    })
-    migrated = migrateAppData({ ...EMPTY_APP_DATA, attempts, mistakes })
-    if (!migrated) throw new Error("Synced attempts or mistakes failed validation")
-    console.warn(`mcp projection omitted ${omittedAttempts.length} attempts ${JSON.stringify(omittedAttempts)} and ${omittedMistakes.length} mistakes ${JSON.stringify(omittedMistakes)}`)
-  }
-  const timetable = rows.get(rowKey("timetable_config", TIMETABLE_ROW))
-  const progression = value("examProgression")
-  const difficulty = value("examDifficulty")
-  const reviewPreferences = value("mistakeReviewPreferences")
-  return {
-    ...migrated,
-    events: migrateCalendarEvents(live(rows, "events").map((row) => row.payload)),
-    classTimetable: timetable?.operation === "put" && isTimetableConfig(timetable.payload) ? timetable.payload : undefined,
-    examProgression: isExamProgression(progression) ? progression : undefined,
-    trackedExamIds: strings(value("trackedExamIds")), trackedExamIdsUpdatedAt: stamp("trackedExamIds"),
-    completedExamIds: strings(value("completedExamIds")), completedExamIdsUpdatedAt: stamp("completedExamIds"),
-    ...readSubjectCompletions({ subjects: value("completedSubjects"), years: value("subjectCompletionYears") }, stamp("completedSubjects")), completedSubjectsUpdatedAt: stamp("completedSubjects"),
-    subjects: strings(value("subjects")), subjectsUpdatedAt: stamp("subjects"),
-    sacRecords: migrateSacRecords(value("sacRecords")) ?? [], sacRecordsUpdatedAt: stamp("sacRecords"),
-    mistakeReviewPreferences: isRecord(reviewPreferences) ? normalizeMistakeReviewPreferences(reviewPreferences) : undefined,
-    examDifficulty: isExamDifficultySettings(difficulty) ? difficulty : undefined,
-    atarEstimates: migrateAppData({ ...EMPTY_APP_DATA, atarEstimates: value("atarEstimates") })?.atarEstimates ?? [],
-    atarEstimatesUpdatedAt: stamp("atarEstimates"),
-    learning: migrateLearningWorkspace(value("learning")),
-  }
+  const { data, omitted } = projectRows(rows.values())
+  // shortcut: invalid rows are hidden, not repaired; they stay on the server until fixed in the app.
+  if (omitted.length) console.warn(`mcp projection omitted ${omitted.length} rows ${JSON.stringify(omitted)}`)
+  return data
 }
 
 /** App data and study sessions from one snapshot, so the two are consistent with each other. Deleted sessions are dropped. */

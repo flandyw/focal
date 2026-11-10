@@ -350,7 +350,7 @@ function freshState(): TimerState {
   }
 }
 
-export function loadTimerState(settings: TimerSettings, now = Date.now()): TimerState {
+export function loadTimerState(settings: TimerSettings, now = Date.now(), onWorkEnded?: (at: number) => void): TimerState {
   const fallback = freshState()
   const parsed = readJson<Record<string, unknown>>(STATE_KEY)
   if (!parsed || typeof parsed !== "object") return fallback
@@ -359,7 +359,7 @@ export function loadTimerState(settings: TimerSettings, now = Date.now()): Timer
   const mode = isValidMode(parsed.mode) ? parsed.mode : fallback.mode
   if (mode === "free" || parsed.freeStudy === true) {
     return advanceTimer({ ...fallback, running: parsed.running === true, overtimeSeconds: safeNonNegativeInteger(parsed.overtimeSeconds) }, settings,
-      parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.max(0, Math.floor((now - parsed.updatedAt) / 1000)) : 0)
+      parsed.running === true && typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? Math.min(MAX_RESTORE_ELAPSED_SECONDS, Math.max(0, Math.floor((now - parsed.updatedAt) / 1000))) : 0)
   }
 
   const duration = getDurationSeconds(mode, settings)
@@ -393,6 +393,7 @@ export function loadTimerState(settings: TimerSettings, now = Date.now()): Timer
     running, mode, secondsLeft, totalSeconds, cycles,
     studyOvertime: false, overtimeSeconds: 0, freeStudy: false, breakSeconds: 0,
   }
+  if (running && mode === "work" && elapsedSeconds >= secondsLeft) onWorkEnded?.(updatedAt + secondsLeft * 1000)
   return running ? advanceTimer(restored, settings, elapsedSeconds) : restored
 }
 

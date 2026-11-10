@@ -33,6 +33,8 @@ import type { FocusTimerSession } from "../lib/ongoing-timers"
 import { buzz } from "../lib/mobile"
 import { notifyTimer, scheduleTimerAlerts } from "../lib/pwa"
 
+import { useTickingNow } from "./use-ticking-now"
+
 const TICK_MS = 1000
 const focusAlertBody = (mode: string, workMinutes: number) => mode === "work" ? "Time for a break. Stand up and look at something far away." : `Back to ${workMinutes} minutes of focus.`
 
@@ -99,16 +101,25 @@ export function useStudyTimer({
   enabled?: boolean
 }): StudyTimerEngine {
   const [settings, setSettings] = useState<TimerSettings>(loadSettings)
-  const [state, dispatch] = useReducer(timerReducer, undefined, () => loadTimerState(loadSettings()))
+  const [restored] = useState<{ state: TimerState; workEndedAt: number | null }>(() => {
+    const now = Date.now()
+    let workEndedAt: number | null = null
+    const state = loadTimerState(loadSettings(), now, (at) => { workEndedAt = serverNow() - (now - at) })
+    return { state, workEndedAt }
+  })
+  const [state, dispatch] = useReducer(timerReducer, restored.state)
+  const workEndedAtRef = useRef(restored.workEndedAt)
   const [blocks, setBlocks] = useState<FocusBlock[]>(loadBlocks)
-  const [now, setNow] = useState(() => Date.now())
+  const now = useTickingNow(state.running ? 15_000 : 60_000).getTime()
 
+  const stateRef = useRef(state)
   const settingsRef = useRef(settings)
   // `useState` gives the one stable ref object a lazy `useRef` initializer cannot.
   const [openBlockRef] = useState(() => ({ current: loadOpenBlock() as OpenBlock | null }))
   useEffect(() => {
     settingsRef.current = settings
-  }, [settings])
+    stateRef.current = state
+  }, [settings, state])
 
   // The synced lifecycle of the focus session. Its acknowledged state only moves on a
   // server answer, every boundary is sent in the order it was crossed and retried until
@@ -229,6 +240,10 @@ export function useStudyTimer({
       // Keep the unspent fraction: late intervals would otherwise shave seconds off every block.
       const seconds = Math.max(0, Math.floor((current - last) / 1000))
       last += seconds * 1000
+      const timer = stateRef.current
+      if (timer.mode === "work" && !timer.studyOvertime && seconds >= timer.secondsLeft) {
+        workEndedAtRef.current ??= serverNow() - (current - last) - (seconds - timer.secondsLeft) * 1000
+      }
       if (seconds > 0) dispatch({ type: "TICK", settings: settingsRef.current, seconds })
     }, TICK_MS)
     return () => window.clearInterval(interval)
@@ -237,6 +252,10 @@ export function useStudyTimer({
   // Both study modes use the same logged start/pause/resume/finish lifecycle.
   // Server-clock stamps keep devices with different clocks in agreement.
   useEffect(() => {
+    if (workEndedAtRef.current !== null) {
+      closeBlock(workEndedAtRef.current)
+      workEndedAtRef.current = null
+    }
     const at = serverNow()
     if (!enabled) {
       pauseBlock(false, at)
@@ -254,6 +273,7 @@ export function useStudyTimer({
       return
     }
     if (state.mode === "work") {
+      if (openBlockRef.current?.source === "pomodoro" && openBlockRef.current.cycleNumber <= state.cycles) closeBlock(at)
       // A block begins when the timer starts counting, not when the page happens to be
       // showing a focus timer: opening the screen mid-break must not log a block.
       // `openBlock` is a no-op while one is already open, so this doubles as the
@@ -314,13 +334,6 @@ export function useStudyTimer({
   useEffect(() => {
     saveTimerState(state, Date.now())
   }, [state])
-
-  // Re-render once a second so "focused for 24m" style labels stay honest.
-  useEffect(() => {
-    if (!enabled || !state.running) return
-    const interval = window.setInterval(() => setNow(Date.now()), 15_000)
-    return () => window.clearInterval(interval)
-  }, [enabled, state.running])
 
   const updateSettings = useCallback((patch: Partial<TimerSettings>) => {
     setSettings((current) => {

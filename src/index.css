@@ -503,4 +503,6 @@ html[data-desktop] [data-slot="page-header"] {
   top: 0;
   z-index: 10;
   background: var(--background);
+  /* The header sticks below #main-content's top padding; cover that strip so content cannot show above it. */
+  box-shadow: 0 -2.5rem 0 var(--background);
 }

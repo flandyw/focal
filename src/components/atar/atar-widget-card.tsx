@@ -5,17 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui
 import { Label } from "../ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
 import { Switch } from "../ui/switch"
-import { AtarTargetInput } from "./atar-estimate-card"
 import type { SavedAtarEstimate } from "../../lib/exam-data"
 import { refreshWidgets, setWidgetAtarSettings, takeWidgetFocus, useWidgetState, type WidgetAtarSettings } from "../../lib/widgets"
 
 const time = (value: number) => new Date(value).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
 
 /** Mirrors the macOS ATAR widget and controls what it shows. */
-export function AtarWidgetCard({ saved, target, onTargetChange, onLoad }: {
+export function AtarWidgetCard({ saved, onLoad }: {
   saved: SavedAtarEstimate[]
-  target: number | null
-  onTargetChange: (target: number | null) => void
   onLoad: (saved: SavedAtarEstimate) => void
 }) {
   const { settings, atar, sentAt, error, focus } = useWidgetState()
@@ -39,7 +36,7 @@ export function AtarWidgetCard({ saved, target, onTargetChange, onLoad }: {
         <CardTitle>Desktop widget</CardTitle>
         <CardDescription>What the macOS ATAR widget shows, and where it comes from.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-5">
+      <CardContent className="grid items-start gap-6 md:grid-cols-[minmax(0,20rem)_minmax(0,26rem)]">
         <div className="grid gap-2 rounded-lg border bg-muted/40 p-4" aria-live="polite">
           {atar ? (
             <>
@@ -83,6 +80,7 @@ export function AtarWidgetCard({ saved, target, onTargetChange, onLoad }: {
           </p>
         </div>
 
+        <div className="grid gap-5">
         <div className="grid gap-2">
           <Label htmlFor="atar-widget-source">Shows</Label>
           <Select value={settings.source} onValueChange={(value) => { if (value) setWidgetAtarSettings({ source: value }) }}>
@@ -107,15 +105,12 @@ export function AtarWidgetCard({ saved, target, onTargetChange, onLoad }: {
               <Switch id={`atar-widget-${key}`} checked={settings[key]} onCheckedChange={(checked) => setWidgetAtarSettings({ [key]: checked })} />
             </div>
           ))}
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="atar-widget-target">Target ATAR</Label>
-            <AtarTargetInput id="atar-widget-target" target={target} onTargetChange={onTargetChange} />
-          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {scenario ? <Button variant="outline" size="sm" onClick={() => onLoad(scenario)}><RotateCcw />Edit this scenario</Button> : null}
           <Button variant="outline" size="sm" onClick={refreshWidgets}><RefreshCw />Refresh widget</Button>
+        </div>
         </div>
       </CardContent>
     </Card>

@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { AtarStudiesCard } from "./atar/atar-studies-card"
 import { AtarEstimateCard } from "./atar/atar-estimate-card"
 import { AtarScenariosCard } from "./atar/atar-scenarios-card"
+import { AtarWidgetCard } from "./atar/atar-widget-card"
+import { macDesktop } from "../lib/widgets"
 import { AtarBreakdownCard, AtarSensitivityCard, AtarTrendCard } from "./atar/atar-charts"
-import { atarYears, buildAtarHistory, buildAtarModel } from "../lib/atar-model"
+import { atarYears, buildAtarHistory, buildAtarModel, subjectAtarRows } from "../lib/atar-model"
 import type { AppData, AssessmentReference, AtarEstimatorRow, SavedAtarEstimate } from "../lib/exam-data"
 import { atarScalingReference, normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
@@ -49,9 +51,9 @@ export function AtarEstimator({
   const matches = (subject: string) => studies.find((study) => normaliseScalingStudyName(study.studyName) === normaliseScalingStudyName(subject))
   // Start from the student's own subjects, not a single blank row to fill in six times.
   const [rows, setRows] = useState<Row[]>(() => {
-    const codes = data.subjects.flatMap((subject) => matches(subject)?.code ?? [])
+    const own = subjectAtarRows(data.subjects, scalingReferences)
     const firstName = firstPreferredSubject(studies.map((study) => study.studyName), data.subjects)
-    return codes.length ? codes.map((code) => newRow(code)) : [newRow(studies.find((study) => study.studyName === firstName)?.code ?? "")]
+    return own.length ? own.map((row) => newRow(row.code)) : [newRow(studies.find((study) => study.studyName === firstName)?.code ?? "")]
   })
 
   const model = useMemo(() => buildAtarModel({ data, references, scaling: scalingReferences, rows, year }), [data, references, scalingReferences, rows, year])
@@ -111,6 +113,7 @@ export function AtarEstimator({
         <div className="grid gap-6 max-lg:contents lg:sticky lg:top-6">
           <AtarEstimateCard model={model} onTargetChange={onTargetChange} />
           <AtarScenariosCard saved={savedEstimates} onLoad={loadEstimate} onDelete={deleteEstimate} />
+          {macDesktop() ? <AtarWidgetCard saved={savedEstimates} target={model.target} onTargetChange={onTargetChange} onLoad={loadEstimate} /> : null}
         </div>
       </div>
 

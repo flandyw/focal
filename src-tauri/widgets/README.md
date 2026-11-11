@@ -6,8 +6,11 @@ Click a widget to open the corresponding Focal screen.
 
 Focal publishes a small snapshot from its existing Supabase-synced account data:
 classes and calendar events, tracked exams and SACs, actual study minutes with
-overlapping sessions merged, daily goals, due spaced-repetition cards, and a live projection of the newest saved ATAR
-scenario (with the active ATAR goal as its target).
+overlapping sessions merged, daily goals, due spaced-repetition cards, and an ATAR projection recomputed live
+(with the active ATAR goal as its target). The **Desktop widget** card on the ATAR page
+previews exactly what was sent and chooses the source (newest saved scenario, live Focal
+estimate, or a pinned scenario), which parts to show, the target, and a forced refresh.
+Those choices are stored on this Mac only. Clicking the ATAR widget opens that card.
 The extension never receives a Supabase token or database credentials.
 Signing out clears the snapshot. Gallery previews use sample data only.
 

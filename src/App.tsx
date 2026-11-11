@@ -59,7 +59,7 @@ import { useTickingNow } from "./hooks/use-ticking-now"
 import { count } from "./lib/utils"
 import { localDate, materialiseTask, type CurriculumArea, type LearningWorkspaceUpdate, type StudyGoal } from "./lib/learning-workspace"
 import { AI_ENABLED } from "./lib/host"
-import { useDesktopWidgets } from "./lib/widgets"
+import { useDesktopWidgets, widgetAtarSettings } from "./lib/widgets"
 import { applyItemLinks, collectLinkRecords, demoteGreens, restoreItems, withStoplightProgress, type ItemLink } from "./lib/stoplight"
 import { applyMistakeAutofills, applyMistakeEdits, applyMistakeFieldMergePlan, type MistakeAutofill, type MistakeEdit, type MistakeFieldMergePlan } from "./lib/mistake-autofill"
 import type { VcaaExplorerPreset } from "./components/vcaa-explorer"
@@ -233,8 +233,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     scalingStatus,
     reload: reloadReferences,
   } = useReferenceData(
-    // The macOS ATAR widget needs scaling data to break down the latest saved scenario.
-    view === "predictor" || view === "atar" || view === "goals" || Boolean(import.meta.env.VITE_DESKTOP && data.atarEstimates.length),
+    // The macOS ATAR widget needs scaling data to recompute its saved scenario or live estimate.
+    view === "predictor" || view === "atar" || view === "goals" || Boolean(import.meta.env.VITE_DESKTOP && (data.atarEstimates.length || widgetAtarSettings().source === "live")),
     !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view),
     view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || sheet?.kind === "mistake" || Boolean(view === "mistakes" && recordId),
   )

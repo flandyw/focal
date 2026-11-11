@@ -310,10 +310,13 @@ private struct FocalWidgetView: View {
                     let increments = atar.subjects.filter(\.increment).reduce(0) { $0 + $1.contribution }
                     HStack(alignment: .firstTextBaseline) {
                         metric("Aggregate", atar.aggregate)
-                        Spacer()
-                        metric("Primary four", atar.subjects.isEmpty ? nil : primary)
-                        Spacer()
-                        metric("Increments", atar.subjects.isEmpty ? nil : increments)
+                        // Subjects are empty when hidden on Focal's ATAR page.
+                        if !atar.subjects.isEmpty {
+                            Spacer()
+                            metric("Primary four", primary)
+                            Spacer()
+                            metric("Increments", increments)
+                        }
                     }
                     if large && !atar.subjects.isEmpty {
                         Divider()
@@ -329,10 +332,10 @@ private struct FocalWidgetView: View {
                             }
                         }
                     }
-                    if large { Text("\(String(atar.year)) VTAC conversion · estimate only").font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1) }
+                    if large { Text((atar.source.map { $0 + " · " } ?? "") + "\(String(atar.year)) VTAC · estimate only").font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1) }
                 }
             }
-        } else { message("No estimate yet", detail: "Save a scenario in the ATAR calculator.") }
+        } else { message("No estimate yet", detail: "Choose what this shows on Focal's ATAR page.") }
     }
     private func metric(_ name: String, _ value: Double?) -> some View {
         VStack(alignment: .leading, spacing: 3) {

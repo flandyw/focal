@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "sonner/dist/styles.css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/instrument-sans";
 @import "./typeset.css";
@@ -454,6 +455,22 @@ span.tt-break { background-color: var(--border); }
   --info-bg: var(--popover); --info-text: var(--popover-foreground); --info-border: var(--border);
   --error-bg: color-mix(in srgb, var(--destructive) 10%, var(--popover)); --error-text: var(--destructive); --error-border: color-mix(in srgb, var(--destructive) 30%, var(--popover));
 }
+
+/* Keep notifications outside the shell and clear of native window chrome. */
+[data-sonner-toaster].toaster {
+  --toast-top-inset: max(1rem, env(safe-area-inset-top));
+  --toast-right-inset: max(1rem, env(safe-area-inset-right));
+  --toast-left-inset: max(1rem, env(safe-area-inset-left));
+  max-width: calc(100vw - var(--toast-left-inset) - var(--toast-right-inset));
+}
+html[data-desktop] [data-sonner-toaster].toaster {
+  --toast-top-inset: max(3rem, env(safe-area-inset-top));
+}
+[data-sonner-toaster].toaster[data-y-position="top"] { top: var(--toast-top-inset); }
+[data-sonner-toaster].toaster[data-x-position="right"] { right: var(--toast-right-inset); }
+[data-sonner-toaster].toaster[data-x-position="left"] { left: var(--toast-left-inset); }
+[data-sonner-toaster].toaster [data-sonner-toast] { max-width: 100%; }
+[data-sonner-toaster].toaster [data-content] { min-width: 0; overflow-wrap: anywhere; }
 
 /* Desktop owns one bounded shell. `none` also suppresses WebKit's local rubber band;
    `contain` alone only stops chaining. Keep native momentum and keyboard scrolling. */

@@ -2,7 +2,7 @@
 import type { AppData, AssessmentReference, AtarEstimatorRow, SavedAtarEstimate } from "./exam-data.js"
 import { ATAR_AGGREGATE_REFERENCES } from "./atar-data.js"
 import { atarRawScore, estimateAtar, type AtarEstimate, type AtarStudyResult } from "./atar.js"
-import { atarScalingReference, interpolateScaledScore, type ScalingReference } from "./scaling.js"
+import { atarScalingReference, interpolateScaledScore, normaliseScalingStudyName, type ScalingReference } from "./scaling.js"
 import { predictStudyScore, type StudyScorePrediction } from "./study-score.js"
 import { subjectCompletionYear } from "./subject-completion.js"
 
@@ -164,4 +164,12 @@ export function liveSavedAtarModel(data: Parameters<typeof buildAtarHistory>[0][
   if (!saved) return null
   const model = buildAtarModel({ data, references, scaling, rows: saved.rows, year: saved.year })
   return model.estimate ? { saved, model } : null
+}
+
+/** The student's own subjects, each on its Focal estimate: the ATAR page's starting rows and the widget's live source. */
+export function subjectAtarRows(subjects: string[], scaling: ScalingReference[]): AtarEstimatorRow[] {
+  return subjects.flatMap((subject) => {
+    const code = scaling.find((reference) => normaliseScalingStudyName(reference.studyName) === normaliseScalingStudyName(subject))?.code
+    return code ? [{ id: code, code, raw: "", usePrediction: true }] : []
+  })
 }

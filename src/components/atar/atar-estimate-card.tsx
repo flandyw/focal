@@ -18,12 +18,6 @@ export function AtarEstimateCard({ model, onTargetChange }: { model: AtarModel; 
     { label: "An English-group study", met: hasEnglish },
   ]
 
-  function commitTarget(value: string) {
-    const target = value.trim() === "" ? null : Number(value)
-    if (target === model.target) return
-    if (target === null || (Number.isFinite(target) && target >= 1 && target <= 99.95)) onTargetChange(target)
-  }
-
   return (
     <Card className="max-lg:order-first">
       <CardHeader><CardDescription>Estimated ATAR</CardDescription></CardHeader>
@@ -53,20 +47,7 @@ export function AtarEstimateCard({ model, onTargetChange }: { model: AtarModel; 
         <div className="grid gap-2 border-t pt-4">
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="atar-target">Target ATAR</Label>
-            <Input
-              id="atar-target"
-              key={String(model.target)}
-              className="w-24 text-right tabular-nums"
-              type="number"
-              inputMode="decimal"
-              min="1"
-              max="99.95"
-              step="0.05"
-              placeholder="None"
-              defaultValue={model.target ?? ""}
-              onBlur={(event) => commitTarget(event.target.value)}
-              onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }}
-            />
+            <AtarTargetInput id="atar-target" target={model.target} onTargetChange={onTargetChange} />
           </div>
           <p className="text-xs text-muted-foreground tabular-nums" aria-live="polite">
             {model.target === null ? "Set a target to see the gap. It is saved as your ATAR goal."
@@ -77,5 +58,29 @@ export function AtarEstimateCard({ model, onTargetChange }: { model: AtarModel; 
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+export function AtarTargetInput({ id, target, onTargetChange }: { id: string; target: number | null; onTargetChange: (target: number | null) => void }) {
+  function commit(value: string) {
+    const next = value.trim() === "" ? null : Number(value)
+    if (next === target) return
+    if (next === null || (Number.isFinite(next) && next >= 1 && next <= 99.95)) onTargetChange(next)
+  }
+  return (
+    <Input
+      id={id}
+      key={String(target)}
+      className="w-24 text-right tabular-nums"
+      type="number"
+      inputMode="decimal"
+      min="1"
+      max="99.95"
+      step="0.05"
+      placeholder="None"
+      defaultValue={target ?? ""}
+      onBlur={(event) => commit(event.target.value)}
+      onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }}
+    />
   )
 }

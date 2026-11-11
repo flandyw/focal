@@ -1,9 +1,9 @@
 import { currentSubjectWork, isCurrentSubject } from "./subject-completion"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useSyncExternalStore } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import type { AppData, AssessmentReference } from "./exam-data"
-import { buildAtarHistory, liveSavedAtarModel } from "./atar-model"
+import { atarYears, buildAtarHistory, buildAtarModel, latestSavedEstimate, subjectAtarRows } from "./atar-model"
 import type { ScalingReference } from "./scaling"
 import { getMistakeSchedule } from "./exam-data"
 import type { AppView } from "./app-view"
@@ -18,34 +18,73 @@ import type { SyncStatus } from "./sync"
 import { getExamEnd, getExamStart, type Timetable } from "./timetable"
 
 type Item = { id: string; title: string; subtitle: string; start: number; end: number; view: string; allDay?: boolean }
-const macDesktop = () => import.meta.env.VITE_DESKTOP && isTauri() && navigator.platform.toLowerCase().includes("mac")
+export const macDesktop = () => Boolean(import.meta.env.VITE_DESKTOP && isTauri() && navigator.platform.toLowerCase().includes("mac"))
+
+/** "latest" = newest saved scenario, "live" = Focal estimates for your subjects, otherwise a pinned scenario id. */
+export type WidgetAtarSettings = { source: string; target: boolean; change: boolean; subjects: boolean }
+export type WidgetAtar = NonNullable<ReturnType<typeof atar>>
+type WidgetState = { settings: WidgetAtarSettings; tick: number; atar?: WidgetAtar | null; sentAt?: number; error?: string; focus?: boolean }
+// Device-local on purpose: the widget lives on this Mac, so synced account data stays unchanged.
+const SETTINGS_KEY = "focal.widget.atar"
+const defaults: WidgetAtarSettings = { source: "latest", target: true, change: true, subjects: true }
+let state: WidgetState = { settings: (() => { try { return { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") } } catch { return defaults } })(), tick: 0 }
+const listeners = new Set<() => void>()
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
+function setWidgetState(patch: Partial<WidgetState>) {
+  state = { ...state, ...patch }
+  listeners.forEach((listener) => listener())
+}
+export const useWidgetState = () => useSyncExternalStore(subscribe, () => state)
+export const widgetAtarSettings = () => state.settings
+export function setWidgetAtarSettings(patch: Partial<WidgetAtarSettings>) {
+  const settings = { ...state.settings, ...patch }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)) } catch { /* Applies until restart without storage. */ }
+  setWidgetState({ settings })
+}
+/** Republish now and ask WidgetKit to reload every timeline. */
+export const refreshWidgets = () => setWidgetState({ tick: state.tick + 1 })
+export const takeWidgetFocus = () => { if (state.focus) setWidgetState({ focus: false }); return Boolean(state.focus) }
+
 let publishing = Promise.resolve()
 function publish(snapshot: unknown) {
   // Serialize account switches/sign-out behind earlier writes so old data cannot win the race.
-  publishing = publishing.catch(() => undefined).then(() => invoke<void>("publish_widget_snapshot", { snapshot: JSON.stringify(snapshot) }))
-  void publishing.catch((error) => console.warn("Could not refresh Focal widgets:", error))
+  const run = publishing.catch(() => undefined).then(() => invoke<void>("publish_widget_snapshot", { snapshot: JSON.stringify(snapshot) }))
+  publishing = run
+  void run.then(() => setWidgetState({ sentAt: Date.now(), error: undefined }), (error) => {
+    setWidgetState({ error: String(error) })
+    console.warn("Could not refresh Focal widgets:", error)
+  })
 }
 
-// The newest saved scenario recomputed live with the ATAR page's model; the page deep-links via view "atar".
-function atar(data: AppData, references: AssessmentReference[], scaling: ScalingReference[]) {
-  const live = liveSavedAtarModel(data, references, scaling)
+// Recomputed live with the ATAR page's model from the chosen source; the page deep-links via view "atar".
+function atar(data: AppData, references: AssessmentReference[], scaling: ScalingReference[], settings: WidgetAtarSettings) {
+  const pinned = data.atarEstimates.find((item) => item.id === settings.source)
+  // A deleted pin falls back to the newest scenario.
+  const saved = settings.source === "live" ? undefined : pinned ?? latestSavedEstimate(data)
+  const year = saved?.year ?? atarYears(scaling)[0]
+  const rows = saved?.rows ?? subjectAtarRows(data.subjects, scaling)
+  if (year === undefined || !rows.length) return null
+  const model = buildAtarModel({ data, references, scaling, rows, year })
+  const estimate = model.estimate
   // Missing live scores must not resurrect an old saved headline.
-  if (!live) return null
-  const { saved, model } = live
-  const estimate = model.estimate!
-  const trend = buildAtarHistory({ data, references, scaling, rows: saved.rows, year: saved.year }).flatMap((point) => point.atar ?? [])
+  if (!estimate) return null
+  const trend = buildAtarHistory({ data, references, scaling, rows, year }).flatMap((point) => point.atar ?? [])
+  const savedOn = saved && new Date(saved.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })
   return {
-    label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year: saved.year, target: model.target, gap: model.gap,
+    label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year,
+    target: settings.target ? model.target : null, gap: settings.target ? model.gap : null,
     // Change since the previous point in the page's "Estimate over time" history.
-    change: estimate.atar !== null && trend.length > 1 ? Math.round((estimate.atar - trend.at(-2)!) * 100) / 100 : null,
-    subjects: [...estimate.primaryFour, ...estimate.increments].map((item) => ({
+    change: settings.change && estimate.atar !== null && trend.length > 1 ? Math.round((estimate.atar - trend.at(-2)!) * 100) / 100 : null,
+    subjects: settings.subjects ? [...estimate.primaryFour, ...estimate.increments].map((item) => ({
       name: item.studyName.slice(0, 200), scaled: item.scaledScore, contribution: item.contribution, increment: item.role === "Increment",
-    })),
+    })) : [],
+    source: saved ? `${pinned ? "Pinned" : "Newest"} scenario, saved ${savedOn}` : "Live Focal estimate",
+    scenarioId: saved?.id ?? null,
   }
 }
 
-function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null, references: AssessmentReference[], scaling: ScalingReference[]) {
-  const atarEstimate = atar(data, references, scaling)
+function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null, references: AssessmentReference[], scaling: ScalingReference[], settings: WidgetAtarSettings) {
+  const atarEstimate = atar(data, references, scaling, settings)
   data = currentSubjectWork(data)
   const now = Date.now()
   const today = new Date()
@@ -98,6 +137,8 @@ function snapshot(data: AppData, sessions: CanonicalStudySession[], timetable: T
 
 export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession[], timetable: Timetable | null,
   references: AssessmentReference[], scaling: ScalingReference[], accountId: string | undefined, status: SyncStatus, navigate: (view: AppView) => void) {
+  const settings = useSyncExternalStore(subscribe, () => state.settings)
+  const tick = useSyncExternalStore(subscribe, () => state.tick)
   const owner = useRef(accountId)
   const navigation = useRef(navigate)
   useEffect(() => { navigation.current = navigate }, [navigate])
@@ -105,7 +146,10 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
     if (!import.meta.env.VITE_DESKTOP || !macDesktop()) return
     let disposed = false
     const open = (view: string) => {
-      if (["calendar", "timetable", "exams", "sacs", "focus", "mistakes", "settings", "atar"].includes(view)) navigation.current(view as AppView)
+      if (!["calendar", "timetable", "exams", "sacs", "focus", "mistakes", "settings", "atar"].includes(view)) return
+      navigation.current(view as AppView)
+      // Only the ATAR widget opens "atar"; land on the page's widget section.
+      if (view === "atar") setWidgetState({ focus: true })
     }
     const listener = listen<string>("focal:widget-open", (event) => open(event.payload))
     void listener.then(() => invoke<string | null>("take_widget_navigation")).then((view) => { if (!disposed && view) open(view) }).catch(console.warn)
@@ -114,13 +158,20 @@ export function useDesktopWidgets(data: AppData, sessions: CanonicalStudySession
   useEffect(() => {
     if (!import.meta.env.VITE_DESKTOP || !macDesktop()) return
     // Only clear on a real account change; the first render has no user yet while the session restores.
-    if ((owner.current && owner.current !== accountId) || ["signed-out", "sign-in-required", "unconfigured"].includes(status)) publish(null)
+    if ((owner.current && owner.current !== accountId) || ["signed-out", "sign-in-required", "unconfigured"].includes(status)) {
+      setWidgetState({ atar: undefined })
+      publish(null)
+    }
     owner.current = accountId
     // Local data is still the account's own while offline or with unpushed changes.
     if (!accountId || !["synced", "pending", "error"].includes(status)) return
-    const update = () => publish(snapshot(data, sessions, timetable, references, scaling))
+    const update = () => {
+      const value = snapshot(data, sessions, timetable, references, scaling, settings)
+      setWidgetState({ atar: value.atar })
+      publish(value)
+    }
     const timer = window.setTimeout(update, 1200)
     const interval = window.setInterval(update, 60_000)
     return () => { clearTimeout(timer); clearInterval(interval) }
-  }, [data, sessions, timetable, references, scaling, accountId, status])
+  }, [data, sessions, timetable, references, scaling, accountId, status, settings, tick])
 }

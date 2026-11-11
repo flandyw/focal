@@ -13,6 +13,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Settings2,
   SkipForward,
   Square,
   Timer as TimerIcon,
@@ -21,7 +22,8 @@ import {
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 import { Button } from "./ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardContent } from "./ui/card"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./ui/sheet"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { Field, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
@@ -175,6 +177,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const { settings, blocks, blocksToday, focusSecondsToday, updateSettings } = local
   const [sharedBusy, setSharedBusy] = useState(false)
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const sharedBusyRef = useRef(false)
   const [sharedFailure, setSharedFailure] = useState<{ key: string; message: string } | null>(null)
   const now = useTickingNow(sharedSession && isRunning(sharedSession) ? 1000 : 60_000)
@@ -419,27 +422,29 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       : "Stay with one task until the block ends."
 
   return (
-    <div className="grid gap-6 lg:gap-8">
+    <>
+    <div className="grid items-start gap-6 lg:gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <Card className="min-w-0 gap-0 py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-          <div className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:w-auto" aria-label="Study mode" role="group">
+          <div className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:flex-none" aria-label="Study mode" role="group">
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
+          <Button className="text-muted-foreground hover:text-foreground" onClick={() => setSettingsOpen(true)} variant="ghost"><Settings2 />Settings</Button>
           {sharedSession ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="w-full text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{studySessionSubjects(sharedSession).map(subjectNameFor).join(" · ") || "Study"}</span>
               {sharedSession.title ? ` · ${sharedSession.title}` : ""}
             </p>
           ) : (
-            <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2 lg:w-auto lg:max-w-[34rem] lg:flex-1">
+            <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2">
               <FieldLabel htmlFor="timer-subject" className="sr-only">Subject</FieldLabel><SubjectCombobox allowCustom id="timer-subject" onValueChange={setSubject} placeholder={subjectChosen ? "Subject" : "Pick a subject to start"} preferredSubjects={preferredSubjects} required subjects={subjects} value={subject} />
               <Input aria-label="Intent" id="timer-intent" maxLength={120} onChange={(event) => setIntent(event.target.value)} placeholder="Intent, e.g. redo the 2023 organic paper" value={intent} />
               {state.running ? <p className="text-xs text-muted-foreground sm:col-span-2">Change the subject to switch; this session keeps going and records each subject's time.</p> : null}
             </div>
           )}
         </div>
-        <CardContent className="px-4 py-4 sm:px-6 sm:py-14">
+        <CardContent className="px-4 py-4 sm:px-6 sm:py-8">
           <TimerReadout
             animationKey={`${displayMode}:${state.cycles}`}
             caption={caption}
@@ -494,29 +499,16 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         </div>
       </Card>
 
-      <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
-            <AlertDialogDescription>{sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>{sharedSession ? "Discard session" : "Reset timer"}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+      <aside className="grid min-w-0 gap-6 lg:gap-8">
       <section className="grid gap-3" aria-labelledby="planned-study-title">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <SectionHeading id="planned-study-title" title={`Planned study · ${planned.length}`} description="Start the same session here or in Folio. Only time you work counts." />
-          {plannedActions ? <Button onClick={newPlan} variant="outline"><CalendarPlus />Plan study</Button> : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
+        <SectionHeading className="flex-row items-end justify-between" id="planned-study-title" title={planned.length ? `Planned study · ${planned.length}` : "Planned study"} description="Only time you work counts."
+          action={plannedActions ? <Button onClick={newPlan} size="sm" variant="outline"><CalendarPlus />Plan study</Button> : undefined} />
+        {/* Search and filters are noise until there are enough plans to lose one in. */}
+        {planned.length > 3 && <div className="flex flex-wrap gap-2">
           <Input type="search" aria-label="Search planned study" className="sm:max-w-xs" placeholder="Search title, subject or topics" value={planSearch} onChange={(event) => { setPlanSearch(event.target.value); setPlanLimit(10) }} />
           {[["all", "All"], ["today", "Today"], ["overdue", "Overdue"], ["upcoming", "Upcoming"]].map(([value, label]) =>
             <Button key={value} aria-pressed={planFilter === value} size="sm" variant={planFilter === value ? "secondary" : "outline"} onClick={() => { setPlanFilter(value); setPlanLimit(10) }}>{label}</Button>)}
-        </div>
+        </div>}
         {blockedPlan && planned.length ? <p className="text-sm text-muted-foreground">{blockedPlan}</p> : null}
         {planError ? <p role="alert" className="text-sm text-destructive">{planError}</p> : null}
         {visiblePlans.slice(0, planLimit).map((session) => {
@@ -532,41 +524,14 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             {plan.topics.length ? <p className="text-sm text-muted-foreground">Topics: {plan.topics.join(" · ")}</p> : null}
           </CardContent></Card>
         })}
-        {!visiblePlans.length ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">{planned.length ? "No plans match these filters." : "Plan study here or on the calendar. Your plans also appear in Folio when you connect the same account."}</p> : null}
+        {!visiblePlans.length ? <p className="rounded-lg border border-dashed p-4 text-sm text-pretty text-muted-foreground">{planned.length ? "No plans match these filters." : "Nothing planned. Plan study here or on the calendar; plans also appear in Folio on the same account."}</p> : null}
         {visiblePlans.length > planLimit ? <Button onClick={() => setPlanLimit((limit) => limit + 10)} variant="outline">Show more plans</Button> : null}
       </section>
-      {eclair ? <EclairHome
-        display={readout} mode={displayMode} status={statusLabel} running={state.running}
-        seconds={countdown ? Math.abs(remainingSeconds) : isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
-        totalSeconds={countdown ? (pastPlan ? null : planSeconds) : isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
-        onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
-        locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
-        subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
-        settings={{ ...settings, notificationsEnabled }} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
-        continueLabel={offerContinue ? continueLabel : undefined}
-        onContinue={offerContinue ? () => void startPlan(offerContinue, "resume") : undefined}
-        plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
-          detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }),
-          start: () => void startPlan(session) }))}
-        actions={{
-          toggle: actions.toggle, reset: requestReset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
-          addTime: actions.addTime, selectMode: actions.selectMode, preset: applyPreset, setting: updateSettings,
-          notifications: () => void toggleNotifications(), subject: setSubject, intent: setIntent,
-          paper: () => { setEclair(false); onTimedPaper() }, exit: () => setEclair(false),
-        }}
-      /> : null}
-      {editingPlan && plannedActions ? <StudySessionDialog key={editingPlan.id}
-        session={(sessions ?? []).find((session) => session.id === editingPlan.id) ?? editingPlan}
-        subjects={preferredSubjects} allowConvert={false} creating={creatingPlan} onCreate={copyPlan}
-        onClose={() => setEditingPlan(null)} onEdit={plannedActions.edit} onRemove={plannedActions.remove}
-        onDuplicate={copyPlan} onConvert={async () => { throw new Error("Convert study to events from the calendar.") }} /> : null}
-
-      <div className="grid items-start gap-6 lg:gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <section className="grid min-w-0 gap-3" aria-labelledby="today-title">
           <SectionHeading
             id="today-title"
             title="Today's log"
-            description="Study logged since midnight, across every app on your account."
+            description="Since midnight, across every app on your account."
           />
           {todaysRecord ? (
             <div className="grid gap-2">
@@ -614,8 +579,6 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             </Empty>
           )}
         </section>
-      <aside className="grid min-w-0 gap-4">
-        {renderSettings()}
         {AI_ENABLED && !isFreeStudy && <Collapsible className="rounded-xl border bg-card"><CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-2 text-left px-4 py-3 text-sm font-semibold"><span className="min-w-0">Plan a session</span><ChevronDown className="size-4 shrink-0 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger><CollapsibleContent keepMounted>
           <StudyPlanCard
             className="rounded-none border-0 shadow-none"
@@ -630,18 +593,61 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           />
         </CollapsibleContent></Collapsible>}
       </aside>
-      </div>
     </div>
+      <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
+            <AlertDialogDescription>{sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>{sharedSession ? "Discard session" : "Reset timer"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {eclair ? <EclairHome
+        display={readout} mode={displayMode} status={statusLabel} running={state.running}
+        seconds={countdown ? Math.abs(remainingSeconds) : isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
+        totalSeconds={countdown ? (pastPlan ? null : planSeconds) : isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
+        onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
+        locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
+        subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
+        settings={{ ...settings, notificationsEnabled }} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
+        continueLabel={offerContinue ? continueLabel : undefined}
+        onContinue={offerContinue ? () => void startPlan(offerContinue, "resume") : undefined}
+        plans={planned.map((session) => ({ id: session.id, title: session.title || "Study",
+          detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }),
+          start: () => void startPlan(session) }))}
+        actions={{
+          toggle: actions.toggle, reset: requestReset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
+          addTime: actions.addTime, selectMode: actions.selectMode, preset: applyPreset, setting: updateSettings,
+          notifications: () => void toggleNotifications(), subject: setSubject, intent: setIntent,
+          paper: () => { setEclair(false); onTimedPaper() }, exit: () => setEclair(false),
+        }}
+      /> : null}
+      {editingPlan && plannedActions ? <StudySessionDialog key={editingPlan.id}
+        session={(sessions ?? []).find((session) => session.id === editingPlan.id) ?? editingPlan}
+        subjects={preferredSubjects} allowConvert={false} creating={creatingPlan} onCreate={copyPlan}
+        onClose={() => setEditingPlan(null)} onEdit={plannedActions.edit} onRemove={plannedActions.remove}
+        onDuplicate={copyPlan} onConvert={async () => { throw new Error("Convert study to events from the calendar.") }} /> : null}
+
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent className="gap-0">
+          <SheetHeader>
+            <SheetTitle>Timer settings</SheetTitle>
+            <SheetDescription>Choose a preset or adjust your own rhythm.</SheetDescription>
+          </SheetHeader>
+          {renderSettings()}
+        </SheetContent>
+      </Sheet>
+    </>
   )
 
   function renderSettings() {
     return (
-      <Card size="sm" className="min-w-0 gap-4">
-        <CardHeader>
-          <CardTitle>Pomodoro settings</CardTitle>
-          <CardDescription>Choose a preset or adjust your own rhythm.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
+        <div className="grid gap-4 p-6 max-sm:p-4">
           <div className="grid gap-2">
           <h3 className="text-sm font-medium">Presets</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -761,8 +767,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             />
             </div>
           </CollapsibleContent></Collapsible>
-        </CardContent>
-      </Card>
+        </div>
     )
   }
 }

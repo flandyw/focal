@@ -25,7 +25,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
@@ -239,7 +238,7 @@ export function AppSidebar({
     action()
   }
 
-  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={() => run(onSearch)} className="mx-2 h-8 justify-start gap-2 rounded-xs px-3 font-normal text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground/90 group-data-[collapsible=icon]:hidden">
+  const searchButton = <Button variant="ghost" aria-label="Search anything" onClick={() => run(onSearch)} className="h-8 justify-start gap-2.5 rounded-sm px-2 font-normal text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground/90 group-data-[collapsible=icon]:hidden">
     <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
     <span className="flex-1 text-left text-[0.8125rem]">Search</span>
     <kbd className="rounded-xs border border-sidebar-border px-1.5 font-sans text-[0.625rem] text-sidebar-foreground/80" aria-hidden>{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd>
@@ -249,28 +248,25 @@ export function AppSidebar({
     <>
     {isMobile && commandLoaded && <Suspense fallback={null}><MobileSearch open={commandOpen} onOpenChange={onCommandOpenChange} icons={NAVIGATION_ICONS} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense>}
     <Sidebar side={appearance.sidebarSide} collapsible="icon" className="focal-navigation">
-      <SidebarHeader className="gap-5 px-5 pt-7 pb-5 group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-3">
+      <SidebarHeader className="gap-2 px-2 pt-3 pb-1">
         <div className="flex items-center group-data-[collapsible=icon]:justify-center">
           <Button
             variant="ghost"
-            className="h-auto min-w-0 flex-1 items-center justify-start gap-2.5 rounded-sm p-0 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
+            className="h-8 min-w-0 flex-1 justify-start gap-2 rounded-sm px-2 text-left text-sidebar-primary hover:bg-transparent hover:text-sidebar-primary group-data-[collapsible=icon]:hidden"
             aria-label="Focal home"
             onClick={() => navigate("today")}
           >
-            {/* -mb trims the empty descender space (0.265em, minus the 0.025em gap above f/l) so the box is centred on the lettering. */}
-            <span className="-mb-[0.24em] font-heading text-[2.5rem] leading-none tracking-[-0.06em]">
-              {/* Sits on the baseline at Newsreader's f/l ascender height (1419/2000 em), so it spans the lettering exactly. */}
-              <FocalMark className="mr-2.5 inline-block size-[0.71em] align-baseline" />focal
-            </span>
+            <FocalMark className="size-5 shrink-0" />
+            <span className="font-heading text-base text-sidebar-foreground">focal</span>
           </Button>
           <SidebarTrigger className="shrink-0 text-sidebar-foreground/80" />
         </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" data-tour="add" className="h-10 gap-2 rounded-sm bg-primary px-3 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
+              <DropdownMenuTrigger render={<SidebarMenuButton tooltip="Add" data-tour="add" className="h-8 gap-2 rounded-sm bg-primary px-2 text-[0.8125rem] font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" />}>
                 <Plus aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-left group-data-[collapsible=icon]:hidden">Add to your study</span>
+                <span className="min-w-0 flex-1 truncate text-left group-data-[collapsible=icon]:hidden">New</span>
                 <ChevronDown aria-hidden className="size-3! opacity-60 group-data-[collapsible=icon]:hidden" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-52">
@@ -285,14 +281,14 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent className="gap-4 px-3 group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:px-2">
+      <SidebarContent className="gap-2 px-2 pt-1 group-data-[collapsible=icon]:gap-2">
         {!isMobile && (commandOpen || commandLoaded) ? <Suspense fallback={searchButton}><AppCommandMenu open={commandOpen} onOpenChange={onCommandOpenChange} onViewChange={navigate} onLogExam={() => run(onLogExam)} onLogPastStudy={() => run(onLogPastStudy)} onLogMistake={() => run(onLogMistake)} onStartExam={() => run(onStartExam)} /></Suspense> : searchButton}
         <Button variant="ghost" aria-label="Search anything" onClick={() => { setOpen(true); onSearch() }} className="hidden h-8 rounded-xs text-sidebar-foreground/90 hover:bg-sidebar-accent group-data-[collapsible=icon]:flex"><Search className="size-4 opacity-70" strokeWidth={1.5} aria-hidden /></Button>
         {NAVIGATION_GROUPS.map((group) => {
           const items = [...group.items].filter((item) => !appearance.hiddenLinks.includes(item.id)).sort((a, b) => (appearance.linkOrder.indexOf(a.id) + 1 || 100) - (appearance.linkOrder.indexOf(b.id) + 1 || 100))
           if (!items.length) return null
           return <SidebarGroup className="p-0" key={group.label}>
-          {appearance.sidebarLabels ? <SidebarGroupLabel className="focal-eyebrow mb-1 h-6 gap-2 px-3">{group.label}</SidebarGroupLabel> : null}
+          {appearance.sidebarLabels && items.length > 1 ? <SidebarGroupLabel className="h-6 px-2 text-xs font-medium text-sidebar-foreground/60">{group.label}</SidebarGroupLabel> : null}
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => {
@@ -304,7 +300,7 @@ export function AppSidebar({
                     aria-current={view === item.id ? "page" : undefined}
                     tooltip={item.label}
                     data-tour={`nav-${item.id}`}
-                    className="h-9 gap-3 rounded-xs px-3 text-[0.8125rem]"
+                    className="h-7 gap-2.5 rounded-sm px-2 text-[0.8125rem]"
                     onClick={() => navigate(item.id)}
                   >
                     <Icon aria-hidden className="size-4! opacity-70" strokeWidth={1.5} />
@@ -322,19 +318,18 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>})}
       </SidebarContent>
-      <SidebarFooter className="gap-3 px-5 pt-4 pb-5 group-data-[collapsible=icon]:px-2">
+      <SidebarFooter className="gap-1 border-t border-sidebar-border p-2">
         <SharedSessions sessions={sessions} onControl={onControlSession} />
-        <SidebarSeparator className="mx-0" />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Settings" data-tour="settings" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
-              <Settings2 aria-hidden strokeWidth={1.5} /><span>Settings</span>
+            <SidebarMenuButton tooltip="Settings" data-tour="settings" className="h-8 gap-2.5 px-2 text-[0.8125rem]" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
+              <Settings2 aria-hidden className="size-4! opacity-70" strokeWidth={1.5} /><span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger render={<SidebarMenuButton size="lg" data-tour="account" tooltip={accountTooltip} aria-label={accountTooltip} />}>
-                <CircleUserRound aria-hidden className="size-6! text-sidebar-foreground/80" strokeWidth={1.25} />
+                <CircleUserRound aria-hidden className="size-5! text-sidebar-foreground/80" strokeWidth={1.5} />
                 <span className="flex min-w-0 flex-col gap-0.5 group-data-[collapsible=icon]:hidden">
                   <span className="truncate">{accountLabel}</span>
                   <span className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground"><SyncIndicator status={syncStatus} />{accountStatus}</span>

@@ -488,9 +488,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}
         </CardContent>
         <div className="grid grid-cols-3 divide-x border-t text-center">
-          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{formatFocusTime(recordSeconds)}</p></div>
-          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
-          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 font-heading text-2xl sm:text-3xl font-normal tabular-nums">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Focus today</p><p className="mt-1 focal-stat-value">{formatFocusTime(recordSeconds)}</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">{isFreeStudy ? "Sessions" : "Blocks"}</p><p className="mt-1 focal-stat-value">{settings.dailyGoal && !isFreeStudy ? `${recordCount} / ${settings.dailyGoal}` : recordCount}</p></div>
+          <div className="px-2 py-3 sm:py-4"><p className="text-xs text-muted-foreground">Rhythm</p><p className="mt-1 focal-stat-value">{settings.workMinutes}/{settings.breakMinutes}m</p></div>
         </div>
       </Card>
 

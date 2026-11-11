@@ -45,10 +45,10 @@ export type Appearance = {
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
-  surface: "focal", customAccent: null, sidebarTint: null,
-  bodyFont: "instrument", headingFont: "newsreader", fontSize: 16, readingSpacing: 1.6,
-  density: "default", contentWidth: "full", radius: 5,
-  sidebarWidth: 248, sidebarSide: "left", sidebarLabels: true,
+  surface: "paper", customAccent: null, sidebarTint: null,
+  bodyFont: "instrument", headingFont: "instrument", fontSize: 16, readingSpacing: 1.6,
+  density: "default", contentWidth: "full", radius: 6,
+  sidebarWidth: 232, sidebarSide: "left", sidebarLabels: true,
   hiddenLinks: [], linkOrder: [], reduceMotion: false,
   calendarPane: 65, mistakePane: 40, editorPane: 40,
 }

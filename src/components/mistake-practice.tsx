@@ -28,7 +28,7 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         <DialogDescription>Explore answers at your own pace. Practice does not change your review schedule.</DialogDescription>
       </DialogHeader>
       {finished ? <div className="grid justify-items-center gap-5 py-10 text-center">
-        <p className="font-heading text-3xl font-normal">{count(cards.length, "card")} explored</p>
+        <p className="font-heading text-xl">{count(cards.length, "card")} explored</p>
         <p className="text-muted-foreground">Come back to these whenever you need a refresher.</p>
         <div className="flex gap-2"><Button variant="outline" onClick={() => { go(0); setFinished(false) }}><RotateCcw />Start again</Button><Button onClick={onClose}>Back to library</Button></div>
       </div> : card ? <div className="grid gap-5">
@@ -39,7 +39,7 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         }}><Shuffle />Shuffle & restart</Button></div>
         <Progress value={(index + 1) / cards.length * 100} aria-label="Practice progress" />
         <div className="flex flex-wrap gap-2"><Badge variant="secondary">{card.category}</Badge>{card.areaOfStudy ? <Badge variant="outline">{card.areaOfStudy}</Badge> : null}</div>
-        <h3 className="font-heading text-2xl font-normal"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
+        <h3 className="focal-section-title"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
         <div className="min-h-32"><MarkdownPreview>{card.questionText || card.question}</MarkdownPreview><MistakeAttachments attachments={card.attachments} /></div>
         <Button variant="secondary" aria-expanded={revealed} onClick={() => setRevealed(!revealed)}>{revealed ? "Hide answer" : "Reveal answer"}</Button>
         {revealed ? <div className="grid gap-5 rounded-xl border bg-muted/30 p-5">

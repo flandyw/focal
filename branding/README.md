@@ -4,10 +4,10 @@
 
 Four rounded tiles: three filled blocks of study and one ticked off. It stands for planned work getting done, which is what the app does.
 
-- `focal-icon.svg`: the forest tile. This is the canonical app icon (desktop, PWA, Apple touch, notifications).
-- `focal-mark-light.svg`: the pale sage tile, for light backgrounds outside the app.
+- `focal-icon.svg`: the blue tile. This is the canonical app icon (desktop, PWA, Apple touch, notifications).
+- `focal-mark-light.svg`: the pale blue tile, for light backgrounds outside the app.
 
-Inside the app, `src/components/focal-mark.tsx` draws the mark from `currentColor` and `--card`, so it follows the accent, sidebar tint, and theme. In the sidebar it is sized to the ascender height of the wordmark and optically centred on the visible lettering, with a 4px upward offset for Newsreader's line-box spacing.
+Inside the app, `src/components/focal-mark.tsx` draws the mark from `currentColor` and `--card`, so it follows the accent, sidebar tint, and theme.
 
 `public/focal-icon.svg` is a copy of the app icon. `public/favicon.svg` contains both and switches with `prefers-color-scheme`. `public/apple-touch-icon.svg` is the full-bleed version for iOS and the maskable PWA icons.
 
@@ -15,17 +15,17 @@ Inside the app, `src/components/focal-mark.tsx` draws the mark from `currentColo
 
 | Role | Hex | Where it's used |
 | --- | --- | --- |
-| Forest | `#0B4C37` | Light `--primary`, wordmark, app icon tile |
-| Deep forest | `#043224` | End of the icon tile gradient (icon only) |
-| Mint | `#A9CBB6` | Dark `--primary`, secondary tiles |
-| Sage | `#DEE7DC` | Light icon tile |
-| Paper | `#F9F7F0` | Tiles and the tick on forest |
+| Blue | `#2A5FC4` | Default accent (light `--primary`), app icon tile |
+| Deep blue | `#173A85` | End of the icon tile gradient (icon only) |
+| Sky | `#AFC6EE` | Secondary tiles |
+| Mist | `#E1E9F8` | Light icon tile |
+| White | `#FFFFFF` | Tiles and the tick on blue |
 
 The app UI stays flat. The gradient appears only on the icon tile.
 
 ## Wordmark
 
-Lowercase `focal` in Newsreader (`font-heading`), tight tracking, set in `--sidebar-primary`, with the mark to its left (see `app-navigation.tsx`).
+Lowercase `focal` in the heading font (`font-heading`, semibold), with the mark to its left (see `app-navigation.tsx`).
 
 ## Regenerating icons
 
@@ -73,7 +73,7 @@ Check the installed bundle (adjust `/Applications` if installed elsewhere):
 open /Applications/Focal.app/Contents/Resources/focal.icns
 ```
 
-The icon file must show the green Study Grid. If it does, refresh registration
+The icon file must show the blue Study Grid. If it does, refresh registration
 and the shell icon caches:
 
 ```sh

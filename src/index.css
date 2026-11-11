@@ -258,7 +258,7 @@
   :where(h1, h2, h3, p) { overflow-wrap: break-word; }
   :where(h1, h2, h3) { text-wrap: balance; }
   :where(p) { text-wrap: pretty; }
-  h1, h2 { font-family: var(--font-heading); font-weight: 400; }
+  h1, h2 { font-family: var(--font-heading); font-weight: 600; }
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
   :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
   #root { @apply min-h-svh w-full; }
@@ -268,10 +268,12 @@
 }
 
 @layer components {
-  .focal-page-title { font-family: var(--font-heading); font-size: clamp(2.25rem, 3.4vw, 3.25rem); font-weight: 400; letter-spacing: -0.035em; line-height: 1.08; }
-  .focal-section-title { font-family: var(--font-heading); font-size: 1.65rem; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; }
-  .focal-eyebrow { font-size: 0.625rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; }
-  .focal-stat-value { font-family: var(--font-heading); font-size: 2.5rem; font-weight: 400; letter-spacing: -0.035em; line-height: 1; }
+  /* Headings are compact and weighted: hierarchy comes from weight and spacing, not display sizes. */
+  .font-heading { font-weight: 600; letter-spacing: -0.015em; }
+  .focal-page-title { font-family: var(--font-heading); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; }
+  .focal-section-title { font-family: var(--font-heading); font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+  .focal-eyebrow { font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+  .focal-stat-value { font-family: var(--font-heading); font-size: 1.75rem; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .focal-navigation [data-sidebar="menu-badge"] { background: var(--sidebar-accent); border-radius: 2px; }
 }
 
@@ -351,9 +353,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   :root[data-keyboard] { --mobile-tabbar: 0px; }
   [data-keyboard] .mobile-tabbar { display: none; }
   [data-keyboard] [data-slot="sheet-content"] { height: auto; bottom: var(--keyboard-inset); }
-  .focal-page-title { font-size: 1.75rem; }
-  .focal-section-title { font-size: 1.25rem; }
-  .focal-stat-value { font-size: 1.75rem; }
+  .focal-stat-value { font-size: 1.5rem; }
   /* Today's plan matters more than the month grid on a phone. */
   .workspace-split[data-split="false"] .calendar-day-pane { order: -1; }
 }

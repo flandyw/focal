@@ -958,7 +958,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         {/* Mobile: one compact row that scrolls away; the negative sticky top keeps only its safe-area padding pinned,
             and being sticky at the top edge makes iOS Safari tint the status bar from it instead of blurring it. */}
         {!embedded && <header className="mobile-app-header sticky -top-11 z-20 flex h-11 shrink-0 items-center gap-1 bg-background pr-2 pl-4 lg:hidden">
-          <span className="min-w-0 shrink truncate font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === navView)?.label}</span>
+          <span className="shrink-0 font-heading text-lg font-medium">{ALL_NAVIGATION.find((item) => item.id === navView)?.label}</span>
           {showSubjectMenu && subjectMenu}
           <OfflineChip status={sync.status} />
           <Button variant="ghost" size="icon" aria-label="Friends" aria-current={navView === "friends" ? "page" : undefined} className={`ml-auto ${navView === "friends" ? "text-foreground" : "text-muted-foreground"}`} onClick={() => setView("friends")}><UsersRound aria-hidden /></Button>
@@ -968,7 +968,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {ALL_NAVIGATION.toSorted((a, b) => Number(b.id === "exams") - Number(a.id === "exams")).map((item) => <Button key={item.id} size="sm" variant={view === item.id ? "secondary" : "ghost"} aria-current={view === item.id ? "page" : undefined} onClick={() => setView(item.id)}>{item.id === "exams" ? "Overview" : item.id === "settings" ? "Exam settings" : item.id === "focus" ? "Timed paper" : item.label}</Button>)}
           <span role="status" className="ml-auto self-center text-xs text-muted-foreground">{sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing…" : sync.status === "error" ? "Sync failed" : "Saved locally"}</span>
         </nav>}
-        <main id="main-content" data-view={view} aria-busy={navView !== view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar)-var(--keyboard-inset))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-8 lg:px-10 lg:py-9 2xl:px-12"}`}>
+        <main id="main-content" data-view={view} aria-busy={navView !== view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar)-var(--keyboard-inset))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-6"}`}>
           {showSubjectMenu && <div className="-ml-2.5 mb-1 max-lg:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>

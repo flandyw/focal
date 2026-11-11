@@ -9,7 +9,7 @@ import { Slider } from "./ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { NAVIGATION_GROUPS } from "../lib/navigation"
-import { ACCENT_THEMES } from "../lib/accent-theme"
+import { ACCENT_THEMES, DEFAULT_ACCENT } from "../lib/accent-theme"
 import { DEFAULT_APPEARANCE, FONT_FAMILIES, SURFACE_THEMES, selectAccent, updateAppearance, useAccent, useAppearance, type Appearance } from "../lib/appearance"
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
@@ -63,7 +63,7 @@ export function AppearanceSettings() {
 
   function reset() {
     updateAppearance(DEFAULT_APPEARANCE)
-    selectAccent("sage")
+    selectAccent(DEFAULT_ACCENT)
     setTheme("light")
     toast("Appearance reset", { duration: 8000, action: { label: "Undo", onClick: () => {
       selectAccent(accent)
@@ -79,8 +79,8 @@ export function AppearanceSettings() {
     </header>
 
     <div className="appearance-preview my-6" aria-label="Live appearance preview">
-      <div className="appearance-preview-sidebar" aria-hidden="true"><div className="font-heading text-2xl text-primary">focal.</div><div className="mt-4 rounded-sm bg-sidebar-accent px-2 py-1.5 text-xs text-sidebar-accent-foreground">Your workspace</div><div className="mt-2 px-2 text-xs text-sidebar-foreground">Made for you</div></div>
-      <div className="min-w-0 flex-1 p-5 sm:p-7"><h3 className="font-heading text-3xl leading-tight">A space to think.</h3><p className="mt-2 max-w-[42ch] text-sm text-muted-foreground" style={{ lineHeight: appearance.readingSpacing }}>Your notes, your plans, your next idea. Shape a workspace that feels right for the way you study.</p><div className="mt-4 flex flex-wrap items-center gap-3"><span className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground">Your accent</span><span className="text-xs text-muted-foreground">Live preview</span></div></div>
+      <div className="appearance-preview-sidebar" aria-hidden="true"><div className="focal-section-title text-primary">focal.</div><div className="mt-4 rounded-sm bg-sidebar-accent px-2 py-1.5 text-xs text-sidebar-accent-foreground">Your workspace</div><div className="mt-2 px-2 text-xs text-sidebar-foreground">Made for you</div></div>
+      <div className="min-w-0 flex-1 p-5 sm:p-7"><h3 className="font-heading text-xl leading-tight">A space to think.</h3><p className="mt-2 max-w-[42ch] text-sm text-muted-foreground" style={{ lineHeight: appearance.readingSpacing }}>Your notes, your plans, your next idea. Shape a workspace that feels right for the way you study.</p><div className="mt-4 flex flex-wrap items-center gap-3"><span className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground">Your accent</span><span className="text-xs text-muted-foreground">Live preview</span></div></div>
     </div>
 
     <Tabs value={tab} onValueChange={setTab}>

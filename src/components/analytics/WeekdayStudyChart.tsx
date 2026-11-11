@@ -23,7 +23,7 @@ export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
 
   return (
     <section className="min-w-0 border-t border-border/70 pt-5">
-      <h3 className="mb-1 font-heading text-xl font-normal tracking-tight">Your weekly rhythm</h3>
+      <h3 className="mb-1 focal-section-title">Your weekly rhythm</h3>
       <p className="mb-4 text-xs text-muted-foreground">Average minutes for each weekday, including days without study.</p>
       {best.average > 0 ? <>
         <ChartContainer config={config} className="h-48 w-full min-w-0 aspect-auto" aria-label="Average study minutes by weekday">

@@ -29,9 +29,9 @@ private struct FocalProvider: TimelineProvider {
     }
 }
 private extension Color {
-    // Mirrors --primary and --card in src/index.css so widgets match the app in both themes.
-    static let focal = adaptive(light: (0x0b, 0x4c, 0x37), dark: (0xa9, 0xcb, 0xb6))
-    static let focalCard = adaptive(light: (0xfd, 0xfc, 0xf8), dark: (0x22, 0x29, 0x25))
+    // Mirrors the default accent and Paper surface (src/lib/accent-theme.ts, src/index.css) so widgets match the app in both themes.
+    static let focal = adaptive(light: (0x2a, 0x5f, 0xc4), dark: (0x90, 0xab, 0xe0))
+    static let focalCard = adaptive(light: (0xff, 0xff, 0xff), dark: (0x22, 0x22, 0x22))
     static func adaptive(light: (Int, Int, Int), dark: (Int, Int, Int)) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let (r, g, b) = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light

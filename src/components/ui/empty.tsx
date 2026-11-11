@@ -56,7 +56,7 @@ function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "font-heading text-2xl font-normal tracking-tight",
+        "font-heading text-lg font-semibold tracking-tight",
         className
       )}
       {...props}

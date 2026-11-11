@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Focal Study Grid, dark icon">
   <defs>
-    <linearGradient id="forest" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0B4C37"/>
-      <stop offset="1" stop-color="#043224"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A5FC4"/>
+      <stop offset="1" stop-color="#173A85"/>
     </linearGradient>
   </defs>
-  <rect x="54" y="54" width="916" height="916" rx="235" fill="url(#forest)"/>
-  <rect x="250" y="244" width="246" height="246" rx="68" fill="#F9F7F0"/>
-  <rect x="528" y="244" width="246" height="246" rx="68" fill="#A9CBB6"/>
-  <rect x="250" y="522" width="246" height="246" rx="68" fill="#A9CBB6"/>
-  <rect x="540" y="534" width="222" height="222" rx="60" fill="none" stroke="#F9F7F0" stroke-width="24"/>
-  <path d="M592 656 L633 697 L718 610" fill="none" stroke="#F9F7F0" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="54" y="54" width="916" height="916" rx="235" fill="url(#tile)"/>
+  <rect x="250" y="244" width="246" height="246" rx="68" fill="#FFFFFF"/>
+  <rect x="528" y="244" width="246" height="246" rx="68" fill="#AFC6EE"/>
+  <rect x="250" y="522" width="246" height="246" rx="68" fill="#AFC6EE"/>
+  <rect x="540" y="534" width="222" height="222" rx="60" fill="none" stroke="#FFFFFF" stroke-width="24"/>
+  <path d="M592 656 L633 697 L718 610" fill="none" stroke="#FFFFFF" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

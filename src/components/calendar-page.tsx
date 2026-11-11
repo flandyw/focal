@@ -377,7 +377,7 @@ export function CalendarPage({
           <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] calendar-day-card">
             <CardHeader className="shrink-0 gap-2 pb-1">
               <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-xl">{formatDayTitle(selected)}</CardTitle>
+                <CardTitle>{formatDayTitle(selected)}</CardTitle>
                 <div className="flex shrink-0 items-center gap-0.5">
                   <Button aria-label="Previous day" onClick={() => selectDay(shiftDay(selected, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
                   <Button aria-label="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>

@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <!-- Light tile in light browser chrome, forest tile in dark. -->
+  <!-- Light tile in light browser chrome, blue tile in dark. -->
   <style>.d{display:none}@media (prefers-color-scheme:dark){.l{display:none}.d{display:inline}}</style>
-  <defs><linearGradient id="forest" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B4C37"/><stop offset="1" stop-color="#043224"/></linearGradient></defs>
+  <defs><linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A5FC4"/><stop offset="1" stop-color="#173A85"/></linearGradient></defs>
   <g class="l">
-    <rect x="54" y="54" width="916" height="916" rx="235" fill="#DEE7DC"/>
-    <rect x="250" y="244" width="246" height="246" rx="68" fill="#0B4C37"/>
-    <rect x="528" y="244" width="246" height="246" rx="68" fill="#F9F7F0"/>
-    <rect x="250" y="522" width="246" height="246" rx="68" fill="#A9CBB6"/>
-    <rect x="528" y="522" width="246" height="246" rx="68" fill="#F9F7F0"/>
-    <path d="M586 651 L633 697 L717 609" fill="none" stroke="#0B4C37" stroke-width="29" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="54" y="54" width="916" height="916" rx="235" fill="#E1E9F8"/>
+    <rect x="250" y="244" width="246" height="246" rx="68" fill="#2A5FC4"/>
+    <rect x="528" y="244" width="246" height="246" rx="68" fill="#FFFFFF"/>
+    <rect x="250" y="522" width="246" height="246" rx="68" fill="#AFC6EE"/>
+    <rect x="528" y="522" width="246" height="246" rx="68" fill="#FFFFFF"/>
+    <path d="M586 651 L633 697 L717 609" fill="none" stroke="#2A5FC4" stroke-width="29" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <g class="d">
-    <rect x="54" y="54" width="916" height="916" rx="235" fill="url(#forest)"/>
-    <rect x="250" y="244" width="246" height="246" rx="68" fill="#F9F7F0"/>
-  <rect x="528" y="244" width="246" height="246" rx="68" fill="#A9CBB6"/>
-  <rect x="250" y="522" width="246" height="246" rx="68" fill="#A9CBB6"/>
-  <rect x="540" y="534" width="222" height="222" rx="60" fill="none" stroke="#F9F7F0" stroke-width="24"/>
-  <path d="M592 656 L633 697 L718 610" fill="none" stroke="#F9F7F0" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="54" y="54" width="916" height="916" rx="235" fill="url(#tile)"/>
+    <rect x="250" y="244" width="246" height="246" rx="68" fill="#FFFFFF"/>
+  <rect x="528" y="244" width="246" height="246" rx="68" fill="#AFC6EE"/>
+  <rect x="250" y="522" width="246" height="246" rx="68" fill="#AFC6EE"/>
+  <rect x="540" y="534" width="222" height="222" rx="60" fill="none" stroke="#FFFFFF" stroke-width="24"/>
+  <path d="M592 656 L633 697 L718 610" fill="none" stroke="#FFFFFF" stroke-width="27" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

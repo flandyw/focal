@@ -23,7 +23,7 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
         <p className="text-sm text-muted-foreground">Estimated ATAR</p>
         {estimate
           ? <p className="mt-1 text-7xl leading-none font-semibold tracking-tight tabular-nums sm:text-8xl">{estimate.atarLabel}</p>
-          : <p className="mt-2 font-heading text-4xl tracking-tight">No estimate yet</p>}
+          : <p className="mt-2 focal-section-title tracking-tight">No estimate yet</p>}
         <p className="mt-3 text-sm text-muted-foreground tabular-nums text-pretty">
           {estimate ? `Aggregate ${estimate.aggregate.toFixed(2)} · ${year} conversion${model.range ? ` · likely ${model.range.low}–${model.range.high}` : ""}` : emptyGuidance}
         </p>

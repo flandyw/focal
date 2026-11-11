@@ -178,7 +178,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
     <section className="border-t border-border/70 pt-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-heading text-xl font-normal tracking-tight">Study consistency</h3>
+          <h3 className="focal-section-title">Study consistency</h3>
         </div>
         <div className="flex items-center gap-2" aria-hidden>
           <span className="text-micro text-muted-foreground/70">Less</span>

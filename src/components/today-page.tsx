@@ -97,7 +97,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
         {stats.map((stat) => (
           <div key={stat.label} className="flex min-w-0 flex-col gap-1 bg-background p-4">
             <span className="text-xs text-muted-foreground">{stat.label}</span>
-            <span className="flex items-center gap-1.5 text-2xl font-semibold tabular-nums">
+            <span className="focal-stat-value flex items-center gap-1.5">
               {stat.flame ? <Flame aria-hidden className="size-5 text-primary" /> : null}{stat.value}
             </span>
             <span className="truncate text-xs text-muted-foreground" title={stat.note}>{stat.note}</span>

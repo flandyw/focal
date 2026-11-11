@@ -81,7 +81,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
         <section className="grid overflow-hidden border-y border-border md:grid-cols-[1fr_0.75fr]">
           <div className="py-12 pr-6 sm:py-16">
             <p className="focal-eyebrow text-primary">Make room for your day</p>
-            <h2 className="mt-5 max-w-md font-heading text-4xl leading-tight sm:text-5xl">Your school rhythm,<br />all in one place.</h2>
+            <h2 className="mt-5 max-w-md focal-section-title leading-tight">Your school rhythm,<br />all in one place.</h2>
             <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground">Bring in your existing timetable, or build a cycle from scratch. Your classes will also appear on the calendar, ready to plan study around.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button onClick={addPeriod}><Plus />Build my timetable</Button>
@@ -90,7 +90,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           </div>
           <div className="flex flex-col justify-center border-t bg-secondary/45 p-8 md:border-t-0 md:border-l sm:p-12">
             <CalendarClock className="mb-6 size-9 text-primary" strokeWidth={1.25} />
-            <p className="font-heading text-2xl">Built around your cycle.</p>
+            <p className="focal-section-title">Built around your cycle.</p>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Five days, ten days, or something different. Keep class times, rooms, breaks, and school holidays together.</p>
             <p className="mt-6 border-t pt-4 text-xs leading-relaxed text-muted-foreground">Already set up on desktop? Your timetable will appear here after sync.</p>
           </div>
@@ -101,7 +101,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
             <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
               <div>
                 <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-                  <h2 className="font-heading text-3xl">Your {cycleLength}-day cycle</h2>
+                  <h2 className="font-heading text-xl">Your {cycleLength}-day cycle</h2>
                   <span className="text-xs text-muted-foreground">{totalPeriods} {totalPeriods === 1 ? "period" : "periods"} · {config.weekendTimetables ? "Weekends included" : "Weekdays only"}</span>
                 </div>
               </div>
@@ -128,7 +128,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           <section aria-labelledby="tt-agenda-heading" className="grid gap-6 border-t pt-6 lg:grid-cols-[0.65fr_1.35fr] lg:gap-12">
             <div>
               <p className="focal-eyebrow text-primary">One day at a time</p>
-              <h2 className="mt-2 font-heading text-4xl" id="tt-agenda-heading">Day {day}{day === today ? <span className="ml-3 align-middle font-sans text-xs text-primary">Today</span> : null}</h2>
+              <h2 className="mt-2 focal-section-title" id="tt-agenda-heading">Day {day}{day === today ? <span className="ml-3 align-middle font-sans text-xs text-primary">Today</span> : null}</h2>
               <p className="mt-3 text-sm text-muted-foreground">{periods.length ? `${classCount(classes)}${periods.length > classes ? ` · ${periods.length - classes} ${periods.length - classes === 1 ? "break" : "breaks"}` : ""}` : "A blank page for your school day."}</p>
               {periods.length ? <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground tabular-nums"><Clock3 className="size-3.5" aria-hidden />{timeLabel(periods[0].startTime)} – {timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}</p> : null}
               <Button className="mt-5" onClick={addPeriod} size="sm"><Plus />Add a period</Button>
@@ -143,7 +143,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                     <Pencil aria-hidden className="mr-2 size-3.5 shrink-0 text-muted-foreground opacity-50 group-hover:text-primary group-hover:opacity-100 group-focus-visible:opacity-100" />
                   </Button>
                 </li>)}
-              </ol> : <div className="flex min-h-36 flex-col justify-center border-y border-dashed py-6"><p className="font-heading text-2xl">Start with the first bell.</p><p className="mt-2 text-sm text-muted-foreground">Add classes and breaks, with their times and rooms.</p></div>}
+              </ol> : <div className="flex min-h-36 flex-col justify-center border-y border-dashed py-6"><p className="focal-section-title">Start with the first bell.</p><p className="mt-2 text-sm text-muted-foreground">Add classes and breaks, with their times and rooms.</p></div>}
             </div>
           </section>
           <Holidays config={config} onChange={onChange} />
@@ -280,7 +280,7 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
   const valid = draft.name.trim() && draft.startDate && draft.endDate >= draft.startDate
   return (
     <Collapsible className="border-y">
-      <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-4 py-5 text-left"><div><h2 className="font-heading text-2xl">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" /></CollapsibleTrigger>
+      <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-4 py-5 text-left"><div><h2 className="focal-section-title">Time away from school</h2><p className="mt-1 text-xs text-muted-foreground">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Holidays pause your cycle.</p></div><ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" /></CollapsibleTrigger>
       <CollapsibleContent keepMounted><div className="grid gap-5 pb-6">
         {config.holidays.length ? <ul className="divide-y border-t">{config.holidays.map((holiday, index) => <li className="flex items-center justify-between gap-3 py-3" key={`${holiday.name}-${index}`}><div className="min-w-0"><p className="break-words text-sm font-medium">{holiday.name}</p><p className="mt-1 text-xs text-muted-foreground tabular-nums">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => { onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) }); toast("Holiday removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(config) } }) }} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}
         <form className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_auto]" onSubmit={(event) => { event.preventDefault(); if (!valid) return; onChange({ ...config, holidays: [...config.holidays, { ...draft, name: draft.name.trim() }].toSorted((a, b) => a.startDate.localeCompare(b.startDate)) }); setDraft({ name: "", startDate: "", endDate: "" }); toast("Holiday added") }}>
@@ -314,8 +314,8 @@ function ImportDialog({ current, onClose, onImport }: { current: TimetableConfig
       <DialogContent className="sm:max-w-lg">
         <DialogHeader><p className="focal-eyebrow text-primary">Bring your timetable along</p><DialogTitle>From screenshot to schedule.</DialogTitle><DialogDescription>Use any chatbot to turn a screenshot into timetable data. Importing replaces your current periods; your holidays stay in place.</DialogDescription></DialogHeader>
         <FieldGroup>
-          <div className="flex items-start gap-4 border-y py-5"><span className="font-heading text-3xl text-primary">01</span><div className="min-w-0 flex-1"><p className="font-medium">Share the screenshot</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Copy our prompt and send it to a chatbot with a screenshot of your timetable.</p><Button className="mt-3" onClick={() => void copy()} size="sm" type="button" variant="outline">{copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}</Button></div></div>
-          <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="tt-import"><span className="mr-2 font-heading text-3xl font-normal text-primary">02</span>Paste the reply</FieldLabel><Textarea aria-describedby={error ? "tt-import-error" : undefined} aria-invalid={error ? true : undefined} className="font-mono text-xs" id="tt-import" placeholder="Paste the chatbot’s JSON reply here…" rows={7} value={text} onChange={(e) => { setText(e.target.value); setError(null) }} />{error ? <FieldError id="tt-import-error" role="alert">{error}</FieldError> : null}</Field>
+          <div className="flex items-start gap-4 border-y py-5"><span className="font-heading text-xl text-primary">01</span><div className="min-w-0 flex-1"><p className="font-medium">Share the screenshot</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Copy our prompt and send it to a chatbot with a screenshot of your timetable.</p><Button className="mt-3" onClick={() => void copy()} size="sm" type="button" variant="outline">{copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}</Button></div></div>
+          <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="tt-import"><span className="mr-2 font-heading text-xl text-primary">02</span>Paste the reply</FieldLabel><Textarea aria-describedby={error ? "tt-import-error" : undefined} aria-invalid={error ? true : undefined} className="font-mono text-xs" id="tt-import" placeholder="Paste the chatbot’s JSON reply here…" rows={7} value={text} onChange={(e) => { setText(e.target.value); setError(null) }} />{error ? <FieldError id="tt-import-error" role="alert">{error}</FieldError> : null}</Field>
         </FieldGroup>
         <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!text.trim()} onClick={() => { try { onImport(parseTimetableImport(text, "pasted.json", current)) } catch (e) { setError(e instanceof Error ? e.message : "Could not read this timetable.") } }} type="button">Import timetable<ArrowRight /></Button></DialogFooter>
       </DialogContent>

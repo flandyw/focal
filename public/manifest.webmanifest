@@ -10,8 +10,8 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f6f4ee",
-  "theme_color": "#f6f4ee",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
   "shortcuts": [
     { "name": "Study timer", "url": "/?timer=focus", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
     { "name": "Review mistakes", "url": "/?view=mistakes", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },

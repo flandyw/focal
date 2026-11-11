@@ -75,7 +75,7 @@ export function ExamPerformanceChart({ attempts, range, periodEnd, onLogExam }: 
     <section className="min-w-0 border-t border-border/70 pt-5" aria-label="Exam performance">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl font-normal tracking-tight">Exam performance</h2>
+          <h2 className="focal-section-title">Exam performance</h2>
           <p className="mt-1 text-xs text-muted-foreground">Raw marks as percentages. Each line tracks one subject; multiple papers on a day are averaged.</p>
         </div>
         <Button size="sm" variant="outline" onClick={onLogExam}>Log an exam</Button>

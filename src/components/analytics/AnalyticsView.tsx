@@ -471,7 +471,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  />
  </motion.div>
  </> : <motion.div variants={staggerItem} className="border-t border-border/70 pt-5 min-[900px]:col-span-2">
- <h2 className="font-heading text-xl font-normal tracking-tight">Study habits</h2>
+ <h2 className="focal-section-title">Study habits</h2>
  <p className="mt-1 mb-4 text-sm text-muted-foreground">Complete your first study session to see time trends, consistency, and your weekly rhythm.</p>
  <Button size="sm" variant="outline" onClick={onNewSession}>Start study session</Button>
  </motion.div>}
@@ -588,7 +588,7 @@ function AnalyticsHighlights({
  const topSubject = topSubjectId ? getSubjectById(topSubjectId) : null
  return (
  <section className="border-t border-border/70 pt-5">
- <h3 className="font-heading text-xl font-normal tracking-tight">Highlights</h3>
+ <h3 className="focal-section-title">Highlights</h3>
  <div className="mt-3 grid divide-y divide-border/50 border-y border-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
  <Highlight label="Most productive day" value={bestDay ? formatDay(bestDay.date) : "No study yet"} detail={bestDay ? formatMinutesLong(bestDay.minutes) : undefined} />
  <Highlight label="Peak study hour" value={peakHour ? formatHour(peakHour.hour) : "No pattern yet"} detail={peakHour ? formatMinutesLong(peakHour.minutes) : undefined} />
@@ -619,15 +619,9 @@ function KpiCard({
 }) {
  return (
  <div className="relative px-4 py-3">
- <div className="focal-stat-value tabular-nums">
- {value}
- </div>
- <div className="mt-1 text-caption text-muted-foreground">
- {label}
- {sub ? (
- <span> · {sub}</span>
- ) : null}
- </div>
+ <div className="text-xs text-muted-foreground">{label}</div>
+ <div className="focal-stat-value mt-1">{value}</div>
+ {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
  </div>
  )
 }

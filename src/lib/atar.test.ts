@@ -1,6 +1,8 @@
 /// <reference types="bun-types" />
 import { expect, test } from "bun:test"
 import { atarRawScore, estimateAtar } from "./atar"
+import { buildAtarHistory, buildAtarModel } from "./atar-model"
+import { ATAR_AGGREGATE_REFERENCES } from "./atar-data"
 import { atarScalingReference, interpolateScaledScore } from "./scaling"
 import { projectRows, rowsFromAppData } from "./app-rows"
 import { EMPTY_APP_DATA, migrateAppData } from "./exam-data"
@@ -65,4 +67,50 @@ test("legacy and current Accounting codes contribute only once in every ATAR con
   const counted = [...estimate.primaryFour, ...estimate.increments]
   expect(counted.filter((r) => r.studyName === "Accounting").map((r) => r.id)).toEqual(["legacy"])
   expect(estimate.aggregate).toBe(165)
+})
+
+const modelRow = (code: string, raw: string, usePrediction = false) => ({ id: code, code, raw, usePrediction })
+const modelInput = (rows: ReturnType<typeof modelRow>[], target: number | null = null) =>
+  ({ data: EMPTY_APP_DATA, references: [], scaling: reports.references, rows, year: 2025, target })
+
+test("ATAR model agrees with estimateAtar and applies the Focal/Manual/blank source rules", () => {
+  const rows = ["EN", "CH", "PH", "NJ", "BI", "PE"].map((code) => modelRow(code, "40"))
+  const model = buildAtarModel(modelInput([...rows, modelRow("NS", "", true), modelRow("FR", ""), modelRow("SP", "19"), modelRow("ZZ", "45")]))
+  expect(model.estimate!.aggregate).toBe(estimateAtar(model.results, 2025)!.aggregate)
+  expect(model.estimate!.aggregate).toBeCloseTo(39 + 46 + 44 + 42 + 4.1 + 3.8)
+  const by = new Map(model.rows.map((item) => [item.row.code, item]))
+  expect(by.get("EN")!.role).toBe("English")
+  expect(by.get("PE")!.role).toBe("Increment")
+  expect(by.get("PE")!.contribution).toBeCloseTo(3.8)
+  expect(model.rows.reduce((total, item) => total + item.contribution, 0)).toBeCloseTo(model.estimate!.aggregate)
+  // Focal without usable practice, blank and out-of-range manual scores, and unknown studies contribute nothing.
+  expect([by.get("NS")!.issue, by.get("FR")!.issue, by.get("SP")!.issue, by.get("ZZ")!.issue]).toEqual(["no-estimate", "blank", "invalid-manual", "no-study"])
+  for (const code of ["NS", "FR", "SP", "ZZ"]) expect([by.get(code)!.contribution, by.get(code)!.role, by.get(code)!.sensitivity]).toEqual([0, null, null])
+  expect(model.range).toBeNull()
+})
+
+test("ATAR sensitivity re-runs selection for +1 raw, and the target gap uses the conversion table", () => {
+  const model = buildAtarModel(modelInput(["EN", "CH", "PH", "NJ", "BI", "PE"].map((code) => modelRow(code, "40")), 99.25))
+  const by = new Map(model.rows.map((item) => [item.row.code, item]))
+  expect(by.get("EN")!.sensitivity!.aggregate).toBeCloseTo(1.2)
+  expect(by.get("CH")!.sensitivity!.aggregate).toBeCloseTo(0.6)
+  expect(by.get("PE")!.sensitivity!.aggregate).toBeCloseTo(0.12)
+  expect(buildAtarModel(modelInput([modelRow("EN", "50"), modelRow("CH", "40"), modelRow("PH", "40"), modelRow("NJ", "40")])).rows[0].sensitivity).toBeNull()
+  // An increment that out-scales a primary study gets swapped in, so its +1 counts at full weight.
+  const swap = buildAtarModel(modelInput([modelRow("EN", "40"), modelRow("CH", "40"), modelRow("PH", "40"), modelRow("NJ", "40"), modelRow("BI", "41")]))
+  expect(swap.rows.find((item) => item.row.code === "BI")!.sensitivity!.aggregate).toBeCloseTo(1)
+  const point = ATAR_AGGREGATE_REFERENCES.find((item) => item.year === 2025)!.points.find((item) => item.atar >= 99.25 - 1e-9)!
+  expect(model.targetAggregate).toBe(point.aggregate)
+  expect(model.aggregateGap).toBeCloseTo(point.aggregate - model.estimate!.aggregate)
+  expect(model.gap).toBeCloseTo(99.25 - model.estimate!.atar!)
+  expect(buildAtarModel(modelInput(model.rows.map((item) => item.row))).gap).toBeNull()
+})
+
+test("ATAR history lists saved scenarios in time order and keeps below-table labels as gaps", () => {
+  const atarEstimates = [
+    { id: "b", year: 2025, rows: [], atarLabel: "<30.00", aggregate: 60, savedAt: "2026-05-01T00:00:00.000Z" },
+    { id: "a", year: 2025, rows: [], atarLabel: "90.10", aggregate: 170, savedAt: "2026-03-01T00:00:00.000Z" },
+  ]
+  const history = buildAtarHistory({ ...modelInput([]), data: { ...EMPTY_APP_DATA, atarEstimates } })
+  expect(history.map((point) => [point.atar, point.aggregate, point.kind])).toEqual([[90.1, 170, "saved"], [null, 60, "saved"]])
 })

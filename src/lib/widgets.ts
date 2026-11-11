@@ -42,8 +42,8 @@ function atar(data: AppData, references: AssessmentReference[], scaling: Scaling
     return scaledScore === null ? [] : [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
   })
   const estimate = estimateAtar(results, saved.year)
-  // Scaling data loads after startup; until then publish the saved headline without a breakdown.
-  if (!estimate) return { label: saved.atarLabel, atar: Number.parseFloat(saved.atarLabel) || null, aggregate: saved.aggregate, year: saved.year, target, subjects: [] }
+  // Missing live scores must not resurrect an old saved headline.
+  if (!estimate) return null
   return {
     label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year: saved.year, target,
     subjects: [...estimate.primaryFour, ...estimate.increments].map((item) => ({

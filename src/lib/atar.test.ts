@@ -45,7 +45,12 @@ test("completed-subject Focal/manual selection survives saved scenario serializa
     expect(synced.atarEstimates[0].rows[0].usePrediction).toBe(usePrediction)
     expect(atarRawScore(synced.atarEstimates[0].rows[0], 45)).toBe(usePrediction ? 45 : 40)
   }
-  expect(atarRawScore(row)).toBe(40)
+  expect(atarRawScore(row)).toBeNaN()
+  expect(atarRawScore({ ...row, raw: "", usePrediction: false })).toBeNaN()
+  expect(atarRawScore({ ...row, raw: " ", usePrediction: false })).toBeNaN()
+  expect(atarRawScore({ ...row, raw: "40.5", usePrediction: false })).toBeNaN()
+  expect(atarRawScore({ ...row, raw: "19", usePrediction: false })).toBeNaN()
+  expect(atarRawScore({ ...row, usePrediction: false }, 45)).toBe(40)
 })
 
 test("legacy and current Accounting codes contribute only once in every ATAR consumer", () => {

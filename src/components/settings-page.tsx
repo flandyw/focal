@@ -211,8 +211,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
                     <li key={subject} className="flex items-center gap-2 py-2">
                       <span className="w-6 text-sm tabular-nums text-muted-foreground">{index + 1}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-medium" title={subject}>{subject}</span>
-                      <Button type="button" variant="outline" size="sm" disabled={!completedSubjects.some((name) => sameStudySubject(name, subject)) && !validCompletionYear(completionYear)} onClick={() => onSubjectCompletion(subject, completedSubjects.some((name) => sameStudySubject(name, subject)) ? null : completionYear)}>{completedSubjects.some((name) => sameStudySubject(name, subject)) ? "Resume subject" : "Mark completed"}</Button>
-                      {completedSubjects.some((name) => sameStudySubject(name, subject)) ? <Badge variant="secondary">Completed</Badge> : null}
+                      <Button type="button" variant="outline" size="sm" disabled={!completedSubjects.some((name) => sameStudySubject(name, subject)) && !validCompletionYear(completionYear)} onClick={() => onSubjectCompletion(subject, completedSubjects.some((name) => sameStudySubject(name, subject)) ? null : completionYear)}>{completedSubjects.some((name) => sameStudySubject(name, subject)) ? "Unarchive" : "Archive"}</Button>
+                      {completedSubjects.some((name) => sameStudySubject(name, subject)) ? <Badge variant="secondary">Archived</Badge> : null}
                       {subject === selectedSubjects.find((item) => !completedSubjects.some((name) => sameStudySubject(name, item))) ? <Badge variant="secondary">Default</Badge> : null}
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move ${subject} up`} disabled={index === 0} onClick={() => {
                         const next = [...selectedSubjects]

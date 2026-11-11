@@ -27,6 +27,8 @@ struct AtarSummary: Codable {
     let atar, aggregate, target: Double?
     let year: Int
     let subjects: [AtarSubject]
+    // Optional so snapshots written by older builds still decode.
+    var change: Double? = nil
 }
 struct WidgetSnapshot: Codable {
     let version: Int

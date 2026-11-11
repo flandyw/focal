@@ -1,5 +1,7 @@
 import type { AppData, AssessmentReference } from "./exam-data"
 import { predictStudyScore } from "./study-score.js"
+import { latestSavedEstimate, liveSavedAtarModel } from "./atar-model.js"
+import type { ScalingReference } from "./scaling.js"
 
 type StudyTaskKind = "mistake-review" | "topic-practice" | "practice-exam" | "sac-prep" | "custom"
 export type StudyTaskStatus = "planned" | "completed" | "skipped"
@@ -175,7 +177,7 @@ export function materialiseTask(draft: TaskDraft, now = new Date()): StudyTask {
   return { ...draft, id: crypto.randomUUID(), status: "planned", createdAt: timestamp, updatedAt: timestamp }
 }
 
-export function getGoalProgress(goal: StudyGoal, data: AppData, references: AssessmentReference[]): GoalProgress {
+export function getGoalProgress(goal: StudyGoal, data: AppData, references: AssessmentReference[], scaling?: ScalingReference[]): GoalProgress {
   let current: number | null = null
   let label = "Current"
   let evidence = "No compatible evidence yet."
@@ -191,11 +193,16 @@ export function getGoalProgress(goal: StudyGoal, data: AppData, references: Asse
     label = "Predicted raw study score"
     evidence = prediction ? `${prediction.confidence} confidence · likely ${prediction.low}–${prediction.high}.` : evidence
   } else if (goal.kind === "atar") {
-    const saved = data.atarEstimates.toSorted((first, second) => second.savedAt.localeCompare(first.savedAt))[0]
-    const value = saved?.atarLabel.trim() ? Number(saved.atarLabel) : Number.NaN
+    // With scaling data, track the newest scenario recomputed live, like the ATAR page and widgets.
+    const live = scaling ? liveSavedAtarModel(data, references, scaling) : null
+    const saved = latestSavedEstimate(data)
+    // Missing live scores must not resurrect an old saved headline.
+    const value = live ? live.model.estimate!.atar ?? Number.NaN : !scaling && saved?.atarLabel.trim() ? Number(saved.atarLabel) : Number.NaN
     current = Number.isFinite(value) && value >= 0 && value <= 99.95 ? value : null
-    label = "Latest saved ATAR estimate"
-    evidence = saved ? `Saved ${saved.atarLabel} on ${new Date(saved.savedAt).toLocaleDateString("en-AU")}.` : "Save an ATAR estimate to establish a baseline."
+    label = live ? "Live ATAR estimate" : "Latest saved ATAR estimate"
+    evidence = live ? `Newest scenario (saved ${new Date(live.saved.savedAt).toLocaleDateString("en-AU")}) recalculated with current scores.`
+      : saved && scaling ? "Your newest scenario no longer has enough scores for an estimate."
+      : saved ? `Saved ${saved.atarLabel} on ${new Date(saved.savedAt).toLocaleDateString("en-AU")}.` : "Save an ATAR estimate to establish a baseline."
   }
   const gap = current === null ? null : Math.max(0, goal.target - current)
   return { current, target: goal.target, progress: current === null ? 0 : Math.max(0, Math.min(100, current / goal.target * 100)), gap, label, evidence }

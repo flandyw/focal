@@ -225,5 +225,10 @@ test("estimate_atar includes completed subjects with fallback scaling and saves 
   expect([...result.primaryFour, ...result.increments].map((r: { study: string }) => r.study)).toContain("Mathematical Methods")
   expect([...result.primaryFour, ...result.increments].map((r: { study: string }) => r.study)).toContain("Physical Education")
   expect(data.atarEstimates[0].rows.every((row) => row.raw === "40" && !row.usePrediction)).toBe(true)
-  expect((await call("list_atar_estimates"))[0].aggregate).toBe(result.aggregate)
+  const [listed] = await call("list_atar_estimates")
+  expect(listed.aggregate).toBe(result.aggregate)
+  // MCP reports the same live model the page and widgets use.
+  expect(listed.live.aggregate).toBe(result.aggregate)
+  expect(result.sensitivity.length).toBe(6)
+  expect(result.sensitivity[0].aggregatePerRawMark).toBeGreaterThanOrEqual(result.sensitivity.at(-1).aggregatePerRawMark)
 })

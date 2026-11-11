@@ -1,11 +1,10 @@
 import { sameStudySubject } from "../../src/lib/studySubjects.js"
-import { currentSubjectWork, isCurrentSubject, subjectCompletionYear } from "../../src/lib/subject-completion.js"
+import { currentSubjectWork, isCurrentSubject } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
-import { ATAR_AGGREGATE_REFERENCES } from "../../src/lib/atar-data.js"
-import { atarRawScore, estimateAtar, type AtarStudyResult } from "../../src/lib/atar.js"
+import { atarYears, buildAtarModel, type AtarModel } from "../../src/lib/atar-model.js"
 import { buildDayPlan } from "../../src/lib/day-plan.js"
 import {
-  buildAttemptBenchmarks, buildCoverage, buildSubjectBenchmarks, computeDistributionStats, normaliseComparisonName, type AppData, type AssessmentReference, type SavedAtarEstimate,
+  buildAttemptBenchmarks, buildCoverage, buildSubjectBenchmarks, computeDistributionStats, normaliseComparisonName, type AppData, type AssessmentReference, type SavedAtarEstimate, type AtarEstimatorRow,
 } from "../../src/lib/exam-data.js"
 import { getAttemptMathsPaper } from "../../src/lib/mistake-filters.js"
 import { buildExamSuggestions } from "../../src/lib/exam-suggestions.js"
@@ -15,7 +14,7 @@ import { buildFocusPriorities, buildLostMarksAttribution, buildPaperDataQuality,
 import { getAnalyticsData } from "../../src/lib/progress-analytics.js"
 import { analyticsSessions } from "../../src/lib/progress-utils.js"
 import { getUpcomingSacs } from "../../src/lib/sac.js"
-import { atarScalingReference, interpolateScaledScore, normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
+import { normaliseScalingStudyName, predictScaledStudyScore } from "../../src/lib/scaling.js"
 import { buildStudyScoreTrend, predictStudyScore } from "../../src/lib/study-score.js"
 import { daysUntil, formatExamLabel, formatExamTime, isUpcoming } from "../../src/lib/timetable.js"
 import { isPaused, isRunning, isPlanned } from "../../src/lib/sync/sessionContract.js"
@@ -52,9 +51,24 @@ export function buildExamAnalytics(data: AppData, references: AssessmentReferenc
   }
 }
 
+/** The shared ATAR model in the shape MCP clients get. */
+function atarModelSummary(model: AtarModel) {
+  const estimate = model.estimate!
+  const counted = (role: string) => model.rows.filter((r) => role === "Increment" ? r.role === role : r.role === "English" || r.role === "Primary")
+    .map((r) => ({ study: r.study!.studyName, rawScore: r.rawScore!, scaledScore: round(r.scaledScore!), contribution: round(r.contribution) }))
+  return {
+    year: model.year, atar: estimate.atarLabel, aggregate: estimate.aggregate,
+    sources: model.rows.map((r) => ({ study: r.study?.studyName ?? r.row.code, source: r.source === "focal" ? "Focal estimate" : "Manual", ...(r.source === "focal" && r.prediction ? { low: r.prediction.low, high: r.prediction.high, confidence: r.prediction.confidence } : {}) })),
+    primaryFour: counted("Primary"), increments: counted("Increment"), excluded: estimate.excluded.map((r) => r.studyName),
+    sensitivity: model.rows.flatMap((r) => r.sensitivity ? [{ study: r.study!.studyName, aggregatePerRawMark: r.sensitivity.aggregate, atarPerRawMark: r.sensitivity.atar }] : []).toSorted((a, b) => b.aggregatePerRawMark - a.aggregatePerRawMark),
+    range: model.range && { low: model.range.low, high: model.range.high },
+    target: model.target, gap: model.gap, targetAggregate: model.targetAggregate, aggregateGap: model.aggregateGap,
+  }
+}
+
 export function insightTools(define: Define) {
   define("get_overview", "Start here. A snapshot of the whole account: queue and counts, today's plan, running timer, upcoming SACs, events and tracked VCE exams, goal progress and predicted study scores.", {}, "read", async () => {
-    const [{ data, sessions }, references, timetable] = await Promise.all([readAll(), gradeReferences(), vceTimetable()])
+    const [{ data, sessions }, references, timetable, scaling] = await Promise.all([readAll(), gradeReferences(), vceTimetable(), scalingReferences()])
     const now = new Date()
     const today = localDate(now)
     const plan = buildDayPlan(today, { ...currentSubjectWork(data), sessions: sessions.filter((session) => !isPlanned(session) || !data.completedSubjects.some((subject) => sameStudySubject(session.subject_id, subject))) }, timetable && { ...timetable, exams: timetable.exams.filter((exam) => !data.completedSubjects.some((subject) => sameStudySubject(exam.subject, subject))) })
@@ -70,7 +84,7 @@ export function insightTools(define: Define) {
       upcomingEvents: current.events.filter((e) => !e.isFinished && Date.parse(e.startTime) >= now.getTime()).toSorted((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)).slice(0, 5)
         .map((e) => ({ id: e.id, title: e.title, type: e.eventType, startTime: e.startTime })),
       trackedVceExams: (timetable?.exams ?? []).filter((e) => isCurrentSubject(data, e.subject) && tracked.has(e.id) && isUpcoming(e, now)).slice(0, 10).map((e) => ({ id: e.id, exam: formatExamLabel(e), date: e.date, daysUntil: daysUntil(e, now) })),
-      goals: current.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references) })),
+      goals: current.learning.goals.filter((g) => !g.archivedAt).map((goal) => ({ id: goal.id, kind: goal.kind, subject: goal.subject, deadline: goal.deadline, ...getGoalProgress(goal, data, references, scaling) })),
       studyScores: [...new Set(data.attempts.filter((a) => isCurrentSubject(data, a.subject)).map((a) => a.subject))].flatMap((subject) => {
         const p = predictStudyScore({ subject, attempts: data.attempts, references })
         return p ? [{ subject, studyScore: p.studyScore, low: p.low, high: p.high, confidence: p.confidence }] : []
@@ -120,49 +134,38 @@ export function insightTools(define: Define) {
       return predictScaledStudyScore(rawScore, subject, await scalingReferences(), year) ?? { scaled: null, reason: "No VTAC scaling data for that subject, score or year." }
     })
 
-  define("estimate_atar", "Estimate an ATAR from at least four Unit 3/4 studies including an English-group study. Give each study's raw score, or omit it to use the Focal prediction. Set save to keep the estimate in the account.", {
+  define("estimate_atar", "Estimate an ATAR from at least four Unit 3/4 studies including an English-group study, using the same model as the app's ATAR page. Give each study's raw score, or omit it to use the Focal prediction. Returns each study's raw → scaled → contribution and role, the ATAR change from +1 raw per study (sensitivity), the likely range from Focal estimate ranges, and the gap to the ATAR goal. Set save to keep the estimate in the account.", {
     year: z.number().int().optional().describe("VTAC report year; defaults to the latest"),
     studies: z.array(z.object({ study: z.string().min(1).describe("Study name or VTAC study code"), rawScore: z.number().int().min(20).max(50).optional() })).min(4).max(12),
     save: z.boolean().default(false),
   }, "write", async ({ year, studies, save }) => {
     const [{ data }, references, scaling] = await Promise.all([readAll(), gradeReferences(), scalingReferences()])
-    const years = ATAR_AGGREGATE_REFERENCES.map((r) => r.year).filter((y) => scaling.some((s) => s.year === y)).toSorted((a, b) => b - a)
-    const reportYear = year ?? years[0]
-    const rows = studies.map((entry, index) => {
+    const reportYear = year ?? atarYears(scaling)[0]
+    const rows: AtarEstimatorRow[] = studies.map((entry) => {
       const reference = scaling.find((s) => s.code === entry.study || normaliseScalingStudyName(s.studyName) === normaliseScalingStudyName(entry.study))
       if (!reference) throw new Error(`No VTAC scaling data in any year for "${entry.study}". Use the exact study name or code.`)
-      const predicted = entry.rawScore === undefined ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
-      const rawScore = atarRawScore({ id: String(index), code: reference.code, raw: entry.rawScore === undefined ? "" : String(entry.rawScore), usePrediction: entry.rawScore === undefined }, predicted)
-      if (!Number.isFinite(rawScore)) throw new Error(`Give a rawScore for "${entry.study}"; log a practice paper with valid marks and a matching grade distribution (one usable result is enough), or supply a whole manual score from 20 to 50.`)
-      return { reference, rawScore, usePrediction: entry.rawScore === undefined, id: String(index) }
+      return { id: crypto.randomUUID(), code: reference.code, raw: entry.rawScore === undefined ? "" : String(entry.rawScore), usePrediction: entry.rawScore === undefined }
     })
-    const results = rows.flatMap((row): AtarStudyResult[] => {
-      const completionYear = subjectCompletionYear(data, row.reference.studyName)
-      const reference = atarScalingReference(scaling, row.reference.code, reportYear, completionYear)
-      if (!reference) throw new Error(`No published scaling for ${row.reference.studyName}`)
-      const scaledScore = interpolateScaledScore(row.rawScore, reference.points)
-      return scaledScore === null ? [] : [{ id: row.id, code: row.reference.code, studyName: row.reference.studyName, rawScore: row.rawScore, scaledScore }]
-    })
-    const estimate = estimateAtar(results, reportYear)
+    const model = buildAtarModel({ data, references, scaling, rows, year: reportYear })
+    for (const [index, item] of model.rows.entries()) {
+      if (item.issue === "no-estimate") throw new Error(`Give a rawScore for "${studies[index].study}"; log a practice paper with valid marks and a matching grade distribution (one usable result is enough), or supply a whole manual score from 20 to 50.`)
+      if (item.issue) throw new Error(`No published scaling for ${item.study?.studyName ?? studies[index].study}`)
+    }
+    const estimate = model.estimate
     if (!estimate) throw new Error("Could not estimate: need four studies with scores from 20-50 and one English-group study.")
     if (save) {
-      const saved: SavedAtarEstimate = {
-        id: crypto.randomUUID(), year: reportYear, atarLabel: estimate.atarLabel, aggregate: estimate.aggregate, savedAt: nowIso(),
-        rows: rows.map((row) => ({ id: crypto.randomUUID(), code: row.reference.code, raw: row.usePrediction ? "" : String(row.rawScore), usePrediction: row.usePrediction })),
-      }
+      const saved: SavedAtarEstimate = { id: crypto.randomUUID(), year: reportYear, atarLabel: estimate.atarLabel, aggregate: estimate.aggregate, savedAt: nowIso(), rows }
       await updateApp((current) => ({ ...current, atarEstimates: [saved, ...current.atarEstimates], atarEstimatesUpdatedAt: saved.savedAt }))
     }
-    const brief = (r: { studyName: string; rawScore: number; scaledScore: number; contribution: number }) => ({ study: r.studyName, rawScore: r.rawScore, scaledScore: round(r.scaledScore), contribution: round(r.contribution) })
-    return {
-      sources: rows.map((row) => ({ study: row.reference.studyName, source: row.usePrediction ? "Focal estimate" : "Manual" })),
-      year: reportYear, atar: estimate.atarLabel, aggregate: estimate.aggregate, primaryFour: estimate.primaryFour.map(brief),
-      increments: estimate.increments.map(brief), excluded: estimate.excluded.map((r) => r.studyName), saved: save,
-    }
+    return { ...atarModelSummary(model), saved: save }
   })
 
-  define("list_atar_estimates", "Saved ATAR estimates, newest first.", {}, "read", async () => {
-    const { data } = await readAll()
-    return data.atarEstimates.toSorted((a, b) => b.savedAt.localeCompare(a.savedAt))
+  define("list_atar_estimates", "Saved ATAR estimates, newest first, each with `live`: the scenario recalculated with current scores (null when it no longer forms an estimate), as the app's ATAR page, goals and widgets show it.", {}, "read", async () => {
+    const [{ data }, references, scaling] = await Promise.all([readAll(), gradeReferences(), scalingReferences()])
+    return data.atarEstimates.toSorted((a, b) => b.savedAt.localeCompare(a.savedAt)).map((saved) => {
+      const live = buildAtarModel({ data, references, scaling, rows: saved.rows, year: saved.year })
+      return { ...saved, live: live.estimate ? { atar: live.estimate.atarLabel, aggregate: live.estimate.aggregate, gap: live.gap } : null }
+    })
   })
 
   define("delete_atar_estimate", "Delete a saved ATAR estimate.", { id: z.string() }, "delete", async ({ id }) => {

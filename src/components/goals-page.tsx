@@ -1,3 +1,4 @@
+import type { ScalingReference } from "../lib/scaling"
 import { useMemo, useState, type FormEvent } from "react"
 import { Archive, CalendarPlus, Flag, Pencil, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -94,13 +95,14 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   )
 }
 
-export function GoalsPage({ data, references, subjects, subjectScoped = false, onChange, onPlanGoal }: {
+export function GoalsPage({ data, references, subjects, subjectScoped = false, onChange, onPlanGoal, scalingReferences }: {
   data: AppData
   references: AssessmentReference[]
   subjects: string[]
   subjectScoped?: boolean
   onChange: (learning: LearningWorkspaceUpdate) => void
   onPlanGoal: (goal: StudyGoal) => void
+  scalingReferences?: ScalingReference[]
 }) {
   const [kind, setKind] = useState<StudyGoalKind>("exam-percentage")
   const [subject, setSubject] = useState(data.subjects[0] ?? "")
@@ -109,7 +111,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
   const [editingGoal, setEditingGoal] = useState<StudyGoal | null>(null)
   const [error, setError] = useState<string | null>(null)
   const now = useTickingNow()
-  const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => ({ goal, progress: getGoalProgress(goal, data, references) })), [data, references])
+  const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => ({ goal, progress: getGoalProgress(goal, data, references, scalingReferences) })), [data, references, scalingReferences])
   const archivedGoals = data.learning.goals.filter((goal) => goal.archivedAt)
 
   function commit(update: (current: LearningWorkspace) => LearningWorkspace) {

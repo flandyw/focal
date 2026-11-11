@@ -1,11 +1,10 @@
-import { currentSubjectWork, isCurrentSubject, subjectCompletionYear } from "./subject-completion"
+import { currentSubjectWork, isCurrentSubject } from "./subject-completion"
 import { useEffect, useRef } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import type { AppData, AssessmentReference } from "./exam-data"
-import { atarRawScore, estimateAtar } from "./atar"
-import { atarScalingReference, interpolateScaledScore, type ScalingReference } from "./scaling"
-import { predictStudyScore } from "./study-score"
+import { buildAtarHistory, liveSavedAtarModel } from "./atar-model"
+import type { ScalingReference } from "./scaling"
 import { getMistakeSchedule } from "./exam-data"
 import type { AppView } from "./app-view"
 import { classPeriodsOn, periodSubjectName, subjectNameFor } from "./class-timetable"
@@ -27,25 +26,18 @@ function publish(snapshot: unknown) {
   void publishing.catch((error) => console.warn("Could not refresh Focal widgets:", error))
 }
 
-// Live projection of the newest saved scenario, recomputed like the ATAR page does when it is loaded.
+// The newest saved scenario recomputed live with the ATAR page's model; the page deep-links via view "atar".
 function atar(data: AppData, references: AssessmentReference[], scaling: ScalingReference[]) {
-  const saved = data.atarEstimates[0]
-  if (!saved) return null
-  const target = data.learning.goals.find((goal) => goal.kind === "atar" && !goal.archivedAt)?.target ?? null
-  const results = saved.rows.flatMap((row) => {
-    const study = atarScalingReference(scaling, row.code, saved.year)
-    const reference = study && atarScalingReference(scaling, row.code, saved.year, subjectCompletionYear(data, study.studyName))
-    if (!reference) return []
-    const predicted = row.usePrediction ? predictStudyScore({ subject: reference.studyName, attempts: data.attempts, references })?.studyScore : undefined
-    const rawScore = atarRawScore(row, predicted)
-    const scaledScore = interpolateScaledScore(rawScore, reference.points)
-    return scaledScore === null ? [] : [{ id: row.id, code: reference.code, studyName: reference.studyName, rawScore, scaledScore }]
-  })
-  const estimate = estimateAtar(results, saved.year)
+  const live = liveSavedAtarModel(data, references, scaling)
   // Missing live scores must not resurrect an old saved headline.
-  if (!estimate) return null
+  if (!live) return null
+  const { saved, model } = live
+  const estimate = model.estimate!
+  const trend = buildAtarHistory({ data, references, scaling, rows: saved.rows, year: saved.year }).flatMap((point) => point.atar ?? [])
   return {
-    label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year: saved.year, target,
+    label: estimate.atarLabel, atar: estimate.atar, aggregate: estimate.aggregate, year: saved.year, target: model.target, gap: model.gap,
+    // Change since the previous point in the page's "Estimate over time" history.
+    change: estimate.atar !== null && trend.length > 1 ? Math.round((estimate.atar - trend.at(-2)!) * 100) / 100 : null,
     subjects: [...estimate.primaryFour, ...estimate.increments].map((item) => ({
       name: item.studyName.slice(0, 200), scaled: item.scaledScore, contribution: item.contribution, increment: item.role === "Increment",
     })),

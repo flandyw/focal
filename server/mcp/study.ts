@@ -8,7 +8,7 @@ import {
   applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
 } from "../../src/lib/stoplight.js"
 import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
-import { gradeReferences, readAll, sessionCommand, updateApp, vceTimetable } from "./store.js"
+import { gradeReferences, readAll, scalingReferences, sessionCommand, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
 import { day, instant, limit, nowIso, required, round } from "./util.js"
 
@@ -217,15 +217,15 @@ export function studyTools(define: Define) {
   /* ---------------------------------------------------------------- goals */
 
   const goalView = async () => {
-    const [{ data }, references] = await Promise.all([readAll(), gradeReferences()])
-    return { data, references }
+    const [{ data }, references, scaling] = await Promise.all([readAll(), gradeReferences(), scalingReferences()])
+    return { data, references, scaling }
   }
 
   define("list_goals", "Score goals (study score, exam average, ATAR) with current progress and the gap to the target.",
     { includeArchived: z.boolean().default(false) }, "read", async ({ includeArchived }) => {
-      const { data, references } = await goalView()
+      const { data, references, scaling } = await goalView()
       return currentSubjectWork(data).learning.goals.filter((g) => includeArchived || !g.archivedAt)
-        .map((goal) => ({ ...goal, progress: getGoalProgress(goal, data, references) }))
+        .map((goal) => ({ ...goal, progress: getGoalProgress(goal, data, references, scaling) }))
     })
 
   define("save_goal", "Create a goal, or update one when `id` is given. study-score: raw study score 1-50 for a subject. exam-percentage: average exam result 1-100%, optionally for a subject. atar: 1-99.95.", {

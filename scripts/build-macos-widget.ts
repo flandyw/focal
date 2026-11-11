@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { execFileSync } from "node:child_process"
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { join } from "node:path"
 
@@ -23,6 +23,8 @@ if (!targets) throw new Error(`Unsupported macOS widget target: ${triple}`)
 const output = join(root, "target/widget/FocalWidget.appex")
 await rm(output, { recursive: true, force: true })
 await mkdir(join(output, "Contents/MacOS"), { recursive: true })
+await mkdir(join(output, "Contents/Resources"), { recursive: true })
+await copyFile(join(root, "icons/focal.icns"), join(output, "Contents/Resources/focal.icns"))
 const sdk = execFileSync("xcrun", ["--sdk", "macosx", "--show-sdk-path"], { encoding: "utf8" }).trim()
 const binary = join(output, "Contents/MacOS/FocalWidget")
 const helper = join(root, "target/widget/focal-widget-publisher")
@@ -52,6 +54,7 @@ await writeFile(join(output, "Contents/Info.plist"), `<?xml version="1.0" encodi
   <key>CFBundleIdentifier</key><string>com.andy.focal.widget</string>
   <key>CFBundleName</key><string>FocalWidget</string>
   <key>CFBundleDisplayName</key><string>Focal Widgets</string>
+  <key>CFBundleIconFile</key><string>focal.icns</string>
   <key>CFBundleExecutable</key><string>FocalWidget</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
   <key>CFBundleShortVersionString</key><string>${config.version}</string>

@@ -507,6 +507,17 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     toast.success("ATAR estimate saved")
   }
 
+  // The ATAR page target is the account's ATAR goal, so Goals, widgets and MCP share it.
+  function setAtarTarget(target: number | null) {
+    saveLearning((current) => {
+      const timestamp = new Date().toISOString()
+      const goal = current.goals.find((item) => item.kind === "atar" && !item.archivedAt)
+      if (goal) return { ...current, goals: current.goals.map((item) => item !== goal ? item : target === null ? { ...item, archivedAt: timestamp, updatedAt: timestamp } : { ...item, target, updatedAt: timestamp }) }
+      // VCE results arrive mid-December; the deadline is editable in Goals.
+      return target === null ? current : { ...current, goals: [...current.goals, { id: crypto.randomUUID(), kind: "atar", target, deadline: `${new Date().getFullYear()}-12-15`, createdAt: timestamp, updatedAt: timestamp }] }
+    })
+  }
+
   function deleteAtarEstimate(id: string) {
     void commitRecoverable((current) => ({
       ...current,
@@ -1071,7 +1082,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "sacs" ? <SacPage openTimerRequest={sacTimerRequest} scopedSubject={subjectScoped ? selectedSubject : undefined} records={pageData.sacRecords} subjects={pageSubjects} preferredSubjects={pageData.subjects} activeTimer={data.activeSacTimer} onTimerChange={saveActiveSacTimer} onSave={saveSac} onDelete={deleteSac} /> : null}
           {view === "library" ? <>{referencesLoading ? PAGE_LOADING : <ExamLibrary selectedPaperId={recordId} onSelectPaper={(id) => openRecord("library", id)} onClosePaper={closeRecord} references={references} studies={resourceStudies} attempts={data.attempts} completedExamIds={data.completedExamIds} generatedAt={resourcesGeneratedAt ?? referencesGeneratedAt} preferredSubjects={pageData.subjects} onToggleCompleted={toggleCompletedExam} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }} onCompare={openVcaaComparison} />}</> : null}
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onLogExam={openNewExam} onOpenAtar={() => setView("atar")} />}</> : null}
-          {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <AtarEstimator onLogPractice={openNewExam} data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} />}</> : null}
+          {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <AtarEstimator onLogPractice={openNewExam} data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} onTargetChange={setAtarTarget} />}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }} />}</> : null}
           {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}

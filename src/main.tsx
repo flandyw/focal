@@ -2,11 +2,14 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from 'next-themes'
 import './index.css'
+
 import { AppErrorBoundary } from './components/error-boundary.tsx'
 import { applyAppearance } from './lib/appearance.ts'
 import App from './App.tsx'
 import { registerPwa, watchForUpdates } from './lib/pwa.ts'
 import { trackKeyboard } from './lib/mobile.ts'
+
+if (import.meta.env.VITE_DESKTOP) document.documentElement.dataset.desktop = ''
 
 // A chunk from a previous deploy is gone; refresh the cached shell and reload, at most once a minute to avoid a loop.
 window.addEventListener('vite:preloadError', () => {

@@ -355,7 +355,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
   [data-keyboard] [data-slot="sheet-content"] { height: auto; bottom: var(--keyboard-inset); }
   .focal-stat-value { font-size: 1.5rem; }
   /* Today's plan matters more than the month grid on a phone. */
-  .workspace-split[data-split="false"] .calendar-day-pane { order: -1; }
+  :not(.calendar-custom) > .workspace-split[data-split="false"] [data-module="day"] { order: -1; }
 }
 
 @media (max-width: 639px) {
@@ -437,6 +437,9 @@ main[aria-busy="true"] { opacity: 0.6; transition: opacity 150ms 250ms; }
 }
 [data-sidebar-resizing="true"] .group\/sidebar-wrapper * { transition-duration: 0ms !important; user-select: none; }
 .workspace-split[data-split="true"] .calendar-day-pane { position: absolute; inset: 0; margin-left: calc(var(--spacing) * 3); }
+/* The module wrapper is the positioned box so the pane keeps its size while the wrapper animates (a transform becomes the containing block). */
+.workspace-split[data-split="true"] [data-module="day"] { position: absolute; inset: 0; }
+.workspace-split[data-split="true"] [data-module="day"][data-lead] .calendar-day-pane { margin-left: 0; margin-right: calc(var(--spacing) * 3); }
 .workspace-split[data-split="true"] .calendar-day-card { position: absolute; inset: 0; overflow-y: auto; }
 .tt-block { background-color: color-mix(in srgb, var(--tt-color) 13%, var(--card)); color: var(--tt-color); }
 .dark .tt-block { background-color: color-mix(in srgb, var(--tt-color) 16%, var(--card)); }

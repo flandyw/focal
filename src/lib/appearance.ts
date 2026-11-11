@@ -22,6 +22,8 @@ export const FONT_FAMILIES = [
 
 type FontFamily = (typeof FONT_FAMILIES)[number]["id"]
 type Pane = "calendarPane" | "mistakePane" | "editorPane"
+export const CALENDAR_MODULES = ["month", "day", "timeline"] as const
+export type CalendarModule = (typeof CALENDAR_MODULES)[number]
 export type Appearance = {
   surface: (typeof SURFACE_THEMES)[number]["id"]
   customAccent: string | null
@@ -42,6 +44,7 @@ export type Appearance = {
   calendarPane: number
   mistakePane: number
   editorPane: number
+  calendarOrder: CalendarModule[]
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -51,6 +54,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   sidebarWidth: 232, sidebarSide: "left", sidebarLabels: true,
   hiddenLinks: [], linkOrder: [], reduceMotion: false,
   calendarPane: 65, mistakePane: 40, editorPane: 40,
+  calendarOrder: [...CALENDAR_MODULES],
 }
 
 const STORAGE_KEY = "focal:appearance:v1"
@@ -84,6 +88,9 @@ function readAppearance(): Appearance {
     for (const key of ["hiddenLinks", "linkOrder"] as const) {
       if (Array.isArray(values[key])) result[key] = [...new Set(values[key].filter((id): id is string => typeof id === "string" && navigationIds.some((item) => item === id)))]
     }
+    const order = values.calendarOrder
+    // Only a full permutation of the modules is valid; anything else keeps the default layout.
+    if (Array.isArray(order) && order.length === CALENDAR_MODULES.length && CALENDAR_MODULES.every((id) => order.includes(id))) result.calendarOrder = order as CalendarModule[]
   } catch { /* Use defaults when storage is unavailable or malformed. */ }
   return result
 }

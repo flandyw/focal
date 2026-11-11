@@ -70,7 +70,7 @@ export function WorkspaceSplit({ id, primary, secondary }: { id: "calendar" | "m
     {wide && secondary ? <ResizablePanelGroup groupRef={group} orientation="horizontal" className="h-auto! items-stretch" style={{ overflow: "visible" }} defaultLayout={{ primary: percent, secondary: 100 - percent }} onLayoutChanged={(layout, meta) => {
       if (meta.isUserInteraction) savePaneSize(field, (meta.requestedLayout ?? layout).primary)
     }}>
-      <ResizablePanel id="primary" minSize={id === "calendar" ? "35%" : "25%"} style={{ overflow: "visible" }} className="min-w-0"><div className="w-full min-w-0 pr-3">{primary}</div></ResizablePanel>
+      <ResizablePanel id="primary" minSize={id === "calendar" ? "35%" : "25%"} style={{ overflow: "visible" }} className="relative min-w-0"><div className="w-full min-w-0 pr-3">{primary}</div></ResizablePanel>
       <ResizableHandle withHandle aria-label={id === "calendar" ? "Resize calendar and day plan" : "Resize mistake list and details"} className="self-stretch" />
       <ResizablePanel id="secondary" minSize={id === "calendar" ? "25%" : "30%"} style={{ overflow: "visible" }} className="relative min-w-0"><div className="flex w-full min-w-0 flex-col pl-3">{secondary}</div></ResizablePanel>
     </ResizablePanelGroup> : <div className="grid min-w-0 gap-4">{primary}{secondary}</div>}

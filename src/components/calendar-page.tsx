@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react"
 import { swipe } from "../lib/mobile"
-import { Archive, CalendarDays, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
+import { motion, useReducedMotion } from "framer-motion"
+import { Archive, ArrowDown, ArrowUp, CalendarDays, LayoutGrid, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -15,6 +16,8 @@ import { StudySessionDialog } from "./study-session-dialog"
 import { EventDialog } from "./event-dialog"
 import { StudyTimeline } from "./study-timeline"
 import { WorkspacePage, WorkspaceSplit } from "./workspace-layout"
+import { CALENDAR_MODULES, updateAppearance, useAppearance, type CalendarModule } from "../lib/appearance"
+import { MOTION_DURATION, MOTION_EASE } from "../lib/progress-motion"
 import {
   archiveTask,
   buildCalendarMonth,
@@ -136,6 +139,8 @@ export function CalendarPage({
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
   const [importOpen, setImportOpen] = useState(false)
+  const [arranging, setArranging] = useState(false)
+  const customLayout = useAppearance().calendarOrder.join() !== CALENDAR_MODULES.join()
   const [eventDialog, setEventDialog] = useState<{ event: CalendarEvent | null; key: number } | null>(null)
   const [editingSession, setEditingSession] = useState<CanonicalStudySession | null>(null)
   const now = useTickingNow(30_000)
@@ -271,7 +276,7 @@ export function CalendarPage({
   }
 
   return (
-    <WorkspacePage className="gap-5 lg:gap-6">
+    <WorkspacePage className={cn("gap-5 lg:gap-6", customLayout && "calendar-custom")}>
       {/* The month is the page title: one header carries where you are, how to move, and what
           you can add, so the grid starts above the fold instead of under a slogan and a strip
           of figures that repeated the day panel. */}
@@ -291,6 +296,7 @@ export function CalendarPage({
           </p>
         </div>
         <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
+          <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</Button>
           <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
           <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
@@ -339,7 +345,7 @@ export function CalendarPage({
         }}
       /> : null}
 
-      <WorkspaceSplit id="calendar" primary={
+      <CalendarModules arranging={arranging} modules={{ month: (
         <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
             {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
@@ -372,7 +378,7 @@ export function CalendarPage({
           </div>
           <KindLegend />
         </section>
-        } secondary={
+      ), day: (
         <aside className="calendar-day-pane min-w-0" {...swipe(() => selectDay(shiftDay(selected, -1)), () => selectDay(shiftDay(selected, 1)))}>
           <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)] calendar-day-card">
             <CardHeader className="shrink-0 gap-2 pb-1">
@@ -457,8 +463,7 @@ export function CalendarPage({
             </CardContent>
           </Card>
         </aside>
-      } />
-
+      ), timeline: (
       <StudyTimeline
         key={selected}
         classes={classes}
@@ -480,6 +485,7 @@ export function CalendarPage({
         sessions={sessions}
         subjects={subjects}
       />
+      ) }} />
     </WorkspacePage>
   )
 }
@@ -569,6 +575,54 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
 })
 
 /** The grid's marks are its only colour, so they are named once, in the grid's own footer. */
+const MODULE_LABEL: Record<CalendarModule, string> = { month: "Month", day: "Day plan", timeline: "Timeline" }
+
+// Modules render in the saved order; an adjacent month and day plan share the resizable split.
+function CalendarModules({ modules, arranging }: { modules: Record<CalendarModule, ReactNode>; arranging: boolean }) {
+  const { calendarOrder: order, reduceMotion } = useAppearance()
+  const systemReduced = useReducedMotion()
+  const transition = reduceMotion || systemReduced ? { duration: 0 } : { duration: MOTION_DURATION.medium, ease: MOTION_EASE }
+  const move = (id: CalendarModule, by: number) => {
+    const next = [...order]
+    const from = next.indexOf(id)
+    ;[next[from], next[from + by]] = [next[from + by], next[from]]
+    updateAppearance({ calendarOrder: next })
+  }
+  const block = (id: CalendarModule, lead = false) => {
+    const index = order.indexOf(id)
+    // layoutId lets a module glide between the split panes and the full-width rows; off outside arranging so pane resizes don't animate.
+    return (
+      <motion.div
+        key={id}
+        data-module={id}
+        data-lead={lead || undefined}
+        layout={arranging ? "position" : false}
+        layoutId={arranging ? `calendar-${id}` : undefined}
+        transition={transition}
+        className={cn("relative min-w-0 rounded-lg", arranging && "outline-2 outline-offset-4 outline-dashed outline-primary/40")}
+      >
+        {arranging ? (
+          <div className="absolute -top-3.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-md border bg-popover py-0.5 pr-0.5 pl-2 text-xs font-medium whitespace-nowrap shadow-sm">
+            {MODULE_LABEL[id]}
+            <Button aria-label={`Move ${MODULE_LABEL[id]} earlier`} disabled={index === 0} onClick={() => move(id, -1)} size="icon-xs" variant="ghost"><ArrowUp /></Button>
+            <Button aria-label={`Move ${MODULE_LABEL[id]} later`} disabled={index === order.length - 1} onClick={() => move(id, 1)} size="icon-xs" variant="ghost"><ArrowDown /></Button>
+          </div>
+        ) : null}
+        {modules[id]}
+      </motion.div>
+    )
+  }
+  const groups: CalendarModule[][] = []
+  for (const id of order) {
+    const last = groups.at(-1)
+    if (last?.length === 1 && last[0] !== "timeline" && id !== "timeline") last.push(id)
+    else groups.push([id])
+  }
+  return groups.map((group) => group.length === 2
+    ? <WorkspaceSplit key="split" id="calendar" primary={block(group[0], true)} secondary={block(group[1])} />
+    : block(group[0]))
+}
+
 function KindLegend() {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground" role="list">

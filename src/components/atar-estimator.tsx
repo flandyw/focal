@@ -8,7 +8,7 @@ import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Input } from "./ui/input"
-import { Toggle } from "./ui/toggle"
+import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { ATAR_AGGREGATE_REFERENCES } from "../lib/atar-data"
 import { atarRawScore, estimateAtar, isEnglishStudy, type AtarStudyResult } from "../lib/atar"
@@ -30,6 +30,7 @@ export function AtarEstimator({
   savedEstimates,
   onSaveEstimate,
   onDeleteEstimate,
+  onLogPractice,
 }: {
   data: AppData
   references: AssessmentReference[]
@@ -37,6 +38,7 @@ export function AtarEstimator({
   savedEstimates: SavedAtarEstimate[]
   onSaveEstimate: (estimate: SavedAtarEstimate) => void
   onDeleteEstimate: (id: string) => void
+  onLogPractice: () => void
 }) {
   const years = useMemo(
     () => ATAR_AGGREGATE_REFERENCES.map((item) => item.year)
@@ -44,6 +46,7 @@ export function AtarEstimator({
       .toSorted((a, b) => b - a),
     [scalingReferences],
   )
+  const [sourceDetails, setSourceDetails] = useState<string | null>(null)
   const [year, setYear] = useState(years[0] ?? 2025)
   const studies = useMemo(() => {
     const available = [...new Set(scalingReferences.map((reference) => reference.code))].flatMap((code) => atarScalingReference(scalingReferences, code, year) ?? [])
@@ -59,19 +62,19 @@ export function AtarEstimator({
   })
 
   const predictions = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const subject of new Set(data.attempts.map((attempt) => attempt.subject))) {
-      const prediction = predictStudyScore({ subject, attempts: data.attempts, references })
-      if (prediction) map.set(normaliseScalingStudyName(subject), prediction.studyScore)
+    const map = new Map<string, NonNullable<ReturnType<typeof predictStudyScore>>>()
+    for (const study of studies) {
+      const prediction = predictStudyScore({ subject: study.studyName, attempts: data.attempts, references })
+      if (prediction) map.set(normaliseScalingStudyName(study.studyName), prediction)
     }
     return map
-  }, [data.attempts, references])
+  }, [data.attempts, references, studies])
 
   const results = useMemo<AtarStudyResult[]>(() => rows.flatMap((row) => {
     const reference = studies.find((item) => item.code === row.code)
     if (!reference) return []
     const predicted = predictions.get(normaliseScalingStudyName(reference.studyName))
-    const rawScore = atarRawScore(row, predicted)
+    const rawScore = atarRawScore(row, predicted?.studyScore)
     const completedYear = subjectCompletionYear(data, reference.studyName)
     const scaling = atarScalingReference(scalingReferences, reference.code, year, completedYear)
     if (!scaling) return []
@@ -118,6 +121,11 @@ export function AtarEstimator({
     ...(estimate?.excluded.map((item) => [item.id, "Not counted"] as const) ?? []),
   ])
   const counted = estimate ? [...estimate.primaryFour, ...estimate.increments] : []
+  const missingEnglish = !results.some((result) => isEnglishStudy(result.code))
+  const missingScores = Math.max(missingEnglish ? 1 : 0, 4 - results.length)
+  const emptyGuidance = missingScores
+    ? `Add scores for ${missingScores} more ${missingScores === 1 ? "subject" : "subjects"}${missingEnglish ? " including English" : ""}. Choose Focal estimate or Manual in Studies.`
+    : "These studies do not form an eligible VTAC combination. Add a study from another study area."
   const requirements = [
     { label: "Four or more studies with a score", met: results.length >= 4 },
     { label: "An English-group study", met: results.some((result) => isEnglishStudy(result.code)) },
@@ -139,29 +147,44 @@ export function AtarEstimator({
           <CardContent className="grid gap-4">
             {data.subjects.filter((subject) => !studies.some((study) => normaliseScalingStudyName(study.studyName) === normaliseScalingStudyName(subject))).map((subject) => <p key={subject} className="text-xs text-destructive">{subject}: no published scaling data in any year. Choose a matching study with Add study to include it.</p>)}
             <div role="table" aria-label="Studies" className="grid">
-              <div role="row" className="grid grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem] gap-3 border-b pb-2 text-xs font-medium text-muted-foreground max-md:hidden">
+              <div role="row" className="grid grid-cols-[minmax(0,1fr)_11rem_3.5rem_6.5rem_1.75rem] gap-3 border-b pb-2 text-xs font-medium text-muted-foreground max-md:hidden">
                 <span role="columnheader">Subject</span><span role="columnheader">Raw score</span><span role="columnheader" className="text-right">Scaled</span><span role="columnheader">Counts as</span><span role="columnheader" className="sr-only">Remove</span>
               </div>
               {rows.map((row) => {
                 const reference = studies.find((item) => item.code === row.code)
                 const prediction = reference ? predictions.get(normaliseScalingStudyName(reference.studyName)) : undefined
                 const result = results.find((item) => item.id === row.id)
-                const usePrediction = row.usePrediction && prediction !== undefined
+                const usePrediction = row.usePrediction
                 const invalidScore = !usePrediction && row.raw !== "" && (!Number.isInteger(Number(row.raw)) || Number(row.raw) < 20 || Number(row.raw) > 50)
                 const role = roles.get(row.id)
                 const name = reference?.studyName ?? "subject"
                 const completedYear = subjectCompletionYear(data, name)
                 const scaling = atarScalingReference(scalingReferences, row.code, year, completedYear)
                 return (
-                  <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_8.5rem_3.5rem_6.5rem_1.75rem]">
+                  <div key={row.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 border-b py-3 last:border-b-0 md:grid-cols-[minmax(0,1fr)_11rem_3.5rem_6.5rem_1.75rem]">
                     <div role="cell" className="max-md:col-span-3">
                       {completedYear !== undefined ? <p className="text-xs text-muted-foreground">Completed {completedYear} · {scaling ? `${scaling.year} scaling${scaling.year !== completedYear ? " (fallback)" : ""}` : "No published scaling data for this study"}</p> : null}
                       {!reference && row.code ? <p className="text-xs text-destructive">No published scaling data for study {row.code}; choose a matching study to include it.</p> : null}
                       <SubjectCombobox subjects={studies.filter((study) => study.code === row.code || !rows.some((other) => other.code === study.code)).map((study) => study.studyName)} preferredSubjects={data.subjects} value={reference?.studyName ?? ""} onValueChange={(value) => updateRow(row.id, { code: studies.find((study) => study.studyName === value)?.code ?? "" })} className="w-full" />
                     </div>
-                    <div role="cell" className="flex items-center gap-1.5">
-                      <Input aria-label={`Raw score for ${name}`} aria-invalid={invalidScore || undefined} aria-describedby={invalidScore ? `score-error-${row.id}` : undefined} className="w-16 tabular-nums" type="number" inputMode="numeric" min="20" max="50" step="1" value={usePrediction ? String(prediction) : row.raw} disabled={usePrediction} placeholder="20–50" onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
-                      {prediction !== undefined ? <Toggle variant="outline" size="sm" title="Use Focal’s predicted score" pressed={usePrediction} onPressedChange={(pressed) => updateRow(row.id, { usePrediction: pressed })} aria-label={`Use Focal prediction for ${name}`}>Focal</Toggle> : null}
+                    <div role="cell" className="grid gap-2">
+                      <div className="flex gap-1" role="group" aria-label={`Score source for ${name}`}>
+                        <Button size="sm" variant={usePrediction ? "secondary" : "ghost"} aria-pressed={usePrediction} onClick={() => { updateRow(row.id, { usePrediction: true }); setSourceDetails(row.id) }}>Focal estimate</Button>
+                        <Button size="sm" variant={!usePrediction ? "secondary" : "ghost"} aria-pressed={!usePrediction} onClick={() => updateRow(row.id, { usePrediction: false })}>Manual</Button>
+                      </div>
+                      <Input aria-label={`Raw score for ${name}`} aria-invalid={invalidScore || undefined} aria-describedby={invalidScore ? `score-error-${row.id}` : undefined} className="w-full tabular-nums" type="number" inputMode="numeric" min="20" max="50" step="1" value={usePrediction ? prediction?.studyScore ?? "" : row.raw} disabled={usePrediction} placeholder={usePrediction ? "No estimate" : "Enter score"} onChange={(event) => updateRow(row.id, { raw: event.target.value })} />
+                      <Popover open={sourceDetails === row.id} onOpenChange={(open) => setSourceDetails(open ? row.id : null)}>
+                        <PopoverTrigger className="text-left text-xs text-muted-foreground underline underline-offset-4" aria-label={`About Focal estimate for ${name}`}>How Focal estimates</PopoverTrigger>
+                        <PopoverContent>
+                          {prediction ? <>
+                            <p>{prediction.evidence.length} usable practice result(s). Most recent used: {prediction.evidence.map((item) => item.attempt.completedAt).toSorted().at(-1)}.</p>
+                            <ul className="max-h-48 overflow-auto">{prediction.evidence.map((item) => <li key={item.attempt.id}>{item.attempt.title} · {item.attempt.completedAt} · {item.referenceYear} distribution</li>)}</ul>
+                            <p>{prediction.excludedAttemptCount} result(s) excluded. SAC performance and missing maths papers are projected from practice.</p>
+                          </> : <p>No usable practice results yet. Log a paper with valid marks and a matching grade distribution to get a Focal estimate.</p>}
+                          <p>One usable result is enough. More recent results carry more weight. Assessment/SAC records are not used here.</p>
+                          <Button variant="outline" size="sm" onClick={onLogPractice}>Log practice</Button>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div role="cell" className="text-right text-sm tabular-nums max-md:hidden">{result ? result.scaledScore.toFixed(1) : "—"}</div>
                     <div role="cell" className="flex items-center gap-2 max-md:justify-end">
@@ -171,6 +194,7 @@ export function AtarEstimator({
                     <div role="cell">
                       <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((item) => item.id !== row.id))}><Trash2 /></Button>
                     </div>
+                    {usePrediction && !prediction ? <p className="col-span-full text-xs text-muted-foreground">No usable practice results yet. <button className="underline underline-offset-4" onClick={onLogPractice}>Log a paper in Practice</button> with valid marks and a matching grade distribution, or choose Manual.</p> : null}
                     {invalidScore ? <p id={`score-error-${row.id}`} className="col-span-full text-xs text-destructive">Enter a whole score from 20 to 50.</p> : null}
                   </div>
                 )
@@ -186,7 +210,7 @@ export function AtarEstimator({
             <CardContent className="grid gap-5">
               <div>
                 <p className="text-6xl font-semibold tracking-tight tabular-nums">{estimate?.atarLabel ?? "—"}</p>
-                <p className="mt-2 text-sm text-muted-foreground tabular-nums">{estimate ? `Aggregate ${estimate.aggregate.toFixed(2)} · ${year} conversion` : "Needs four scores including English"}</p>
+                <p className="mt-2 text-sm text-muted-foreground tabular-nums">{estimate ? `Aggregate ${estimate.aggregate.toFixed(2)} · ${year} conversion` : emptyGuidance}</p>
               </div>
               {estimate ? (
                 <>

@@ -212,5 +212,9 @@ export function estimateAtar(results: AtarStudyResult[], year: number): AtarEsti
 }
 
 export function atarRawScore(row: AtarEstimatorRow, prediction?: number): number {
-  return row.usePrediction && prediction !== undefined ? prediction : Number(row.raw)
+  // Focal uses >=1 valid practice attempt matched to a grade distribution (see predictStudyScore).
+  // Completion status never changes the source; missing Focal evidence never falls back to manual.
+  if (row.usePrediction) return prediction ?? NaN
+  const raw = row.raw.trim() === "" ? NaN : Number(row.raw)
+  return Number.isInteger(raw) && raw >= 20 && raw <= 50 ? raw : NaN
 }

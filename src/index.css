@@ -504,7 +504,8 @@ html[data-desktop] #main-content[data-view="chat"] { overflow: hidden; }
 html[data-desktop] [data-slot="page-header"] {
   position: sticky;
   top: 0;
-  z-index: 10;
+  /* Above in-page layers (calendar/timeline/timetable use up to z-20), below popovers and dialogs (z-50). */
+  z-index: 30;
   background: var(--background);
   /* The header sticks below #main-content's top padding; cover that strip so content cannot show above it. */
   box-shadow: 0 -2.5rem 0 var(--background);

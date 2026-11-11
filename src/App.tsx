@@ -263,7 +263,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   const currentWork = useMemo(() => currentSubjectWork(data), [data])
   const activeSubject = (subject?: string | null) => !subject || !data.completedSubjects.some((completed) => sameStudySubject(completed, subject))
   const currentSessions = studySessionSync.sessions.filter((session) => activeSubject(session.subject_id) || !isPlanned(session))
-  const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? currentWork.subjects[0] ?? data.attempts[0]?.subject ?? data.sacRecords[0]?.subject ?? data.mistakes.find((mistake) => mistake.subject)?.subject ?? "all"
+  const selectedSubject = view === "mistakes" ? mistakesSubject : chosenSubject ?? (currentWork.subjects.length === 1 ? currentWork.subjects[0] : "all")
   const globalView = ["today", "calendar", "chat", "timetable", "predictor", "atar", "settings", "focus", "friends"].includes(view)
   const subjectScoped = !globalView && selectedSubject !== "all"
   const showSubjectMenu = !globalView && view !== "mistakes"

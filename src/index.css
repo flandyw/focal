@@ -483,6 +483,7 @@ html[data-desktop], html[data-desktop] body, html[data-desktop] #root {
   overflow: hidden;
   overscroll-behavior: none;
 }
+html[data-desktop] { --mobile-tabbar: 0px; }
 html[data-desktop] * { overscroll-behavior: none; }
 html[data-desktop] [data-slot="sidebar-wrapper"] {
   height: 100%;
@@ -491,7 +492,6 @@ html[data-desktop] [data-slot="sidebar-wrapper"] {
 }
 html[data-desktop] [data-slot="sidebar-container"] { height: 100%; }
 html[data-desktop] [data-slot="sidebar-inset"] { min-height: 0; overflow: hidden; }
-html[data-desktop] .mobile-app-header { position: relative; top: 0; }
 html[data-desktop] #main-content {
   flex: 1;
   min-height: 0;

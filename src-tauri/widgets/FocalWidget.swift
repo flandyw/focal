@@ -281,6 +281,10 @@ private struct FocalWidgetView: View {
                         Text("Estimated rank").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
                         Text(atar.label).font(.system(size: large ? 48 : 40, weight: .semibold)).monospacedDigit()
                             .foregroundStyle(Color.focal).widgetAccentable().minimumScaleFactor(0.6).lineLimit(1)
+                        if !small, let change = atar.change, abs(change) >= 0.005 {
+                            Text("\(change > 0 ? "▲" : "▼") \(String(format: "%.2f", abs(change))) since last estimate")
+                                .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+                        }
                     }
                     if !small, let target = atar.target {
                         Spacer(minLength: 8)

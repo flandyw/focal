@@ -275,7 +275,7 @@ export function CalendarPage({
       {/* The month is the page title: one header carries where you are, how to move, and what
           you can add, so the grid starts above the fold instead of under a slogan and a strip
           of figures that repeated the day panel. */}
-      <header className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
+      <header data-slot="page-header" className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase max-lg:hidden">Calendar</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">

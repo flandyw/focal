@@ -34,12 +34,14 @@ export function useAppRoute(embedded: boolean, onBack: (route: AppRoute | null, 
 
   useEffect(() => saveAppView(typeof localStorage === "undefined" ? null : localStorage, view), [view])
   // Each page remembers its own scroll; without this a new tab opens part-way down.
-  useLayoutEffect(() => { window.scrollTo(0, scrollByView.current.get(view) ?? 0) }, [view])
+  useLayoutEffect(() => { (import.meta.env.VITE_DESKTOP && !embedded ? document.getElementById("main-content") : window)?.scrollTo(0, scrollByView.current.get(view) ?? 0) }, [view, embedded])
   useEffect(() => {
-    const remember = () => { scrollByView.current.set(view, window.scrollY) }
-    window.addEventListener("scroll", remember, { passive: true })
-    return () => window.removeEventListener("scroll", remember)
-  }, [view])
+    const pane = import.meta.env.VITE_DESKTOP && !embedded ? document.getElementById("main-content") : null
+    const target = pane ?? window
+    const remember = () => { scrollByView.current.set(view, pane ? pane.scrollTop : window.scrollY) }
+    target.addEventListener("scroll", remember, { passive: true })
+    return () => target.removeEventListener("scroll", remember)
+  }, [view, embedded])
   useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
   // Without history entries, Android's back button quits the installed app from any page.
   useEffect(() => {

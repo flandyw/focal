@@ -454,3 +454,36 @@ span.tt-break { background-color: var(--border); }
   --info-bg: var(--popover); --info-text: var(--popover-foreground); --info-border: var(--border);
   --error-bg: color-mix(in srgb, var(--destructive) 10%, var(--popover)); --error-text: var(--destructive); --error-border: color-mix(in srgb, var(--destructive) 30%, var(--popover));
 }
+
+/* Desktop owns one bounded shell. `none` also suppresses WebKit's local rubber band;
+   `contain` alone only stops chaining. Keep native momentum and keyboard scrolling. */
+html[data-desktop], html[data-desktop] body, html[data-desktop] #root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html[data-desktop] * { overscroll-behavior: none; }
+html[data-desktop] [data-slot="sidebar-wrapper"] {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+html[data-desktop] [data-slot="sidebar-container"] { height: 100%; }
+html[data-desktop] [data-slot="sidebar-inset"] { min-height: 0; overflow: hidden; }
+html[data-desktop] .mobile-app-header { position: relative; top: 0; }
+html[data-desktop] #main-content {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow: auto;
+  scroll-padding-block: 10rem 2rem;
+}
+/* Chat's message list owns scrolling; the composer and conversation header stay put. */
+html[data-desktop] #main-content[data-view="chat"] { overflow: hidden; }
+html[data-desktop] [data-slot="page-header"] {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--background);
+}

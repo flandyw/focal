@@ -76,7 +76,7 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
       {MOBILE_TABS.map((item) => tab(item.id, item.label, NAVIGATION_ICONS[item.id], !openMobile && view === item.id, () => {
         setOpenMobile(false)
         // Tapping the current tab goes back to its top, as every phone app does.
-        if (view === item.id) window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
+        if (view === item.id) (import.meta.env.VITE_DESKTOP ? document.getElementById("main-content") : window)?.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })
         else { buzz(); onViewChange(item.id) }
       },
         item.id === "exams" ? dueMistakes : item.id === "today" ? plannedTasks : 0, item.id === "today" ? "planned" : "due"))}

@@ -393,7 +393,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     for (const scope of ["exam", "sac"] as const) void scheduleTimerAlerts(scope, upcoming.filter((alert) => alert.scope === scope))
     return () => timers.forEach(window.clearTimeout)
   }, [data.activeExamTimer, data.activeSacTimer])
-  useEffect(() => { document.title = `${ALL_NAVIGATION.find((item) => item.id === view)?.label ?? "Study"} · Focal` }, [view])
   useRouteUrl(embedded, view, sheet?.kind === "marking"
     ? routePath({ view: "exams", id: sheet.attempt.id }) + "?marking=1"
     : routePath({ view, subject: chosenSubject ?? selectedSubject, id: recordId }) + routeSearch + (typeof location === "undefined" ? "" : location.hash), consumeBack)

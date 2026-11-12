@@ -72,9 +72,9 @@ export function AppearanceSettings() {
     } } })
   }
 
-  return <section className="min-w-0" aria-labelledby="appearance-heading">
-    <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-      <div><h2 id="appearance-heading" className="focal-section-title">Make Focal yours</h2><p className="mt-1 max-w-[62ch] text-sm text-muted-foreground">Changes apply instantly and are saved on this device.</p></div>
+  return <div className="min-w-0">
+    <header className="-mt-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+      <p className="max-w-[62ch] text-sm text-muted-foreground">Changes apply instantly and are saved on this device.</p>
       <Button variant="ghost" size="sm" onClick={reset}><RotateCcw />Reset appearance</Button>
     </header>
 
@@ -136,5 +136,5 @@ export function AppearanceSettings() {
         </div>
       </TabsContent>
     </Tabs>
-  </section>
+  </div>
 }

@@ -45,7 +45,18 @@ function guestPastStudy(): CanonicalStudySession[] {
 }
 
 const GUEST_KEY = "examtrack:past-study:guest"
+const CONTINUED_KEY = "examtrack:continued-session:v1"
 type Block = { start: string; end: string }
+
+function savedContinue(): { id: string; revision: number; blocks: Block[] } | null {
+  try { return JSON.parse(localStorage.getItem(CONTINUED_KEY) ?? "null") } catch { return null }
+}
+/** The blocks a session held before Continue was pressed on this device, so discarding can put them back.
+ *  shortcut: known only on the device that continued it; elsewhere Discard still deletes the whole session. Store it on the row if that matters. */
+export function continuedBlocks(id: string): Block[] | undefined {
+  const saved = savedContinue()
+  return saved?.id === id && Array.isArray(saved.blocks) && saved.blocks.length ? saved.blocks : undefined
+}
 
 function saveGuest(sessions: CanonicalStudySession[]) {
   localStorage.setItem(GUEST_KEY, JSON.stringify(sessions))
@@ -56,9 +67,14 @@ const blocksOf = (session: CanonicalStudySession): Block[] =>
 
 /** Mirrors the server's block and completed bookkeeping for sessions that only exist in this browser. */
 function guestApply(session: CanonicalStudySession, patch: StudySessionEdit): CanonicalStudySession {
-  if (isRunning(session) || isPaused(session) || isDeleted(session)) throw new Error("Stop the timer before editing this session.")
+  // Like the server: a live timer can be renamed or change subject, but its times are the timer's.
+  const live = isRunning(session) || isPaused(session)
+  if (isDeleted(session) || (live && (patch.blocks || patch.completed !== undefined))) throw new Error("Stop the timer before editing this session.")
   if (patch.title !== undefined && (!patch.title.trim() || patch.title.length > 512)) throw new Error("Enter a title of 1–512 characters.")
   if (patch.metadata && new TextEncoder().encode(JSON.stringify(patch.metadata)).length > 60_000) throw new Error("Plan details are too long. Shorten the notes or topics.")
+  if (live) return { ...session, title: patch.title ?? session.title,
+    subject_id: patch.subject_id === undefined ? session.subject_id : patch.subject_id,
+    metadata: patch.metadata ?? session.metadata, revision: session.revision + 1, updated_at: new Date().toISOString() }
   const blocks = (patch.blocks ?? blocksOf(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
   const completed = patch.completed ?? session.completed
   if (blocks.length > 100) throw new Error("Enter up to 100 study blocks.")
@@ -717,7 +733,7 @@ export function useStudySessionSync(
   userId: string | undefined,
   data: AppData,
   setData: Dispatch<SetStateAction<AppData>>,
-): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (...args: Parameters<typeof controlSession>) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; restore: (source: CanonicalStudySession, id: string, savedAt: string) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
+): { sessions: CanonicalStudySession[]; queued: number; plan: (entries: Array<{ title: string; subjectId?: string; subjectSwitches?: SubjectSwitch[]; start: string; end: string; description?: string; topics?: string[]; blocks?: Block[] }>) => Promise<number>; control: (session: CanonicalStudySession, action: Parameters<typeof controlSession>[1]) => Promise<void>; undoContinue: (session: CanonicalStudySession, blocks: Block[]) => Promise<void>; log: (entry: PastStudyLog, id: string) => Promise<void>; edit: (session: CanonicalStudySession, patch: StudySessionEdit) => Promise<void>; remove: (session: CanonicalStudySession) => Promise<void>; restore: (source: CanonicalStudySession, id: string, savedAt: string) => Promise<void>; merge: (sessions: CanonicalStudySession[]) => Promise<void> } {
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
   const initialized = useRef(false)
@@ -738,6 +754,9 @@ export function useStudySessionSync(
     for (const session of incoming) {
       const previous = next.get(session.id)
       if (!previous || previous.revision <= session.revision) next.set(session.id, session)
+      // Finished again since the continue: those blocks are no longer what a discard should restore.
+      const saved = savedContinue()
+      if (saved?.id === session.id && session.completed && session.revision > saved.revision) localStorage.removeItem(CONTINUED_KEY)
     }
     canonicalSessions.current = next
     if (userId) noteRevisions(userId, incoming)
@@ -1071,9 +1090,10 @@ export function useStudySessionSync(
     announce()
   }
 
-  return { sessions, queued, plan, edit, remove, restore, merge, log, control: async (session, action) => {
+  const control = async (session: CanonicalStudySession, action: Parameters<typeof controlSession>[1]) => {
     const current = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id)
     if (!current) throw new Error("This session no longer exists. Refresh and try again.")
+    if (action === "resume" && canContinue(current)) localStorage.setItem(CONTINUED_KEY, JSON.stringify({ id: current.id, revision: current.revision, blocks: blocksOf(current) }))
     if ((action === "start" || action === "resume") && current.kind === "focus" &&
         (dataRef.current.activeExamTimer || dataRef.current.activeSacTimer)) {
       throw new Error("Stop the exam or SAC timer before starting regular study.")
@@ -1093,7 +1113,15 @@ export function useStudySessionSync(
     if (userId && (await readQueue(userId)).some((entry) => entry.sessionId === session.id)) {
       toast("Saved on this device", { description: "It will sync when the connection is back." })
     }
-  } }
+  }
+  /** Undo a continue: finish the session, then restore the blocks it had before. If the second step fails the time is kept, not lost. */
+  async function undoContinue(session: CanonicalStudySession, blocks: Block[]) {
+    await control(session, "complete")
+    const finished = overlaySessions(canonicalSessions.current, queue.current).find((row) => row.id === session.id)
+    if (!finished || !finished.completed) throw new Error("The session was finished, but its continued time could not be removed. Edit it from the calendar.")
+    await edit(finished, { blocks })
+  }
+  return { sessions, queued, plan, edit, remove, restore, merge, log, control, undoContinue }
 }
 
 function estimateNow(): number {

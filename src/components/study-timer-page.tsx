@@ -36,13 +36,14 @@ import { PageHeader } from "./page-header"
 import { TimerReadout } from "./timer-readout"
 import { playChime, useStudyTimer } from "../hooks/use-study-timer"
 import { notificationPermission, notifyTimer, requestTimerNotifications, timerNotificationHelp } from "../lib/pwa"
-import type { useStudySessionSync } from "../lib/study-session-sync"
+import { canonicalNow, continuedBlocks, type useStudySessionSync } from "../lib/study-session-sync"
+import { Badge } from "./ui/badge"
 import { StudySessionDialog } from "./study-session-dialog"
 import type { StudySessionEdit, SubjectSwitch } from "../lib/sync/sessionContract"
 import type { FocusSessionSink } from "../lib/focus-session"
 import { continuableToday, sessionItem } from "../lib/day-plan"
 import { localDate } from "../lib/learning-workspace"
-import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionSubjects, studySessionActiveMilliseconds, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import { isPaused, isRunning, isPlanned, studySessionPlan, studySessionSubjects, studySessionSwitches, studySessionActiveMilliseconds, withSubjectSwitch, type StudySessionAction, type CanonicalStudySession } from "../lib/sync/sessionContract"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import type { CalendarEvent, TimetableConfig } from "../lib/types"
 import { classPeriodsOn, subjectNameFor } from "../lib/class-timetable"
@@ -145,7 +146,7 @@ function blockSummary(block: FocusBlock) {
 function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, eclair, setEclair, examActive = false }: {
   subjects: string[]
   preferredSubjects: string[]
-  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge">
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge" | "undoContinue">
   examActive?: boolean
   onTimedPaper: () => void
   eclair: boolean
@@ -196,7 +197,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     return true
   })
   const blockedPlan = examActive ? "Stop the exam timer before starting a plan."
-    : localSessionId || activeSession || local.state.running ? "Finish your current session before starting a plan." : ""
+    // A break is not a session, so a plan or Continue can take over from one.
+    : localSessionId || activeSession || (local.state.running && (local.state.studyOvertime || local.state.mode === "work" || local.state.mode === "free")) ? "Finish your current session before starting a plan." : ""
   async function startPlan(session: CanonicalStudySession, action: "start" | "resume" = "start") {
     if (!onControlSession || planBusyRef.current || blockedPlan) return
     planBusyRef.current = true; setPlanBusy(session.id); setPlanError(""); setContinueError("")
@@ -233,13 +235,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const sharedSessionKey = sharedSession ? `${sharedSession.id}:${sharedSession.revision}:${isRunning(sharedSession)}` : ""
   const sharedError = sharedFailure?.key === sharedSessionKey ? sharedFailure.message : ""
 
-  async function controlShared(action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">) {
-    if (!sharedSession || !onControlSession || sharedBusyRef.current) return
+  async function runShared(task: (session: CanonicalStudySession) => Promise<void>) {
+    if (!sharedSession || sharedBusyRef.current) return
     sharedBusyRef.current = true
     setSharedBusy(true)
     setSharedFailure(null)
     try {
-      await onControlSession(sharedSession, action)
+      await task(sharedSession)
     } catch (error) {
       setSharedFailure({ key: sharedSessionKey, message: error instanceof Error ? error.message : "Could not update the study session." })
     } finally {
@@ -247,6 +249,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       setSharedBusy(false)
     }
   }
+  const controlShared = (action: Extract<StudySessionAction, "start" | "pause" | "resume" | "complete" | "cancel">) =>
+    onControlSession ? runShared((session) => onControlSession(session, action)) : Promise.resolve()
+  const editShared = (patch: (session: CanonicalStudySession) => StudySessionEdit) =>
+    plannedActions ? runShared((session) => plannedActions.edit(session, patch(session))) : Promise.resolve()
+  // Continued here: Discard gives back the session as it was finished, rather than deleting it.
+  const undoBlocks = sharedSession && plannedActions ? continuedBlocks(sharedSession.id) : undefined
 
   // The canonical intervals own shared time; viewing a session never creates a second local log.
   const state = sharedSession ? {
@@ -269,7 +277,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   const actions = sharedSession ? {
     ...local,
     toggle: () => void controlShared(isRunning(sharedSession) ? "pause" : "resume"),
-    reset: () => void controlShared("cancel"),
+    reset: () => void (undoBlocks ? runShared((session) => plannedActions!.undoContinue(session, undoBlocks)) : controlShared("cancel")),
     finishFreeStudy: () => void controlShared("complete"),
     selectMode: () => {},
   } : local
@@ -368,7 +376,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     return new Map((sessions ?? []).filter((session) => continuableToday(session, now.getTime())).map((session) => [session.id, session]))
   }, [now, sessions])
   const lastFinished = [...continuable.values()].toSorted((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0]
-  const timerIdle = !sharedSession && !state.running && !state.studyOvertime && state.overtimeSeconds === 0 && (isFreeStudy || state.secondsLeft === state.totalSeconds)
+  const timerIdle = !sharedSession && (onBreak || (!state.running && !state.studyOvertime && state.overtimeSeconds === 0 && (isFreeStudy || state.secondsLeft === state.totalSeconds)))
   const offerContinue = timerIdle && !blockedPlan && onControlSession && lastFinished ? lastFinished : undefined
   const continueLabel = offerContinue
     ? `Continue ${studySessionSubjects(offerContinue).map(subjectNameFor).join(" · ") || offerContinue.title} · ${Math.round(offerContinue.accumulated_active_ms / 60_000)} min`
@@ -432,7 +440,18 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>
           <Button className="text-muted-foreground hover:text-foreground" onClick={() => setSettingsOpen(true)} variant="ghost"><Settings2 />Settings</Button>
-          {sharedSession ? (
+          {sharedSession && plannedActions ? (
+            <div className="grid w-full min-w-0 gap-2 sm:grid-cols-2">
+              <FieldLabel htmlFor="timer-subject" className="sr-only">Subject</FieldLabel><SubjectCombobox allowCustom id="timer-subject" placeholder="Subject" preferredSubjects={preferredSubjects} required subjects={subjects} value={sharedSession.subject_id ?? ""}
+                onValueChange={(value) => { if (value.trim() && value !== sharedSession.subject_id) void editShared((session) => ({ subject_id: value, metadata: { ...session.metadata, subjectSwitches: withSubjectSwitch(
+                  studySessionSwitches(session).length || !session.subject_id || !session.started_at ? studySessionSwitches(session) : [{ at: session.started_at, subjectId: session.subject_id }],
+                  canonicalNow().toISOString(), value) } })) }} />
+              <Input aria-label="Title" defaultValue={sharedSession.title} key={`${sharedSession.id}:${sharedSession.title}`} maxLength={120} placeholder="Title"
+                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }}
+                onBlur={(event) => { const title = event.target.value.trim(); if (title && title !== sharedSession.title) void editShared(() => ({ title })) }} />
+              <p className="text-xs text-muted-foreground sm:col-span-2">Change the subject to switch; this session keeps going and records each subject's time.</p>
+            </div>
+          ) : sharedSession ? (
             <p className="w-full text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{studySessionSubjects(sharedSession).map(subjectNameFor).join(" · ") || "Study"}</span>
               {sharedSession.title ? ` · ${sharedSession.title}` : ""}
@@ -544,7 +563,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                       {[item.detail, `${Math.round(item.minutes)} min`].filter(Boolean).join(" · ")}
                     </p>
                   </div>
-                  {continuable.has(item.id) && onControlSession ? (
+                  {item.live ? <Badge variant="secondary">{item.paused ? "Paused" : "Running"}</Badge> : continuable.has(item.id) && onControlSession ? (
                     <Button aria-label={`Continue ${item.title || "focus block"}`} className="shrink-0 self-start sm:self-auto" disabled={!!blockedPlan || !!planBusy} onClick={() => void startPlan(continuable.get(item.id)!, "resume")} size="sm" variant="outline">
                       <Play />Continue
                     </Button>
@@ -598,12 +617,12 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
       <AlertDialog open={confirmingDiscard} onOpenChange={setConfirmingDiscard}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
-            <AlertDialogDescription>{sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
+            <AlertDialogTitle>{undoBlocks ? "Discard the continued time?" : sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
+            <AlertDialogDescription>{undoBlocks ? `Only the time since you pressed Continue is removed. The ${Math.round(undoBlocks.reduce((total, block) => total + Date.parse(block.end) - Date.parse(block.start), 0) / 60_000)} min you logged before stays.` : sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>{sharedSession ? "Discard session" : "Reset timer"}</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={() => { setConfirmingDiscard(false); actions.reset() }}>{undoBlocks ? "Discard continued time" : sharedSession ? "Discard session" : "Reset timer"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -826,7 +845,7 @@ export function StudyTimerPage({
   /** The student's own subjects, floated to the top of the picker. */
   preferredSubjects: string[]
   mode: StudyTimerMode
-  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge">
+  plannedActions?: Pick<ReturnType<typeof useStudySessionSync>, "plan" | "edit" | "remove" | "log" | "merge" | "undoContinue">
   focusPreset?: { subject?: string; intent: string }
   company?: React.ReactNode
   events?: CalendarEvent[]

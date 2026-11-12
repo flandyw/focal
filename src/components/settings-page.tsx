@@ -456,7 +456,7 @@ function ChatGPTGroup() {
 
   return (
     <Group title="ChatGPT" description="Fill with AI uses the connected account's ChatGPT plan." action={auth.isAuthenticated ? <Button size="sm" variant="ghost" disabled={loading} onClick={() => void refresh()}>{loading ? <VortexAngularSpinLoader dotSize={2} gap={1} /> : <RefreshCw />}Refresh models</Button> : null}>
-      <div className="p-4"><ChatGPTConnection /></div>
+      <div className="px-4 py-3"><ChatGPTConnection /></div>
       {model ? <>
         <Row title="Model" description="Access depends on your plan. Saved on this device.">
           <Select items={Object.fromEntries(available.map((item) => [item.slug, item.displayName]))} value={model} onValueChange={(slug) => { if (slug) save({ model: slug, reasoningEffort: effort }) }}>

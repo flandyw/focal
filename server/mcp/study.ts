@@ -1,3 +1,4 @@
+import { isExamTimerSession, isSacTimerSession } from "../../src/lib/ongoing-timers.js"
 import { sameStudySubject } from "../../src/lib/studySubjects.js"
 import { currentSubjectWork, isCurrentSubject } from "../../src/lib/subject-completion.js"
 import { z } from "zod"
@@ -7,8 +8,8 @@ import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learni
 import {
   applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
 } from "../../src/lib/stoplight.js"
-import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
-import { gradeReferences, readAll, scalingReferences, sessionCommand, updateApp, vceTimetable } from "./store.js"
+import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSwitches, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
+import { gradeReferences, mergeSessions, readAll, scalingReferences, sessionCommand, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
 import { day, instant, limit, nowIso, required, round } from "./util.js"
 
@@ -44,6 +45,66 @@ function sessionView(session: CanonicalStudySession, now = Date.now()) {
 }
 
 export function studyTools(define: Define) {
+  define("get_study_session", "Read a canonical session in full, including timing segments, revision, reflection and exam/SAC workspace metadata.", { id: z.string() }, "read", async ({ id }) => required((await readAll()).sessions.find((session) => session.id === id), "study session"))
+
+  define("start_assessment_timer", "Start the app's live exam or SAC timer. details is a JSON object: exam requires subject, provider, title, examYear, paper, readingMinutes, writingMinutes, marks; SAC requires subject, provider, title, unit, scheduledAt, durationMinutes, maxScore. Optional fields use the same shapes as an existing timer's metadata.examtrack. Pause/resume/complete with study_timer. Completing a timer does not log marks; use save_exam or save_sac for results.", {
+    kind: z.enum(["exam", "sac"]), details: z.string().min(2).max(60_000),
+  }, "write", async ({ kind, details }) => {
+    const raw = JSON.parse(details)
+    if (!isRecord(raw)) throw new Error("details must be a JSON object.")
+    const timer = { ...raw, startedAt: Date.now(), pausedSeconds: 0 }
+    if (!(kind === "exam" ? isExamTimerSession(timer) : isSacTimerSession(timer))) throw new Error("Invalid timer details.")
+    if ((await readAll()).sessions.some((session) => isRunning(session) || isPaused(session))) throw new Error("Complete the current timer first.")
+    const id = crypto.randomUUID()
+    const phase = kind === "exam" ? "reading" : "focus"
+    await sessionCommand({ session_id: id, expected_revision: 0, action: "start", kind, phase,
+      title: String(raw.title), subject_id: String(raw.subject),
+      metadata: { ...raw, createdVia: "examtrack", examtrack: raw, integrations: { examtrack: { type: "examtrack", id, kind, subject: raw.subject, phase } } },
+    })
+    return { id }
+  })
+
+  define("update_session_metadata", "Edit session details such as timer conditions, question workspace or reflection. Supply the full metadata object as JSON plus the revision from get_study_session; stale revisions are rejected. Assessment details in metadata.examtrack must remain valid. Use edit_study_session for title, blocks and subject.", {
+    id: z.string(), revision: z.number().int().positive(), json: z.string().min(2).max(60_000), phase: z.enum(["focus", "reading", "writing"]).optional(),
+  }, "write", async ({ id, revision, json, phase }) => {
+    const session = required((await readAll()).sessions.find((item) => item.id === id), "study session")
+    if (session.revision !== revision) throw new Error("Session changed. Read it again before editing.")
+    const metadata = JSON.parse(json)
+    if (!isRecord(metadata)) throw new Error("metadata must be an object.")
+    if (session.kind !== "focus") {
+      const details = isRecord(metadata.examtrack) ? metadata.examtrack : {}
+      const timer = { ...details, startedAt: Date.now(), pausedSeconds: 0 }
+      if (!(session.kind === "exam" ? isExamTimerSession(timer) : isSacTimerSession(timer))) throw new Error("Invalid assessment timer metadata.")
+    }
+    if (phase && (session.kind === "exam" ? phase === "focus" : phase !== "focus")) throw new Error("Phase does not match the session kind.")
+    await sessionCommand({ session_id: id, expected_revision: revision, action: phase ? "phase_change" : "save_progress", metadata, phase })
+  })
+
+  define("merge_study_sessions", "Merge 2–100 stopped focus sessions with the same subject and completed/planned status. Keeps the first id and all source metadata, combines overlapping blocks, and deletes the other source sessions in one database transaction. Stale revisions reject the whole merge.", {
+    ids: z.array(z.string()).min(2).max(100),
+  }, "delete", async ({ ids }) => {
+    if (new Set(ids).size !== ids.length) throw new Error("Choose different sessions.")
+    const { sessions } = await readAll()
+    const chosen = ids.map((id) => required(sessions.find((session) => session.id === id), "study session"))
+    const first = chosen[0]
+    if (chosen.some((session) => session.kind !== "focus" || isRunning(session) || isPaused(session) || session.subject_id !== first.subject_id || session.completed !== first.completed)) throw new Error("Choose stopped focus sessions with the same subject and completion status.")
+    const blocks: { start: string; end: string }[] = []
+    for (const block of chosen.flatMap((session) => sessionBlocks(session)).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))) {
+      const last = blocks.at(-1)
+      if (last && Date.parse(block.start) <= Date.parse(last.end)) {
+        if (Date.parse(block.end) > Date.parse(last.end)) last.end = block.end
+      } else blocks.push({ start: block.start, end: block.end })
+    }
+    const subjectSwitches = chosen.flatMap((session) => {
+      const switches = studySessionSwitches(session)
+      const start = sessionBlocks(session)[0]?.start
+      return switches.length ? switches : start && session.subject_id ? [{ at: start, subjectId: session.subject_id }] : []
+    }).toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at)).reduce<SubjectSwitch[]>((list, item) => list.at(-1)?.subjectId === item.subjectId ? list : [...list, item], [])
+    const metadata = { ...first.metadata, subjectSwitches, merge_sources: chosen.map(({ id, title, metadata }) => ({ id, title, metadata })),
+      ...(first.completed ? {} : { schedule: { blocks } }) }
+    return mergeSessions({ session_id: first.id, expected_revision: first.revision, action: "save_progress", blocks, metadata }, chosen.map(({ id, revision }) => ({ id, revision })))
+  })
+
   /* ------------------------------------------------------ study sessions */
 
   define("list_study_sessions", "List study sessions: planned (scheduled), running or paused timers, and completed/logged study. Filter by the dates of their blocks.",

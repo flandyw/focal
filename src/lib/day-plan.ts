@@ -239,9 +239,11 @@ export function sessionItem(session: CanonicalStudySession, date: string, now = 
 }
 
 /** Study finished today can be continued: the same session picks up again, its time kept.
- *  Older study is left as it is, so a session never stretches across days. */
+ *  Older study is left as it is, apart from two hours' grace so midnight doesn't cut off a late session. */
 export function continuableToday(session: CanonicalStudySession, now = Date.now()) {
-  return canContinue(session) && localDate(new Date(session.completed_at!)) === localDate(new Date(now))
+  if (!canContinue(session)) return false
+  const finished = new Date(session.completed_at!)
+  return localDate(finished) === localDate(new Date(now)) || now - finished.getTime() < 2 * 3_600_000
 }
 
 /** What a day owes and what it banked, in study minutes. Exam entries and the review

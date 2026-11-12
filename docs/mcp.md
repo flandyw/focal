@@ -3,7 +3,7 @@
 Lets an MCP client (Claude Code, Claude Desktop, ...) read and change a Focal account: exams,
 mistakes and reviews, SACs, calendar, study timer and sessions, stoplight, goals, tasks, timetable,
 settings, analytics, predictions, and the VCAA/VTAC reference data. Tools are grouped in
-`server/mcp/records.ts`, `study.ts` and `insights.ts`. Start a conversation with `get_overview`.
+`server/mcp/records.ts`, `study.ts`, `insights.ts`, `app.ts`, `attachments.ts` and `friends.ts`. Start a conversation with `get_overview`.
 
 It reuses the app's own logic from `src/lib` and writes through the same sync RPCs
 (`sync_apply_changes`, `study_session_mutate`), so edits show up in the web and desktop apps and
@@ -102,9 +102,62 @@ before any backfill.
 
 Verify changes with `bun run check`, `bun run build`, and `bun run build:desktop`.
 
-## Not covered
+## Coverage
 
-Live timed exam and SAC timers (real-time UI state), mistake attachments (stored files), PDF
-worksheet export, merging study sessions, and the desktop-only ChatGPT features (insights and
-alternative-question decks). The MCP client does that reasoning itself and writes the results back
-with `add_mistakes`, `link_to_stoplight`, `add_stoplight_items` and friends.
+`get_capabilities` lists the registered tools and their access hints. The shared registry now has
+105 tools, used by HTTP MCP, stdio MCP and in-app AI chat. No new database migration is needed.
+
+| App area | Access |
+| --- | --- |
+| Today, subjects, progress | Overview, full subject workspace, day plan, weekly review, analytics |
+| Practice papers and mistakes | Existing logging, marking, reviews, insights and alternative-card tools; full records through advanced row access |
+| School assessments and calendar | Existing SAC/event CRUD, class timetable import/read/clear |
+| Subject lifecycle | Read completion years in settings; finish or resume with `set_subject_completion` |
+| Skills, tasks and goals | Existing creation/rating/planning/archive tools; `update_stoplight_item`, `edit_task` (including restore) |
+| Exam progression | Read the full plan, import additions, or replace/reorder/remove papers |
+| Predictions and ATAR | Existing prediction/scaling/estimate tools plus editing saved scenarios |
+| Study sessions and timers | Full canonical session reads, planning/logging/editing/deletion, focus and assessment timers, revision-checked metadata edits, atomic merges |
+| Mistake images | Private signed URLs, base64 uploads with the app's image limits, removal from cards |
+| Worksheets | LaTeX text or compiled PDF as base64 bytes |
+| Friends | Profile/privacy, requests, blocks, nicknames, shared activity/countdowns, cheers, groups and shared study sessions/invitations |
+| Review settings | Spacing, practice days/time/target, snooze, effects, sound and finish |
+| Every synced app row | `list_app_records` and `edit_app_record`, including historical and archived records |
+
+### Advanced record access
+
+Prefer the named tools for routine work. `export_app_data` returns the complete projected AppData
+backup and canonical sessions; `list_app_records` returns raw app rows with their sequence numbers.
+To edit a field without a convenience tool, copy its row payload, update its values and timestamps,
+and call `edit_app_record` with its entity, rowId, expectedSeq and JSON payload. It previews by default.
+Inspect that preview, then pass `dryRun: false` to apply. Use expectedSeq 0 for a new row. A put
+must round-trip through the app's canonical row validators; unknown settings and malformed payloads
+are rejected. A concurrent edit rejects the write instead of overwriting it.
+
+This advanced tool writes exactly one row at a time. A collection-valued setting (for example
+`learning`, `sacRecords` or `atarEstimates`) replaces that collection. Multi-row workflows are not
+atomic; use the named tools for cascading exam deletion and transactional session merging.
+
+### Files and external effects
+
+Attachment download URLs are private bearer URLs valid for an hour. Removing an attachment unlinks
+it from the card but retains its stored bytes, avoiding file loss for concurrent readers. An upload
+whose subsequent sync write fails can leave an unlinked stored object; it is deliberately retained
+because a write may have reached the server even if its response was lost.
+
+`export_mistake_worksheet` defaults to LaTeX. PDF compilation sends the selected question text to
+texlive.net, just like the app's export, and returns base64 PDF bytes for the MCP client to save.
+Friend requests, cheers and shared-session invitations should be sent only at the user's request.
+All Friends tools call the same user-scoped RPCs as the UI; database sharing and membership rules
+remain authoritative.
+
+### Device boundary
+
+This covers synced account records, not literally every device operation. The hosted server cannot
+read a device's IndexedDB chat history, local appearance/layout/AI preferences, unsynced guest data,
+or historical desktop-only SQLite sessions. It cannot open native dialogs, grant notification
+permissions, navigate an open app, install updates or drive a desktop ChatGPT login. Account
+sign-in and MCP-token creation/revocation stay in the app. Full device control would require a
+separate authenticated device bridge; these tools do not pretend to provide one.
+
+Validation: `bun run check`, `bun test`, `bun run build`, `bun run build:desktop`. Live Supabase,
+storage, Friends and third-party PDF requests require an authenticated deployment to verify end to end.

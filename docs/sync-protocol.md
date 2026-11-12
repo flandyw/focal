@@ -57,6 +57,9 @@ else about its life is stored:
   reopens the session as paused at its `completed_at` and resumes it in the same transaction, so
   the new interval joins the earlier ones. (`save_progress` with `completed: false` is not a
   continue: it turns the session back into scheduled study and drops its worked time.)
+  Focal remembers the blocks the session held before the continue on the device that pressed it, so
+  Discard there is `complete` followed by `save_progress` with those blocks, not `cancel`.
+  A running or paused session still accepts `save_progress` for title, subject and metadata.
 - **scheduled**: derived, not completed and never timed. `create` makes one from `blocks`;
   `start` replaces its slot with the real run.
 - **deleted**: `cancelled_at` is set. `cancel` deletes any session, done or not; the row is kept

@@ -1,5 +1,3 @@
-import { downloadExamFile } from "./host"
-import { MISTAKES_PDF_ENDPOINT } from "./host"
 import type { ExamAttempt, Mistake } from "./exam-data"
 
 const TEX_SPECIALS = /[#$%&_{}~^\\]/g
@@ -45,7 +43,7 @@ function worksheetDetails(mistakes: Mistake[], attemptMap: Map<string, ExamAttem
   }
 }
 
-function buildMistakesTex(mistakes: Mistake[], attempts: ExamAttempt[]) {
+export function buildMistakesTex(mistakes: Mistake[], attempts: ExamAttempt[]) {
   const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
   const details = worksheetDetails(mistakes, attemptMap)
   const generatedDate = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
@@ -196,6 +194,7 @@ ${pages.join("\n\\newpage\n")}` : ""}
 }
 
 export async function downloadMistakesPdf(mistakes: Mistake[], attempts: ExamAttempt[], subject = "mistakes") {
+  const { downloadExamFile, MISTAKES_PDF_ENDPOINT } = await import("./host")
   const response = await fetch(MISTAKES_PDF_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },

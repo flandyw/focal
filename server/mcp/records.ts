@@ -506,9 +506,9 @@ export function recordTools(define: Define) {
   define("get_settings", "Account settings: subjects, study preferences, review pacing, exam-difficulty weighting, and the exam progression plan with the next paper per subject.", {}, "read", async () => {
     const { data } = await readAll()
     return {
-      subjects: data.subjects, studyPreferences: data.learning.preferences,
+      subjects: data.subjects, completedSubjects: data.completedSubjects, subjectCompletionYears: data.subjectCompletionYears, studyPreferences: data.learning.preferences,
       reviewPreferences: normalizeMistakeReviewPreferences(data.mistakeReviewPreferences), examDifficulty: resolveDifficultySettings(data.examDifficulty),
-      examProgression: data.examProgression && { name: data.examProgression.name, papers: data.examProgression.exams.length, bySubject: progressionBySubject(data.examProgression, data.attempts) },
+      examProgression: data.examProgression && { ...data.examProgression, papers: data.examProgression.exams.length, bySubject: progressionBySubject(data.examProgression, data.attempts) },
       classTimetableConfigured: Boolean(data.classTimetable),
     }
   })
@@ -518,6 +518,8 @@ export function recordTools(define: Define) {
     studyPreferences: z.object({ dailyMinutes: z.number().int().min(5).max(1440), studyDays: z.array(z.number().int().min(0).max(6)).max(7) }).partial().optional(),
     reviewPreferences: z.object({
       spacingMultiplier: z.number().min(0.5).max(3), retryHours: z.number().min(1 / 6).max(168), maximumIntervalDays: z.number().int().min(7).max(365),
+      practiceDays: z.array(z.number().int().min(1).max(7)).max(7).describe("ISO weekdays: 1 Monday through 7 Sunday"), practiceTime: clock, practiceTarget: z.number().int().min(1).max(20),
+      practiceSnoozedUntil: instant.nullable(), practiceEffects: z.boolean(), practiceSound: z.boolean(), practiceFinish: z.enum(["graphite", "moss", "cobalt", "amber"]),
       lighterUntil: instant.nullable(), lighterDailyTarget: z.number().int().min(0).max(100),
     }).partial().optional(),
     examDifficulty: z.object({ enabled: z.boolean(), providerOrder: z.array(z.string()), strength: z.enum(["light", "balanced", "strong"]) }).partial().optional(),
@@ -531,9 +533,10 @@ export function recordTools(define: Define) {
         next = { ...next, learning: { ...next.learning, preferences, preferencesUpdatedAt: stamp, updatedAt: stamp } }
       }
       if (reviewPreferences) {
-        const { lighterUntil, ...rest } = reviewPreferences
+        const { lighterUntil, practiceSnoozedUntil, ...rest } = reviewPreferences
         next = { ...next, mistakeReviewPreferences: normalizeMistakeReviewPreferences({ ...normalizeMistakeReviewPreferences(next.mistakeReviewPreferences), ...rest,
-          ...(lighterUntil === undefined ? {} : { lighterUntil: lighterUntil ?? undefined }), updatedAt: stamp }) }
+          ...(lighterUntil === undefined ? {} : { lighterUntil: lighterUntil ?? undefined }),
+          ...(practiceSnoozedUntil === undefined ? {} : { practiceSnoozedUntil: practiceSnoozedUntil ?? undefined }), updatedAt: stamp }) }
       }
       if (examDifficulty) {
         const settings = { ...resolveDifficultySettings(next.examDifficulty), ...examDifficulty, updatedAt: stamp }

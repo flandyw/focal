@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import { diffAppData, projectRows } from "../../src/lib/app-rows.js"
+import { diffAppData, projectRows, rowsFromAppData, sameValue, type AppRow } from "../../src/lib/app-rows.js"
 import { migrateAppData, type AppData, type AssessmentReference } from "../../src/lib/exam-data.js"
 import type { ScalingReference } from "../../src/lib/scaling"
 import {
@@ -63,7 +63,7 @@ export async function resolveToken(token: string): Promise<string | null> {
  * A user-scoped session without the user's password: the service role mints a magic-link token (no email
  * is sent) and the client redeems it, so every RPC runs with that user's own JWT.
  */
-function connect(): Promise<Connection> {
+export function connect(): Promise<Connection> {
   const session = requestConnection.getStore()
   if (session) return Promise.resolve(session)
   const userId = requestUser.getStore() ?? stdioUser
@@ -91,7 +91,7 @@ function connect(): Promise<Connection> {
 }
 
 /** One RPC as the signed-in user. An expired login is re-established once. */
-async function rpc(fn: string, args: (userId: string) => object): Promise<unknown> {
+export async function rpc(fn: string, args: (userId: string) => object): Promise<unknown> {
   for (let attempt = 0; ; attempt++) {
     const { sb, userId } = await connect()
     const { data, error, status } = await sb.rpc(fn, args(userId))
@@ -194,6 +194,46 @@ export async function updateApp(edit: (data: AppData) => AppData): Promise<AppDa
     only = new Set(sent.filter((change) => stale.has(change.changeId)).map((change) => rowKey(change.entity, change.rowId)))
   }
   throw new Error("Focal data kept changing while saving. Try again.")
+}
+
+/** Raw rows retain their sequence so advanced clients can make one conditional edit without replacing an account. */
+export async function readAppRecords() {
+  return [...(await snapshot()).values()].filter((row) => row.operation === "put" && ["attempts", "mistakes", "events", "user_state", "timetable_config"].includes(row.entity))
+}
+
+export async function editAppRecord(change: AppRow & { expectedSeq: number; dryRun: boolean }) {
+  const rows = await snapshot(true)
+  const key = rowKey(change.entity, change.rowId)
+  const previous = rows.get(key)
+  if ((previous?.seq ?? 0) !== change.expectedSeq) throw new Error("Record changed. Read list_app_records again before editing.")
+  const candidate = new Map(rows)
+  candidate.set(key, { ...change, seq: change.expectedSeq })
+  const projected = projectRows(candidate.values())
+  if (projected.omitted.length > projectRows(rows.values()).omitted.length) throw new Error("Invalid app record. Nothing was saved.")
+  // Reject unknown setting keys, mismatched ids and values that projection would silently discard or normalise.
+  const canonical = rowsFromAppData(projected.data).find((row) => row.entity === change.entity && row.rowId === change.rowId)
+  if (change.operation === "put" && (!canonical || !sameValue(JSON.parse(JSON.stringify(canonical.payload)), change.payload))) throw new Error("Payload must match the app's canonical row format. Read list_app_records for examples.")
+  if (change.dryRun) return { dryRun: true, before: previous ?? null, after: change }
+  const changeId = crypto.randomUUID()
+  const result = await rpc("sync_apply_changes", (userId) => ({ p_expected_user_id: userId, p_changes: [{
+    change_id: changeId, client_id: DEVICE_ID, entity: change.entity, row_id: change.rowId,
+    operation: change.operation, payload: change.payload, expected_seq: change.expectedSeq,
+  }] }))
+  snapshots.delete(requestUser.getStore() ?? stdioUser ?? "")
+  if (!isRecord(result) || !Array.isArray(result.stale)) throw new Error("Could not confirm the write. Read list_app_records before retrying.")
+  if (result.stale.length) throw new Error("Record changed. Read list_app_records again before editing.")
+  return { applied: true }
+}
+
+/** The app's atomic merge RPC preserves all sources if any revision changed. */
+export async function mergeSessions(command: Omit<StudySessionCommand, "mutation_id" | "device_id" | "app">, sources: { id: string; revision: number }[]) {
+  const mutationId = crypto.randomUUID()
+  const result = await rpc("study_session_merge", (userId) => ({
+    p_command: { ...command, mutation_id: mutationId, device_id: DEVICE_ID, app: "examtrack", expected_user_id: userId }, p_sources: sources,
+  }))
+  snapshots.delete(requestUser.getStore() ?? stdioUser ?? "")
+  if (!isRecord(result) || !Array.isArray(result.sessions) || result.sessions.length !== sources.length || result.sessions.some((session) => !parseCanonicalStudySession(session))) throw new Error("Could not confirm the merge. Read the sessions before retrying.")
+  return result
 }
 
 /** One study-session command. Lifecycle commands carry no timing, so the server stamps them at receipt. */

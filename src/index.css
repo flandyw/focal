@@ -280,7 +280,6 @@
 /* One brief transition leaves every section ready to use immediately. */
 :root { --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes page-in { from { opacity: 0.7; } }
-.page-enter { animation: page-in 140ms ease-out; }
 button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: color, background-color, border-color, box-shadow; transition-duration: 120ms; }
 
 @media (pointer: coarse), (max-width: 767px) {

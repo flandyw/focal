@@ -1,6 +1,8 @@
 import { setSubjects, setSubjectCompletion, completeSubjectYear, currentSubjectWork } from "./lib/subject-completion"
 import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
+import { MotionConfig, motion } from "framer-motion"
+import { pageVariants } from "./lib/progress-motion"
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
 import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
 import { toast } from "sonner"
@@ -932,6 +934,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   return (
+    <MotionConfig reducedMotion="user">
     <AIOverviewContext.Provider value={{ userId: sync.status === "sign-in-required" ? undefined : sync.user?.id, onAction: runOverviewAction }}>
     <SidebarProvider keyboardShortcut={!embedded} className={embedded ? "min-h-0" : undefined} defaultOpen={loadSidebarOpen(typeof document === "undefined" ? null : document.cookie)}>
       <a href="#main-content" className="fixed left-2 top-2 z-50 -translate-y-20 rounded-md bg-background px-3 py-2 text-sm shadow focus:translate-y-0">Skip to content</a>
@@ -1031,7 +1034,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {recordId && (view === "exams" && !editingAttempt || view === "mistakes" && !editingMistake) ? <Alert><AlertTitle>Record unavailable</AlertTitle><AlertDescription>This record is not on this device. Check your account and sync status.</AlertDescription><Button variant="outline" onClick={closeRecord}>Back to {view === "exams" ? "practice" : "mistakes"}</Button></Alert> : null}
           {/* Outside the keyed page, so a transition holds the current page until the next chunk is ready instead of flashing the loader. */}
           <Suspense fallback={PAGE_LOADING}>
-          <div key={`${view}:${subjectScoped && view !== "mistakes" ? selectedSubject : "all"}`} className={`page-enter ${view === "chat" ? "flex min-h-0 flex-1 flex-col" : ""}`}>
+          {/* Cards and the page header inherit these labels, so every page staggers in without per-page code. */}
+          <motion.div key={`${view}:${subjectScoped && view !== "mistakes" ? selectedSubject : "all"}`} variants={pageVariants} initial="initial" animate="animate" className={view === "chat" ? "flex min-h-0 flex-1 flex-col" : undefined}>
           {view === "exams" ? (
             <ExamsPage
               scopedSubject={subjectScoped ? selectedSubject : undefined}
@@ -1087,7 +1091,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => { setSettingsSection("account"); setView("settings") }} onSettings={() => { setSettingsSection("ai"); setView("settings") }} /> : null}
           {view === "settings" ? <SettingsPage initialSection={settingsSection} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} onCompleteYear={(year, subjects) => setData((current) => completeSubjectYear(current, year, subjects))} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then(() => toast.success("Backup exported"), (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setGuide("onboarding")} onStartTour={() => setGuide("tour")} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
-          </div>
+          </motion.div>
           </Suspense>
         </main>
         {!embedded && !import.meta.env.VITE_DESKTOP && <MobileTabBar view={navView} dueMistakes={dueMistakeCount} plannedTasks={dueStudyTaskCount} onViewChange={setView} />}
@@ -1134,5 +1138,6 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       {!embedded && <Toaster position="bottom-right" offset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 1.5rem)" }} mobileOffset={{ bottom: "calc(var(--mobile-tabbar) + var(--keyboard-inset) + 0.75rem)" }} />}
     </SidebarProvider>
     </AIOverviewContext.Provider>
+    </MotionConfig>
   )
 }

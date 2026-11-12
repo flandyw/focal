@@ -1,5 +1,7 @@
 import * as React from "react"
+import { motion, type HTMLMotionProps } from "framer-motion"
 
+import { riseItem } from "../../lib/progress-motion"
 import { cn } from "../../lib/utils"
 
 function Card({
@@ -8,13 +10,14 @@ function Card({
   ...props
 }: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
   return (
-    <div
+    <motion.div
+      variants={riseItem}
       data-size={size}
       className={cn(
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-lg border border-border bg-card py-(--card-spacing) text-sm text-card-foreground [--card-spacing:--spacing(5)] max-sm:[--card-spacing:--spacing(4)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
         className
       )}
-      {...props}
+      {...(props as HTMLMotionProps<"div">)}
     />
   )
 }

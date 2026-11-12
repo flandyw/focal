@@ -1,6 +1,7 @@
 import { Fragment, lazy, Suspense, useEffect, useState } from "react"
 import { Sun, ArrowUpRight, Calculator, Menu, BookOpen, CalendarDays, CalendarRange, ChartColumn, ChartNoAxesCombined, ChevronDown, CircleUserRound, GraduationCap, Layers, Library, ListChecks, MessageSquare, Plus, Search, Settings2, Target, Timer, TrendingUp, Users, UsersRound } from "lucide-react"
 import { toast } from "sonner"
+import { motion } from "framer-motion"
 import { Button } from "./ui/button"
 
 import {
@@ -38,6 +39,10 @@ import { buzz } from "../lib/mobile"
 import { cn, count } from "../lib/utils"
 import { FocalMark } from "./focal-mark"
 import { useAppearance } from "../lib/appearance"
+import { indicatorSpring } from "../lib/progress-motion"
+
+/** One highlight shared by every nav item, so switching pages glides it to the new row. */
+const navHighlight = (active: boolean) => active ? <motion.span aria-hidden layoutId="nav-active" transition={indicatorSpring} className="absolute inset-0 -z-10 rounded-sm bg-sidebar-accent" /> : null
 
 type SessionSync = ReturnType<typeof useStudySessionSync>
 const AppCommandMenu = lazy(() => import("./app-command-menu").then((module) => ({ default: module.AppCommandMenu })))
@@ -63,9 +68,10 @@ export function MobileTabBar({ view, dueMistakes, plannedTasks, onViewChange }: 
   // The active tab grows into a labelled pill; the rest stay icon-only with the label kept for screen readers.
   const tab = (key: string, label: string, Icon: typeof Menu, active: boolean, onClick: () => void, badge = 0, badgeLabel = "due") => (
     <button key={key} type="button" aria-current={active ? "page" : undefined} onClick={onClick}
-      className={`relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-[background-color,padding,color] duration-200 ease-(--ease-spring) ${active ? "shrink-0 bg-accent px-4 font-semibold text-accent-foreground" : "flex-1 text-muted-foreground"}`}>
+      className={`relative isolate flex h-11 min-w-11 items-center justify-center gap-2 rounded-full text-sm transition-colors duration-200 ${active ? "shrink-0 px-4 font-semibold text-accent-foreground" : "flex-1 text-muted-foreground"}`}>
+      {active ? <motion.span aria-hidden layoutId="mobile-tab-active" transition={indicatorSpring} className="absolute inset-0 -z-10 rounded-full bg-accent" /> : null}
       <Icon aria-hidden className="size-5 shrink-0" strokeWidth={active ? 2 : 1.5} />
-      <span className={active ? "whitespace-nowrap" : "sr-only"}>{label}</span>
+      {active ? <motion.span initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} transition={indicatorSpring} className="whitespace-nowrap">{label}</motion.span> : <span className="sr-only">{label}</span>}
       {badge > 0 ? <span className={`absolute ${active ? "" : "top-1"} min-w-4 rounded-full bg-primary px-1 text-center text-[0.625rem] leading-4 font-semibold text-primary-foreground ring-2 ${active ? "right-1 -top-1 ring-card" : "left-1/2 ml-1 ring-card"}`}><span aria-hidden>{badge > 99 ? "99+" : badge}</span><span className="sr-only">{badge} {badgeLabel}</span></span> : null}
     </button>
   )
@@ -300,9 +306,10 @@ export function AppSidebar({
                     aria-current={view === item.id ? "page" : undefined}
                     tooltip={item.label}
                     data-tour={`nav-${item.id}`}
-                    className="h-7 gap-2.5 rounded-sm px-2 text-[0.8125rem]"
+                    className="relative isolate h-7 gap-2.5 rounded-sm px-2 text-[0.8125rem] data-active:bg-transparent"
                     onClick={() => navigate(item.id)}
                   >
+                    {navHighlight(view === item.id)}
                     <Icon aria-hidden className="size-4! opacity-70" strokeWidth={1.5} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
@@ -322,8 +329,8 @@ export function AppSidebar({
         <SharedSessions sessions={sessions} onControl={onControlSession} />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Settings" data-tour="settings" className="h-8 gap-2.5 px-2 text-[0.8125rem]" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
-              <Settings2 aria-hidden className="size-4! opacity-70" strokeWidth={1.5} /><span>Settings</span>
+            <SidebarMenuButton tooltip="Settings" data-tour="settings" className="relative isolate h-8 gap-2.5 rounded-sm px-2 text-[0.8125rem] data-active:bg-transparent" isActive={view === "settings"} aria-current={view === "settings" ? "page" : undefined} onClick={() => navigate("settings")}>
+              {navHighlight(view === "settings")}              <Settings2 aria-hidden className="size-4! opacity-70" strokeWidth={1.5} /><span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>

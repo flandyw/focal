@@ -87,3 +87,20 @@ export const hoverLift = (reduceMotion: boolean | null) =>
   reduceMotion
     ? undefined
     : { y: -2, transition: { duration: MOTION_DURATION.normal, ease: MOTION_EASE } }
+
+/* ------------------------------ App-wide ------------------------------ */
+
+/** Page shell: fades in and staggers every descendant that uses `riseItem` (cards, page header). */
+export const pageVariants: Variants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1, transition: { duration: MOTION_DURATION.normal, ease: MOTION_EASE, staggerChildren: 0.05 } },
+}
+
+/** Card-sized block rising into place. Inert outside a parent that sets the labels (e.g. inside dialogs). */
+export const riseItem: Variants = {
+  initial: { opacity: 0, y: 12, scale: 0.985 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: MOTION_DURATION.slow, ease: MOTION_EASE } },
+}
+
+/** Shared-layout glide for active indicators (nav highlight, tab underline). */
+export const indicatorSpring: Transition = { type: "spring", stiffness: 500, damping: 40, mass: 0.8 }

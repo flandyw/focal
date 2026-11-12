@@ -190,8 +190,12 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
     if (!tooltipVisible) return
     const dismiss = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") setTooltipDay(null) }
     window.addEventListener("keydown", dismiss)
-    return () => window.removeEventListener("keydown", dismiss)
-  }, [tooltipVisible])
+    window.addEventListener("scroll", handleCellLeave, true)
+    return () => {
+      window.removeEventListener("keydown", dismiss)
+      window.removeEventListener("scroll", handleCellLeave, true)
+    }
+  }, [tooltipVisible, handleCellLeave])
 
   const hasAnyData = stats.totalStudyDays > 0
 

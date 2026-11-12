@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { count } from "../lib/utils"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
@@ -27,10 +27,13 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | null>(null)
+  const [manualPrompt, setManualPrompt] = useState<string | null>(null)
   const [worksheet, setWorksheet] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [promptItems, setPromptItems] = useState<CurriculumArea[] | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
   function close() {
     if (text.trim()) setConfirmingClose(true)
     else onOpenChange(false)
@@ -41,17 +44,23 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   function toggle(group: string) {
     setSkipped((current) => { const next = new Set(current); if (!next.delete(group)) next.add(group); return next })
     setCopied(false)
+    setManualPrompt(null)
   }
 
   async function copyPrompt() {
+    const prompt = buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined)
     try {
-      await navigator.clipboard.writeText(buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined))
-      setPromptItems(selected)
+      await navigator.clipboard.writeText(prompt)
+      setManualPrompt(null)
       setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("Could not copy the prompt. Check clipboard permission and try again.")
+      setManualPrompt(prompt)
+      toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
+    // Ratings map by item number, so keep the items this exact prompt listed.
+    setPromptItems(selected)
   }
 
   function apply() {
@@ -74,7 +83,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <DialogDescription>Quiz in chat, or get a printable XeLaTeX worksheet and upload it back to be marked. Either way the chatbot suggests a red, amber or green rating for each item it tested.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
-          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); setCopied(false) }}>
+          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); setCopied(false); setManualPrompt(null) }}>
             <TabsList><TabsTrigger value="chat">Quiz in chat</TabsTrigger><TabsTrigger value="worksheet">Worksheet</TabsTrigger></TabsList>
           </Tabs>
           <Field>
@@ -98,7 +107,8 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
-            {promptItems ? <p role="status" className="text-xs text-muted-foreground">Pasted ratings use the {count(promptItems.length, "item")} in your last copied prompt.</p> : null}
+            {manualPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={manualPrompt} /> : null}
+            {promptItems ? <p role="status" className="text-xs text-muted-foreground">Pasted ratings use the {count(promptItems.length, "item")} in your last copied or shown prompt.</p> : null}
             <FieldDescription>Includes {count(selected.length, "item")} with your current ratings, open mistakes and marks{worksheet ? ", plus the worksheet template" : ""}.</FieldDescription>
           </Field>
           <Field data-invalid={error ? true : undefined}>

@@ -110,7 +110,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
-            <pre id="mistake-import-prompt" className="max-h-64 overflow-y-auto rounded-lg border bg-muted/30 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap select-all">{prompt}</pre>
+            <Textarea id="mistake-import-prompt" readOnly className="max-h-64 overflow-y-auto bg-muted/30 font-mono text-xs" value={prompt} />
             <FieldDescription>Send it with photos, transcripts, or a description of your marked work. Any chatbot that can return JSON works.</FieldDescription>
           </Field>
 

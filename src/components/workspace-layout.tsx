@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
+import { motion } from "framer-motion"
 import type { GroupImperativeHandle } from "react-resizable-panels"
 import { savePaneSize, useAppearance } from "../lib/appearance"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resizable"
@@ -66,7 +67,8 @@ export function WorkspaceSplit({ id, primary, secondary }: { id: "calendar" | "m
     if (wide) group.current?.setLayout({ primary: percent, secondary: 100 - percent })
   }, [percent, wide])
 
-  return <div ref={container} className="workspace-split min-w-0" data-split={wide}>
+  // Panes remount when `wide` flips, after the page's entry animation has run; starting the subtree at "animate" keeps their cards from staying invisible.
+  return <motion.div ref={container} initial="animate" className="workspace-split min-w-0" data-split={wide}>
     {wide && secondary ? <ResizablePanelGroup groupRef={group} orientation="horizontal" className="h-auto! items-stretch" style={{ overflow: "visible" }} defaultLayout={{ primary: percent, secondary: 100 - percent }} onLayoutChanged={(layout, meta) => {
       if (meta.isUserInteraction) savePaneSize(field, (meta.requestedLayout ?? layout).primary)
     }}>
@@ -74,5 +76,5 @@ export function WorkspaceSplit({ id, primary, secondary }: { id: "calendar" | "m
       <ResizableHandle withHandle aria-label={id === "calendar" ? "Resize calendar and day plan" : "Resize mistake list and details"} className="self-stretch" />
       <ResizablePanel id="secondary" minSize={id === "calendar" ? "25%" : "30%"} style={{ overflow: "visible" }} className="relative min-w-0"><div className="flex w-full min-w-0 flex-col pl-3">{secondary}</div></ResizablePanel>
     </ResizablePanelGroup> : <div className="grid min-w-0 gap-4">{primary}{secondary}</div>}
-  </div>
+  </motion.div>
 }

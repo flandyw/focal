@@ -265,7 +265,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // A planned session counts down its planned time. Pauses don't use it up, and it keeps
   // recording past zero (as overtime) until you finish, the way Folio does.
   const planSeconds = sharedSession ? Math.round(studySessionPlan(sharedSession).milliseconds / 1000) : 0
-  const countdown = planSeconds > 0
+  const countdown = planSeconds > 0 && sharedSession?.metadata.continued !== true && !undoBlocks
   const remainingSeconds = planSeconds - state.overtimeSeconds
   const pastPlan = countdown && remainingSeconds < 0
   const progress = countdown ? Math.min(100, state.overtimeSeconds / planSeconds * 100) : sharedSession ? 0 : local.progress
@@ -507,7 +507,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               </div>
             ) : null}
           </TimerReadout>
-          {sharedSession && studySessionPlan(sharedSession).milliseconds > 0 ? <p className="mt-4 text-center text-sm text-muted-foreground">
+          {sharedSession && countdown ? <p className="mt-4 text-center text-sm text-muted-foreground">
             {Math.round(studySessionActiveMilliseconds(sharedSession, now.getTime()) / 60_000)} of {Math.round(studySessionPlan(sharedSession).milliseconds / 60_000)} planned minutes worked
           </p> : null}
           {sharedError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{sharedError}</p>}

@@ -112,6 +112,7 @@ function controlProjection(session: CanonicalStudySession, action: StudySessionA
   const accumulated = segments.reduce((sum, segment) => sum + (segment.ended_at ? Math.max(0, Date.parse(segment.ended_at) - Date.parse(segment.started_at)) : 0), 0)
   const metadata = { ...session.metadata }
   if (action === "start" && !metadata.schedule) metadata.schedule = { blocks: blocksOf(session) }
+  if (action === "resume" && canContinue(session)) metadata.continued = true
   return { ...session, metadata, segments, revision: session.revision + 1, updated_at: stamp,
     started_at: action === "start" ? stamp : session.started_at,
     segment_started_at: action === "start" || action === "resume" ? stamp : null,
@@ -1107,7 +1108,7 @@ export function useStudySessionSync(
       acceptSessions([next])
       return
     }
-    await controlSession({ ...current, revision: canonicalSessions.current.get(current.id)?.revision ?? 0 }, action, userId)
+    await controlSession({ ...current, metadata: next.metadata, revision: canonicalSessions.current.get(current.id)?.revision ?? 0 }, action, userId)
     // Hold the caller's spinner until the server has answered, as long as it answers promptly.
     await requestFlush()
     if (userId && (await readQueue(userId)).some((entry) => entry.sessionId === session.id)) {

@@ -14,8 +14,8 @@ export function PageHeader({
 }) {
   // On mobile the top bar already names the page, so only the actions stay visible.
   return (
-    <motion.div variants={riseItem} data-slot="page-header" className={`flex flex-col gap-3 border-b border-border pb-4 max-lg:border-b-0 max-lg:pb-0 md:flex-row md:items-center md:justify-between md:gap-6 ${children ? "" : "max-lg:sr-only"}`}>
-      <div className="min-w-0 max-lg:sr-only">
+    <motion.div variants={riseItem} data-slot="page-header" className={`flex flex-col gap-3 border-b border-border pb-4 compact:border-b-0 compact:pb-0 md:flex-row md:items-center md:justify-between md:gap-6 ${children ? "" : "compact:sr-only"}`}>
+      <div className="min-w-0 compact:sr-only">
         <h1 className="focal-page-title text-balance">{title}</h1>
         {description ? <p className="mt-1 max-w-[60ch] text-sm text-muted-foreground text-pretty">{description}</p> : null}
       </div>

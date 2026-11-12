@@ -15,6 +15,7 @@ import {
   saveSettings,
   saveTimerState,
   timerReducer,
+  studyTimerTitle,
   type FocusBlock,
   type OpenBlock,
   type TimerSettings,
@@ -194,7 +195,7 @@ export function useStudyTimer({
    *  same minutes the timer shows. */
   const syncSession = useCallback((previous: TimerState, next: TimerState, at: number) => {
     const settingsNow = settingsRef.current
-    const identity = { subject: subject.trim(), title: intent.trim() || (next.mode === "free" ? "Free study" : `${settingsNow.workMinutes} minute focus block`) }
+    const identity = { subject: subject.trim(), title: studyTimerTitle(subject, intent, next.mode) }
     // Boundaries are decided against the projected session: the acknowledged one plus
     // the boundaries still on their way. A Start and a Pause pressed on a slow connection
     // then form one coherent history instead of two commands fighting over one revision.

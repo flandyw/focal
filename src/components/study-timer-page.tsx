@@ -52,6 +52,7 @@ import { AI_ENABLED } from "../lib/host"
 import type { StudyPlan } from "../lib/study-plan"
 import {
   DEFAULT_SETTINGS,
+  studyTimerTitle,
   loadFocusSession,
   loadOpenBlock,
   MAX_DAILY_GOAL,
@@ -556,7 +557,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               {todaysBlocks.map((block) => (
                 <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between" key={block.id}>
                   <div className="min-w-0">
-                    <p className="font-medium">{block.intent || "Focus block"}</p>
+                    <p className="font-medium">{studyTimerTitle(block.subject, block.intent, block.source === "free-study" ? "free" : "work")}</p>
                     <p className="text-sm text-muted-foreground">
                       {[block.subject, block.source === "free-study" ? "Free study" : `Block ${block.cycleNumber}`, blockSummary(block)]
                         .filter(Boolean)

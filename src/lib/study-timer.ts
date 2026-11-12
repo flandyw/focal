@@ -1,7 +1,12 @@
 import { formatTimer } from "./exam-timer"
 import type { FocusTimerSession } from "./ongoing-timers"
+import { subjectNameFor } from "./class-timetable"
 
 export { formatTimer }
+
+export function studyTimerTitle(subject: string, intent: string, mode: TimerMode): string {
+  return intent.trim() || [subjectNameFor(subject.trim()), mode === "free" ? "Free study" : "Pomodoro"].filter(Boolean).join(" · ")
+}
 
 const SETTINGS_KEY = "examtrack:study-timer:settings:v1"
 const STATE_KEY = "examtrack:study-timer:state:v1"

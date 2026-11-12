@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState, useCallback } from "react"
-import type { KeyboardEvent, MouseEvent } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import type { FocusEvent, KeyboardEvent, MouseEvent } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, useMotionValue, useReducedMotion } from "framer-motion"
 import { format } from "date-fns"
@@ -143,7 +143,10 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
       if (next) {
         e.preventDefault()
         setFocusOverride(next)
-        cellRefs.current.get(`${next.weekIdx}-${next.dayIdx}`)?.focus({ preventScroll: true })
+        const cell = cellRefs.current.get(`${next.weekIdx}-${next.dayIdx}`)
+        // Instant, nearest-edge scroll keeps the cell visible without page jumps; focus then anchors the tooltip.
+        cell?.scrollIntoView({ block: "nearest", inline: "nearest" })
+        cell?.focus({ preventScroll: true })
       }
     },
     [findAdjacent, weeks],
@@ -171,6 +174,28 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
   const handleCellLeave = useCallback(() => {
     setTooltipDay(null)
   }, [])
+
+  const handleCellFocus = useCallback(
+    (e: FocusEvent<HTMLDivElement>, day: ConsistencyDay) => {
+      const rect = e.currentTarget.getBoundingClientRect()
+      tooltipX.set(rect.left + rect.width / 2)
+      tooltipY.set(rect.bottom)
+      setTooltipDay(day)
+    },
+    [tooltipX, tooltipY],
+  )
+
+  const tooltipVisible = tooltipDay !== null
+  useEffect(() => {
+    if (!tooltipVisible) return
+    const dismiss = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") setTooltipDay(null) }
+    window.addEventListener("keydown", dismiss)
+    window.addEventListener("scroll", handleCellLeave, true)
+    return () => {
+      window.removeEventListener("keydown", dismiss)
+      window.removeEventListener("scroll", handleCellLeave, true)
+    }
+  }, [tooltipVisible, handleCellLeave])
 
   const hasAnyData = stats.totalStudyDays > 0
 
@@ -249,6 +274,8 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
                         onMouseEnter={(e) => handleCellEnter(e, day)}
                         onMouseMove={(e) => handleCellMove(e, day)}
                         onMouseLeave={handleCellLeave}
+                        onFocus={(e) => handleCellFocus(e, day)}
+                        onBlur={handleCellLeave}
                         onKeyDown={(e) => handleKeyDown(e, wi, di)}
                         className={cn(
                           "h-3.5 w-3.5 rounded-[3px] cursor-pointer transition-shadow outline-none",

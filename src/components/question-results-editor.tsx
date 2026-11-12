@@ -21,7 +21,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
   const template = paper && findMarkingTemplate(attempts, paper)
   let preview: QuestionResult[] = []
   let previewError: string | null = null
-  if (text.trim()) {
+  if (pasting && text.trim()) {
     try { preview = parseScoreTable(text) }
     catch (error) { previewError = error instanceof Error ? error.message : "Could not read the scores." }
   }
@@ -32,7 +32,10 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
   }
 
   function add() {
-    onChange([...value, { id: crypto.randomUUID(), label: `Item ${value.length + 1}`, marksAwarded: 0, maxMarks: 1, confidence: "medium" }])
+    const used = new Set(value.map((result) => questionKey(result.label)))
+    let next = value.length + 1
+    while (used.has(questionKey(`Item ${next}`))) next++
+    onChange([...value, { id: crypto.randomUUID(), label: `Item ${next}`, marksAwarded: 0, maxMarks: 1, confidence: "medium" }])
   }
 
   return (

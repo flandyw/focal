@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
@@ -24,8 +24,11 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   const [items, setItems] = useState<ImportedItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | null>(null)
+  const [showPrompt, setShowPrompt] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const groups = items ? groupBy(items, (item) => item.group) : null
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
 
   function close() {
     if (text.trim()) setConfirmingClose(true)
@@ -37,9 +40,11 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
     try {
       await navigator.clipboard.writeText(buildStoplightPrompt(subject.trim()))
       setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("Could not copy the prompt. Check clipboard permission and try again.")
+      setShowPrompt(true)
+      toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
   }
 
@@ -77,7 +82,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="stoplight-import-subject">1. Subject</FieldLabel>
-            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setItems(null); setError(null) }} allowCustom required />
+            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required />
           </Field>
           <Field>
             <div className="flex items-center justify-between gap-3">
@@ -86,6 +91,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
+            {showPrompt && subject.trim() ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={buildStoplightPrompt(subject.trim())} /> : null}
           </Field>
           <Field>
             <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply</FieldLabel>

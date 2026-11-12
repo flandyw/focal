@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Check, ClipboardCheck, ClipboardCopy } from "lucide-react"
 import { toast } from "sonner"
 
@@ -23,11 +23,13 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | null>(null)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const [showPrompt, setShowPrompt] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [imported, setImported] = useState<Set<number>>(new Set())
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
   const importSubjects = subjects.map((name) => ({ id: name, name, shortCode: name }))
   const prompt = buildChatbotImportPrompt(importSubjects, [])
   const chosen = drafts?.map((draft, index) => ({ draft, index })).filter(({ index }) => !skipped.has(index) && !imported.has(index)) ?? []
@@ -42,7 +44,8 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
     try {
       await navigator.clipboard.writeText(prompt)
       setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
       setShowPrompt(true)
       toast.error("Could not copy. Select the prompt below and copy it manually.")
@@ -142,7 +145,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
             : <Button type="button" disabled={!text.trim()} onClick={review}>Review items</Button>}
         </DialogFooter>
       </DialogContent>
-      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setDrafts(null); setImported(new Set()); onOpenChange(false) }} />
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setDrafts(null); setSkipped(new Set()); setImported(new Set()); setError(null); onOpenChange(false) }} />
     </Dialog>
   )
 }

@@ -105,7 +105,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
       {/* Same header as the calendar: where you are in the cycle, how to move, what you can add. */}
       <header data-slot="page-header" className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase max-lg:hidden">Class timetable</p>
+          <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase compact:hidden">Class timetable</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title" aria-live="polite">{!config ? "Class timetable" : days.length > 1 ? `Days ${firstDay}–${days.at(-1)}` : `Day ${firstDay}`}</h1>
             {config && cycleLength > 5 ? (

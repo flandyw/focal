@@ -435,7 +435,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
     <div className="grid items-start gap-6 lg:gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <Card className="min-w-0 gap-0 py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
-          <div className="grid flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:flex-none" aria-label="Study mode" role="group">
+          <div className="grid min-w-max flex-1 grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:flex sm:flex-none" aria-label="Study mode" role="group">
             <Button aria-pressed={!isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("work")} size="sm" variant={!isFreeStudy ? "default" : "ghost"}>Pomodoro</Button>
             <Button aria-pressed={isFreeStudy} disabled={!!sharedSession || sessionBusy || state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds} onClick={() => actions.selectMode("free")} size="sm" variant={isFreeStudy ? "default" : "ghost"}>Free study</Button>
           </div>

@@ -16,6 +16,10 @@
 @custom-variant dark (&:is(.dark *));
 @custom-variant data-horizontal (&[data-orientation="horizontal"]);
 @custom-variant data-vertical (&[data-orientation="vertical"]);
+/* Phone/tablet chrome (top bar + tab bar). The desktop app keeps its sidebar at every width, so it never applies there. */
+@custom-variant compact {
+  html:not([data-desktop]) & { @media (width < 64rem) { @slot; } }
+}
 
 @font-face {
   font-family: "Newsreader";
@@ -323,7 +327,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 :root { --mobile-tabbar: 0px; --keyboard-inset: 0px; }
 
 @media (max-width: 1023px) {
-  :root {
+  :root:not([data-desktop]) {
     /* Floating pill: sits just above the home indicator (or 0.5rem off the edge without one). */
     --mobile-tabbar-gap: max(0.5rem, calc(env(safe-area-inset-bottom) - 0.5rem));
     --mobile-tabbar: calc(3.5rem + 2px + var(--mobile-tabbar-gap));
@@ -370,7 +374,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 
 /* Landscape phone: the height is what's scarce, so the bars shrink and pages start at the top. */
 @media (max-width: 1023px) and (max-height: 500px) {
-  :root { --mobile-tabbar: calc(2.75rem + 2px + var(--mobile-tabbar-gap)); }
+  :root:not([data-desktop]) { --mobile-tabbar: calc(2.75rem + 2px + var(--mobile-tabbar-gap)); }
   .mobile-tabbar > div { max-width: 20rem; padding: 0.125rem; margin-left: auto; }
   .mobile-tabbar button { height: 2.5rem; }
   #main-content:not([data-view="chat"]) { padding-top: 0.25rem; }

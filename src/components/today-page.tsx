@@ -14,7 +14,7 @@ import type { AppView } from "../lib/app-view"
 import { cn, count } from "../lib/utils"
 
 const DAY = 86_400_000
-const hours = (minutes: number) => minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`
+const hours = (raw: number) => { const minutes = Math.round(raw); return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` }
 const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) - Date.parse(today)) / DAY)
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 

@@ -7,7 +7,7 @@ help:
 	@echo "Focal — VCE study management app"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev            Vite dev server (port 5173)"
+	@echo "  make dev            Vite+ dev server (port 5173)"
 	@echo "  make tauri-dev      Full Tauri desktop app in dev mode"
 	@echo ""
 	@echo "Build:"
@@ -16,8 +16,8 @@ help:
 	@echo "  make install        Copy built .app to /Applications"
 	@echo ""
 	@echo "Quality:"
-	@echo "  make lint           Oxlint check"
-	@echo "  make lint-fix       Oxlint auto-fix"
+	@echo "  make lint           Vite+ lint check"
+	@echo "  make lint-fix       Vite+ lint auto-fix"
 	@echo "  make typecheck      TypeScript check (app + Vite config)"
 	@echo "  make check          lint + typecheck (CI gate)"
 	@echo ""
@@ -28,7 +28,7 @@ help:
 	@echo "Maintenance:"
 	@echo "  make clean          Remove dist + bundled .app"
 	@echo "  make distclean      clean + remove src-tauri/target/"
-	@echo "  make format         Oxlint auto-fix"
+	@echo "  make format         Vite+ formatting"
 
 # Detect CPU count for cargo parallelism
 UNAME_S := $(shell uname -s)
@@ -89,7 +89,8 @@ lint-fix:
 typecheck:
 	bun run typecheck
 
-check: lint typecheck
+check:
+	bun run check
 	@echo "✓ All checks passed"
 
 # ---------------------------------------------------------------------------
@@ -118,5 +119,5 @@ distclean: clean
 	@echo "✓ Cleaned all Rust build artifacts"
 
 format:
-	bun run lint:fix
+	bun run fmt
 	@echo "✓ Formatted"

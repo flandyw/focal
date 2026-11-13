@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { beforeEach, expect, mock, test } from "bun:test"
+import { beforeEach, afterAll, expect, vi, test } from "vite-plus/test"
 import { z } from "zod"
 import reports from "../../public/vtac-scaling-reports.json"
 import type { ScalingReference } from "../../src/lib/scaling"
@@ -10,7 +9,7 @@ import { failingCase } from "../../src/lib/fixtures/failing-case"
 // The tools run against an in-memory account. updateApp runs the same validity check the real store does.
 let data: AppData
 let scaling: ScalingReference[] = []
-mock.module("./store", () => ({
+vi.doMock("./store", () => ({
   readAll: async () => ({ data, sessions: [] }),
   updateApp: async (edit: (current: AppData) => AppData) => {
     const next = edit(data)
@@ -33,7 +32,8 @@ const call = (name: string, args: Record<string, unknown> = {}) => tools.get(nam
 
 // Bulk writes log one JSON line to stderr; keep it out of the test output but check it is written.
 const logs: string[] = []
-console.error = (line: string) => void logs.push(line)
+const errorSpy = vi.spyOn(console, "error").mockImplementation((line: string) => void logs.push(line))
+afterAll(() => errorSpy.mockRestore())
 beforeEach(() => { data = { ...EMPTY_APP_DATA, ...failingCase() }; logs.length = 0; scaling = [] })
 
 const exam = { subject: "Mathematical Methods", provider: "Neap", examYear: 2025, completedAt: "2026-05-01", rawScore: 30 }

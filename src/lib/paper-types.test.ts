@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vite-plus/test"
 import { examWarnings, expectedRawMax, parsePaperType, rawMaxWarning, trustedRawMax } from "./paper-types"
 import { getAttemptMathsPaper } from "./mistake-filters"
 

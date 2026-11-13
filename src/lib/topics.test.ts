@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vite-plus/test"
 import { FAILING_CASE_LABELS, FAILING_CASE_SUBJECT, failingCase } from "./fixtures/failing-case"
 import { buildPaperWeaknessMatrix } from "./performance-insights"
 import { applyMistakeChanges, inferTopic, METHODS_TOPICS, planTopicBackfill, revertMistakes, topicConfigFor, validateTopic } from "./topics"

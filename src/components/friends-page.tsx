@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Check, Copy, Flame, HeartHandshake, Link2, Pencil, Plus, RefreshCw, Search, Trash2, Trophy, UserPlus } from "lucide-react"
-import { format, formatDistanceToNow, subDays } from "date-fns"
+import { differenceInCalendarDays, format, formatDistanceToNow, subDays } from "date-fns"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -674,7 +674,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
             <CardContent className="grid min-w-0 gap-2.5">
               {countdowns.filter((entry) => people.some((person) => person.user_id === entry.user_id)).slice(0, 8).map((entry, index) => {
                 const person = people.find((candidate) => candidate.user_id === entry.user_id)
-                const days = Math.max(0, Math.ceil((new Date(entry.starts).getTime() - now.getTime()) / 86_400_000))
+                const days = Math.max(0, differenceInCalendarDays(new Date(entry.starts), now))
                 return <div key={index} className="flex min-w-0 items-start gap-2 text-sm">
                   <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: colorOf(entry.user_id) }} />
                   <span className="min-w-0 flex-1 break-words"><span className="font-medium">{person?.status === "me" ? "You" : person ? personName(person) : ""}</span> · {entry.title}</span>

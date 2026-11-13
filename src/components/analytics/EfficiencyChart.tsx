@@ -36,8 +36,8 @@ export function EfficiencyChart({ data }: EfficiencyChartProps) {
 
           return (
             <div key={item.subjectId} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="flex min-w-0 grow basis-32 items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: color }}
@@ -46,7 +46,7 @@ export function EfficiencyChart({ data }: EfficiencyChartProps) {
                     {subject?.name ?? "Unassigned"}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
                   <span className="tabular-nums">
                     {item.minutes < 60
                       ? `${item.minutes}m`

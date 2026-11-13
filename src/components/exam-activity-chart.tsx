@@ -1,4 +1,6 @@
+import { ChevronDown } from "lucide-react"
 import { useMemo } from "react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { buildExamActivity, type ExamActivityDay, type ExamActivityLevel } from "../lib/exam-activity"
 import type { ExamAttempt } from "../lib/exam-data"
@@ -104,6 +106,16 @@ export function ExamActivityChart({ attempts }: { attempts: ExamAttempt[] }) {
           ))}
           <span>More</span>
         </div>
+        {activity.activeDays ? (
+          <Collapsible className="mt-3">
+            <CollapsibleTrigger className="group/trigger flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">Exam days<ChevronDown className="size-3.5 transition-transform group-data-[panel-open]/trigger:rotate-180" aria-hidden /></CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                {activity.weeks.flat().filter((day) => day.inRange && day.count).toReversed().map((day) => <li key={day.date}>{describeDay(day)}</li>)}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
       </CardContent>
     </Card>
   )

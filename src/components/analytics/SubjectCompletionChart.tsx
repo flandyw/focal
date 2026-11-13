@@ -26,8 +26,8 @@ export function SubjectCompletionChart({ data }: SubjectCompletionChartProps) {
           const color = getSubjectColor(item.subjectId)
           return (
             <div key={item.subjectId} className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: color }}
@@ -36,7 +36,7 @@ export function SubjectCompletionChart({ data }: SubjectCompletionChartProps) {
                     {subject?.name ?? "Unassigned"}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                   <span className="tabular-nums">
                     {item.completed}/{item.total}
                   </span>

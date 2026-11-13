@@ -51,7 +51,8 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
     <section className="border-t border-border/70 pt-5">
       <h3 className="focal-section-title mb-4">Subject breakdown</h3>
 
-      <div className="flex items-center gap-6">
+      <div className="@container">
+      <div className="flex flex-col items-center gap-6 @sm:flex-row">
         <div className="relative flex h-36 w-36 shrink-0 items-center justify-center">
           <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
             {donutSegments.map((seg) => (
@@ -75,7 +76,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex w-full min-w-0 flex-1 flex-col gap-2">
           {data.map((item) => {
             const subject = getSubjectById(item.subjectId)
             const color = getSubjectColor(item.subjectId)
@@ -100,6 +101,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
             )
           })}
         </div>
+      </div>
       </div>
       <p className="sr-only">
         Subject breakdown: {data.length} subject{data.length === 1 ? "" : "s"},

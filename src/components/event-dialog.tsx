@@ -88,7 +88,9 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   function changeStart(next: string) {
     setStartTime(next)
     const end = toMinutes(next) + (duration ?? 0)
-    if (duration && next && end < 1440) setEndTime(fromMinutes(end))
+    if (!duration || !next || (end >= 1440 && !date)) return
+    setEndTime(fromMinutes(end))
+    setEndDate(end >= 1440 ? shiftDays(date, 1) : "")
   }
 
   function align(period: TimetablePeriod) {

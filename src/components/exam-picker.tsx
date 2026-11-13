@@ -49,9 +49,9 @@ function sortPast(first: TimetableEntry, second: TimetableEntry, now: Date): num
 }
 
 function buildSections(entries: TimetableEntry[], now: Date, query: string): { upcoming: Section; past: Section } {
+  const needle = query.trim().toLowerCase()
   const matches = (entry: TimetableEntry) => {
-    if (!query) return true
-    const needle = query.toLowerCase()
+    if (!needle) return true
     return (
       entry.subject.toLowerCase().includes(needle) ||
       (entry.paper?.toLowerCase().includes(needle) ?? false) ||

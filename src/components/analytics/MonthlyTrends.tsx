@@ -106,7 +106,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
 
       <dl className="mt-4 mb-6 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
         {[
-          [`${monthLabel(current.key)} so far`, formatHours(current.minutes), previous ? `${signed(previous.minutes ? (current.minutes - previous.minutes) / previous.minutes * 100 : null, "%", 0)} vs ${monthLabel(previous.key)}` : undefined],
+          [`${monthLabel(current.key)} so far`, formatHours(current.minutes), previous ? `${signed(previous.minutes ? (current.minutes - previous.minutes) / previous.minutes * 100 : null, "%", 0)} vs all of ${monthLabel(previous.key)}` : undefined],
           ["Monthly average", formatHours(averageMinutes), `across ${active.length} active ${active.length === 1 ? "month" : "months"}`],
           ["Biggest month", best ? monthLabel(best.key, true) : "—", best ? formatHours(best.minutes) : undefined],
           ["Exam average trend", signed(markTrend, " pp"), marked.length >= 2 ? `${monthLabel(marked[0].key)} → ${monthLabel(marked[marked.length - 1].key)}` : "needs two marked months"],
@@ -180,7 +180,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
 
       <div className="mt-8 overflow-x-auto">
         <table className="w-full text-left text-xs tabular-nums">
-          <caption className="sr-only">Monthly study and exam summary. Change compares study time with the previous month.</caption>
+          <caption className="sr-only">Monthly study and exam summary. Change compares study time with the full previous month; the latest month only counts days up to the period end.</caption>
           <thead className="border-b text-muted-foreground">
             <tr>{["Month", "Study time", "Change", "Days studied", "Per study day", "Top subject", "Papers", "Average mark"].map((label, i) => <th key={label} scope="col" className={`pb-2 pr-3 font-normal ${i > 0 && i !== 5 ? "text-right" : ""}`}>{label}</th>)}</tr>
           </thead>

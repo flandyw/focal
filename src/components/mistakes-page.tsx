@@ -264,7 +264,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
   }
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]') || !canUseReviewShortcut(event.target)) return
+      if (event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]') || !canUseReviewShortcut(event.target)) return
       if (!revealed && event.key === " " && !(event.target instanceof HTMLElement && event.target.closest("button"))) { event.preventDefault(); setRevealed(true) }
       const option = RATING_OPTIONS.find((item) => item.shortcut === event.key)
       if (revealed && option) { event.preventDefault(); rate(option.rating) }

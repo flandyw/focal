@@ -1,4 +1,5 @@
 import { Button } from "./ui/button"
+import { count } from "../lib/utils"
 import { PageHeader } from "./page-header"
 import { AIOverview } from "./ai-overview"
 import type { AppView } from "../lib/app-view"
@@ -19,7 +20,7 @@ export function SubjectOverview({ subject, attempts, dueMistakes, onNavigate, on
         {([["stoplight", "Skills"], ["sacs", "Assessments"], ["goals", "Goals"]] as const).map(([destination, label]) => <Button key={destination} variant="outline" onClick={() => onNavigate(destination)}>{label}</Button>)}
       </PageHeader>
       {subject === "all" ? null : <AIOverview area="subject" subject={subject} fingerprint={`${dueMistakes}:${attempts.length}`} />}
-      <div className="rounded-md border p-4"><p className="font-medium">{dueMistakes} mistakes due</p><Button className="mt-3" onClick={onReview}>Review due mistakes</Button></div>
+      <div className="rounded-md border p-4"><p className="font-medium">{count(dueMistakes, "mistake")} due</p><Button className="mt-3" onClick={onReview}>Review due mistakes</Button></div>
       <section className="grid gap-3">
         <h2 className="font-medium">Recent attempts</h2>
         {attempts.length ? attempts.toSorted((a, b) => b.completedAt.localeCompare(a.completedAt)).slice(0, 5).map((attempt) => (

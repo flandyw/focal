@@ -21,7 +21,7 @@ import {
   RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
   mergeStoplightItems, planRevision, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
-import { cn } from "../lib/utils"
+import { cn, count } from "../lib/utils"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { Input } from "./ui/input"
 
@@ -133,7 +133,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
             <TabsList>{itemSubjects.map((name) => <TabsTrigger key={name} value={name}>{name}</TabsTrigger>)}</TabsList>
           </Tabs>
           <MetricGrid className="sm:grid-cols-4">
-            <MetricCard label="Green" value={`${subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%`}><span>{green} of {subjectItems.length} items</span></MetricCard>
+            <MetricCard label="Green" value={`${subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%`}><span>{green} of {count(subjectItems.length, "item")}</span></MetricCard>
             <MetricCard label="Red" value={reds}><span>{reds ? "Start here" : "Nothing red right now"}</span></MetricCard>
             <MetricCard label="Re-check due" value={rechecks}><span>Greens fade after 21 days, ambers after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>

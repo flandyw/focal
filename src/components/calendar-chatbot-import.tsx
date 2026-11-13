@@ -105,7 +105,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
               </Button>
             </div>
           </Field>
-          {showPrompt ? <pre tabIndex={0} aria-label="Prompt to copy manually" className="max-h-64 overflow-auto rounded-lg border p-3 text-xs whitespace-pre-wrap select-all">{prompt}</pre> : null}
+          {showPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={prompt} /> : null}
           <Field data-invalid={error && !drafts ? true : undefined}>
             <FieldLabel htmlFor="calendar-import-json">2. Paste the chatbot's reply</FieldLabel>
             <Textarea

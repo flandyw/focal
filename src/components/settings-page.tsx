@@ -83,6 +83,14 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
   const showDetail = Boolean(open || sync.passwordRecovery)
   const activeSection = sections.find((item) => item.id === active)!
 
+  // Phones swap the list and the detail in place: open a section at its top, and return focus to its row on the way back.
+  function openSection(id: SectionId | null) {
+    setOpen(id)
+    if (!matchMedia("(max-width: 767px)").matches) return
+    if (id) (import.meta.env.VITE_DESKTOP ? document.getElementById("main-content") : window)?.scrollTo({ top: 0 })
+    requestAnimationFrame(() => document.getElementById(id ? "settings-section-title" : `settings-nav-${open}`)?.focus({ preventScroll: Boolean(id) }))
+  }
+
   return (
     <div className="grid gap-6">
       <PageHeader title="Settings" />
@@ -94,7 +102,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
               <ul className="divide-y overflow-hidden rounded-lg border bg-card">
                 {sections.filter((item) => item.group === group).map(({ id, label, icon: Icon, summary }) => (
                   <li key={id}>
-                    <button type="button" aria-current={active === id && showDetail ? "page" : undefined} onClick={() => setOpen(id)} className={`flex w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transition-none ${active === id ? "md:bg-primary/10" : ""}`}>
+                    <button type="button" aria-current={active === id && showDetail ? "page" : undefined} id={`settings-nav-${id}`} onClick={() => openSection(id)} className={`flex w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset motion-reduce:transition-none ${active === id ? "md:bg-primary/10" : ""}`}>
                       <span className={`grid size-8 shrink-0 place-items-center rounded-md ${active === id ? "md:bg-primary md:text-primary-foreground" : ""} bg-muted text-foreground`}><Icon className="size-4" aria-hidden /></span>
                       <span className="min-w-0 flex-1">
                         <span className={`block truncate text-sm font-medium ${active === id ? "md:text-primary" : ""}`}>{label}</span>
@@ -113,9 +121,9 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
         </nav>
 
         <section className={`min-w-0 max-w-3xl ${showDetail ? "" : "max-md:hidden"}`} aria-labelledby="settings-section-title">
-          <Button variant="ghost" size="sm" className="-ml-2 mb-3 text-muted-foreground md:hidden" onClick={() => setOpen(null)}><ChevronLeft />Settings</Button>
+          <Button variant="ghost" size="sm" className="-ml-2 mb-3 text-muted-foreground md:hidden" onClick={() => openSection(null)}><ChevronLeft />Settings</Button>
           <header className="mb-6">
-            <h2 id="settings-section-title" className="focal-page-title">{activeSection.label}</h2>
+            <h2 id="settings-section-title" tabIndex={-1} className="focal-page-title outline-none">{activeSection.label}</h2>
           </header>
           {active === "account" ? <AccountSection sync={sync} syncLabel={syncLabel} /> : null}
           {active === "notifications" ? <Panel description="Choose which alerts reach you and when. Preferences apply to this device."><Group padded><PushSettings key={sync.status === "sign-in-required" ? "signed-out" : sync.user?.id ?? "signed-out"} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} /></Group></Panel> : null}
@@ -123,7 +131,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
           {active === "difficulty" ? <DifficultySection difficulty={difficulty} providers={providers} onChange={onExamDifficultyChange} /> : null}
           {active === "appearance" ? <AppearanceSettings /> : null}
           {active === "ai" ? <AISection sync={sync} signedIn={signedIn} /> : null}
-          {active === "app" ? <PhoneSection onNotifications={() => setOpen("notifications")} /> : null}
+          {active === "app" ? <PhoneSection onNotifications={() => openSection("notifications")} /> : null}
           {active === "updates" ? <UpdatesSection /> : null}
           {active === "data" ? <DataSection {...{ onExport, onImport, onReplayOnboarding, onStartTour, recovery }} /> : null}
         </section>

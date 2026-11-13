@@ -198,6 +198,8 @@ type FriendsCache = { userId?: string; profile: Profile | null; people: Person[]
 const emptyCache = (userId?: string): FriendsCache => ({ userId, profile: null, people: [], fetchedAt: 0, cheers: null })
 // In memory only: revisiting Friends shows the last result at once while it refreshes. Another account never sees it.
 let cache = emptyCache()
+// Event handlers update the module cache through this, never during render.
+const rememberProfile = (profile: Profile) => { cache.profile = profile }
 supabase?.auth.onAuthStateChange((_event, session) => { if (session?.user.id !== cache.userId) cache = emptyCache(session?.user.id) })
 
 export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
@@ -323,7 +325,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
   async function saveProfile(next: Profile) {
     const args = { p_username: next.username, p_display_name: next.display_name, p_status_message: next.status_message, p_share_exams: next.share_exams, p_share_subjects: next.share_subjects, p_require_requests: next.require_requests }
     if (await call("friends_update_profile", args, "Could not save your profile.")) {
-      cache.profile = next
+      rememberProfile(next)
       setProfile(next)
       toast.success("Profile updated")
     }

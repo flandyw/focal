@@ -93,6 +93,16 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
     setEndDate(end >= 1440 ? shiftDays(date, 1) : "")
   }
 
+  function changeDate(next: string) {
+    if (date && next && endDate && endDate >= date) {
+      // Date-only parsing counts calendar days without daylight-saving shifts.
+      const daySpan = (Date.parse(endDate) - Date.parse(date)) / 86_400_000
+      setEndDate(shiftDays(next, daySpan))
+    } else if (endDate && endDate < next) setEndDate("")
+    setDate(next)
+    setError(null)
+  }
+
   function align(period: TimetablePeriod) {
     setStartTime(period.startTime)
     setEndTime(period.endTime)
@@ -187,7 +197,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Field>
               <FieldLabel htmlFor="event-date">Date</FieldLabel>
-              <Input id="event-date" type="date" value={date} onChange={(e) => { setDate(e.target.value); if (endDate && endDate < e.target.value) setEndDate(""); setError(null) }} />
+              <Input id="event-date" type="date" value={date} onChange={(e) => changeDate(e.target.value)} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-end-date">Ends on <span className="text-muted-foreground">(optional)</span></FieldLabel>

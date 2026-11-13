@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { expect, test } from "bun:test"
+import { expect, test } from "vite-plus/test"
 import { atarRawScore, estimateAtar } from "./atar"
 import { buildAtarHistory, buildAtarModel } from "./atar-model"
 import { ATAR_AGGREGATE_REFERENCES } from "./atar-data"

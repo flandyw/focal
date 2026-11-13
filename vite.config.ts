@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin, lazyPlugins } from 'vite-plus'
 import { Readable } from 'node:stream'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -90,8 +90,22 @@ function apiPlugin(): Plugin {
   }
 }
 
-// https://vite.dev/config/
+// https://viteplus.dev/config/
 export default defineConfig(({ mode }) => ({
+  // ponytail: keep existing formatting; enable the format gate after a dedicated formatting pass.
+  check: { fmt: false },
+  fmt: { ignorePatterns: ['vendor/**', 'public/**', 'src-tauri/**'] },
+  lint: {
+    ignorePatterns: ['vendor/**'],
+    plugins: ['react', 'typescript', 'oxc'],
+    rules: {
+      'react/rules-of-hooks': 'error',
+      'react/only-export-components': ['warn', { allowConstantExport: true }],
+      'vite-plus/prefer-vite-plus-imports': 'error',
+    },
+    options: { typeAware: true, typeCheck: true },
+    jsPlugins: [{ name: 'vite-plus', specifier: 'vite-plus/oxlint-plugin' }],
+  },
   define: {
     "import.meta.env.VITE_DESKTOP": JSON.stringify(mode === "desktop"),
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(version),
@@ -99,7 +113,7 @@ export default defineConfig(({ mode }) => ({
   },
   clearScreen: false,
   server: { port: mode === "desktop" ? 1420 : 5173, strictPort: true, host: process.env.TAURI_DEV_HOST ?? false },
-  plugins: [react(), tailwindcss(), mistakesPdfPlugin(), apiPlugin()],
+  plugins: lazyPlugins(() => [react(), tailwindcss(), mistakesPdfPlugin(), apiPlugin()]),
   resolve: {
     dedupe: ['react', 'react-dom', 'katex'],
     alias: {

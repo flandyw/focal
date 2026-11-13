@@ -17,7 +17,7 @@ on:
       - "index.html"
       - "vite.config.ts"
       - "tsconfig*.json"
-      - ".oxlintrc.json"
+      - ".node-version"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/release.yml"
@@ -47,6 +47,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -69,6 +72,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -79,7 +85,7 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun test
+      - run: bun run test
       - run: bun run build
       - run: bun run build:desktop
 
@@ -136,6 +142,9 @@ jobs:
           path: public
       - name: Stamp version
         run: node scripts/bump-version.cjs ${{ needs.version.outputs.count }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json

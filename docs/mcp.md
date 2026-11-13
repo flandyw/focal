@@ -159,5 +159,5 @@ permissions, navigate an open app, install updates or drive a desktop ChatGPT lo
 sign-in and MCP-token creation/revocation stay in the app. Full device control would require a
 separate authenticated device bridge; these tools do not pretend to provide one.
 
-Validation: `bun run check`, `bun test`, `bun run build`, `bun run build:desktop`. Live Supabase,
+Validation: `bun run check`, `bun run test`, `bun run build`, `bun run build:desktop`. Live Supabase,
 storage, Friends and third-party PDF requests require an authenticated deployment to verify end to end.

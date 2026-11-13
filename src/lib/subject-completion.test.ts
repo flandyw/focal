@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { expect, test } from "bun:test"
+import { expect, test } from "vite-plus/test"
 import { EMPTY_APP_DATA } from "./exam-data"
 import { subjectKey } from "./studySubjects"
 import { isPreferredSubject } from "./subjects"

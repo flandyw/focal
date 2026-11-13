@@ -38,4 +38,5 @@ supabase/.temp/
 # Windows stray nul artifact (touches history shows untracked `nul` file)
 nul
 
-
+# Vite+ task cache
+.vite-plus/

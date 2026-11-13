@@ -13,16 +13,16 @@ bun run dev                  # browser frontend, port 5173
 bun run dev:desktop          # desktop-mode frontend, port 1420
 bun run tauri dev            # desktop shell + local ChatGPT sidecar + frontend
 bun run check                # typecheck + lint (CI gate); `make check` is the same
-bun run typecheck            # tsc for tsconfig.json and tsconfig.node.json
-bun run lint[:fix]           # oxlint src scripts server api server.ts vite.config.ts
-bun test                     # the four existing test files; do not add more
+bun run typecheck            # Vite+ type checks for both TypeScript projects
+bun run lint[:fix]           # Vite+ lint (same source scope)
+bun run test                 # the seven existing test files; do not add more
 bun run build                # typecheck + browser build
-bun run build:desktop        # typecheck + `vite build --mode desktop` into dist/
+bun run build:desktop        # typecheck + `vp build --mode desktop` into dist/
 bun run start                # production server.ts (serves build + /api/mistakes-pdf + /api/mcp)
 bun run mcp[:http]           # MCP server over stdio / HTTP (docs/mcp.md)
 ```
 
-The small existing `bun test` suite (four files) must keep passing; do not add new tests. Verify with `check`, `bun test`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually.
+The small existing `bun run test` suite (seven files) must keep passing; do not add new tests. Verify with `check`, `bun run test`, both builds, or running the app. `make build` bumps the version, commits, and installs a macOS `.app`; don't run it casually.
 
 ## Architecture
 

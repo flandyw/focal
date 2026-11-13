@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { expect, test } from "bun:test"
+import { expect, test } from "vite-plus/test"
 import { mergeConcurrentValue } from "./app-sync"
 
 for (const row of ["subjects", "completedSubjects", "trackedExamIds", "completedExamIds"]) {

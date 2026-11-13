@@ -1,5 +1,4 @@
-/// <reference types="bun-types" />
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "vite-plus/test"
 import type { ExamAttempt, Mistake, QuestionResult } from "./exam-data"
 import { failingCase, FAILING_CASE_SUBJECT } from "./fixtures/failing-case"
 import { buildPaperDataQuality, buildPaperWeaknessMatrix, WEAKNESS_THRESHOLDS } from "./performance-insights"

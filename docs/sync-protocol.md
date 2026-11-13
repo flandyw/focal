@@ -229,10 +229,10 @@ receipts immediately replace pruned local intervals when the journal is settled.
 
 ## Checks
 
-The small existing `bun test` suite (four files) must keep passing; do not add new tests (see `AGENTS.md`). Verify changes with:
+The small existing `bun run test` suite (seven files) must keep passing; do not add new tests (see `AGENTS.md`). Verify changes with:
 
-- `bun run check` — typecheck (`tsc --noEmit`) + lint (`oxlint`) for the root app.
-- `bun test` — the four existing test files.
+- `bun run check` — typecheck (`vp check --no-fmt --no-lint`) + lint (`vp lint`) for the root app.
+- `bun run test` — the seven existing test files.
 - `bun run typecheck` — the shared TypeScript contract and Focal client only.
 - `bun run build` — browser production compilation.
 - `bun run build:desktop` — desktop frontend compilation.

@@ -4,7 +4,7 @@ Focal has one React frontend for web and desktop. Run commands from the reposito
 
 ## Prerequisites
 
-Install [Bun](https://bun.sh/) (the repository specifies `bun@1.4.2`) and Git. Native desktop development also needs Rust and the platform prerequisites in the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/). On Linux, desktop session restoration also needs an available Secret Service and `secret-tool`.
+Install Node.js (the version in `.node-version` satisfies Vite+), [Bun](https://bun.sh/) (the repository specifies `bun@1.4.2`) and Git. Native desktop development also needs Rust and the platform prerequisites in the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/). On Linux, desktop session restoration also needs an available Secret Service and `secret-tool`.
 
 ```sh
 git clone https://github.com/flandyw/focal.git
@@ -16,6 +16,10 @@ bun run dev
 
 The browser app runs at `http://localhost:5173`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to `.env.local` to use account features. The app can be used locally without an account; sync and other account-backed features need a configured Supabase project. See [deployment](deployment.md) for migrations and server-only settings.
 
+The frontend toolchain is [Vite+](https://viteplus.dev/): Vite, Vitest, Oxlint, Oxfmt, and type checks share `vite.config.ts`. Bun remains the package manager and the server/sidecar runtime. With the optional global `vp` CLI, use `vp install`, `vp dev`, `vp run check`, `vp test`, and `vp run build:desktop`; otherwise use the scripts below. `vp run check` checks both TypeScript projects. `vp build` alone bundles the frontend; `bun run build` also runs the typecheck gate.
+
+Formatting is available with `bun run fmt` or `bun run fmt:check`. It is not a CI gate yet, to preserve the existing source style.
+
 ## Commands
 
 | Command | Purpose |
@@ -24,14 +28,14 @@ The browser app runs at `http://localhost:5173`. Add `VITE_SUPABASE_URL` and `VI
 | `bun run dev:desktop` | Desktop-mode frontend on port 1420; does not launch the native shell. |
 | `bun run tauri dev` | Native shell and desktop frontend; builds the local ChatGPT sidecar first. |
 | `bun run check` | Typecheck and lint the frontend, server, API, and scripts. |
-| `bun test` | Run the four existing test files; do not add new tests. |
+| `bun run test` | Run the seven existing test files with Vite+/Vitest; do not add new tests. |
 | `bun run build` | Typecheck and build the web frontend. |
 | `bun run build:desktop` | Typecheck and build the desktop frontend; does not package the native app. |
 | `bun run tauri build` | Build a native bundle; requires the Tauri toolchain. |
 | `bun run build:chatgpt-sidecar` | Build the desktop sidecar. |
 | `bun run start` | Serve the built app and API using Bun. |
 
-Verify changes with `bun run check`, `bun test`, `bun run build`, and `bun run build:desktop`. The small existing test suite (four files) must keep passing; do not add new tests. Exercise affected behavior in the app when appropriate.
+Verify changes with `bun run check`, `bun run test`, `bun run build`, and `bun run build:desktop`. The small existing test suite (seven files) must keep passing; do not add new tests. Exercise affected behavior in the app when appropriate.
 
 ## Repository map
 

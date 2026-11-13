@@ -18,7 +18,7 @@ Focal is a study companion for VCE students. Plan your week, track study session
 
 ## Get started
 
-Download a desktop build from [GitHub Releases](https://github.com/flandyw/focal/releases), or run the web app locally:
+Download a desktop build from [GitHub Releases](https://github.com/flandyw/focal/releases), or run the web app locally with Node.js (see `.node-version`) and Bun. Development, builds, checks, and tests use [Vite+](https://viteplus.dev/):
 
 ```sh
 git clone https://github.com/flandyw/focal.git

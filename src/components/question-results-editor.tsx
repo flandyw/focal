@@ -8,6 +8,7 @@ import { Textarea } from "./ui/textarea"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
 import { useId, useRef, useState } from "react"
 import { FieldError } from "./ui/field"
+import { count } from "../lib/utils"
 import { findMarkingTemplate, parseScoreTable, questionKey } from "../lib/marking"
 import type { ExamAttempt } from "../lib/exam-data"
 import { validateQuestionResults, type QuestionConfidence, type QuestionResult } from "../lib/exam-data"
@@ -56,7 +57,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>
         <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setError(null) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} />
         <FieldError>{previewError ?? error}</FieldError>
-        {preview.length ? <p role="status" className="text-sm tabular-nums">{preview.length} items · {preview.reduce((sum, result) => sum + result.marksAwarded, 0)} / {preview.reduce((sum, result) => sum + result.maxMarks, 0)} marks. These will be added to your breakdown.</p> : null}
+        {preview.length ? <p role="status" className="text-sm tabular-nums">{count(preview.length, "item")} · {preview.reduce((sum, result) => sum + result.marksAwarded, 0)} / {preview.reduce((sum, result) => sum + result.maxMarks, 0)} marks. These will be added to your breakdown.</p> : null}
         <div className="flex gap-2"><Button type="button" size="sm" disabled={!preview.length || !!previewError} onClick={() => {
           if (value.length + preview.length > 500) return setError("Keep the breakdown to 500 items or fewer.")
           const labels = [...value, ...preview].map((result) => questionKey(result.label))

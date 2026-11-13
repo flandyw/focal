@@ -403,14 +403,19 @@ function ImportDialog({ current, onClose, onImport }: { current: TimetableConfig
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<number | null>(null)
+  const [showPrompt, setShowPrompt] = useState(false)
+  useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(TIMETABLE_SCREENSHOT_PROMPT)
       setCopied(true)
-      window.setTimeout(() => setCopied(false), 2000)
+      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+      copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("Could not copy the prompt. Check clipboard permission and try again.")
+      setShowPrompt(true)
+      toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
   }
 
@@ -419,7 +424,7 @@ function ImportDialog({ current, onClose, onImport }: { current: TimetableConfig
       <DialogContent className="sm:max-w-lg">
         <DialogHeader><p className="focal-eyebrow text-primary">Bring your timetable along</p><DialogTitle>From screenshot to schedule.</DialogTitle><DialogDescription>Use any chatbot to turn a screenshot into timetable data. Importing replaces your current periods; your holidays stay in place.</DialogDescription></DialogHeader>
         <FieldGroup>
-          <div className="flex items-start gap-4 border-y py-5"><span className="font-heading text-xl text-primary">01</span><div className="min-w-0 flex-1"><p className="font-medium">Share the screenshot</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Copy our prompt and send it to a chatbot with a screenshot of your timetable.</p><Button className="mt-3" onClick={() => void copy()} size="sm" type="button" variant="outline">{copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}</Button></div></div>
+          <div className="flex items-start gap-4 border-y py-5"><span className="font-heading text-xl text-primary">01</span><div className="min-w-0 flex-1"><p className="font-medium">Share the screenshot</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Copy our prompt and send it to a chatbot with a screenshot of your timetable.</p><Button className="mt-3" onClick={() => void copy()} size="sm" type="button" variant="outline">{copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}</Button>{showPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="mt-3 max-h-64 overflow-y-auto font-mono text-xs" value={TIMETABLE_SCREENSHOT_PROMPT} /> : null}</div></div>
           <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="tt-import"><span className="mr-2 font-heading text-xl text-primary">02</span>Paste the reply</FieldLabel><Textarea aria-describedby={error ? "tt-import-error" : undefined} aria-invalid={error ? true : undefined} className="font-mono text-xs" id="tt-import" placeholder="Paste the chatbot’s JSON reply here…" rows={7} value={text} onChange={(e) => { setText(e.target.value); setError(null) }} />{error ? <FieldError id="tt-import-error" role="alert">{error}</FieldError> : null}</Field>
         </FieldGroup>
         <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!text.trim()} onClick={() => { try { onImport(parseTimetableImport(text, "pasted.json", current)) } catch (e) { setError(e instanceof Error ? e.message : "Could not read this timetable.") } }} type="button">Import timetable<ArrowRight /></Button></DialogFooter>

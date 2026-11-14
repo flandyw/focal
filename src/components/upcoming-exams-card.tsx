@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { downloadExamFile } from "../lib/host"
 import { useMemo } from "react"
 import { ArrowRight, CalendarDays, CheckCircle2, Download, Plus } from "lucide-react"
@@ -50,7 +51,7 @@ export function UpcomingExamsCard({
 
   function downloadCalendar() {
     const calendar = buildTimetableCalendar(entries.filter((entry) => trackedSet.has(entry.id)), sourceUrl)
-    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "vce-exams.ics")
+    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "vce-exams.ics").then((saved) => { if (saved) toast.success("Calendar downloaded") })
   }
 
   return (

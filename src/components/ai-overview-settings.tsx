@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { clearOverviews } from "../lib/ai-overview"
 import { saveOverviewSettings, useOverviewSettings } from "../lib/ai-overview-state"
 import { loadChatSettings, saveChatSettings, type ChatSettings } from "../lib/chat-history"
@@ -34,7 +35,7 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
     if (!chat) return
     const next = { ...chat, favourites: chat.favourites.includes(id) ? chat.favourites.filter((entry) => entry !== id) : [...chat.favourites, id] }
     setChat(next)
-    void saveChatSettings(next)
+    void saveChatSettings(next).catch(() => toast.error("Chat preferences could not be saved. Changes apply for this visit only."))
   }
   if (!CHAT_ENDPOINT) return <p className="py-4 text-sm text-muted-foreground">AI overviews are not connected in this build.</p>
   return (

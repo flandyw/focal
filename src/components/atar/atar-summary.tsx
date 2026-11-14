@@ -55,10 +55,11 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
 }
 
 function AtarTargetInput({ id, target, onTargetChange }: { id: string; target: number | null; onTargetChange: (target: number | null) => void }) {
-  function commit(value: string) {
-    const next = value.trim() === "" ? null : Number(value)
+  function commit(input: HTMLInputElement) {
+    const next = input.validity.badInput ? Number.NaN : input.value.trim() === "" ? null : Number(input.value)
     if (next === target) return
     if (next === null || (Number.isFinite(next) && next >= 1 && next <= 99.95)) onTargetChange(next)
+    else input.value = target === null ? "" : String(target)
   }
   return (
     <Input
@@ -72,7 +73,7 @@ function AtarTargetInput({ id, target, onTargetChange }: { id: string; target: n
       step="0.05"
       placeholder="None"
       defaultValue={target ?? ""}
-      onBlur={(event) => commit(event.target.value)}
+      onBlur={(event) => commit(event.target)}
       onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur() }}
     />
   )

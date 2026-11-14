@@ -181,7 +181,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
             {/* The number is the point of the card: current against target, with the clock beside it. */}
             <div className="flex items-end justify-between gap-4">
               <p className="tabular-nums"><span className="focal-stat-value">{item.current === null ? "—" : item.current.toFixed(digits)}</span><span className="ml-1.5 text-sm text-muted-foreground">/ {goal.target}</span></p>
-              <p className={`text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{expired ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
+              <p className={`text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{daysLeft < 0 ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
             </div>
             <div className="grid gap-1.5">
               <Progress aria-label={`${goal.subject ? `${goal.subject} ` : ""}${kindLabel(goal.kind)} progress to ${goal.target}`} value={item.progress} />

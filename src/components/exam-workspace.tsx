@@ -7,6 +7,7 @@ import { Input } from "./ui/input"
 import { Progress } from "./ui/progress"
 import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group"
 import { cn, count } from "../lib/utils"
+import { questionKey } from "../lib/exam-data"
 import type { ExamWorkspaceItem, ExamWorkspaceStatus } from "../lib/ongoing-timers"
 
 const nextStatus: Record<ExamWorkspaceStatus, ExamWorkspaceStatus> = {
@@ -39,9 +40,12 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
 
   function add() {
     if (!label.trim()) return setError("Enter a question or section label.")
-    if (items.some((item) => item.label.trim().toLowerCase() === label.trim().toLowerCase())) return setError("That question or section is already mapped.")
-    if (!Number.isFinite(marks) || marks <= 0) return setError("Marks must be greater than zero.")
+    if (items.some((item) => questionKey(item.label) === questionKey(label))) return setError("That question or section is already mapped.")
+    if (!Number.isFinite(marks) || marks < 0.5) return setError("Marks must be at least 0.5.")
     if (marks > remainingMarks) return setError(`Only ${count(remainingMarks, "mark")} left to map.`)
+    const remainder = remainingMarks - marks
+    // Ignore floating-point dust at the zero and half-mark boundaries.
+    if (remainder > 1e-9 && remainder < 0.5 - 1e-9) return setError("Use all remaining marks, or leave at least 0.5 marks to map.")
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])
     // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".
     setLabel(label.trim().replace(/\d+$/, (number) => String(Number(number) + 1)).replace(/^[^\d]*$/, ""))

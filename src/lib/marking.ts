@@ -1,4 +1,6 @@
-import { validateQuestionResults, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data"
+import { questionKey, validateQuestionResults, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data"
+
+export { questionKey }
 
 /** Accept spreadsheet TSV and quoted CSV without treating pasted cells as markup or code. */
 export function parseScoreTable(text: string): QuestionResult[] {
@@ -38,11 +40,8 @@ export function parseScoreTable(text: string): QuestionResult[] {
   })
   const error = validateQuestionResults(results)
   if (error) throw new Error(error)
-  if (new Set(results.map((result) => questionKey(result.label))).size !== results.length) throw new Error("Question labels must be unique.")
   return results
 }
-
-export const questionKey = (label: string) => label.normalize("NFKC").toLowerCase().replace(/\bquestion(?=\s*\d)/g, "q").replace(/[^\p{L}\p{N}]/gu, "")
 
 export function findMarkingTemplate(attempts: ExamAttempt[], paper: Pick<ExamAttempt, "subject" | "provider" | "examYear" | "paper">): ExamAttempt | undefined {
   const subject = paper.subject.trim().toLowerCase()

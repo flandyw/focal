@@ -71,7 +71,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
               <Button type="button" size="sm" variant="outline" render={<label />}>
                 <FileUp />Load file
                 <Input type="file" accept=".json,application/json,.txt" className="sr-only" onChange={(event) => {
-                  void event.target.files?.[0]?.text().then((content) => { setText(content); setResult(null); setError(null) })
+                  void event.target.files?.[0]?.text().then((content) => { setText(content); setResult(null); setError(null) }, () => setError("Could not read that file. Try again or paste its contents."))
                   event.target.value = ""
                 }} />
               </Button>

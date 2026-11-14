@@ -47,8 +47,13 @@ export function McpTokens() {
     void load()
   }
 
-  function copy(text: string, label: string) {
-    void navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`), () => toast.error("Could not copy. Select the text above and copy it manually."))
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`${label} copied`)
+    } catch {
+      toast.error("Could not copy. Select the text above and copy it manually.")
+    }
   }
 
   const command = `claude mcp add --transport http focal ${MCP_URL} --header "Authorization: Bearer ${created}"`

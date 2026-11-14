@@ -672,11 +672,17 @@ export function validateMistakeMarks(totalMarks: number, marksLost: number): str
   return marksLost > totalMarks ? "Marks lost cannot exceed total marks." : null
 }
 
+export const questionKey = (label: string) => label.normalize("NFKC").toLowerCase().replace(/\bquestion(?=\s*\d)/g, "q").replace(/[^\p{L}\p{N}]/gu, "")
+
 export function validateQuestionResults(results: QuestionResult[]): string | null {
+  const keys = new Set<string>()
   for (const result of results) {
     if (!result.label.trim()) return "Every question needs a label."
     const error = validateAttempt({ rawScore: result.marksAwarded, rawMax: result.maxMarks })
     if (error) return `${result.label}: ${error}`
+    const key = questionKey(result.label)
+    if (keys.has(key)) return "Question labels must be unique."
+    keys.add(key)
   }
   return null
 }

@@ -40,7 +40,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   function add() {
     if (!label.trim()) return setError("Enter a question or section label.")
     if (items.some((item) => item.label.trim().toLowerCase() === label.trim().toLowerCase())) return setError("That question or section is already mapped.")
-    if (!Number.isFinite(marks) || marks <= 0) return setError("Marks must be greater than zero.")
+    if (!Number.isFinite(marks) || marks < 0.5) return setError("Marks must be at least 0.5.")
     if (marks > remainingMarks) return setError(`Only ${count(remainingMarks, "mark")} left to map.`)
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])
     // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".

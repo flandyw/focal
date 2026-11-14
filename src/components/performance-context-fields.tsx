@@ -22,8 +22,9 @@ const ratingLabels = ["Very low", "Low", "Moderate", "High", "Very high"]
 export function PerformanceContextFields({ value, onChange, idPrefix }: PerformanceContextFieldsProps) {
   return (
     <fieldset className="grid gap-4 border-t pt-5">
-      <div>
-        <legend className="text-sm font-medium">Conditions and headspace <span className="text-muted-foreground">(optional)</span></legend>
+      {/* Floated so it lays out as a grid row instead of sitting on the top border; it still names the fieldset. */}
+      <legend className="float-left w-full text-sm font-medium">Conditions and headspace <span className="text-muted-foreground">(optional)</span></legend>
+      <div className="-mt-4">
         <FieldDescription>Rate how you felt when you began. After a few results, Insights can identify conditions linked with stronger performance.</FieldDescription>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

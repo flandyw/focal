@@ -120,10 +120,10 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
 
   const active = rooms.find((room) => room.my_status === "joined" && !ended(room, now))
   const selected = selectedId === "browse" ? undefined : rooms.find((room) => room.id === selectedId) ?? active
-  const invitations = rooms.filter((room) => room.my_status === "invited" && !ended(room, now))
-  const upcoming = rooms.filter((room) => !ended(room, now) && Date.parse(room.starts_at) > now.getTime() && room.my_status !== "invited" && room.my_status !== "declined" && room.my_status !== "left")
-  const live = rooms.filter((room) => !ended(room, now) && Date.parse(room.starts_at) <= now.getTime() && room.my_status !== "declined")
-  const recent = rooms.filter((room) => ended(room, now) && ["invited", "going", "joined"].includes(room.my_status ?? ""))
+  // Invitations first, then what is on now, what is coming, and what just ended.
+  const order = (room: Room) => ended(room, now) ? 3 : room.my_status === "invited" ? 0 : Date.parse(room.starts_at) <= now.getTime() ? 1 : 2
+  const listed = rooms.filter((room) => ended(room, now) ? ["invited", "going", "joined"].includes(room.my_status ?? "") : room.my_status !== "declined" && (room.my_status !== "left" || Date.parse(room.starts_at) <= now.getTime()))
+    .sort((a, b) => order(a) - order(b) || Date.parse(a.starts_at) - Date.parse(b.starts_at))
 
   function newSession(scheduled: boolean, friendId?: string) {
     setDraft({ id: crypto.randomUUID(), title: "", note: "", kind: scheduled ? "round" : "desk", visibility: friendId || scheduled ? "invite" : "friends",
@@ -225,22 +225,20 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
           {selected.owner_id === userId && !ended(selected, now) ? <Button variant="outline" disabled={busy} onClick={() => setConfirmEnd(selected)}>{Date.parse(selected.starts_at) > now.getTime() ? "Cancel session" : "End shared session"}</Button> : null}
         </aside>
       </div>
-    </> : <>
-      <section className="grid gap-6">
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="focal-section-title">Study together</h2><p className="mt-2 text-sm text-muted-foreground">A little company for your next study block.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!loaded || busy} onClick={() => newSession(true)}><CalendarPlus />Plan a session</Button><Button disabled={!loaded || busy || !!active} onClick={() => newSession(false)}><Plus />Start a session</Button></div></div>
-        {active ? <Button variant="outline" className="h-auto justify-between gap-3 py-3 text-left whitespace-normal" onClick={() => setSelectedId(active.id)}><span className="min-w-0 truncate">Return to {active.title}</span><span className="font-mono tabular-nums">{clock(active).value}</span></Button> : null}
-        {invitations.length ? <section><h3 className="font-heading text-xl">Your invitations</h3><ul className="mt-3 divide-y">{invitations.map((room) => <li key={room.id} className="flex flex-wrap items-center gap-3 py-4"><Initial name={room.host_name} /><div className="min-w-0 flex-1"><p className="break-words font-medium">{room.title}</p><p className="text-sm text-muted-foreground">{room.host_name} invited you · {Date.parse(room.starts_at) > now.getTime() ? when(room) : "Happening now"}</p></div><Button variant="outline" onClick={() => setSelectedId(room.id)}>View invitation</Button></li>)}</ul></section> : null}
-        <section><h3 className="font-heading text-xl">Open sessions</h3><ul className="mt-3 divide-y">{live.map((room) => <li key={room.id} className="flex flex-wrap items-center gap-3 py-5"><Initial name={room.host_name} /><div className="min-w-0 flex-1"><p className="break-words font-medium">{room.title}</p><p className="mt-1 text-sm text-muted-foreground">{room.kind === "round" ? "Focus round" : "Open desk"} · {room.members.filter((m) => m.status === "joined").length} in session · {room.visibility === "friends" ? "Open to friends" : "Invitation only"}</p></div><span className="font-mono text-lg tabular-nums text-primary">{clock(room).value}</span><Button variant="outline" onClick={() => setSelectedId(room.id)}>View session</Button></li>)}</ul>{loaded && !live.length ? <div className="py-5"><p className="text-sm">No open sessions right now.</p><p className="mt-1 text-sm text-muted-foreground">Start a quiet desk or a timed round, then invite a friend.</p></div> : null}</section>
-      </section>
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-12">
-        <section><h3 className="focal-section-title">Coming up</h3><ul className="mt-3 divide-y">{upcoming.map((room) => <li key={room.id} className="flex flex-wrap items-center justify-between gap-3 py-4"><div className="min-w-0"><p className="break-words font-medium">{room.title}</p><p className="mt-1 text-sm text-muted-foreground">{when(room)}</p><p className="text-sm text-primary">{room.my_status === "going" ? "You’re going" : `Hosted by ${room.host_name}`}</p></div><Button variant="outline" onClick={() => setSelectedId(room.id)}>View</Button></li>)}</ul>{loaded && !upcoming.length ? <p className="py-5 text-sm text-muted-foreground">Nothing planned yet. Pick a time that works for you and your friends.</p> : null}<p className="text-sm text-muted-foreground">Times use your local timezone · {Intl.DateTimeFormat().resolvedOptions().timeZone}. Accepted plans appear in Calendar; reminders follow your settings.</p></section>
-        <section><h3 className="focal-section-title">Your friends</h3><ul className="mt-3 divide-y">{friends.map((friend) => <li key={friend.id} className="flex items-center gap-3 py-3"><Initial name={friend.name} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{friend.name}</p><p className="text-sm text-muted-foreground">{friend.studying ? "Studying now" : "Not studying right now"}</p></div><Button size="sm" variant="outline" disabled={!loaded || busy || (active?.owner_id === userId && active.members.some((m) => m.user_id === friend.id))} onClick={() => {
-          if (active?.owner_id === userId) { setInviting(active); setInvitees([friend.id]) }
-          else newSession(false, friend.id)
-        }}>{active?.owner_id === userId && active.members.some((m) => m.user_id === friend.id) ? "Included" : "Invite"}</Button></li>)}</ul>{!friends.length ? <p className="py-5 text-sm text-muted-foreground">Add a friend to invite them to study.</p> : null}</section>
-      </div>
-      {recent.length ? <section><h3 className="font-heading text-xl">Recently ended</h3><ul className="mt-3 divide-y">{recent.map((room) => <li key={room.id} className="flex items-center justify-between gap-3 py-3 text-sm"><span className="truncate">{room.title} · {room.ended_at ? "Ended by host" : "Session finished"}</span><Button variant="ghost" size="sm" onClick={() => setSelectedId(room.id)}>View</Button></li>)}</ul></section> : null}
-    </>}
+    </> : <section aria-labelledby="study-together" className="grid gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3"><div className="min-w-0"><h2 id="study-together" className="focal-section-title">Study together</h2><p className="mt-1 text-sm text-muted-foreground">Share a desk or a timed focus round. Everyone keeps their own timer.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!loaded || busy} onClick={() => newSession(true)}><CalendarPlus />Plan a session</Button><Button disabled={!loaded || busy || !!active} onClick={() => newSession(false)}><Plus />Start a session</Button></div></div>
+      {listed.length ? <ul className="divide-y border-y">{listed.map((room) => {
+        const over = ended(room, now)
+        const future = Date.parse(room.starts_at) > now.getTime()
+        const invited = room.my_status === "invited" && !over
+        return <li key={room.id} className="flex flex-wrap items-center gap-3 py-3"><Initial name={room.host_name} /><div className="min-w-0 flex-1"><p className="break-words font-medium">{room.title}</p><p className="text-sm text-muted-foreground">{
+          over ? `Ended · hosted by ${room.host_name}`
+            : invited ? `${room.host_name} invited you · ${future ? when(room) : "happening now"}`
+            : future ? `${when(room)} · ${room.my_status === "going" ? "you’re going" : `hosted by ${room.host_name}`}`
+            : `${room.kind === "round" ? "Focus round" : "Open desk"} · ${room.members.filter((m) => m.status === "joined").length} in session · hosted by ${room.host_name}`
+        }</p></div>{over || future ? null : <span className="font-mono text-lg tabular-nums text-primary">{clock(room).value}</span>}<Button size="sm" variant={invited || room.id === active?.id ? "default" : "outline"} onClick={() => setSelectedId(room.id)}>{invited ? "View invitation" : room.id === active?.id ? "Return" : "View"}</Button></li>
+      })}</ul> : loaded ? <p className="text-sm text-muted-foreground">No sessions right now.</p> : null}
+    </section>}
     <Dialog open={!!draft} onOpenChange={(open) => { if (!open && !busy) setDraft(null) }}><DialogContent className="max-h-[90dvh] overflow-y-auto" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>{draft?.scheduled ? "Plan a session" : "Start a session"}</DialogTitle><DialogDescription>Choose a quiet desk with independent timers, or a shared focus round.</DialogDescription></DialogHeader>
       {draft ? <form id="shared-study-form" className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void save() }}><fieldset disabled={busy} className="grid min-w-0 gap-4">

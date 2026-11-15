@@ -1,12 +1,12 @@
 # Studying with friends
 
-Friends → Together combines three flows in the shared web/desktop interface:
+The Study together section at the top of Friends combines three flows in the shared web/desktop interface:
 
 - **Open desk:** start a session, allow accepted friends or invite specific friends, and study with independent personal timers. Desks close after 12 hours or when the host ends them.
 - **Focus round:** share a server-timed focus countdown followed by a break. Late joiners see the time remaining. The shared clock never starts, pauses or stops a personal timer.
 - **Scheduled session:** plan up to 90 days ahead and invite friends. Accepting before the start creates one personal canonical study plan, visible in Calendar, Focus and Folio. Existing notification preferences govern reminders.
 
-The session view shows participants, outstanding invitations, a private task field for opening a new personal timer, and controls to join, leave or end the shared session. Focus keeps a compact shared clock with a link back to Friends. An existing timer always takes precedence over starting a planned session. Activity & sharing retains the existing leaderboard, comparisons, cheers, groups and profile controls.
+The session view shows participants, outstanding invitations, a private task field for opening a new personal timer, and controls to join, leave or end the shared session. Focus keeps a compact shared clock with a link back to Friends. An existing timer always takes precedence over starting a planned session. Below it, Friends is one page: requests, the study-time list, cheers, groups and upcoming exams; adding a friend and profile & sharing are dialogs.
 
 Invitations can be declined or withdrawn. Leaving cancels an untouched personal plan; host cancellation does the same for all members. Running and completed study remains intact. Cancellation publishes normal canonical-session feed events, preserving existing sync identifiers.
 

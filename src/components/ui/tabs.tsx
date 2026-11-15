@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { LayoutGroup, motion } from "framer-motion"
 import { useId } from "react"
 
-import { indicatorSpring, TRANSITION } from "../../lib/progress-motion"
+import { indicatorSpring, staggerItem } from "../../lib/progress-motion"
 import { cn } from "../../lib/utils"
 
 function Tabs({
@@ -79,7 +79,9 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       className={cn("flex-1 text-sm outline-none", className)}
-      render={<motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={TRANSITION.entrance} />}
+      // Labels, not inline targets: cards inside inherit them and rise in with the panel. Inline targets left cards in a
+      // panel opened after the page's entry animation stuck at their invisible initial state.
+      render={<motion.div variants={staggerItem} initial="initial" animate="animate" />}
       {...props}
     />
   )

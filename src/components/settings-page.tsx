@@ -8,7 +8,7 @@ import { validCompletionYear } from "@/lib/subject-completion"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
 import { AI_ENABLED } from "../lib/host"
 import { canPromptInstall, onInstallChange, promptInstall } from "../lib/pwa"
-import { updateActions, useUpdateState } from "../lib/update-store"
+import { readOvernightInstall, saveOvernightInstall, updateActions, useUpdateState } from "../lib/update-store"
 import { loadAISettings, saveAISettings, type AISettings, type ReasoningEffort } from "../lib/ai-settings"
 import type { useSupabaseSync } from "../lib/sync"
 import { DEFAULT_PROVIDER_DIFFICULTY, MATHEMATICS_PROVIDER_DIFFICULTY, resolveDifficultySettings, type ExamDifficultySettings } from "../lib/exam-difficulty"
@@ -502,6 +502,7 @@ const formatBytes = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).t
 
 function UpdatesSection() {
   const update = useUpdateState()
+  const [overnight, setOvernight] = useState(readOvernightInstall)
   const busy = update.status === "checking" || update.status === "downloading" || update.status === "installing"
   const percent = update.total ? Math.min(100, (update.downloaded / update.total) * 100) : null
   const status = {
@@ -528,6 +529,9 @@ function UpdatesSection() {
             <p className="text-sm tabular-nums text-muted-foreground">{formatBytes(update.downloaded)}{update.total ? ` of ${formatBytes(update.total)}` : ""}{percent === null ? "" : ` · ${Math.round(percent)}%`}{update.speed ? ` · ${formatBytes(update.speed)}/s` : ""}</p>
           </div>
         ) : null}
+        <Row title={<Label htmlFor="update-overnight">Install updates overnight</Label>} description="Restart into a downloaded update between 2 and 5 am, if Focal hasn’t been used for 30 minutes.">
+          <Switch id="update-overnight" checked={overnight} onCheckedChange={(on) => { setOvernight(on); saveOvernightInstall(on) }} />
+        </Row>
       </Group>
     </Panel>
   )

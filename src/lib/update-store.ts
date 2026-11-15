@@ -15,6 +15,16 @@ export const updateActions: { check?: () => Promise<void>; download?: () => Prom
 let state: UpdateState = { status: "idle", downloaded: 0, speed: 0 }
 const listeners = new Set<() => void>()
 
+export const getUpdateState = () => state
+
+const OVERNIGHT_KEY = "focal:update-overnight:v1"
+export function readOvernightInstall() {
+  try { return localStorage.getItem(OVERNIGHT_KEY) === "1" } catch { return false }
+}
+export function saveOvernightInstall(on: boolean) {
+  try { localStorage.setItem(OVERNIGHT_KEY, on ? "1" : "0") } catch { /* Applies for this session only. */ }
+}
+
 export function setUpdateState(next: Partial<UpdateState>) {
   state = { ...state, ...next }
   listeners.forEach((listener) => listener())

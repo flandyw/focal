@@ -10,7 +10,7 @@ import { toast } from "sonner"
 import { examHost } from "./host"
 import { setSupabaseClient } from "./supabase"
 import { supabase } from "./supabase/client"
-import { setUpdateState, updateActions } from "./update-store"
+import { getUpdateState, readOvernightInstall, setUpdateState, updateActions } from "./update-store"
 
 setSupabaseClient(supabase)
 
@@ -109,8 +109,28 @@ updateActions.install = async () => {
   }
 }
 
+let lastActivity = Date.now()
+for (const type of ["pointerdown", "keydown"]) addEventListener(type, () => { lastActivity = Date.now() }, { capture: true, passive: true })
+
+async function backgroundUpdate() {
+  if (getUpdateState().status !== "ready") {
+    if (["checking", "downloading", "installing"].includes(getUpdateState().status)) return
+    await updateActions.check!()
+    if (!pending) return
+    await updateActions.download!()
+    if (getUpdateState().status !== "ready") return
+    toast(`Focal ${pending.version} is ready`, {
+      description: readOvernightInstall() ? "It installs overnight, or restart now." : "Restart to finish updating.",
+      action: { label: "Restart", onClick: () => void updateActions.install!() },
+    })
+  }
+  // Opt-in: install 2–5 am local time, only after 30 idle minutes, so no one is mid-exam or mid-edit.
+  const hour = new Date().getHours()
+  if (readOvernightInstall() && hour >= 2 && hour < 5 && Date.now() - lastActivity > 30 * 60_000) await updateActions.install!()
+}
+
 if (isTauri() && !import.meta.env.DEV) {
-  void updateActions.check().then(() => {
-    if (pending) toast(`Focal ${pending.version} is available`, { description: "Download it from Settings → Updates." })
-  })
+  void backgroundUpdate()
+  // Hourly so the 3-hour quiet window is never skipped; once downloaded, ticks make no network request.
+  setInterval(() => void backgroundUpdate(), 60 * 60_000)
 }

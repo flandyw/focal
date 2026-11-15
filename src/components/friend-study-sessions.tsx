@@ -14,6 +14,7 @@ import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Avatar, AvatarFallback } from "./ui/avatar"
 import { Skeleton } from "./ui/skeleton"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 
 type Member = { user_id: string; name: string; status: "invited" | "going" | "joined" | "left" | "declined" }
 type Room = {
@@ -54,6 +55,8 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
   const busyRef = useRef(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [pristineDraft, setPristineDraft] = useState("")
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false)
   const [inviting, setInviting] = useState<Room | null>(null)
   const [invitees, setInvitees] = useState<string[]>([])
   const [confirmEnd, setConfirmEnd] = useState<Room | null>(null)
@@ -118,6 +121,7 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
     } finally { busyRef.current = false; setBusy(false) }
   }
 
+  const cancelling = !!confirmEnd && Date.parse(confirmEnd.starts_at) > now.getTime()
   const active = rooms.find((room) => room.my_status === "joined" && !ended(room, now))
   const selected = selectedId === "browse" ? undefined : rooms.find((room) => room.id === selectedId) ?? active
   // Invitations first, then what is on now, what is coming, and what just ended.
@@ -126,8 +130,16 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
     .sort((a, b) => order(a) - order(b) || Date.parse(a.starts_at) - Date.parse(b.starts_at))
 
   function newSession(scheduled: boolean, friendId?: string) {
-    setDraft({ id: crypto.randomUUID(), title: "", note: "", kind: scheduled ? "round" : "desk", visibility: friendId || scheduled ? "invite" : "friends",
-      scheduled, start: format(new Date(canonicalNow().getTime() + 3_600_000), "yyyy-MM-dd'T'HH:mm"), focus: "25", pause: "5", members: friendId ? [friendId] : [] })
+    const next: Draft = { id: crypto.randomUUID(), title: "", note: "", kind: scheduled ? "round" : "desk", visibility: friendId || scheduled ? "invite" : "friends",
+      scheduled, start: format(new Date(canonicalNow().getTime() + 3_600_000), "yyyy-MM-dd'T'HH:mm"), focus: "25", pause: "5", members: friendId ? [friendId] : [] }
+    setDraft(next)
+    setPristineDraft(JSON.stringify(next))
+  }
+
+  function closeDraft() {
+    if (busy) return
+    if (draft && JSON.stringify(draft) !== pristineDraft) setConfirmingDiscard(true)
+    else setDraft(null)
   }
 
   async function save() {
@@ -239,7 +251,7 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
         }</p></div>{over || future ? null : <span className="font-mono text-lg tabular-nums text-primary">{clock(room).value}</span>}<Button size="sm" variant={invited || room.id === active?.id ? "default" : "outline"} onClick={() => setSelectedId(room.id)}>{invited ? "View invitation" : room.id === active?.id ? "Return" : "View"}</Button></li>
       })}</ul> : loaded ? <p className="text-sm text-muted-foreground">No sessions right now.</p> : null}
     </section>}
-    <Dialog open={!!draft} onOpenChange={(open) => { if (!open && !busy) setDraft(null) }}><DialogContent className="max-h-[90dvh] overflow-y-auto" showCloseButton={!busy}>
+    <Dialog open={!!draft} onOpenChange={(open) => { if (!open) closeDraft() }}><DialogContent className="max-h-[90dvh] overflow-y-auto" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>{draft?.scheduled ? "Plan a session" : "Start a session"}</DialogTitle><DialogDescription>Choose a quiet desk with independent timers, or a shared focus round.</DialogDescription></DialogHeader>
       {draft ? <form id="shared-study-form" className="grid gap-4" onSubmit={(event) => { event.preventDefault(); void save() }}><fieldset disabled={busy} className="grid min-w-0 gap-4">
         <Label className="grid gap-2">Session name<Input autoFocus required maxLength={80} placeholder="e.g. Methods revision" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></Label>
@@ -251,16 +263,17 @@ export function FriendStudySessions({ userId, friends = [], sessions = [], compa
         {memberPicker(draft.members, (members) => setDraft({ ...draft, members }))}
         <p className="text-sm text-muted-foreground">{draft.kind === "desk" ? "Desks close after 12 hours, or when you end them. " : "The shared round starts at the set time, even if someone arrives late. "}Only selected friends receive invitations. Your subjects, tasks and exam results keep their existing privacy settings.</p>
       </fieldset></form> : null}
-      <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDraft(null)}>Cancel</Button><Button type="submit" form="shared-study-form" disabled={busy || !draft?.title.trim()}>{busy ? "Saving…" : draft?.scheduled ? "Plan and invite" : "Start session"}</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={closeDraft}>Cancel</Button><Button type="submit" form="shared-study-form" disabled={busy || !draft?.title.trim()}>{busy ? "Saving…" : draft?.scheduled ? "Plan and invite" : "Start session"}</Button></DialogFooter>
     </DialogContent></Dialog>
+    <DiscardChangesDialog open={confirmingDiscard} onKeep={() => setConfirmingDiscard(false)} onDiscard={() => { setConfirmingDiscard(false); setDraft(null) }} />
     <Dialog open={!!inviting} onOpenChange={(open) => { if (!open && !busy) setInviting(null) }}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>Invite to your session</DialogTitle><DialogDescription>Only selected friends receive an invitation. They choose whether to join.</DialogDescription></DialogHeader>
       {memberPicker(invitees, setInvitees, inviting?.members.map((m) => m.user_id) ?? [])}
       <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setInviting(null)}>Cancel</Button><Button disabled={busy || !invitees.length} onClick={() => {
         if (inviting) void mutate("friend_study_invite", { p_id: inviting.id, p_members: invitees }, "Invitations sent").then((ok) => { if (ok) setInviting(null) })
       }}>{busy ? "Sending…" : "Send invitation"}</Button></DialogFooter>
     </DialogContent></Dialog>
-    <Dialog open={!!confirmEnd} onOpenChange={(open) => { if (!open && !busy) setConfirmEnd(null) }}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>End {confirmEnd?.title}?</DialogTitle><DialogDescription>This ends the shared session for everyone and cancels untouched calendar plans. Recorded study and running personal timers are kept.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirmEnd(null)}>Keep session</Button><Button variant="destructive" disabled={busy} onClick={() => {
-      if (confirmEnd) void mutate("friend_study_end", { p_id: confirmEnd.id }, "Shared session ended").then((ok) => { if (ok) setConfirmEnd(null) })
-    }}>{busy ? "Ending…" : "End session"}</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={!!confirmEnd} onOpenChange={(open) => { if (!open && !busy) setConfirmEnd(null) }}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{cancelling ? "Cancel" : "End"} {confirmEnd?.title}?</DialogTitle><DialogDescription>This {cancelling ? "cancels" : "ends"} the shared session for everyone and cancels untouched calendar plans. Recorded study and running personal timers are kept.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setConfirmEnd(null)}>Keep session</Button><Button variant="destructive" disabled={busy} onClick={() => {
+      if (confirmEnd) void mutate("friend_study_end", { p_id: confirmEnd.id }, cancelling ? "Shared session cancelled" : "Shared session ended").then((ok) => { if (ok) setConfirmEnd(null) })
+    }}>{busy ? (cancelling ? "Cancelling…" : "Ending…") : cancelling ? "Cancel session" : "End session"}</Button></DialogFooter></DialogContent></Dialog>
   </div>
 }

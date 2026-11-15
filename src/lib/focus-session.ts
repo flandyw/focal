@@ -212,7 +212,7 @@ export function createFocusSessionMirror({
       case "resume": {
         if (!base) return undefined
         const gap = Math.max(0, boundary.at - (base.pausedAt ?? boundary.at))
-        return { ...base, startedAt: base.startedAt + gap, pausedAt: undefined, pausedSeconds: base.pausedSeconds + gap / 1000 }
+        return { ...base, startedAt: base.startedAt + gap, pausedAt: undefined, pausedSeconds: Math.round(base.pausedSeconds + gap / 1000) }
       }
     }
   }

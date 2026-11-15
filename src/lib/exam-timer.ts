@@ -35,6 +35,7 @@ export function getExamClock(session: ClockSession, now: number) {
 export type ExamClock = ReturnType<typeof getExamClock>
 
 export function formatTimer(seconds: number) {
+  seconds = Math.max(0, Math.round(seconds)) // older attempts stored fractional pausedSeconds
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const remainder = seconds % 60

@@ -60,7 +60,7 @@ export function resumeExamSession(session: ExamTimerSession, now = Date.now()): 
     ...session,
     startedAt: session.startedAt + pauseDuration,
     pausedAt: undefined,
-    pausedSeconds: session.pausedSeconds + pauseDuration / 1000,
+    pausedSeconds: Math.round(session.pausedSeconds + pauseDuration / 1000),
   }
 }
 

@@ -289,7 +289,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
         plannedWritingMinutes: session.writingMinutes,
         actualWritingSeconds: clock.writingElapsedSeconds,
         overtimeSeconds: clock.overtimeSeconds,
-        pausedSeconds: session.pausedSeconds ?? 0,
+        pausedSeconds: Math.round(session.pausedSeconds ?? 0),
       },
       referenceId: null,
       createdAt: timestamp,
@@ -459,7 +459,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
             <Stat label="Pace" value={`${(session.writingMinutes / session.marks).toFixed(2)} min / mark`} />
             <Stat label="Expected by now" value={clock.phase === "reading" ? "0 marks" : `${clock.expectedMarks.toFixed(1)} / ${session.marks}`} />
             <Stat label="Done" value={items.length ? `${doneMarks} / ${session.marks}${pace ? ` · ${pace}` : ""}` : "Map questions below"} tone={paceDelta < -5 && pace ? "warning" : undefined} />
-            <Stat label="Paused" value={formatTimer(Math.round(session.pausedSeconds ?? 0))} />
+            <Stat label="Paused" value={formatTimer(session.pausedSeconds ?? 0)} />
           </dl>
         </CardContent>
       </Card>

@@ -134,7 +134,7 @@ function WeekBars({ day }: { day: (offset: number) => number }) {
   )
 }
 
-type ChartSeries = { name: string; day: (offset: number) => number; className: string }
+type ChartSeries = { id: string; name: string; day: (offset: number) => number; className: string }
 
 /** Paired bars for the last 30 days; oldest day on the left. Hover or focus a day to read it. */
 function DailyChart({ series, now }: { series: ChartSeries[]; now: Date }) {
@@ -146,16 +146,16 @@ function DailyChart({ series, now }: { series: ChartSeries[]; now: Date }) {
     <div className="grid gap-1.5" onMouseLeave={() => setHover(null)}>
       <div className="flex min-h-5 flex-wrap items-center gap-x-3 text-xs text-muted-foreground" aria-live="polite">
         <span className="font-medium text-foreground">{hover === null ? "Daily average" : format(subDays(now, hover), "EEE d MMM")}</span>
-        {series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} />{s.name} <span className="tabular-nums text-foreground">{duration(hover === null ? sum(s) / 30 : s.day(hover))}</span></span>)}
+        {series.map((s) => <span key={s.id} className="flex items-center gap-1"><span className={cn("size-2 rounded-full", s.className)} />{s.name} <span className="tabular-nums text-foreground">{duration(hover === null ? sum(s) / 30 : s.day(hover))}</span></span>)}
       </div>
-      <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(sum(s))}`).join(". ")}.`}>
+      <div className="flex h-24 items-end gap-[2px]" role="group" aria-label={`Daily study for the last 30 days. ${series.map((s) => `${s.name}: ${duration(sum(s))}`).join(". ")}.`}>
         {days.map((offset) => (
-          <div key={offset} tabIndex={0} role="img" aria-label={`${format(subDays(now, offset), "EEEE d MMMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(", ")}`} onClick={() => setHover(offset)} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 items-end gap-px rounded-sm outline-none transition-opacity", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60")}>
-            {series.map((s) => <span key={s.name} className={cn("w-full rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%` }} />)}
+          <div key={offset} tabIndex={0} role="img" aria-label={`${format(subDays(now, offset), "EEEE d MMMM")}: ${series.map((s) => `${s.name} ${duration(s.day(offset))}`).join(", ")}`} onClick={() => setHover(offset)} onMouseEnter={() => setHover(offset)} onFocus={() => setHover(offset)} onBlur={() => setHover(null)} className={cn("flex h-full flex-1 items-end gap-px rounded-sm outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring", hover !== null && hover !== offset && "opacity-40", hover === offset && "bg-muted/60")}>
+            {series.map((s) => <span key={s.id} className={cn("w-full rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.day(offset) ? 3 : 0, s.day(offset) / max * 100)}%` }} />)}
           </div>
         ))}
       </div>
-      <div className="flex justify-between text-xs text-muted-foreground" aria-hidden><span>30 days ago</span><span>Today</span></div>
+      <div className="flex justify-between text-xs text-muted-foreground" aria-hidden><span>{days[0]} days ago</span><span>Today</span></div>
     </div>
   )
 }
@@ -175,7 +175,7 @@ function WeekdayChart({ series, now }: { series: ChartSeries[]; now: Date }) {
       {names.map((name, index) => (
         <div key={name} className="grid gap-1 text-center text-xs text-muted-foreground">
           <div className="flex h-20 items-end justify-center gap-0.5">
-            {data.map((s) => <span key={s.name} className={cn("w-full max-w-4 rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.values[index] ? 4 : 0, s.values[index] / max * 100)}%` }} title={`${s.name}: ${duration(s.values[index])} on average`} />)}
+            {data.map((s) => <span key={s.id} className={cn("w-full max-w-4 rounded-t-[2px]", s.className)} style={{ height: `${Math.max(s.values[index] ? 4 : 0, s.values[index] / max * 100)}%` }} title={`${s.name}: ${duration(s.values[index])} on average`} />)}
           </div>
           {name}
         </div>
@@ -218,6 +218,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
   const [pending, setPending] = useState<string | null>(null)
   const [removing, setRemoving] = useState(false)
   const [deletingGroup, setDeletingGroup] = useState<Group | null>(null)
+  const [manualCopy, setManualCopy] = useState<string | null>(null)
   const actionInFlight = useRef(false)
   const loadSequence = useRef(0)
   const poll = useTickingNow(30_000)
@@ -358,7 +359,11 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
     if (ok) { setEditing(null); toast.success("Group saved") }
   }
   const weekOf = (id: string) => { const person = people.find((entry) => entry.user_id === id); return person ? activity(person, now, fetchedAt).period.week : 0 }
-  const copy = (text: string, done: string) => void navigator.clipboard.writeText(text).then(() => toast.success(done), () => toast.error("Could not copy. Select the text and copy it manually."))
+  // Promise.resolve().then also catches a missing Clipboard API, which throws synchronously.
+  const copy = (text: string, done: string) => {
+    setManualCopy(null)
+    void Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => toast.success(done), () => { setManualCopy(text); toast.error("Could not copy. Select the text below and copy it manually.") })
+  }
   const exams = countdowns.filter((entry) => people.some((person) => person.user_id === entry.user_id)).slice(0, 8)
   const standing = !me || board.length < 2 ? ""
     : nextRival ? `${duration((nextRival.score - me.score) * 60_000)} behind ${personName(nextRival.person)}`
@@ -432,7 +437,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
                   </span>
                 </Button>
                 <div className="hidden w-44 shrink-0 md:block 2xl:w-72">{period === "today"
-                  ? <div role="img" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={colorOf(person.user_id)} /></div>
+                  ? <div role="group" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={colorOf(person.user_id)} /></div>
                   : <WeekBars day={stats.day} />}</div>
                 <span className="w-16 shrink-0 text-right text-sm font-medium tabular-nums">{duration(stats.period[period])}</span>
                 {isMe ? <span className="w-9 shrink-0" /> : <Button variant="ghost" size="icon" disabled={cheerOff || done} title={done ? "Cheered · one cheer per friend every 24 hours" : `Cheer ${personName(person)}`} aria-label={done ? `Already cheered ${personName(person)}` : `Cheer ${personName(person)}`} onClick={() => void cheerFriend(person)}>{done ? <Check /> : <HeartHandshake />}</Button>}
@@ -502,7 +507,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
 
       {selected ? <FriendSheet key={selected.person.user_id} person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} pending={pending} onSaveNickname={(nickname) => call("friends_set_nickname", { p_user_id: selected.person.user_id, p_nickname: nickname }, "Could not save this nickname.")} cheerDisabled={cheerOff} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
 
-      <Dialog open={dialog === "add"} onOpenChange={(open) => { if (!pending && !open) setDialog(null) }}>
+      <Dialog open={dialog === "add"} onOpenChange={(open) => { if (!pending && !open) { setDialog(null); setManualCopy(null) } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add a friend</DialogTitle><DialogDescription>Connect by @username. Study activity is shared only once you are friends.</DialogDescription></DialogHeader>
           <form className="grid gap-2" onSubmit={(event) => {
@@ -510,7 +515,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
             const username = friendUsername.trim().replace(/^@/, "").toLowerCase()
             if (!/^[a-z0-9_]{3,24}$/.test(username)) { toast.error("Enter a username with 3–24 letters, numbers or underscores."); return }
             if (username === profile?.username) { toast.error("That is your username. Share it with a friend instead."); return }
-            void call("friends_add", { p_username: username }, "Could not add that friend.").then((ok) => { if (ok) { setFriendUsername(""); setDialog(null); toast.success(cache.people.some((person) => person.username === username && person.status === "outgoing") ? "Friend request sent" : "Friend added") } })
+            void call("friends_add", { p_username: username }, "Could not add that friend.").then((ok) => { if (ok) { setFriendUsername(""); setDialog(null); setManualCopy(null); toast.success(cache.people.some((person) => person.username === username && person.status === "outgoing") ? "Friend request sent" : "Friend added") } })
           }}>
             <Label htmlFor="friend-username" className="text-sm font-medium">Their username</Label>
             <div className="flex gap-2">
@@ -524,6 +529,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
               <Button variant="outline" disabled={!profile} onClick={() => copy(`@${profile?.username}`, "Username copied")} aria-label={profile ? `Copy your username @${profile.username}` : "Copy username"}><Copy /><span className="max-w-40 truncate">{profile ? `@${profile.username}` : "Username"}</span></Button>
               <Button variant="outline" disabled={!profile} onClick={() => { const url = `${INVITE_BASE}/?view=friends&add=${profile?.username}`; if (matchMedia("(pointer: coarse)").matches && navigator.share) { void navigator.share({ title: "Study with me on Focal", url }).catch(() => undefined); return } copy(url, "Invite link copied") }}><Link2 />Copy invite link</Button>
             </div>
+            {manualCopy ? <Input readOnly aria-label="Text to copy manually" value={manualCopy} onFocus={(event) => event.currentTarget.select()} /> : null}
           </div>
         </DialogContent>
       </Dialog>
@@ -567,18 +573,18 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
       <Dialog open={!!editing} onOpenChange={(open) => { if (!pending && !open) setEditing(null) }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editing?.id ? "Edit group" : "New group"}</DialogTitle><DialogDescription>Pick friends and, optionally, a weekly goal for the whole group.</DialogDescription></DialogHeader>
-          {editing ? <form id="group-form" className="grid gap-3" onSubmit={(event) => { event.preventDefault(); void saveGroup() }}>
+          {editing ? <form id="group-form" onSubmit={(event) => { event.preventDefault(); void saveGroup() }}><fieldset disabled={!!pending} className="grid min-w-0 gap-3">
             <Label className="grid gap-2 text-sm font-medium">Name<Input value={editing.name} maxLength={40} onChange={(event) => setEditing({ ...editing, name: event.target.value })} placeholder="e.g. Methods squad" /></Label>
             <Label className="grid gap-2 text-sm font-medium">Weekly goal in hours (optional)<Input type="number" min={0} max={168} step={0.5} value={editing.hours} onChange={(event) => setEditing({ ...editing, hours: event.target.value })} placeholder="e.g. 20" /></Label>
             <fieldset className="grid max-h-48 gap-2 overflow-y-auto">
               <legend className="mb-1 text-sm font-medium">Friends</legend>
               {friends.map((person) => <Label key={person.user_id} className="flex items-center gap-2 text-sm">
-                <Checkbox checked={editing.members.includes(person.user_id)} onCheckedChange={(checked) => setEditing({ ...editing, members: checked ? [...editing.members, person.user_id] : editing.members.filter((id) => id !== person.user_id) })} />
+                <Checkbox disabled={!!pending} checked={editing.members.includes(person.user_id)} onCheckedChange={(checked) => setEditing({ ...editing, members: checked ? [...editing.members, person.user_id] : editing.members.filter((id) => id !== person.user_id) })} />
                 {personName(person)}
               </Label>)}
               {!friends.length ? <p className="text-sm text-muted-foreground">Add a friend first.</p> : null}
             </fieldset>
-          </form> : null}
+          </fieldset></form> : null}
           <DialogFooter><Button variant="outline" disabled={!!pending} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" form="group-form" disabled={!!pending || !editing?.name.trim()}>{pending === "friends_group_save" ? "Saving…" : "Save group"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
@@ -652,8 +658,8 @@ function FriendSheet({ person, stats, me, period, onPeriodChange, now, cheered, 
     .sort((a, b) => ((person.subjects?.[b] ?? 0) + (me.person.subjects?.[b] ?? 0)) - ((person.subjects?.[a] ?? 0) + (me.person.subjects?.[a] ?? 0))) : []
 
   const chartSeries = [
-    ...(!isMe && me ? [{ name: "You", day: me.stats.day, className: "bg-muted-foreground/50" }] : []),
-    { name: isMe ? "You" : personName(person), day: stats.day, className: "bg-primary" },
+    ...(!isMe && me ? [{ id: me.person.user_id, name: "You", day: me.stats.day, className: "bg-muted-foreground/50" }] : []),
+    { id: person.user_id, name: isMe ? "You" : personName(person), day: stats.day, className: "bg-primary" },
   ]
 
   return (

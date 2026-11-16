@@ -359,8 +359,10 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
   const cycle = Number(length)
   const valid = start && Number.isInteger(cycle) && cycle >= 1 && cycle <= 60
   const removed = config.entries.filter((entry) => entry.dayLabel > cycle).reduce((sum, entry) => sum + entry.periods.length, 0)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  function requestClose() { if (start !== config.day1Starts || length !== String(config.cycleLength ?? 10) || weekends !== Boolean(config.weekendTimetables)) setConfirmingClose(true); else onClose() }
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
       <DialogContent>
         <DialogHeader><DialogTitle>Set your rhythm</DialogTitle><DialogDescription>Your cycle repeats on school days. Holidays pause it until school resumes.</DialogDescription></DialogHeader>
         <form className="contents" onSubmit={(event) => { event.preventDefault(); if (valid) onSave({ ...config, day1Starts: start, cycleLength: cycle, weekendTimetables: weekends, dayToWeekday: undefined, entries: config.entries.filter((entry) => entry.dayLabel <= cycle) }) }}>
@@ -370,9 +372,10 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
             <Label className="flex items-center gap-3 text-sm"><Checkbox checked={weekends} onCheckedChange={(checked) => setWeekends(checked)} />Include weekends as school days</Label>
             {valid && removed > 0 ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
           </FieldGroup>
-          <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!valid} type="submit">{removed > 0 && valid ? "Save & remove periods" : "Save cycle"}</Button></DialogFooter>
+          <DialogFooter><Button onClick={requestClose} type="button" variant="outline">Cancel</Button><Button disabled={!valid} type="submit">{removed > 0 && valid ? "Save & remove periods" : "Save cycle"}</Button></DialogFooter>
         </form>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
     </Dialog>
   )
 }
@@ -405,6 +408,8 @@ function ImportDialog({ current, onClose, onImport }: { current: TimetableConfig
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | null>(null)
   const [showPrompt, setShowPrompt] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  function requestClose() { if (text.trim()) setConfirmingClose(true); else onClose() }
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
 
   async function copy() {
@@ -420,15 +425,16 @@ function ImportDialog({ current, onClose, onImport }: { current: TimetableConfig
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader><p className="focal-eyebrow text-primary">Bring your timetable along</p><DialogTitle>From screenshot to schedule.</DialogTitle><DialogDescription>Use any chatbot to turn a screenshot into timetable data. Importing replaces your current periods; your holidays stay in place.</DialogDescription></DialogHeader>
         <FieldGroup>
           <div className="flex items-start gap-4 border-y py-5"><span className="font-heading text-xl text-primary">01</span><div className="min-w-0 flex-1"><p className="font-medium">Share the screenshot</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Copy our prompt and send it to a chatbot with a screenshot of your timetable.</p><Button className="mt-3" onClick={() => void copy()} size="sm" type="button" variant="outline">{copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}</Button>{showPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="mt-3 max-h-64 overflow-y-auto font-mono text-xs" value={TIMETABLE_SCREENSHOT_PROMPT} /> : null}</div></div>
           <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="tt-import"><span className="mr-2 font-heading text-xl text-primary">02</span>Paste the reply</FieldLabel><Textarea aria-describedby={error ? "tt-import-error" : undefined} aria-invalid={error ? true : undefined} className="font-mono text-xs" id="tt-import" placeholder="Paste the chatbot’s JSON reply here…" rows={7} value={text} onChange={(e) => { setText(e.target.value); setError(null) }} />{error ? <FieldError id="tt-import-error" role="alert">{error}</FieldError> : null}</Field>
         </FieldGroup>
-        <DialogFooter><Button onClick={onClose} type="button" variant="outline">Cancel</Button><Button disabled={!text.trim()} onClick={() => { try { onImport(parseTimetableImport(text, "pasted.json", current)) } catch (e) { setError(e instanceof Error ? e.message : "Could not read this timetable.") } }} type="button">Import timetable<ArrowRight /></Button></DialogFooter>
+        <DialogFooter><Button onClick={requestClose} type="button" variant="outline">Cancel</Button><Button disabled={!text.trim()} onClick={() => { try { onImport(parseTimetableImport(text, "pasted.json", current)) } catch (e) { setError(e instanceof Error ? e.message : "Could not read this timetable.") } }} type="button">Import timetable<ArrowRight /></Button></DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
     </Dialog>
   )
 }

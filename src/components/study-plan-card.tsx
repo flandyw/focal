@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Field, FieldDescription, FieldLabel } from "./ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Textarea } from "./ui/textarea"
-import { isCheapestModel, loadPlannerModel, savePlannerModel, supportsStreamedAnalysis } from "../lib/ai-settings"
+import { isCheapestModel, loadPlannerModel, pickPlannerModel, savePlannerModel, supportsStreamedAnalysis } from "../lib/ai-settings"
 import { canonicalNow } from "../lib/study-session-sync"
 import { describeStudyPlan, formatPlannerError, planStudySession, type StudyPlan } from "../lib/study-plan"
 import type { TimerSettings } from "../lib/study-timer"
@@ -62,9 +62,10 @@ export function StudyPlanCard({
   }
 
   async function requestPlan() {
-    if (!request.trim() || busy) return
+    if (!request.trim() || busy || !auth.isAuthenticated) return
     setBusy(true)
     setError(null)
+    setPlan(null) // An older preview must not be applied while its replacement is generating.
     try {
       const result = await planStudySession(request, {
         now: canonicalNow(),
@@ -114,7 +115,7 @@ export function StudyPlanCard({
               items={options.map((option) => ({ value: option, label: `${option}${isCheapestModel(option) ? " · cheapest" : ""}` }))}
               disabled={!options.length}
               onValueChange={(value) => value && chooseModel(value)}
-              value={options.includes(model) ? model : options[0]}
+              value={pickPlannerModel(options, model) ?? undefined}
             >
               <SelectTrigger id="study-plan-model" size="sm">
                 <SelectValue placeholder="Cheapest available" />

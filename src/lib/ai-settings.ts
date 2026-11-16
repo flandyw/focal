@@ -36,12 +36,14 @@ export function pickPlannerModel(models: string[], preferred: string): string | 
 const PLANNER_MODEL_KEY = "examtrack:ai-settings:planner-model:v1"
 
 export function loadPlannerModel(): string {
-  if (typeof localStorage === "undefined") return CHEAPEST_MODEL
-  return localStorage.getItem(PLANNER_MODEL_KEY) || CHEAPEST_MODEL
+  try {
+    return localStorage.getItem(PLANNER_MODEL_KEY) || CHEAPEST_MODEL
+  } catch {
+    return CHEAPEST_MODEL // Missing or blocked storage: plan with the default.
+  }
 }
 
 export function savePlannerModel(model: string) {
-  if (typeof localStorage === "undefined") return
   try {
     localStorage.setItem(PLANNER_MODEL_KEY, model)
   } catch {
@@ -69,9 +71,17 @@ function parseAISettings(value: string | null): AISettings {
 }
 
 export function loadAISettings(): AISettings {
-  return parseAISettings(localStorage.getItem(STORAGE_KEY))
+  try {
+    return parseAISettings(localStorage.getItem(STORAGE_KEY))
+  } catch {
+    return DEFAULT_AI_SETTINGS
+  }
 }
 
 export function saveAISettings(settings: AISettings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  } catch {
+    // Blocked or full storage: the choice still applies for this session.
+  }
 }

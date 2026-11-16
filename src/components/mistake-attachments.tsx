@@ -33,7 +33,7 @@ function MistakeImage({ attachment, url, onRetry }: { attachment: MistakeAttachm
     try { localStorage.setItem(storageKey, String(next)) } catch { /* Resizing still works for this session. */ }
   }
 
-  if (failedUrl === url) return <Unavailable name={attachment.name} onRetry={onRetry} />
+  if (failedUrl === url) return <Unavailable name={attachment.name} onRetry={() => { setFailedUrl(null); onRetry() }} />
 
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/30" style={{ width: `${width}%` }}>

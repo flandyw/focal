@@ -44,7 +44,6 @@ export function loadPlannerModel(): string {
 }
 
 export function savePlannerModel(model: string) {
-  if (typeof localStorage === "undefined") return
   try {
     localStorage.setItem(PLANNER_MODEL_KEY, model)
   } catch {

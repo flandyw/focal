@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { Button } from "./ui/button"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
@@ -17,6 +18,8 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   const [writing, setWriting] = useState(String(session.writingMinutes))
   const [marks, setMarks] = useState(String(session.marks))
   const [submitted, setSubmitted] = useState(false)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  function requestClose() { if ([reading, writing, marks].join("/") !== original) setConfirmingClose(true); else onClose() }
   let preview: ExamTimerSession | undefined
   let error: string | undefined
   try {
@@ -31,7 +34,7 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
   }
   const timer = preview ? getExamClock(preview, now) : undefined
 
-  return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+  return <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Edit exam conditions</DialogTitle>
@@ -57,7 +60,8 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
         <p className="text-sm text-muted-foreground">Changes save with this session across devices. Focal’s planned duration updates while keeping your recorded study intervals.</p>
         {error ? <FieldError role={submitted ? "alert" : undefined}>{error}</FieldError> : null}
       </form>
-      <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" form="exam-conditions-form">Save conditions</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" onClick={requestClose}>Cancel</Button><Button type="submit" form="exam-conditions-form">Save conditions</Button></DialogFooter>
     </DialogContent>
+    <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
   </Dialog>
 }

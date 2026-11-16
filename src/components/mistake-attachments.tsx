@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from "react"
 import { ImageIcon } from "lucide-react"
 import type { MistakeAttachment } from "../lib/exam-data"
 import { createMistakeAttachmentUrls } from "../lib/mistake-attachments"
+import { Button } from "./ui/button"
 
-function MistakeImage({ attachment, url }: { attachment: MistakeAttachment; url: string }) {
+function Unavailable({ name, onRetry }: { name: string; onRetry: () => void }) {
+  return (
+    <div role="status" className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+      <span className="min-w-0 truncate">{name || "Question image"} could not be loaded.</span>
+      <Button onClick={onRetry} size="sm" type="button" variant="outline">Retry</Button>
+    </div>
+  )
+}
+
+function MistakeImage({ attachment, url, onRetry }: { attachment: MistakeAttachment; url: string; onRetry: () => void }) {
   const storageKey = `focal:mistake-image-width:v1:${attachment.id}`
   const [width, setWidth] = useState(() => {
     try {
@@ -14,6 +24,8 @@ function MistakeImage({ attachment, url }: { attachment: MistakeAttachment; url:
   })
   const image = useRef<HTMLImageElement>(null)
   const drag = useRef<{ y: number; width: number; height: number } | null>(null)
+  // Keyed by URL so fresh signed URLs from a retry clear the failure.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
 
   function resize(value: number) {
     const next = Math.max(20, Math.min(100, value))
@@ -21,10 +33,12 @@ function MistakeImage({ attachment, url }: { attachment: MistakeAttachment; url:
     try { localStorage.setItem(storageKey, String(next)) } catch { /* Resizing still works for this session. */ }
   }
 
+  if (failedUrl === url) return <Unavailable name={attachment.name} onRetry={onRetry} />
+
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border bg-muted/30" style={{ width: `${width}%` }}>
       <a href={url} target="_blank" rel="noopener noreferrer" className="block" title={attachment.name}>
-        <img ref={image} src={url} loading="lazy" decoding="async" alt={attachment.name || "Question image"} draggable={false} className="block h-auto w-full" />
+        <img ref={image} src={url} loading="lazy" decoding="async" alt={attachment.name || "Question image"} draggable={false} onError={() => setFailedUrl(url)} className="block h-auto w-full" />
       </a>
       <button
         type="button"
@@ -61,6 +75,8 @@ export function MistakeAttachments({ attachments }: { attachments?: MistakeAttac
   const pathKey = attachments?.map(({ storagePath }) => storagePath).join("\u0000") ?? ""
   const [result, setResult] = useState<{ pathKey: string; urls?: Record<string, string>; failed?: boolean }>({ pathKey: "" })
   const currentResult = result.pathKey === pathKey ? result : undefined
+  const [attempt, setAttempt] = useState(0)
+  const retry = () => setAttempt((value) => value + 1)
 
   useEffect(() => {
     let cancelled = false
@@ -74,15 +90,21 @@ export function MistakeAttachments({ attachments }: { attachments?: MistakeAttac
         if (!cancelled) setResult({ pathKey, failed: true })
       })
     return () => { cancelled = true }
-  }, [pathKey])
+  }, [pathKey, attempt])
 
   if (!attachments?.length) return null
-  if (currentResult?.failed) return <p className="text-xs text-muted-foreground">Saved images could not be loaded.</p>
+  if (currentResult?.failed) return (
+    <p role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+      Saved images could not be loaded.<Button onClick={retry} size="xs" type="button" variant="outline">Retry</Button>
+    </p>
+  )
 
   return (
     <div aria-label="Question images" className="my-3 grid min-w-0 grid-cols-1 justify-items-start gap-3">
       {attachments.map((attachment) => currentResult?.urls?.[attachment.storagePath] ? (
-        <MistakeImage key={attachment.id} attachment={attachment} url={currentResult.urls[attachment.storagePath]} />
+        <MistakeImage key={attachment.id} attachment={attachment} url={currentResult.urls[attachment.storagePath]} onRetry={retry} />
+      ) : currentResult?.urls ? (
+        <Unavailable key={attachment.id} name={attachment.name} onRetry={retry} />
       ) : (
         <div key={attachment.id} className="flex h-32 w-full items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon className="size-5" /></div>
       ))}

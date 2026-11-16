@@ -89,9 +89,14 @@ function planFocusMinutes(plan: StudyPlan) {
 export function describeStudyPlan(plan: StudyPlan, now: Date) {
   const ends = new Date(now.getTime() + planSessionMinutes(plan) * 60_000)
   const clock = ends.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
+  const breaks = plan.blocks - 1
+  const longBreaks = Math.floor(breaks / plan.longBreakEvery)
+  const breakText = !longBreaks || plan.longBreakMinutes === plan.breakMinutes ? `${plan.breakMinutes} min breaks`
+    : longBreaks === breaks ? `${plan.longBreakMinutes} min breaks`
+    : `${plan.breakMinutes} min breaks and a ${plan.longBreakMinutes} min break after every ${plan.longBreakEvery} blocks`
   const pattern = plan.blocks === 1
     ? `1 block of ${plan.workMinutes} min`
-    : `${plan.blocks} blocks of ${plan.workMinutes} min with ${plan.breakMinutes} min breaks`
+    : `${plan.blocks} blocks of ${plan.workMinutes} min with ${breakText}`
   return `${pattern} · ${formatFocusTime(planFocusMinutes(plan) * 60)} of focus · finishes around ${clock}`
 }
 

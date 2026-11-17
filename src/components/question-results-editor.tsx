@@ -53,7 +53,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
           <Button type="button" size="sm" variant="outline" disabled={full} aria-describedby={full ? `${pasteId}-limit` : undefined} onClick={add}><Plus />Add item</Button>
         </div>
       </div>
-      {full ? <FieldDescription id={`${pasteId}-limit`}>Breakdowns hold up to 500 items. Remove one to add another.</FieldDescription> : null}
+      {full ? <FieldDescription id={`${pasteId}-limit`}>Breakdowns hold up to 500 items. Remove items until fewer than 500 remain to add another.</FieldDescription> : null}
       {pasting ? <div id={pasteId} className="grid gap-3 rounded-lg border p-3">
         <Label htmlFor={`${pasteId}-text`}>Scores from a spreadsheet</Label>
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>

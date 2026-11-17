@@ -32,9 +32,9 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
   const currentView = view.cardIds === cardIds
   const order = currentView ? view.order : cards.map((card) => card.sourceMistakeId)
   const position = currentView ? view.position : 0
-  if (!currentView) setView({ cardIds, order, position, revealed: "" })
   const current = cardMap.get(order[position])
   const shown = current ? `${current.question}\u0000${current.answer}` : ""
+  if (!currentView || view.revealed && view.revealed !== shown) setView({ cardIds, order, position, revealed: "" })
   const revealed = currentView && Boolean(shown) && view.revealed === shown
   const source = current ? sourceMistakeMap.get(current.sourceMistakeId) : undefined
   const staleCount = cards.filter((card) => (sourceMistakeMap.get(card.sourceMistakeId)?.updatedAt ?? "") > card.generatedAt).length

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { count } from "../lib/utils"
 import { Check, FileDown, FileUp } from "lucide-react"
 
@@ -23,8 +23,10 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   onApply: (edits: MistakeEdit[]) => void
 }) {
   const [text, setText] = useState("")
-  const [confirmingClose, setConfirmingClose] = useState(false)
+  const [confirming, setConfirming] = useState<"close" | "export" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  const reads = useRef(0)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<ReturnType<typeof parseMistakeRoundTrip> | null>(null)
   const changes = useMemo(() => {
@@ -37,12 +39,15 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   }, [result, mistakes])
   const accepted = changes.filter(({ mistake }) => !skipped.has(mistake.id))
 
-  function close() { if (text.trim()) setConfirmingClose(true); else onOpenChange(false) }
+  function close() { if (text.trim()) setConfirming("close"); else onOpenChange(false) }
+  // Bulk export replaces this dialog, so pasted JSON would be lost; single export just downloads.
+  function exportJson() { if (text.trim() && !singleMistake) setConfirming("export"); else onExport() }
 
   function review() {
     try {
       setResult(parseMistakeRoundTrip(text, mistakes))
       setSkipped(new Set())
+      setFailure(null)
       setError(null)
     } catch (reviewError) {
       setResult(null)
@@ -51,7 +56,10 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   }
 
   function apply() {
-    onApply(accepted.map(({ mistake, list }) => ({ id: mistake.id, ...Object.fromEntries(list.map(({ field, after }) => [field, after])) })))
+    try { onApply(accepted.map(({ mistake, list }) => ({ id: mistake.id, ...Object.fromEntries(list.map(({ field, after }) => [field, after])) }))) } catch (applyError) {
+      setFailure(applyError instanceof Error ? applyError.message : "Could not save. Your preview is still here; try again.")
+      return
+    }
     onOpenChange(false)
   }
 
@@ -71,13 +79,16 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
               <Button type="button" size="sm" variant="outline" render={<label />}>
                 <FileUp />Load file
                 <Input type="file" accept=".json,application/json,.txt" className="sr-only" onChange={(event) => {
-                  void event.target.files?.[0]?.text().then((content) => { setText(content); setResult(null); setError(null) }, () => setError("Could not read that file. Try again or paste its contents."))
+                  const file = event.target.files?.[0]
+                  // Only the latest read or paste wins; a slow older file must not overwrite it.
+                  const request = file ? ++reads.current : 0
+                  void file?.text().then((content) => { if (request === reads.current) { setText(content); setResult(null); setError(null) } }, () => { if (request === reads.current) setError("Could not read that file. Try again or paste its contents.") })
                   event.target.value = ""
                 }} />
               </Button>
             </div>
             <Textarea id="mistake-roundtrip-json" rows={6} className="font-mono text-xs" spellCheck={false} placeholder='{"mistakes":[{"id":"…","correction":"…"}]}'
-              value={text} onChange={(event) => { setText(event.target.value); setResult(null); setError(null) }} aria-invalid={error ? true : undefined} />
+              value={text} onChange={(event) => { reads.current++; setText(event.target.value); setResult(null); setError(null) }} aria-invalid={error ? true : undefined} />
             {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only question label, question text, what went wrong, improved response and topic are replaced. Blank fields are ignored.</FieldDescription>}
           </Field>
           {result ? (
@@ -100,18 +111,19 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
                   ))}
                 </div>
               ) : null}
+              {failure ? <FieldError>{failure}</FieldError> : null}
             </div>
           ) : null}
         </FieldGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" className="sm:mr-auto" onClick={onExport}><FileDown />Export JSON…</Button>
+          <Button type="button" variant="outline" className="sm:mr-auto" onClick={exportJson}><FileDown />Export JSON…</Button>
           <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           {result
             ? <Button type="button" disabled={!accepted.length} onClick={apply}><Check />Apply {accepted.length} {accepted.length === 1 ? "edit" : "edits"}</Button>
             : <Button type="button" disabled={!text.trim()} onClick={review}>Review changes</Button>}
         </DialogFooter>
       </DialogContent>
-      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => onOpenChange(false)} />
+      <DiscardChangesDialog open={confirming !== null} onKeep={() => setConfirming(null)} onDiscard={() => { if (confirming === "export") onExport(); else onOpenChange(false) }} />
     </Dialog>
   )
 }

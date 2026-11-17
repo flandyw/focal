@@ -28,6 +28,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
   }
   const earned = value.reduce((sum, result) => sum + (result.marksAwarded || 0), 0)
   const maximum = value.reduce((sum, result) => sum + (result.maxMarks || 0), 0)
+  const full = value.length >= 500
   function update(id: string, patch: Partial<QuestionResult>) {
     onChange(value.map((result) => result.id === id ? { ...result, ...patch } : result))
   }
@@ -49,9 +50,10 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
         <div className="flex flex-wrap gap-2">
           {!value.length && template ? <Button type="button" size="sm" variant="outline" onClick={() => onChange(template.questionResults!.map((result) => ({ id: crypto.randomUUID(), label: result.label, maxMarks: result.maxMarks, marksAwarded: Number.NaN, confidence: "medium", areaOfStudy: result.areaOfStudy, topic: result.topic, itemIds: result.itemIds, itemsBy: result.itemsBy })))}>Use previous layout</Button> : null}
           <Button type="button" size="sm" variant="outline" onClick={() => setPasting(!pasting)} aria-expanded={pasting} aria-controls={pasteId}>Paste scores</Button>
-          <Button type="button" size="sm" variant="outline" onClick={add}><Plus />Add item</Button>
+          <Button type="button" size="sm" variant="outline" disabled={full} aria-describedby={full ? `${pasteId}-limit` : undefined} onClick={add}><Plus />Add item</Button>
         </div>
       </div>
+      {full ? <FieldDescription id={`${pasteId}-limit`}>Breakdowns hold up to 500 items. Remove one to add another.</FieldDescription> : null}
       {pasting ? <div id={pasteId} className="grid gap-3 rounded-lg border p-3">
         <Label htmlFor={`${pasteId}-text`}>Scores from a spreadsheet</Label>
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>

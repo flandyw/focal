@@ -27,13 +27,15 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
   const cards = useMemo(() => deck?.cards.filter((card) => sourceMistakeMap.has(card.sourceMistakeId)) ?? [], [deck, sourceMistakeMap])
   const cardMap = useMemo(() => new Map(cards.map((card) => [card.sourceMistakeId, card])), [cards])
   const cardIds = cards.map((card) => card.sourceMistakeId).join("\u0000")
-  const [view, setView] = useState(() => ({ cardIds, order: cards.map((card) => card.sourceMistakeId), position: 0, revealed: false }))
+  // revealed holds the content of the card whose answer is showing, so a regenerated or synced replacement starts hidden.
+  const [view, setView] = useState(() => ({ cardIds, order: cards.map((card) => card.sourceMistakeId), position: 0, revealed: "" }))
   const currentView = view.cardIds === cardIds
   const order = currentView ? view.order : cards.map((card) => card.sourceMistakeId)
   const position = currentView ? view.position : 0
-  const revealed = currentView && view.revealed
-  if (!currentView) setView({ cardIds, order, position, revealed })
   const current = cardMap.get(order[position])
+  const shown = current ? `${current.question}\u0000${current.answer}` : ""
+  if (!currentView || view.revealed && view.revealed !== shown) setView({ cardIds, order, position, revealed: "" })
+  const revealed = currentView && Boolean(shown) && view.revealed === shown
   const source = current ? sourceMistakeMap.get(current.sourceMistakeId) : undefined
   const staleCount = cards.filter((card) => (sourceMistakeMap.get(card.sourceMistakeId)?.updatedAt ?? "") > card.generatedAt).length
   const missingCount = Math.max(0, mistakes.length - cards.length)
@@ -63,7 +65,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
   }
 
   function move(offset: number) {
-    setView({ cardIds, order, position: (position + offset + order.length) % order.length, revealed: false })
+    setView({ cardIds, order, position: (position + offset + order.length) % order.length, revealed: "" })
   }
 
   function shuffle() {
@@ -72,7 +74,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
       const swapIndex = Math.floor(Math.random() * (index + 1))
       ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
     }
-    setView({ cardIds, order: shuffled, position: 0, revealed: false })
+    setView({ cardIds, order: shuffled, position: 0, revealed: "" })
   }
 
   if (!current || !source) {
@@ -83,7 +85,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
           <EmptyTitle>Create an alternative deck</EmptyTitle>
           <EmptyDescription>ChatGPT will turn each mistake card into a fresh question that tests the same skill, with a separate worked answer.</EmptyDescription>
         </EmptyHeader>
-        {generationProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(generationProgress)}</p> : null}
+        {generationProgress && generating ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(generationProgress)}</p> : null}
         <Button onClick={() => void generateDeck()} disabled={!mistakes.length || generating}>
           <Sparkles />{generating ? "Generating deck…" : `Generate ${mistakes.length} alternative ${mistakes.length === 1 ? "card" : "cards"}`}
         </Button>
@@ -143,7 +145,7 @@ export function MistakeAlternativeDeck({ mistakes, allMistakes, attempts, deck, 
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-2">
           <Button variant="outline" onClick={() => move(-1)} disabled={order.length < 2}><ChevronLeft />Previous</Button>
-          {!revealed ? <Button onClick={() => setView({ cardIds, order, position, revealed: true })}>Show answer</Button> : <span className="text-sm text-muted-foreground">Answer revealed</span>}
+          {!revealed ? <Button onClick={() => setView({ cardIds, order, position, revealed: shown })}>Show answer</Button> : <span className="text-sm text-muted-foreground">Answer revealed</span>}
           <Button variant="outline" onClick={() => move(1)} disabled={order.length < 2}>Next<ChevronRight /></Button>
         </CardFooter>
       </Card>

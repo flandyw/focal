@@ -116,6 +116,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
   }
 
   const viewingMistakes = viewing ? data.mistakes.filter((mistake) => mistake.itemIds?.includes(viewing.id)) : []
+  const viewingResults = viewing ? data.attempts.flatMap((attempt) => (attempt.questionResults ?? []).filter((result) => result.itemIds?.includes(viewing.id)).map((result) => ({ attempt, result }))) : []
 
   return (
     <WorkspacePage>
@@ -214,13 +215,19 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
       <StoplightReviseDialog key={`${revising}${subject}`} open={revising} subject={subject} items={subjectItems} evidence={evidence} onOpenChange={setRevising} onApply={applyRatings} />
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => { if (!open) setViewing(null) }}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
-          <DialogHeader><DialogTitle>{viewing?.name}</DialogTitle><DialogDescription>{viewingMistakes.length} linked mistake{viewingMistakes.length === 1 ? "" : "s"}. Review them in Mistakes.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{viewing?.name}</DialogTitle><DialogDescription>{count(viewingMistakes.length, "linked mistake")} · {count(viewingResults.length, "marked question")}.{viewingMistakes.length ? " Review mistakes in Mistakes." : ""}</DialogDescription></DialogHeader>
           <ul className="grid gap-3">
             {viewingMistakes.map((mistake) => (
               <li key={mistake.id} className="grid gap-2 rounded-lg border p-3">
                 <div className="flex items-center justify-between gap-2"><span className="min-w-0 font-medium"><MarkdownPreview inline>{mistake.question}</MarkdownPreview></span>{mistake.itemsBy === "ai" ? <Badge variant="outline" className="shrink-0">Linked by ChatGPT</Badge> : null}</div>
                 <MarkdownPreview unframed>{mistake.explanation}</MarkdownPreview>
                 <MarkdownPreview unframed>{mistake.correction}</MarkdownPreview>
+              </li>
+            ))}
+            {viewingResults.map(({ attempt, result }) => (
+              <li key={`${attempt.id}:${result.id}`} className="grid gap-1 rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2"><span className="min-w-0 font-medium">{result.label}</span><span className="shrink-0 text-sm tabular-nums">{Number.isFinite(result.marksAwarded) ? result.marksAwarded : "–"} / {result.maxMarks} marks</span></div>
+                <p className="text-xs text-muted-foreground">{attempt.title} · {attempt.paper} · {attempt.completedAt.slice(0, 10)}</p>
               </li>
             ))}
           </ul>

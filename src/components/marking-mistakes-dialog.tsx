@@ -1,28 +1,37 @@
 import { useState } from "react"
 import { MISTAKE_CATEGORIES, type ExamAttempt, type Mistake, type MistakeCategory, type QuestionResult } from "../lib/exam-data"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
-import { Field, FieldLabel } from "./ui/field"
+import { Field, FieldError, FieldLabel } from "./ui/field"
 import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { Textarea } from "./ui/textarea"
 
 export function MarkingMistakesDialog({ attempt, results, onClose, onSave }: { attempt: ExamAttempt; results: QuestionResult[]; onClose: () => void; onSave: (mistakes: Mistake[]) => void }) {
-  const [cards, setCards] = useState(() => results.map((result) => ({ result, selected: true, category: "Other" as MistakeCategory, explanation: result.examinerNote ?? "", correction: "" })))
+  const [initial] = useState(() => results.map((result) => ({ result, selected: true, category: "Other" as MistakeCategory, explanation: result.examinerNote ?? "", correction: "" })))
+  const [cards, setCards] = useState(initial)
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const selected = cards.filter((card) => card.selected)
-  return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+  // Prefilled examiner notes alone aren't changes worth confirming.
+  function close() { if (JSON.stringify(cards) !== JSON.stringify(initial)) setConfirmingClose(true); else onClose() }
+  return <Dialog open onOpenChange={(open) => { if (!open) close() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
       <DialogHeader><DialogTitle>Turn lost marks into revision</DialogTitle><DialogDescription>Your exam is saved. Choose questions and add what went wrong and how to fix it. Existing mistake cards are excluded.</DialogDescription></DialogHeader>
       <form id="marked-mistakes" className="grid gap-5" onSubmit={(event) => {
         event.preventDefault()
         const timestamp = new Date().toISOString()
-        onSave(selected.map(({ result, category, explanation, correction }) => ({
+        setError(null)
+        try { onSave(selected.map(({ result, category, explanation, correction }) => ({
           id: crypto.randomUUID(), attemptId: attempt.id, question: result.label, category,
           explanation: explanation.trim(), correction: correction.trim(),
           totalMarks: result.maxMarks, marksLost: result.maxMarks - result.marksAwarded,
           areaOfStudy: result.areaOfStudy, topic: result.topic, itemIds: result.itemIds, itemsBy: result.itemsBy,
           resolved: false, createdAt: timestamp, updatedAt: timestamp,
-        })))
+        }))) } catch (failure) {
+          setError(failure instanceof Error ? failure.message : "Could not save. Your notes are still here; try again.")
+        }
       }}>
         {cards.map((card, index) => <div key={card.result.id} className="grid gap-3 border-b pb-5 last:border-0">
           <label className="flex items-center gap-2 text-sm font-medium"><Checkbox checked={card.selected} onCheckedChange={(selected) => setCards((current) => current.map((item, i) => i === index ? { ...item, selected: selected === true } : item))} />{card.result.label}<span className="ml-auto text-muted-foreground tabular-nums">{card.result.maxMarks - card.result.marksAwarded} mark{card.result.maxMarks - card.result.marksAwarded === 1 ? "" : "s"} lost</span></label>
@@ -33,7 +42,9 @@ export function MarkingMistakesDialog({ attempt, results, onClose, onSave }: { a
           </> : null}
         </div>)}
       </form>
-      <DialogFooter><Button variant="ghost" onClick={onClose}>Skip for now</Button><Button type="submit" form="marked-mistakes" disabled={!selected.length || selected.some((card) => !card.explanation.trim() || !card.correction.trim())}>Save {selected.length} mistake{selected.length === 1 ? "" : "s"}</Button></DialogFooter>
+      {error ? <FieldError>{error}</FieldError> : null}
+      <DialogFooter><Button variant="ghost" onClick={close}>Skip for now</Button><Button type="submit" form="marked-mistakes" disabled={!selected.length || selected.some((card) => !card.explanation.trim() || !card.correction.trim())}>Save {selected.length} mistake{selected.length === 1 ? "" : "s"}</Button></DialogFooter>
     </DialogContent>
+    <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={onClose} />
   </Dialog>
 }

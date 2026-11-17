@@ -109,7 +109,7 @@ export function AppearanceSettings() {
         </Setting>)}
         <RangeSetting title="Text size" description="Scale the interface, including navigation and controls." field="fontSize" min={14} max={20} unit="px" />
         <RangeSetting title="Reading line spacing" description="Give mistake explanations and the preview more room to breathe." field="readingSpacing" min={1.4} max={2} step={0.1} unit="×" />
-        <p className="py-4 text-xs text-muted-foreground">Instrument Sans and Newsreader are included. Other fonts use the closest available font on your device. Equations keep their mathematical typeface.</p>
+        <p className="py-4 text-xs text-muted-foreground">Allo, Instrument Sans, and Newsreader are included. Other fonts use the closest available font on your device. Equations keep their mathematical typeface.</p>
       </TabsContent>
       <TabsContent value="layout">
         <ChoiceSetting title="Page width" description="Use all available space or keep content centred." field="contentWidth" options={[{ value: "full", label: "Full width" }, { value: "wide", label: "Wide" }, { value: "reading", label: "Focused" }]} />

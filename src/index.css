@@ -22,6 +22,14 @@
 }
 
 @font-face {
+  font-family: "Allo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/allo-variable.woff2") format("woff2");
+}
+
+@font-face {
   font-family: "Newsreader";
   font-style: normal;
   font-weight: 400 700;
@@ -78,9 +86,9 @@
 }
 
 @theme inline {
-  --font-heading: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-heading: var(--app-font-heading);
   --font-serif: var(--font-heading);
-  --font-sans: "Instrument Sans Variable", sans-serif;
+  --font-sans: var(--app-font-body);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -321,8 +329,7 @@ button:not(:disabled), [role="tab"], [role="menuitem"] { transition-property: co
 :root.dark[data-surface="slate"] { --background: #191f29; --foreground: #e2e9f3; --card: #222b38; --popover: #2a3545; --muted: #2b3543; --muted-foreground: #a7b5ca; --border: #3e4d63; --input: #798eab; --sidebar: #141a23; --sidebar-foreground: #b9c7dc; --sidebar-border: #303e51; }
 :root.dark[data-surface="rose"] { --background: #261c21; --foreground: #f1e3e9; --card: #30242b; --popover: #3a2c34; --muted: #382a32; --muted-foreground: #c0a9b5; --border: #543e4a; --input: #a17e90; --sidebar: #20171c; --sidebar-foreground: #d2b8c5; --sidebar-border: #46323d; }
 
-:root { --app-font-body: "Instrument Sans Variable", sans-serif; --app-font-heading: "Newsreader", Georgia, serif; }
-@theme inline { --font-sans: var(--app-font-body); --font-heading: var(--app-font-heading); }
+:root { --app-font-body: "Allo", sans-serif; --app-font-heading: "Allo", sans-serif; }
 
 :root { --mobile-tabbar: 0px; --keyboard-inset: 0px; }
 

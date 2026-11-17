@@ -12,6 +12,7 @@ export const SURFACE_THEMES = [
 ] as const
 
 export const FONT_FAMILIES = [
+  { id: "allo", label: "Allo", value: '"Allo", sans-serif' },
   { id: "instrument", label: "Instrument Sans", value: '"Instrument Sans Variable", sans-serif' },
   { id: "system", label: "System sans", value: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
   { id: "humanist", label: "Humanist", value: '"Trebuchet MS", "Segoe UI", sans-serif' },
@@ -49,7 +50,7 @@ export type Appearance = {
 
 export const DEFAULT_APPEARANCE: Appearance = {
   surface: "paper", customAccent: null, sidebarTint: null,
-  bodyFont: "instrument", headingFont: "instrument", fontSize: 16, readingSpacing: 1.6,
+  bodyFont: "allo", headingFont: "allo", fontSize: 16, readingSpacing: 1.6,
   density: "default", contentWidth: "full", radius: 6,
   sidebarWidth: 232, sidebarSide: "left", sidebarLabels: true,
   hiddenLinks: [], linkOrder: [], reduceMotion: false,

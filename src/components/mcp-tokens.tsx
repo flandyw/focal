@@ -57,6 +57,8 @@ export function McpTokens() {
   function create() {
     const trimmed = name.trim()
     if (!trimmed) return setMessage("Enter a token name.")
+    // The plaintext is shown once; never replace it before the user dismisses it.
+    if (created) return
     void mutate("create", async () => {
       const { data, error } = await supabase!.rpc("mcp_token_create", { p_name: trimmed })
       if (error) throw error
@@ -85,15 +87,18 @@ export function McpTokens() {
     }
   }
 
+  const nameError = name && !name.trim()
+  const describedBy = [nameError ? "mcp-token-name-error" : "", created ? "mcp-token-done-hint" : ""].filter(Boolean).join(" ") || undefined
   const command = `claude mcp add --transport http focal ${MCP_URL} --header "Authorization: Bearer ${created}"`
   return (
     <div className="grid gap-3 py-4">
       <form className="grid max-w-md gap-1.5" onSubmit={(event) => { event.preventDefault(); create() }}>
         <div className="flex gap-2">
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Token name, e.g. Claude Code" aria-label="Token name" maxLength={60} required disabled={!!pending} aria-invalid={name && !name.trim() ? true : undefined} aria-describedby={name && !name.trim() ? "mcp-token-name-error" : undefined} />
-          <Button type="submit" disabled={!!pending || !name.trim()}><KeyRound />{pending === "create" ? "Creating…" : "Create"}</Button>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Token name, e.g. Claude Code" aria-label="Token name" maxLength={60} required disabled={!!pending} aria-invalid={nameError ? true : undefined} aria-describedby={describedBy} />
+          <Button type="submit" disabled={!!pending || !!created || !name.trim()} aria-describedby={describedBy}><KeyRound />{pending === "create" ? "Creating…" : "Create"}</Button>
         </div>
-        {name && !name.trim() ? <p id="mcp-token-name-error" className="text-sm text-destructive">Enter a name, not just spaces.</p> : null}
+        {nameError ? <p id="mcp-token-name-error" className="text-sm text-destructive">Enter a name, not just spaces.</p> : null}
+        {created ? <p id="mcp-token-done-hint" className="text-sm text-muted-foreground">Copy the new token, then select Done before creating another.</p> : null}
       </form>
       {created ? (
         <div className="grid gap-2 rounded-xs border p-3 text-sm">
@@ -113,9 +118,9 @@ export function McpTokens() {
       {list === "error" ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p>Could not load tokens.</p><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw />Retry</Button></div>
         : list === "loading" && !tokens.length ? <p role="status" className="text-sm text-muted-foreground">Loading tokens…</p> : null}
       {tokens.map((token) => (
-        <div key={token.id} className="flex items-center justify-between gap-4 border-t pt-3 text-sm">
+        <div key={token.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3 text-sm">
           <div className="min-w-0">
-            <div className="font-medium">{token.name}</div>
+            <div className="font-medium break-words">{token.name}</div>
             <div className="text-muted-foreground">Created {new Date(token.created_at).toLocaleDateString("en-AU")} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString("en-AU")}` : "never used"}</div>
           </div>
           {revoking === token.id

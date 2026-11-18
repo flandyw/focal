@@ -5,6 +5,7 @@ import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "./ui/chart"
+import { FieldError } from "./ui/field"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -66,7 +67,9 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
     : latestAttempt && latestAttempt.subject === initialSubject
     ? (latestAttempt.rawScore / latestAttempt.rawMax) * 100
     : 75
-  const [score, setScore] = useState(initialScore)
+  const [score, setScore] = useState(() => Math.min(100, Math.max(0, initialScore || 0)))
+  const [scoreText, setScoreText] = useState(() => String(Math.round(score * 10) / 10))
+  const scoreInvalid = scoreText.trim() === "" || !(Number(scoreText) >= 0 && Number(scoreText) <= 100)
   const matchingReferences = useMemo(() => subjectReferences.filter(
     (reference) => normaliseComparisonName(reference.name) === selectedPaper,
   ), [subjectReferences, selectedPaper])
@@ -128,7 +131,13 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
           </div>
           <div className="grid gap-2">
             <Label htmlFor="vcaa-score">Your score (%)</Label>
-            <Input id="vcaa-score" type="number" min={0} max={100} step={0.1} value={score} onChange={(event) => setScore(Math.min(100, Math.max(0, event.currentTarget.valueAsNumber || 0)))} />
+            <Input id="vcaa-score" type="number" min={0} max={100} step={0.1} value={scoreText} aria-invalid={scoreInvalid || undefined} aria-describedby={scoreInvalid ? "vcaa-score-error" : undefined} onChange={(event) => {
+              const next = event.currentTarget.value
+              setScoreText(next)
+              const value = Number(next)
+              if (next.trim() !== "" && value >= 0 && value <= 100) setScore(value)
+            }} />
+            {scoreInvalid ? <FieldError id="vcaa-score-error">Enter a score from 0 to 100. Showing {score.toFixed(1)}%.</FieldError> : null}
           </div>
         </CardContent>
       </Card>

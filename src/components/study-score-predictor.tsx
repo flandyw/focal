@@ -81,11 +81,12 @@ export function StudyScorePredictor({
   )
   const selectedDistributionYear = distributionYear === "automatic" ? null : Number(distributionYear)
 
+  const schoolMedianInvalid = schoolMedian.trim() !== "" && !(Number(schoolMedian) >= 20 && Number(schoolMedian) <= 45)
   const parsedSac = sacMode === "rank"
-    ? sacRank.trim() === "" || sacCohort.trim() === "" || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)) ? null : sacPercentileFromRank(
+    ? schoolMedianInvalid || sacRank.trim() === "" || sacCohort.trim() === "" || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)) ? null : sacPercentileFromRank(
       Number(sacRank),
       Number(sacCohort),
-      schoolMedian.trim() === "" || !Number.isFinite(Number(schoolMedian)) ? undefined : Number(schoolMedian),
+      schoolMedian.trim() === "" ? undefined : Number(schoolMedian),
     )
     : sacPercentile.trim() === "" || !(Number(sacPercentile) > 0 && Number(sacPercentile) < 100) ? null : Number(sacPercentile)
   const prediction = useMemo(
@@ -200,10 +201,13 @@ export function StudyScorePredictor({
                         inputMode="numeric"
                         placeholder="School median study score (optional, 30 is average)"
                         value={schoolMedian}
+                        aria-invalid={schoolMedianInvalid || undefined}
+                        aria-describedby="sac-rank-description"
                         onChange={(event) => saveSac({ schoolMedian: event.target.value })}
                       />
-                      <FieldDescription>
-                        {parsedSac !== null
+                      <FieldDescription id="sac-rank-description">
+                        {schoolMedianInvalid ? "School median must be between 20 and 45. Leave blank to assume 30."
+                          : parsedSac !== null
                           ? `About the ${formatOrdinal(parsedSac)} percentile statewide after moderation.`
                           : sacRank.trim() && sacCohort.trim() ? "Rank must be between 1 and the number of students."
                           : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}

@@ -125,6 +125,8 @@ function normaliseTimeValue(value: string): string {
   if (ampm) {
     let hours = Number(ampm[1])
     const minutes = Number(ampm[2] ?? "00")
+    // Out-of-range 12-hour times (13am, 0pm, 9:75pm) stay raw so isValidDateTime drops them.
+    if (hours < 1 || hours > 12 || minutes > 59) return value.trim()
     if (hours === 12) hours = 0
     if (ampm[3] === "pm") hours += 12
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
@@ -175,7 +177,7 @@ function isValidDateTime(dateValue: string, timeValue: string): boolean {
   return date.getFullYear() === y && date.getMonth() + 1 === mo && date.getDate() === d && date.getHours() === h && date.getMinutes() === mi
 }
 
-export function parseTextEventResponse(content: string, subjects: ImportSubject[], projects: ImportProject[]): TextEventDraft[] {
+export function parseTextEventResponse(content: string, subjects: ImportSubject[], projects: ImportProject[]): { drafts: TextEventDraft[]; rejectedCount: number } {
   const parsed = parseJsonPayload(content)
   if ((typeof parsed !== "object" || parsed === null) && !Array.isArray(parsed)) {
     throw new Error("Invalid planner response")
@@ -237,12 +239,13 @@ export function parseTextEventResponse(content: string, subjects: ImportSubject[
   })
 
   const seen = new Set<string>()
-  return drafts.filter((draft) => {
+  const uniqueDrafts = drafts.filter((draft) => {
     const key = `${draft.kind}|${keyText(draft.title)}|${draft.date}|${draft.startTime}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+  return { drafts: uniqueDrafts, rejectedCount: items.length - drafts.length }
 }
 
 /** Local YYYY-MM-DD for a Date. */

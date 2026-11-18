@@ -20,6 +20,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
 }) {
   const [text, setText] = useState("")
   const [drafts, setDrafts] = useState<TextEventDraft[] | null>(null)
+  const [rejectedCount, setRejectedCount] = useState(0)
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -54,9 +55,10 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
 
   function review() {
     try {
-      const parsed = parseTextEventResponse(text, importSubjects, [])
+      const { drafts: parsed, rejectedCount } = parseTextEventResponse(text, importSubjects, [])
       if (!parsed.length) throw new Error("none")
       setDrafts(parsed)
+      setRejectedCount(rejectedCount)
       setSkipped(new Set())
       setImported(new Set())
       setError(null)
@@ -120,6 +122,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
             />
             {error ? <FieldError>{error}</FieldError> : <FieldDescription>Nothing is added until you confirm the list below.</FieldDescription>}
           </Field>
+          {drafts && rejectedCount > 0 ? <p role="status" className="text-sm text-destructive">{rejectedCount} invalid item{rejectedCount === 1 ? " was" : "s were"} left out of the preview. Check the reply for missing titles, invalid dates or times, or study sessions without a matching subject before importing.</p> : null}
           {drafts ? (
             <ul className="divide-y rounded-lg border" aria-label="Items to import">
               {drafts.map((draft, index) => (

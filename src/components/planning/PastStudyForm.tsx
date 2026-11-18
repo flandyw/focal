@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { localStudyTime, pastStudyBlocks, type PastStudyLog } from "../../lib/pastStudy"
 import { count } from "../../lib/utils"
@@ -10,10 +10,11 @@ import { NativeSelect, NativeSelectOption } from "../ui/native-select"
 import { Textarea } from "../ui/textarea"
 
 // Native fields keep the same small, keyboard-accessible flow on desktop and web.
-export function PastStudyForm({ subjects, onSave, onCancel }: {
+export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
   subjects: { id: string; name: string }[]
   onSave: (log: PastStudyLog) => Promise<void>
   onCancel: () => void
+  onStatusChange: (status: { busy: boolean; dirty: boolean }) => void
 }) {
   const id = useId()
   const [subjectId, setSubjectId] = useState(subjects.length === 1 ? subjects[0].id : "")
@@ -23,6 +24,9 @@ export function PastStudyForm({ subjects, onSave, onCancel }: {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
+  const [original] = useState(() => JSON.stringify([subjectId, rows, title, notes]))
+  const dirty = JSON.stringify([subjectId, rows, title, notes]) !== original
+  useEffect(() => { onStatusChange({ busy, dirty }) }, [busy, dirty, onStatusChange])
   let preview = ""
   try {
     const blocks = pastStudyBlocks(rows)

@@ -3,7 +3,7 @@ import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync
 import { continuableToday } from "./lib/day-plan"
 import { MotionConfig, motion } from "framer-motion"
 import { pageVariants } from "./lib/progress-motion"
-import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
 import { AlertCircle, ChevronDown, Search, UsersRound } from "lucide-react"
 import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./components/ui/alert"
@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescript
 import { Button } from "./components/ui/button"
 import { CircleAccretionDiskLoader } from "./components/ui/circle-accretion-disk-loader"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./components/ui/dialog"
+import { DiscardChangesDialog } from "./components/discard-changes-dialog"
 import type { CalendarEvent, TimetableConfig } from "./lib/types"
 import { sameStudySubject, studySubjectId, studySubjectOptions, subjectColor } from "./lib/studySubjects"
 import { isPreferredSubject } from "./lib/subjects"
@@ -210,6 +211,12 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   useEffect(() => { recoveryOwnerRef.current = recoveryOwner }, [recoveryOwner])
   const [importing, setImporting] = useState(false)
   const [pastStudyId, setPastStudyId] = useState<string | null>(null)
+  const pastStudyStatus = useRef({ busy: false, dirty: false })
+  const [confirmingPastStudyClose, setConfirmingPastStudyClose] = useState(false)
+  const closePastStudy = () => { pastStudyStatus.current = { busy: false, dirty: false }; setConfirmingPastStudyClose(false); setPastStudyId(null) }
+  // A pending save keeps the dialog open so its failure and retry stay visible; edits ask before discarding.
+  const requestClosePastStudy = () => { if (pastStudyStatus.current.busy) return; if (pastStudyStatus.current.dirty) setConfirmingPastStudyClose(true); else closePastStudy() }
+  const reportPastStudyStatus = useCallback((status: { busy: boolean; dirty: boolean }) => { pastStudyStatus.current = status }, [])
   const [pendingImport, setPendingImport] = useState<AppData | null>(null)
   const pendingImportOwner = useRef<string | null>(null)
   // Timer moves queue durably and reach the server a moment later: "saved" means both outboxes are empty.
@@ -1000,16 +1007,17 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) setPastStudyId(null) }}>
+          <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) requestClosePastStudy() }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
               <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
-              {pastStudyId && <Suspense fallback={PAGE_LOADING}><PastStudyForm key={pastStudyId} subjects={studySubjectOptions(selectedSubject === "all" ? [...data.subjects, ...references.map((reference) => reference.studyName)] : [selectedSubject])} onCancel={() => setPastStudyId(null)} onSave={async (entry) => {
+              {pastStudyId && <Suspense fallback={PAGE_LOADING}><PastStudyForm key={pastStudyId} subjects={studySubjectOptions(selectedSubject === "all" ? [...data.subjects, ...references.map((reference) => reference.studyName)] : [selectedSubject])} onCancel={requestClosePastStudy} onStatusChange={reportPastStudyStatus} onSave={async (entry) => {
                 await studySessionSync.log(entry, pastStudyId)
-                setPastStudyId(null)
+                closePastStudy()
                 toast.success("Study logged")
               }} /></Suspense>}
             </DialogContent>
           </Dialog>
+          <DiscardChangesDialog open={confirmingPastStudyClose} onKeep={() => setConfirmingPastStudyClose(false)} onDiscard={() => { if (!pastStudyStatus.current.busy) closePastStudy() }} />
           
           <p role="status" className="sr-only">{ALL_NAVIGATION.find((item) => item.id === view)?.label}</p>
           {!embedded && <InstallNudge />}

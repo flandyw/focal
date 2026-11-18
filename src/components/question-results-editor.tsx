@@ -57,8 +57,8 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
       {pasting ? <div id={pasteId} className="grid gap-3 rounded-lg border p-3">
         <Label htmlFor={`${pasteId}-text`}>Scores from a spreadsheet</Label>
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>
-        <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setError(null) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} />
-        <FieldError>{previewError ?? error}</FieldError>
+        <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setError(null) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} aria-invalid={previewError || error ? true : undefined} aria-describedby={previewError || error ? `${pasteId}-error` : undefined} />
+        <FieldError id={`${pasteId}-error`}>{previewError ?? error}</FieldError>
         {preview.length ? <p role="status" className="text-sm tabular-nums">{count(preview.length, "item")} · {preview.reduce((sum, result) => sum + result.marksAwarded, 0)} / {preview.reduce((sum, result) => sum + result.maxMarks, 0)} marks. These will be added to your breakdown.</p> : null}
         <div className="flex gap-2"><Button type="button" size="sm" disabled={!preview.length || !!previewError} onClick={() => {
           if (value.length + preview.length > 500) return setError("Keep the breakdown to 500 items or fewer.")

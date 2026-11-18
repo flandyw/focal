@@ -125,6 +125,8 @@ function normaliseTimeValue(value: string): string {
   if (ampm) {
     let hours = Number(ampm[1])
     const minutes = Number(ampm[2] ?? "00")
+    // Out-of-range 12-hour times (13am, 0pm, 9:75pm) stay raw so isValidDateTime drops them.
+    if (hours < 1 || hours > 12 || minutes > 59) return value.trim()
     if (hours === 12) hours = 0
     if (ampm[3] === "pm") hours += 12
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`

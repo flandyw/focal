@@ -109,6 +109,7 @@ export function ExamLibrary({
       (second.year ?? 0) - (first.year ?? 0) || paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
   }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject])
 
+  const clearFilters = () => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }
   const focusSubject = subject === "all" ? firstPreferredSubject(subjects, preferredSubjects) || subjects[0] : subject
   const focusStudy = resourcesByStudy.get(normaliseComparisonName(focusSubject))
   const focusExams = exams.filter((exam) => normaliseComparisonName(exam.studyName) === normaliseComparisonName(focusSubject) && exam.year !== null)
@@ -177,7 +178,7 @@ export function ExamLibrary({
           <SelectTrigger className="w-full sm:w-44" aria-label="Filter by completion"><SelectValue>{completion === "todo" ? "Not completed" : completion === "completed" ? "Completed" : "All papers"}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
         </Select>
-        {query || completion !== "all" ? <Button variant="ghost" onClick={() => { setQuery(""); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button> : null}
+        {query || completion !== "all" || subject !== "all" ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button> : null}
         <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{count(filtered.length, "exam")} · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -229,7 +230,7 @@ export function ExamLibrary({
         )})}
       </div>
       {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(filtered.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
-      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matches “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try another subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }}>Clear filters</Button></Empty> : null}
+      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matches “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try another subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
     </div>
   )
 }

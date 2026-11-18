@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { clearOverviews } from "../lib/ai-overview"
 import { saveOverviewSettings, useOverviewSettings } from "../lib/ai-overview-state"
@@ -16,6 +17,7 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
   const [error, setError] = useState("")
   const [chat, setChat] = useState<ChatSettings | null>(null)
   const [cleared, setCleared] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     if (!CHAT_ENDPOINT) return
     const controller = new AbortController()
@@ -23,12 +25,13 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
       try {
         const response = await fetch(CHAT_ENDPOINT, { headers: await chatHeaders(userId), signal: controller.signal })
         if (!response.ok) throw new Error(await response.text())
-        setCatalog(gatewayCatalogSchema.parse(await response.json()))
+        const next = gatewayCatalogSchema.parse(await response.json())
+        if (!controller.signal.aborted) setCatalog(next)
       } catch (failure) { if (!controller.signal.aborted) setError(failure instanceof Error && failure.message.length < 200 ? failure.message : "Could not load models.") }
     })()
-    void loadChatSettings(userId).then(setChat, () => setChat(null))
     return () => controller.abort()
-  }, [userId])
+  }, [userId, attempt])
+  useEffect(() => { void loadChatSettings(userId).then(setChat, () => setChat(null)) }, [userId])
   const model = settings.model || catalog?.defaultModel || ""
   const update = (changes: Partial<typeof settings>) => saveOverviewSettings({ ...settings, ...changes })
   const toggleFavourite = (id: string) => {
@@ -51,7 +54,7 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
         <div className="min-w-0">
           <h3 className="text-sm font-medium">Overview model</h3>
           <p className="text-sm text-muted-foreground">{catalog && !catalog.hasKey ? "Save a Gateway key above to turn overviews on." : "A small, cheap model is plenty. New overviews use it."}</p>
-          {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+          {error ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p className="text-destructive">{error}</p><Button size="sm" variant="outline" onClick={() => { setError(""); setAttempt((value) => value + 1) }}><RefreshCw />Retry</Button></div> : null}
         </div>
         {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={(value) => update({ model: value })} favourites={chat?.favourites ?? []} onToggleFavourite={toggleFavourite} disabled={!settings.enabled} /> : error ? null : <Skeleton className="h-8 w-40" />}
       </div>

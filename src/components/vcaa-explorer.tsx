@@ -73,7 +73,11 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
   const matchingReferences = useMemo(() => subjectReferences.filter(
     (reference) => normaliseComparisonName(reference.name) === selectedPaper,
   ), [subjectReferences, selectedPaper])
+  const [bandYear, setBandYear] = useState<number | null>(null)
+  const bandReferences = useMemo(() => matchingReferences.toSorted((a, b) => b.year - a.year), [matchingReferences])
+  const bandReference = bandReferences.find((reference) => reference.year === bandYear) ?? bandReferences[0]
   const insights = useMemo(() => buildVcaaYearInsights(matchingReferences, score), [matchingReferences, score])
+  const estimatedGrade = insights.find((insight) => insight.year === bandReference?.year)?.grade
   const latest = insights.at(-1)
   const cohortTotal = insights.reduce((total, insight) => total + (insight.cohortSize ?? 0), 0)
   const selectedStudy = useMemo(() => studies.find((study) => normaliseComparisonName(study.studyName) === normaliseComparisonName(subject)), [studies, subject])
@@ -209,6 +213,40 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
           </Table>
         </CardContent>
       </Card>
+
+      {bandReference ? (
+        <Card className="min-w-0">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle>Official grade bands</CardTitle>
+                <CardDescription>
+                  Published mark ranges out of {bandReference.maxScore} and the share of students in each band.
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="vcaa-band-year">Year</Label>
+                <Select value={bandReference.year} onValueChange={setBandYear}>
+                  <SelectTrigger id="vcaa-band-year"><SelectValue>{bandReference.year}</SelectValue></SelectTrigger>
+                  <SelectContent>{bandReferences.map(({ year }) => <SelectItem key={year} value={year}>{year}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader><TableRow><TableHead>Grade</TableHead><TableHead className="text-right">Mark range</TableHead><TableHead className="text-right">Cohort share</TableHead></TableRow></TableHeader>
+              <TableBody>{bandReference.gradeBands.toReversed().map((band) => (
+                <TableRow key={band.grade}>
+                  <TableCell className="font-medium">{band.grade}{band.grade === estimatedGrade ? <Badge variant="secondary" className="ml-2">Your estimate</Badge> : null}</TableCell>
+                  <TableCell className="text-right tabular-nums">{band.minScore === null || band.maxScore === null ? "—" : `${band.minScore}–${band.maxScore}`}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatPercent(band.percentage)}</TableCell>
+                </TableRow>
+              ))}</TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }

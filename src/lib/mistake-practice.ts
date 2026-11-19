@@ -123,12 +123,14 @@ export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
   const challenge: Mistake[] = []
   while (challenge.length < Math.min(ranked.length, 5)) {
     const topics = new Set<string>()
+    const before = challenge.length
     for (const mistake of ranked) {
       if (challenge.length === 5) break
       if (challenge.includes(mistake) || topics.has(topicOf(mistake))) continue
       challenge.push(mistake)
       topics.add(topicOf(mistake))
     }
+    if (challenge.length === before) break
   }
   return { xp, level: Math.floor(xp / 100) + 1, todayXP: current ? dailyXP(current) : 0, todayCount: current?.cards.size ?? 0,
     quests, week, challenge, weeklyCount: weekly?.cards.size ?? 0, weeklyTarget: weekly?.target ?? challenge.length,

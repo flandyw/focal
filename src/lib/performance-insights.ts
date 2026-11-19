@@ -3,7 +3,7 @@ import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-diffi
 import type { CurriculumArea } from "./learning-workspace"
 import { getAttemptMathsPaper, isTechSplitMathsSubject } from "./mistake-filters.js"
 import { expectedRawMax, paperTypeOf, rawMaxWarning, trustedRawMax } from "./paper-types.js"
-import { inferTopic, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics.js"
+import { inferTopic, prerequisitesOf, topicConfigFor, topicOfMistake, type SubjectTopics } from "./topics.js"
 
 function clamp(value: number, minimum = 0, maximum = 100) {
   return Math.min(maximum, Math.max(minimum, value))
@@ -292,6 +292,7 @@ export type PaperWeaknessRow = {
   exam2: PaperPerformanceCell
   gap: number | null
   diagnosis: PaperWeaknessDiagnosis
+  weakPrerequisites: string[]
 }
 
 type PaperCellBucket = Omit<PaperPerformanceCell, "mastery" | "confidenceRisk" | "evidenceConfidence" | "repeatMistakes" | "lostPer100" | "trendPoints" | "trend" | "dominantCategory" | "lostByCategory"> & {
@@ -485,6 +486,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
       exam2,
       gap: exam1.mastery === null || exam2.mastery === null ? null : exam2.mastery - exam1.mastery,
       diagnosis: diagnosePaperGap(exam1, exam2),
+      weakPrerequisites: [] as string[],
     }
   }).sort((first, second) => {
     const firstRisk = first.gap === null ? -1 : Math.abs(first.gap)
@@ -494,7 +496,12 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   // Mastery needs marked questions on both papers. Without that, the logged mistakes
   // (which already name the paper, the marks lost and the skill) are the better evidence.
   const hasComparableResults = rows.some((row) => row.exam1.mastery !== null && row.exam2.mastery !== null)
-  return hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas, config)
+  const matrix = hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas, config)
+  if (config?.prerequisites) {
+    const weakTopics = new Set(matrix.filter((row) => !["secure", "stable", "no evidence", "mistake-only evidence"].includes(row.diagnosis)).map((row) => row.areaOfStudy))
+    for (const row of matrix) if (weakTopics.has(row.areaOfStudy)) row.weakPrerequisites = prerequisitesOf(config, row.areaOfStudy).filter((topic) => weakTopics.has(topic))
+  }
+  return matrix
 }
 
 type PaperBuckets = Map<string, { exam1: PaperCellBucket; exam2: PaperCellBucket }>
@@ -589,6 +596,7 @@ function buildMistakeWeaknessMatrix(subjectAttempts: ExamAttempt[], mistakes: Mi
       exam2,
       gap: exam1.lostPer100 === null || exam2.lostPer100 === null ? null : exam2.lostPer100 - exam1.lostPer100,
       diagnosis: diagnoseMistakeLoss(exam1, exam2),
+      weakPrerequisites: [],
     }
   }).sort((first, second) =>
     second.exam1.missedMarks + second.exam2.missedMarks - first.exam1.missedMarks - first.exam2.missedMarks ||

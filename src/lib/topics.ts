@@ -18,6 +18,7 @@ export type SubjectTopics = {
   subjects: readonly string[]
   topics: readonly string[]
   fallback: string
+  prerequisites?: Readonly<Record<string, readonly string[]>>
   /** Listed in tie-break order (put the broad topics last): on equal scores the earlier rule wins and the match is flagged ambiguous. */
   rules: readonly TopicRule[]
 }
@@ -37,6 +38,13 @@ const METHODS: SubjectTopics = {
   subjects: ["mathematical methods", "mathematical methods cas"],
   topics: METHODS_TOPICS,
   fallback: "Other",
+  prerequisites: {
+    [METHODS_TOPICS[1]]: [METHODS_TOPICS[0]],
+    [METHODS_TOPICS[6]]: [METHODS_TOPICS[0]],
+    [METHODS_TOPICS[2]]: [METHODS_TOPICS[0], METHODS_TOPICS[6]],
+    [METHODS_TOPICS[3]]: [METHODS_TOPICS[2]],
+    [METHODS_TOPICS[5]]: [METHODS_TOPICS[3], METHODS_TOPICS[4]],
+  },
   rules: [
     {
       topic: METHODS_TOPICS[1],
@@ -75,6 +83,20 @@ const METHODS: SubjectTopics = {
 }
 
 export const TOPIC_CONFIGS: readonly SubjectTopics[] = [METHODS]
+
+export function prerequisitesOf(config: SubjectTopics, topic: string): string[] {
+  const seen = new Set([topic])
+  const queue = [...(config.prerequisites?.[topic] ?? [])]
+  const result: string[] = []
+  for (let index = 0; index < queue.length; index++) {
+    const prerequisite = queue[index]
+    if (seen.has(prerequisite)) continue
+    seen.add(prerequisite)
+    result.push(prerequisite)
+    queue.push(...(config.prerequisites?.[prerequisite] ?? []))
+  }
+  return result
+}
 
 export const topicConfigFor = (subject: string) => {
   const name = normaliseComparisonName(subject)

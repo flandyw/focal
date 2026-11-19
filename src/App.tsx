@@ -113,6 +113,7 @@ const MistakesPage = lazy(() =>
 const SacPage = lazy(() =>
   import("./components/sac-page").then((module) => ({ default: module.SacPage })),
 )
+const SacSheet = lazy(() => import("./components/sac-sheet").then((module) => ({ default: module.SacSheet })))
 const StudyTimerPage = lazy(() =>
   import("./components/study-timer-page").then((module) => ({ default: module.StudyTimerPage })),
 )
@@ -138,7 +139,7 @@ const AppTour = lazy(() =>
   import("./components/app-tour").then((module) => ({ default: module.AppTour })),
 )
 const ONBOARDED_KEY = "examtrack:onboarded:v1"
-type Sheet = { kind: "exam" } | { kind: "mistake"; attemptId: string | null } | { kind: "marking"; attempt: ExamAttempt } | null
+type Sheet = { kind: "exam" } | { kind: "mistake"; attemptId: string | null } | { kind: "marking"; attempt: ExamAttempt } | { kind: "sac"; record: SacRecord } | null
 const skillFilterSearch = (filter = "all") => filter === "all" ? "" : `?${new URLSearchParams({ filter })}`
 const SubjectOverview = lazy(() => import("./components/subject-overview").then((module) => ({ default: module.SubjectOverview })))
 const TodayPage = lazy(() => import("./components/today-page").then((module) => ({ default: module.TodayPage })))
@@ -1090,7 +1091,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                 onDeleteExam={deleteAttempt}
               />
           ) : null}
-          {view === "today" ? <TodayPage now={now.getTime()} data={currentWork} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
+          {view === "today" ? <TodayPage now={now.getTime()} data={currentWork} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} dueMistakes={dueMistakeCount} onNavigate={(next) => { startTransition(() => { if (next === "exams") chooseSubject("all"); setView(next) }) }} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} onOpenSac={(id) => { const record = data.sacRecords.find((item) => item.id === id); if (record) setSheet({ kind: "sac", record }) }} /> : null}
           {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} learning={pageData.learning} now={now} dueMistakes={dueMistakeCount} onNavigate={setView} onOpenSkills={openSkills} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
           {view === "calendar" ? <CalendarPage onAutoPlan={() => planAdaptively()} data={{ ...data, events: currentWork.events, sacRecords: currentWork.sacRecords, mistakes: currentWork.mistakes, learning: currentWork.learning }} subjects={currentWork.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
@@ -1153,6 +1154,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         closeSheet("marking")
         if (mistakes.length) toast.success("Mistakes ready to review", { action: { label: "Review now", onClick: () => openMistakeQueue(markingAttempt.subject) } })
       }} /></Suspense> : null}
+      {sheet?.kind === "sac" ? <Suspense fallback={null}><SacSheet open subjects={pageSubjects} preferredSubjects={pageData.subjects} initialRecord={sheet.record} onOpenChange={(open) => { if (!open) closeSheet("sac") }} onSave={saveSac} /></Suspense> : null}
       {trackerOpen && timetable ? (
         <Suspense fallback={null}>
         <ExamPicker

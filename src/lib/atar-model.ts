@@ -178,7 +178,7 @@ export function buildAtarHistory(input: Omit<Parameters<typeof buildAtarModel>[0
   const dates = [...new Set(input.data.attempts.filter((attempt) => subjects.has(attempt.subject)).map((attempt) => attempt.completedAt))].toSorted()
   // shortcut: one full model per practice date (O(dates × rows)); fine for a student's paper count.
   const practice = dates.flatMap((date): AtarHistoryPoint[] => {
-    const estimate = buildAtarModel({ ...input, data: { ...input.data, attempts: input.data.attempts.filter((attempt) => attempt.completedAt <= date) } }).estimate
+    const estimate = buildAtarModel({ ...input, target: null, data: { ...input.data, attempts: input.data.attempts.filter((attempt) => attempt.completedAt <= date) } }).estimate
     const timestamp = Date.parse(`${date}T00:00:00`)
     return estimate && Number.isFinite(timestamp) ? [{ timestamp, atar: estimate.atar, aggregate: estimate.aggregate, kind: "practice", label: estimate.atarLabel }] : []
   })

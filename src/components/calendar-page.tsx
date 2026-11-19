@@ -288,8 +288,8 @@ export function CalendarPage({
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title" aria-live="polite">{monthLabel}</h1>
             <div className="flex items-center gap-0.5">
-              <Button aria-label="Previous month" onClick={() => selectDay(localDate(shiftMonth(month, -1)))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-              <Button aria-label="Next month" onClick={() => selectDay(localDate(shiftMonth(month, 1)))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+              <Button aria-label="Previous month" title="Previous month" onClick={() => selectDay(localDate(shiftMonth(month, -1)))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+              <Button aria-label="Next month" title="Next month" onClick={() => selectDay(localDate(shiftMonth(month, 1)))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground tabular-nums">
@@ -388,8 +388,8 @@ export function CalendarPage({
               <div className="flex items-start justify-between gap-2">
                 <CardTitle>{formatDayTitle(selected)}</CardTitle>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <Button aria-label="Previous day" onClick={() => selectDay(shiftDay(selected, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
-                  <Button aria-label="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+                  <Button aria-label="Previous day" title="Previous day" onClick={() => selectDay(shiftDay(selected, -1))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
+                  <Button aria-label="Next day" title="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
                 </div>
               </div>
               <CardDescription className="tabular-nums">

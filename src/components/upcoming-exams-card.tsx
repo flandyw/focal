@@ -156,7 +156,7 @@ function UpcomingRow({ entry, now }: { entry: TimetableEntry; now: Date }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="truncate text-sm font-medium">{formatExamLabel(entry)}</p>
+        <p className="truncate text-sm font-medium" title={formatExamLabel(entry)}>{formatExamLabel(entry)}</p>
         <p className="text-xs text-muted-foreground tabular-nums">
           {formatExamDate(entry)}
           {entry.scheduledNote ? <> · {entry.scheduledNote}</> : null}

@@ -155,9 +155,9 @@ export function ExamTable({
                 return (
                   <li key={attempt.id} id={getExamTarget(attempt.id)} className={`scroll-mt-20 target:bg-accent/60 ${expanded ? "bg-muted/40" : ""}`}>
                     <div className="flex items-start gap-1 py-1 pr-1">
-                      <button type="button" className="grid min-w-0 flex-1 gap-1 rounded-md px-3 py-2 text-left" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} onClick={() => toggle(attempt.id)}>
+                      <button type="button" className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-1 rounded-md px-3 py-2 text-left" aria-expanded={expanded} aria-controls={expanded ? `distribution-${attempt.id}` : undefined} onClick={() => toggle(attempt.id)}>
                         <span className="flex items-baseline justify-between gap-3">
-                          <span className="min-w-0 font-medium text-pretty">{attempt.title}</span>
+                          <span className="min-w-0 font-medium wrap-anywhere text-pretty">{attempt.title}</span>
                           <span className="shrink-0 text-lg font-semibold tabular-nums">{analysis.percentage.toFixed(1)}%</span>
                         </span>
                         <span className="flex items-center justify-between gap-3 text-xs text-muted-foreground">

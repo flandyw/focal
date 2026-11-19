@@ -25,6 +25,7 @@ type SacTimerProps = {
   records: SacRecord[]
   subjects: string[]
   preferredSubjects: string[]
+  scopedSubject?: string
   initialRecord?: SacRecord | null
   activeSession?: SacTimerSession
   onSessionChange: (session: SacTimerSession | undefined, action?: "cancel" | "complete") => void
@@ -44,11 +45,11 @@ function loadSession(): SacTimerSession | null {
   }
 }
 
-export function SacTimer({ records, subjects, preferredSubjects, initialRecord, activeSession, onSessionChange, onSave }: SacTimerProps) {
+export function SacTimer({ records, subjects, preferredSubjects, scopedSubject, initialRecord, activeSession, onSessionChange, onSave }: SacTimerProps) {
   const migratedLegacySession = useRef(false)
   const session = activeSession ?? null
   const availableSubjects = useMemo(() => prioritiseSubjects(subjects, preferredSubjects), [preferredSubjects, subjects])
-  const [subject, setSubject] = useState(initialRecord?.subject ?? preferredSubjects[0] ?? "")
+  const [subject, setSubject] = useState(initialRecord?.subject ?? scopedSubject ?? preferredSubjects[0] ?? "")
   const [provider, setProvider] = useState(initialRecord?.provider ?? "")
   const [title, setTitle] = useState(initialRecord?.title ?? "")
   const [sacNumber, setSacNumber] = useState(initialRecord?.sacNumber ?? "")
@@ -209,7 +210,10 @@ export function SacTimer({ records, subjects, preferredSubjects, initialRecord, 
           <form onSubmit={start}>
             <FieldGroup>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field><FieldLabel htmlFor="sac-timer-subject">Subject</FieldLabel><SubjectCombobox id="sac-timer-subject" subjects={availableSubjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} allowCustom required placeholder="Search or enter a subject" /></Field>
+                <Field>
+                  <FieldLabel htmlFor="sac-timer-subject">Subject</FieldLabel>
+                  {scopedSubject ? <Input id="sac-timer-subject" value={subject} readOnly /> : <SubjectCombobox id="sac-timer-subject" subjects={availableSubjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} allowCustom required placeholder="Search or enter a subject" />}
+                </Field>
                 <Field><FieldLabel htmlFor="sac-timer-provider">School / provider</FieldLabel><Input id="sac-timer-provider" value={provider} onChange={(event) => setProvider(event.target.value)} required placeholder="School or practice provider" /></Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">

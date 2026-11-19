@@ -17,6 +17,7 @@ type SacSheetProps = {
   open: boolean
   subjects: string[]
   preferredSubjects: string[]
+  scopedSubject?: string
   initialRecord?: SacRecord | null
   onOpenChange: (open: boolean) => void
   onSave: (record: SacRecord) => void
@@ -24,9 +25,9 @@ type SacSheetProps = {
 
 const today = () => localDate(new Date())
 
-export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onOpenChange, onSave }: SacSheetProps) {
+export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, initialRecord, onOpenChange, onSave }: SacSheetProps) {
   const options = useMemo(() => prioritiseSubjects(subjects, preferredSubjects), [preferredSubjects, subjects])
-  const [subject, setSubject] = useState(initialRecord?.subject ?? preferredSubjects[0] ?? "")
+  const [subject, setSubject] = useState(initialRecord?.subject ?? scopedSubject ?? preferredSubjects[0] ?? "")
   const [provider, setProvider] = useState(initialRecord?.provider ?? "")
   const [title, setTitle] = useState(initialRecord?.title ?? "")
   const [sacNumber, setSacNumber] = useState(initialRecord?.sacNumber ?? "")
@@ -111,7 +112,7 @@ export function SacSheet({ open, subjects, preferredSubjects, initialRecord, onO
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="sac-subject">Subject</FieldLabel>
-                <SubjectCombobox id="sac-subject" subjects={options} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} allowCustom required placeholder="Search or enter a subject" />
+                {scopedSubject ? <Input id="sac-subject" value={subject} readOnly /> : <SubjectCombobox id="sac-subject" subjects={options} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} allowCustom required placeholder="Search or enter a subject" />}
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-provider">School / provider</FieldLabel>

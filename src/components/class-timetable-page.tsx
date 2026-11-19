@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { subjectColor } from "../lib/studySubjects"
-import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, ClipboardPaste, Plus, RotateCcw, Settings2, Trash2 } from "lucide-react"
+import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, ClipboardPaste, Plus, RotateCcw, Settings2, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -40,6 +40,14 @@ const isBreak = (period: TimetablePeriod) => isTimetableBreakLabel(period.subjec
 const periodTint = (period: TimetablePeriod) => isBreak(period) ? { className: "tt-break" } : { className: "tt-block", style: { "--tt-color": subjectColor(periodSubjectName(period)) ?? "var(--primary)" } as CSSProperties }
 const classCount = (value: number) => `${value} ${value === 1 ? "class" : "classes"}`
 const hourLabel = (hour: number) => new Date(2000, 0, 1, Math.floor(hour / 60) % 24).toLocaleTimeString("en-AU", { hour: "numeric" })
+
+// ponytail: scan the day's periods for each row; use a sweep line if day lists become large.
+function overlapLabel(period: TimetablePeriod, periods: TimetablePeriod[], original = period) {
+  if (getTimetablePeriodError(period)) return ""
+  const conflicts = periods.filter((other) => other !== original &&
+    other.startTime < period.endTime && period.startTime < other.endTime && !getTimetablePeriodError(other))
+  return conflicts.length ? `Overlaps with ${conflicts.map((other) => periodSubjectName(other) || other.period).join(", ")}` : ""
+}
 
 function withDay(config: TimetableConfig, dayLabel: number, periods: TimetablePeriod[]): TimetableConfig {
   const others = config.entries.filter((entry) => entry.dayLabel !== dayLabel)
@@ -168,6 +176,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                       {periods.map((period, index) => {
                         const name = periodSubjectName(period) || period.period
                         const invalid = getTimetablePeriodError(period)
+                        const overlap = invalid ? "" : overlapLabel(period, periods)
                         const live = day === today && minutes(period.startTime) <= now && now < minutes(period.endTime)
                         const past = day === today && minutes(period.endTime) <= now
                         return (
@@ -177,6 +186,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                               <p className={cn("truncate text-sm font-medium", (past || isBreak(period)) && "text-muted-foreground")} title={name}>{name}</p>
                               <p className="truncate text-xs text-muted-foreground tabular-nums">{[period.subject ? period.period : isBreak(period) ? "" : "Subject not set", `${timeLabel(period.startTime)} – ${timeLabel(period.endTime)}`, period.location].filter(Boolean).join(" · ")}</p>
                               {invalid ? <p className="text-xs text-destructive">{invalid}</p> : null}
+                              {overlap ? <p className="flex items-start gap-1 text-xs text-destructive"><TriangleAlert aria-hidden className="mt-0.5 size-3 shrink-0" />{overlap}</p> : null}
                             </div>
                             {live ? <Badge className="shrink-0" variant="outline">Now</Badge> : isBreak(period) ? <Badge className="shrink-0" variant="secondary">Break</Badge> : null}
                             <Button aria-label={`Edit ${name}, ${timeLabel(period.startTime)} to ${timeLabel(period.endTime)}`} onClick={() => edit(day, period)} size="sm" variant="ghost">Edit</Button>
@@ -202,7 +212,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
       )}
       {importOpen ? <ImportDialog current={config ?? defaultClassTimetable()} onClose={() => setImportOpen(false)} onImport={(next) => { const previous = config; onChange(next); setSelectedDay(1); setImportOpen(false); toast("Timetable imported", previous ? { duration: 8000, action: { label: "Undo", onClick: () => onChange(previous) } } : undefined) }} /> : null}
       {settingsOpen && config ? <SettingsDialog config={config} onClose={() => setSettingsOpen(false)} onSave={(next) => { onChange(next); setSettingsOpen(false); toast("Cycle settings saved") }} /> : null}
-      {editor ? <PeriodDialog editor={editor} subjects={subjects} onClose={() => setEditor(null)} onSave={(period) => {
+      {editor ? <PeriodDialog editor={editor} periods={config ? dayPeriods(config, editor.day) : []} subjects={subjects} onClose={() => setEditor(null)} onSave={(period) => {
         const timetable = config ?? defaultClassTimetable()
         const current = dayPeriods(timetable, editor.day)
         if (editor.original && !current.includes(editor.original)) { toast.error("This period has changed. Reopen it to edit the latest version."); setEditor(null); return }
@@ -318,12 +328,13 @@ function CycleBoard({ config, cycleLength, days, selected, today, now, upcoming,
   )
 }
 
-function PeriodDialog({ editor, subjects, onClose, onSave, onDelete }: {
-  editor: PeriodEditor; subjects: string[]; onClose: () => void; onSave: (period: TimetablePeriod) => void; onDelete?: () => void
+function PeriodDialog({ editor, periods, subjects, onClose, onSave, onDelete }: {
+  editor: PeriodEditor; periods: TimetablePeriod[]; subjects: string[]; onClose: () => void; onSave: (period: TimetablePeriod) => void; onDelete?: () => void
 }) {
   const [draft, setDraft] = useState(editor.draft)
   const [error, setError] = useState<string | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
+  const overlap = overlapLabel(draft, periods, editor.original)
   function update(patch: Partial<TimetablePeriod>) { setDraft({ ...draft, ...patch }); setError(null) }
   function requestClose() { if (JSON.stringify(draft) !== JSON.stringify(editor.draft)) setConfirmingClose(true); else onClose() }
   return (
@@ -340,7 +351,15 @@ function PeriodDialog({ editor, subjects, onClose, onSave, onDelete }: {
           <FieldGroup>
             <Field><FieldLabel htmlFor="tt-period">Period name</FieldLabel><Input id="tt-period" required value={draft.period} onChange={(e) => update({ period: e.target.value })} placeholder="Period 1, recess, or lunch" /></Field>
             <Field><FieldLabel htmlFor="tt-subject">Subject</FieldLabel><Input id="tt-subject" list="tt-subject-options" value={draft.subject} onChange={(e) => update({ subject: e.target.value })} placeholder="Choose or type a subject" /><datalist id="tt-subject-options">{subjects.map((subject) => <option key={subject} value={subject} />)}</datalist><FieldDescription>Leave blank for a break or other school activity.</FieldDescription></Field>
-            <div className="grid grid-cols-2 gap-4"><Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field><Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field></div>
+            <div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field>
+                <Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field>
+              </div>
+              <div id="tt-overlap" role="status" className="text-sm text-destructive">
+                {overlap ? <p className="mt-2 flex items-start gap-1.5"><TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />{overlap}. You can still save this period.</p> : null}
+              </div>
+            </div>
             <Field><FieldLabel htmlFor="tt-room">Room <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel><Input id="tt-room" value={draft.location ?? ""} onChange={(e) => update({ location: e.target.value })} placeholder="e.g. B12" /></Field>
             {error ? <FieldError role="alert">{error}</FieldError> : null}
           </FieldGroup>

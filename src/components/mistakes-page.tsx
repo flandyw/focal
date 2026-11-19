@@ -92,6 +92,7 @@ type MistakesPageProps = {
   onLog: () => void
   onEdit: (mistake: Mistake) => void
   onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void
+  onUndoReview: (mistake: Mistake) => void
   onToggleSuspend: (mistake: Mistake) => void
   onSetSuspended: (ids: string[], suspended: boolean) => void
   onDelete: (mistake: Mistake) => void
@@ -154,6 +155,10 @@ function canUseReviewShortcut(target: EventTarget | null) {
   return !(target instanceof HTMLElement) || !target.closest("input, textarea, select, a, [contenteditable]:not([contenteditable='false']), [role='textbox']")
 }
 
+function isReviewShortcut(event: KeyboardEvent) {
+  return !(event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]') || !canUseReviewShortcut(event.target))
+}
+
 function ExamContext({ mistake, attempt, studies }: { preferences?: MistakeReviewPreferences; mistake: Mistake; attempt?: ExamAttempt; studies: VcaaStudyResources[] }) {
   const exam = attempt ? findCachedVcaaExamForAttempt(attempt, studies) : undefined
   return (
@@ -173,7 +178,7 @@ function AnswerPanel({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onBrowse: () => void }) {
+function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onUndoReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onUndoReview: (mistake: Mistake) => void; onBrowse: () => void }) {
   const tick = useTickingNow(30_000)
   const [latestReviewAt, setLatestReviewAt] = useState(0)
   const nowMs = Math.max(tick.getTime(), latestReviewAt)
@@ -184,6 +189,7 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
   const [feedback, setFeedback] = useState("")
   const [celebration, setCelebration] = useState(0)
   const [scope, setScope] = useState<"due" | "all">("due")
+  const lastRating = useRef<{ mistake: Mistake; feedback: string; toastId: string | number } | null>(null)
   const due = useMemo(() => getDueMistakes(mistakes, now), [mistakes, now])
   // The latest possible Date makes every active card due, keeping the earliest-due-first order.
   const active = useMemo(() => getDueMistakes(mistakes, new Date(8.64e15)), [mistakes])
@@ -194,8 +200,37 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
   const completed = session?.ratings.length ?? 0
   const nextDue = active[0] && getMistakeSchedule(active[0]).dueAt
 
+  function clearUndo() {
+    if (lastRating.current) toast.dismiss(lastRating.current.toastId)
+    lastRating.current = null
+  }
+  function undoRating() {
+    const last = lastRating.current
+    if (!last) return
+    onUndoReview(last.mistake)
+    clearUndo()
+    setSession((previous) => previous && ({ ...previous, ids: [last.mistake.id, ...previous.ids.filter((id) => id !== last.mistake.id)], ratings: previous.ratings.slice(0, -1) }))
+    setFeedback(last.feedback)
+    setCelebration(0)
+  }
+  useEffect(() => () => {
+    if (lastRating.current) toast.dismiss(lastRating.current.toastId)
+    lastRating.current = null
+  }, [])
+  useEffect(() => {
+    if (!session) clearUndo()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "z" || !lastRating.current || !isReviewShortcut(event)) return
+      event.preventDefault()
+      undoRating()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  })
+
   function start(cards = queue, weekly = false) {
     if (!cards.length) return
+    clearUndo()
     setSession({ ids: cards.map((mistake) => mistake.id), ratings: [], weekly, week: progress.week, size: weekly ? progress.weeklyTarget : cards.length, initialXP: progress.xp })
     setFeedback("")
   }
@@ -203,6 +238,9 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
     if (!current || !session) return
     const reviewContext = { ...context, ...(session.weekly ? { challengeWeek: session.week, challengeSize: session.size } : {}) }
     onReview(current, rating, reviewContext)
+    clearUndo()
+    const toastId = toast.success("Review saved · Z to undo", { duration: 8000, action: { label: "Undo", onClick: () => { if (lastRating.current?.mistake === current) undoRating() } } })
+    lastRating.current = { mistake: current, feedback, toastId }
     setLatestReviewAt(Date.now())
     setFeedback(practiceFeedback(current, rating, context))
     if (settings.practiceSound) playPracticeSound()
@@ -236,7 +274,7 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
 
   return <div className="relative mx-auto grid w-full max-w-4xl gap-5">
     <PracticeCelebration event={celebration} enabled={settings.practiceEffects!} finish={settings.practiceFinish} />
-    <header className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm tabular-nums" role="status">{session.weekly ? "Weekly challenge · " : ""}{completed} reviewed · {remaining.length} remaining</p><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={shuffle} disabled={remaining.length < 2}><Shuffle />Shuffle</Button><Button size="sm" variant="ghost" disabled={remaining.length < 2} onClick={() => setSession({ ...session, ids: [...remaining.slice(1), remaining[0]] })}><SkipForward />Skip</Button><Button size="sm" variant="outline" onClick={() => completed ? setSession({ ...session, ids: [] }) : setSession(null)}>End session</Button></div></div><Progress value={completed / (completed + remaining.length) * 100} aria-label="Session progress" />{feedback && <p key={completed} role="status" className={settings.practiceEffects ? "practice-feedback text-sm text-success" : "text-sm text-success"}>{feedback} <span className="text-muted-foreground">+{Math.max(0, progress.xp - session.initialXP)} XP this session</span></p>}</header>
+    <header className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm tabular-nums" role="status">{session.weekly ? "Weekly challenge · " : ""}{completed} reviewed · {remaining.length} remaining</p><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={shuffle} disabled={remaining.length < 2}><Shuffle />Shuffle</Button><Button size="sm" variant="ghost" disabled={remaining.length < 2} onClick={() => setSession({ ...session, ids: [...remaining.slice(1), remaining[0]] })}><SkipForward />Skip</Button><Button size="sm" variant="outline" onClick={() => { clearUndo(); setSession(completed ? { ...session, ids: [] } : null) }}>End session</Button></div></div><Progress value={completed / (completed + remaining.length) * 100} aria-label="Session progress" />{feedback && <p key={completed} role="status" className={settings.practiceEffects ? "practice-feedback text-sm text-success" : "text-sm text-success"}>{feedback} <span className="text-muted-foreground">+{Math.max(0, progress.xp - session.initialXP)} XP this session</span></p>}</header>
     <ReviewCard mistakes={allMistakes} preferences={preferences} key={current.id + current.updatedAt} mistake={current} attempt={attempts.find((attempt) => attempt.id === current.attemptId)} studies={studies} onRate={rate} onEdit={onEdit} onReimport={onReimport} onToggleSuspend={onToggleSuspend} />
   </div>
 }
@@ -267,7 +305,7 @@ function ReviewCard({ preferences, mistakes, mistake, attempt, studies, onRate, 
   }
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]') || !canUseReviewShortcut(event.target)) return
+      if (!isReviewShortcut(event)) return
       if (!revealed && event.key === " " && !(event.target instanceof HTMLElement && event.target.closest("button"))) { event.preventDefault(); setRevealed(true) }
       const option = RATING_OPTIONS.find((item) => item.shortcut === event.key)
       if (revealed && option) { event.preventDefault(); rate(option.rating) }
@@ -460,7 +498,7 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onUndoReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>(initialStatus === "due" ? "study" : "browse")
@@ -656,7 +694,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
           <RecurringPatterns data={{ ...data, mistakes: visibleMistakes }} onSave={onSaveLearning} />
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onUndoReview={onUndoReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
           <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (

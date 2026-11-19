@@ -1,6 +1,6 @@
-import { recordMistakeReview, reduceMistakeReviews, type AppData, type ExamAttempt, type Mistake, type PracticeContext, type ReviewRating } from "./exam-data.js"
+import { getMistakeSchedule, recordMistakeReview, reduceMistakeReviews, type AppData, type ExamAttempt, type Mistake, type PracticeContext, type ReviewRating } from "./exam-data.js"
 import type { SacRecord } from "./sac.js"
-import { materialiseTask, type TaskDraft } from "./learning-workspace.js"
+import { materialiseTask, type CurriculumArea, type TaskDraft } from "./learning-workspace.js"
 
 // Pure AppData operations shared by the app and the MCP server, so both write the same records the same way.
 
@@ -36,6 +36,30 @@ export function saveMistakes(data: AppData, mistakes: Mistake[]): AppData {
 
 export function reviewMistake(data: AppData, id: string, rating: ReviewRating, completedAt: string, context: PracticeContext = {}): AppData {
   return { ...data, mistakes: data.mistakes.map((item) => item.id === id ? recordMistakeReview(item, rating, completedAt, data.mistakeReviewPreferences, data.mistakes, context) : item) }
+}
+
+export function undoMistakeReview(data: AppData, snapshot: Mistake, updatedAt: string, stoplight?: { reviewedAt: string; items: CurriculumArea[] }): AppData {
+  if (!data.mistakes.some((item) => item.id === snapshot.id)) return data
+  const curriculumAreas = data.learning.curriculumAreas.map((item) => {
+    const previous = stoplight?.items.find((before) => before.id === item.id)
+    if (!previous || item.ratedAt !== stoplight?.reviewedAt) return item
+    return { ...item, rating: previous.rating, ratedAt: previous.ratedAt, updatedAt }
+  })
+  const learning = curriculumAreas.every((item, index) => item === data.learning.curriculumAreas[index])
+    ? data.learning : { ...data.learning, curriculumAreas, updatedAt }
+  return { ...data, learning, mistakes: data.mistakes.map((item) => item.id === snapshot.id ? {
+    ...item,
+    reviewHistory: snapshot.reviewHistory,
+    reviewState: snapshot.reviewState,
+    intervalDays: snapshot.intervalDays,
+    easeFactor: snapshot.easeFactor,
+    repetitions: snapshot.repetitions,
+    lapses: snapshot.lapses,
+    lastReviewedAt: snapshot.lastReviewedAt,
+    resolved: snapshot.resolved,
+    dueAt: snapshot.dueAt || getMistakeSchedule(snapshot).dueAt,
+    updatedAt,
+  } : item) }
 }
 
 export function setMistakesSuspended(data: AppData, ids: string[], suspended: boolean, at: string): AppData {

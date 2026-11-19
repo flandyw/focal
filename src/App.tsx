@@ -812,9 +812,20 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     })
   }
 
+  const reviewStoplight = useRef<{ mistakeId: string; reviewedAt: string; items: CurriculumArea[] } | null>(null)
+
   function reviewMistake(mistake: Mistake, rating: ReviewRating, context: PracticeContext = {}) {
     const completedAt = new Date().toISOString()
+    const itemIds = data.mistakes.find((item) => item.id === mistake.id)?.itemIds ?? []
+    reviewStoplight.current = { mistakeId: mistake.id, reviewedAt: completedAt, items: data.learning.curriculumAreas.filter((item) => itemIds.includes(item.id)) }
     setData((current) => ops.reviewMistake(current, mistake.id, rating, completedAt, context))
+  }
+
+  function undoMistakeReview(mistake: Mistake) {
+    // ponytail: concurrent sync rebases union review history; removing a rating across conflicts needs review tombstones.
+    const stoplight = reviewStoplight.current?.mistakeId === mistake.id ? reviewStoplight.current : undefined
+    reviewStoplight.current = null
+    setData((current) => ops.undoMistakeReview(current, mistake, new Date().toISOString(), stoplight))
   }
 
   function toggleMistakeSuspension(mistake: Mistake) {
@@ -1097,7 +1108,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               return { ...next, mistakeReviewPreferences: { ...normalizeMistakeReviewPreferences(current.mistakeReviewPreferences), lighterUntil: new Date(mistakeReviewDayStart(now, days)).toISOString(), lighterDailyTarget: target, updatedAt: new Date(now).toISOString() } }
             })
             toast.success("Lighter review period started")
-          }} data={subjectScoped ? pageData : { ...pageData, mistakes: currentWork.mistakes }} studies={pageStudies} onLog={() => openNewMistake()} onEdit={(mistake) => openRecord("mistakes", mistake.id)} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights: { ...mistakeInsights, subject: subjectScoped ? selectedSubject : undefined } }))} onSaveAlternativeDeck={(deck) => setData((current) => {
+          }} data={subjectScoped ? pageData : { ...pageData, mistakes: currentWork.mistakes }} studies={pageStudies} onLog={() => openNewMistake()} onEdit={(mistake) => openRecord("mistakes", mistake.id)} onReview={reviewMistake} onUndoReview={undoMistakeReview} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights: { ...mistakeInsights, subject: subjectScoped ? selectedSubject : undefined } }))} onSaveAlternativeDeck={(deck) => setData((current) => {
             const scopedIds = new Set(pageData.mistakes.map((mistake) => mistake.id))
             return { ...current, alternativeMistakeDeck: { ...deck, cards: [...(subjectScoped ? current.alternativeMistakeDeck?.cards ?? [] : []).filter((card) => !scopedIds.has(card.sourceMistakeId)), ...deck.cards] } }
           })} /> : null}

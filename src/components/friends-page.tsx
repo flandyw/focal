@@ -124,12 +124,12 @@ function DayTrack({ blocks, now, className, color }: { blocks: Person["today_blo
   )
 }
 
-function WeekBars({ day }: { day: (offset: number) => number }) {
-  const values = Array.from({ length: 7 }, (_, index) => day(6 - index))
+function PeriodBars({ day, days }: { day: (offset: number) => number; days: number }) {
+  const values = Array.from({ length: days }, (_, index) => day(days - 1 - index))
   const max = Math.max(...values, 3_600_000)
   return (
-    <div className="flex h-6 items-end gap-0.5" aria-hidden>
-      {values.map((value, index) => <span key={index} className={cn("w-1.5 rounded-t-[2px]", value ? "bg-primary/70" : "bg-muted")} style={{ height: `${Math.max(8, value / max * 100)}%` }} />)}
+    <div className="flex h-6 items-end gap-0.5" role="img" aria-label={`Daily study over the last ${days} days`} title={`Daily study over the last ${days} days`}>
+      {values.map((value, index) => <span key={index} className={cn(days === 7 ? "w-1.5" : "min-w-0 flex-1", "rounded-t-[2px]", value ? "bg-primary/70" : "bg-muted")} style={{ height: `${Math.max(8, value / max * 100)}%` }} />)}
     </div>
   )
 }
@@ -423,7 +423,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
               const isMe = person.status === "me"
               const done = cheered(person.user_id)
               return <li key={person.user_id} className="flex min-w-0 items-center gap-2 py-1 sm:gap-4">
-                <Button variant="ghost" onClick={() => setSelectedId(person.user_id)} aria-label={`${isMe ? "You" : personName(person)}, rank ${rank}, ${duration(stats.period[period])}. Open details`} className="h-auto min-w-0 flex-1 justify-start gap-3 px-1 py-2 text-left font-normal sm:px-2">
+                <Button variant="ghost" onClick={() => setSelectedId(person.user_id)} aria-label={`${isMe ? "You" : personName(person)}, rank ${rank}, ${duration(stats.period[period])} ${period === "today" ? "today" : `in the last ${PERIOD_DAYS[period]} days`}. Open details`} className="h-auto min-w-0 flex-1 justify-start gap-3 px-1 py-2 text-left font-normal sm:px-2">
                   <span className={cn("w-5 shrink-0 text-center text-sm tabular-nums", rank === 1 && stats.period[period] >= 60_000 ? "font-semibold text-primary" : "text-muted-foreground")}>{rank}</span>
                   <PersonAvatar person={person} />
                   <span className="min-w-0 flex-1">
@@ -438,7 +438,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
                 </Button>
                 <div className="hidden w-44 shrink-0 md:block 2xl:w-72">{period === "today"
                   ? <div role="group" aria-label={`${personName(person)}: ${duration(stats.period.today)} studied today`}><DayTrack blocks={person.today_blocks} now={now} color={colorOf(person.user_id)} /></div>
-                  : <WeekBars day={stats.day} />}</div>
+                  : <PeriodBars day={stats.day} days={PERIOD_DAYS[period]} />}</div>
                 <span className="w-16 shrink-0 text-right text-sm font-medium tabular-nums">{duration(stats.period[period])}</span>
                 {isMe ? <span className="w-9 shrink-0" /> : <Button variant="ghost" size="icon" disabled={cheerOff || done} title={done ? "Cheered · one cheer per friend every 24 hours" : `Cheer ${personName(person)}`} aria-label={done ? `Already cheered ${personName(person)}` : `Cheer ${personName(person)}`} onClick={() => void cheerFriend(person)}>{done ? <Check /> : <HeartHandshake />}</Button>}
               </li>

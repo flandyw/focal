@@ -33,7 +33,7 @@ export function RetakeComparison({ attempt, attempts }: { attempt: ExamAttempt; 
   return (
     <section aria-label="Retake comparison" className="grid gap-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-medium">Compare with earlier attempt</h3>
+        <h3 className="font-medium">Compare with {target === later ? "later" : "earlier"} attempt</h3>
         {retakes.length > 1 ? (
           <Select value={target.id} onValueChange={setSelectedId}>
             <SelectTrigger className="w-auto" aria-label="Comparison attempt"><SelectValue>{dateLabel(target)}</SelectValue></SelectTrigger>

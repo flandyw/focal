@@ -549,7 +549,6 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
   // The summary counts the whole collection, the way the Exams page, the sidebar badge
   // and the folio app do. The subject, paper and exam filters only narrow the library,
   // the tabs and the review queue below the summary.
-  const summaryCounts = useMemo(() => getMistakeQueueCounts(data.mistakes, now), [data.mistakes, now])
   const topPriority = useMemo(() => buildRevisionPriorities(visibleMistakes).find((item) => item.unresolved > 0), [visibleMistakes])
   const alternativeCount = useMemo(() => {
     const visibleIds = new Set(visibleMistakes.map((mistake) => mistake.id))
@@ -699,9 +698,9 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
       <AIOverview area="mistakes" subject={activeSubject} fingerprint={String(visibleMistakes.length)} />
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       {tab !== "study" && data.mistakes.length ? <StatGrid>
-        <StatTile icon={BookOpenCheck} tone={summaryCounts.due ? "warning" : "success"} label={summaryCounts.due ? "Ready to review" : "You’re caught up"} value={summaryCounts.due} hint={<span className="inline-flex items-center gap-1 font-medium text-primary">Review now<ArrowRight aria-hidden className="size-3.5" /></span>} onClick={() => changeTab("study")} className="max-md:col-span-2" />
+        <StatTile icon={BookOpenCheck} tone={counts.due ? "warning" : "success"} label={counts.due ? "Ready to review" : "You’re caught up"} value={counts.due} hint={<span className="inline-flex items-center gap-1 font-medium text-primary">Review now<ArrowRight aria-hidden className="size-3.5" /></span>} onClick={() => changeTab("study")} className="max-md:col-span-2" />
         <StatTile icon={CalendarClock} label="Due in 7 days" value={dueThisWeekCount} hint="Daily load for the week ahead" spark={weekLoad} onClick={() => changeTab("schedule")} />
-        <StatTile icon={ShieldCheck} tone="success" label="Well-spaced" value={summaryCounts.mature} hint={<span className="flex items-center gap-2"><Meter value={summaryCounts.mature} max={visibleMistakes.length} className="min-w-8 flex-1" barClassName="bg-success" /><span className="shrink-0 tabular-nums">of {visibleMistakes.length}</span></span>} />
+        <StatTile icon={ShieldCheck} tone="success" label="Well-spaced" value={counts.mature} hint={<span className="flex items-center gap-2"><Meter value={counts.mature} max={visibleMistakes.length} className="min-w-8 flex-1" barClassName="bg-success" /><span className="shrink-0 tabular-nums">of {visibleMistakes.length}</span></span>} />
         <StatTile icon={Tags} label="Most common error" value={<span className="block truncate text-xl">{topCategory?.[0] ?? "—"}</span>} hint={topCategory ? `${count(topCategory[1], "mistake")} · ${Math.round(topCategory[1] / visibleMistakes.length * 100)}% of the library` : "Tag mistakes with a category"} className="max-md:col-span-2" />
       </StatGrid> : null}
       <Tabs value={tab} onValueChange={(value) => changeTab(value as PageTab)} className="min-w-0">

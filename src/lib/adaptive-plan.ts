@@ -44,7 +44,8 @@ function upcomingAssessments(source: AdaptivePlanSource, timetable: Timetable | 
  * re-check-due stoplight items (due before their subject's next assessment). Each study day's
  * budget is `dailyMinutes` plus free periods in the class timetable, minus work already on it;
  * tasks go to the least-loaded eligible day, spreading subjects apart. Re-running moves the
- * planner's still-planned tasks (including overdue ones) and archives those no longer needed.
+ * planner's still-planned tasks (including overdue ones), refreshes their details, and archives
+ * those no longer needed or that no longer fit before their deadline.
  */
 export function planAdaptive(source: AdaptivePlanSource, timetable: Timetable | null, { subject, now = new Date() }: { subject?: string; now?: Date } = {}) {
   const { learning } = source
@@ -130,25 +131,29 @@ export function planAdaptive(source: AdaptivePlanSource, timetable: Timetable | 
   }
 
   const timestamp = now.toISOString()
+  const needBySource = new Map(needs.map((need) => [need.sourceId, need]))
   let moved = 0
   let dropped = 0
+  let changed = false
   const tasks = learning.tasks.map((task) => {
     if (movable.get(task.sourceId!) !== task) return task
+    const need = needBySource.get(task.sourceId!)
     const date = placed.get(task.sourceId!)
-    if (date) {
-      if (date === task.plannedFor) return task
-      moved += 1
-      return { ...task, plannedFor: date, updatedAt: timestamp }
+    // Archive what is no longer needed or no longer fits, so it can't overbook a day or sit past its assessment.
+    if (!need || !date) {
+      if (!need) dropped += 1
+      changed = true
+      return { ...task, archivedAt: timestamp, updatedAt: timestamp }
     }
-    if (needs.some((need) => need.sourceId === task.sourceId)) return task
-    dropped += 1
-    return { ...task, archivedAt: timestamp, updatedAt: timestamp }
+    if (date !== task.plannedFor) moved += 1
+    else if (task.title === need.title && task.detail === need.detail && task.durationMinutes === need.durationMinutes) return task
+    changed = true
+    return { ...task, title: need.title, detail: need.detail, durationMinutes: need.durationMinutes, plannedFor: date, updatedAt: timestamp }
   })
   const added = needs.filter((need) => placed.has(need.sourceId) && !movable.has(need.sourceId))
     .map(({ before: _before, ...need }) => materialiseTask({ ...need, plannedFor: placed.get(need.sourceId)! }, now))
-  const changed = moved + dropped + added.length > 0
   return {
-    learning: changed ? { ...learning, tasks: [...tasks, ...added], updatedAt: timestamp } : learning,
+    learning: changed || added.length ? { ...learning, tasks: [...tasks, ...added], updatedAt: timestamp } : learning,
     added: added.length, moved, dropped, unplaced,
   }
 }
@@ -158,7 +163,7 @@ export function describeAdaptivePlan({ added, moved, dropped, unplaced }: Return
     added ? `${added} task${added === 1 ? "" : "s"} added` : "",
     moved ? `${moved} rescheduled` : "",
     dropped ? `${dropped} no longer needed` : "",
-    unplaced ? `${unplaced} didn't fit the next ${HORIZON_DAYS} days` : "",
+    unplaced ? `${unplaced} didn't fit your study time before ${unplaced === 1 ? "its" : "their"} deadline` : "",
   ].filter(Boolean)
   return parts.length ? parts.join(" · ") : "Your plan is already up to date."
 }

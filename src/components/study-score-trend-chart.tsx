@@ -25,7 +25,7 @@ function buildSummary(points: StudyScoreTrendPoint[]) {
   return `${points.length} linked attempts; estimate ${change > 0 ? "up" : "down"} ${Math.abs(change)} point${Math.abs(change) === 1 ? "" : "s"} from ${first.studyScore} to ${latest.studyScore}.`
 }
 
-export function StudyScoreTrendChart({ points }: { points: StudyScoreTrendPoint[] }) {
+export function StudyScoreTrendChart({ points, target }: { points: StudyScoreTrendPoint[]; target?: number }) {
   const summary = buildSummary(points)
 
   return (
@@ -52,6 +52,7 @@ export function StudyScoreTrendChart({ points }: { points: StudyScoreTrendPoint[
                 />
                 <YAxis domain={[0, 50]} width={34} tickLine={false} axisLine={false} />
                 <ReferenceLine y={30} stroke="var(--border)" strokeDasharray="4 4" label={{ value: "State median", position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }} />
+                {target === undefined ? null : <ReferenceLine y={target} stroke="var(--primary)" strokeDasharray="6 3" label={{ value: `Target ${target}`, position: "insideTopLeft", fontSize: 10, fill: "var(--primary)" }} />}
                 <ChartLegend content={<ChartLegendContent />} />
                 <ChartTooltip content={({ active, payload }) => {
                   if (!active || !payload?.length) return null

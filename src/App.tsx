@@ -245,7 +245,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     // The macOS ATAR widget needs scaling data to recompute its saved scenario or live estimate.
     view === "predictor" || view === "atar" || view === "goals" || Boolean(import.meta.env.VITE_DESKTOP && (data.atarEstimates.length || widgetAtarSettings().source === "live")),
     !["today", "calendar", "focus", "mistakes", "friends", "settings", "timetable"].includes(view),
-    view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || sheet?.kind === "mistake" || Boolean(view === "mistakes" && recordId),
+    view === "exams" || view === "library" || view === "vcaa" || view === "focus" && timerMode === "exam" || sheet?.kind === "mistake" || Boolean(view === "mistakes" && recordId),
   )
   useDesktopWidgets(data, studySessionSync.sessions, timetable, references, scalingReferences, sync.user?.id, sync.status, setView)
 
@@ -1045,6 +1045,8 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           <motion.div key={`${view}:${subjectScoped && view !== "mistakes" ? selectedSubject : "all"}`} variants={pageVariants} initial="initial" animate="animate" className={view === "chat" ? "flex min-h-0 flex-1 flex-col" : undefined}>
           {view === "exams" ? (
             <ExamsPage
+              studies={pageStudies}
+              onImportMistakes={importMistakes}
               scopedSubject={subjectScoped ? selectedSubject : undefined}
                 data={pageData}
                 references={pageReferences}

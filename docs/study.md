@@ -1,3 +1,7 @@
+# Practice paper generator
+
+On Practice, choose **Generate practice paper**, select a subject, Exam or SAC, paper label and writing time (and an area of study for a SAC). Copy the prompt into a chatbot that can compile XeLaTeX: it includes the VCAA-style template, official exam/specification/report links and your weak areas. Complete its PDF, upload it in the same chat, then paste the marking JSON back to save the exam, per-question marks and mistakes. AI marking is not authoritative; check its rubric and feedback against the examiner reports.
+
 # Planning and tracking study
 
 
@@ -78,4 +82,3 @@ subject, notes, topics and original schedule survive, and only measured time is
 recorded. Repeat signed out and signed in offline; reconnect both clients and
 verify one shared session. Edit the same plan on another device while its editor
 is open and verify a stale save is refused. Test a phone-width timer and editor.
-

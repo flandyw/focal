@@ -49,6 +49,9 @@ import { localDate } from "../lib/learning-workspace"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { count } from "../lib/utils"
 import { AIOverview } from "./ai-overview"
+import { PracticePaperDialog } from "./practice-paper-dialog"
+import type { Mistake } from "../lib/exam-data"
+import type { VcaaStudyResources } from "../lib/vcaa-resources"
 
 const PerformanceTrendChart = lazy(() =>
   import("./performance-trend-chart").then((module) => ({ default: module.PerformanceTrendChart })),
@@ -606,6 +609,8 @@ function RecentExams({
 }
 
 export type ExamsPageProps = {
+  studies: VcaaStudyResources[]
+  onImportMistakes: (mistakes: Mistake[], attempt?: ExamAttempt) => void
   data: AppData
   references: AssessmentReference[]
   comparisonYear: number
@@ -625,6 +630,11 @@ export type ExamsPageProps = {
 }
 
 export function ExamsPage(props: ExamsPageProps) {
+  const [generatorOpen, setGeneratorOpen] = useState(false)
+  const generator = <>
+    <Button variant="outline" onClick={() => setGeneratorOpen(true)}>Generate practice paper</Button>
+    {generatorOpen ? <PracticePaperDialog data={props.data} studies={props.studies} initialSubject={props.scopedSubject} onOpenChange={setGeneratorOpen} onSave={props.onImportMistakes} /> : null}
+  </>
   const {
     data,
     references,
@@ -671,6 +681,7 @@ export function ExamsPage(props: ExamsPageProps) {
         <PageHeader
           title="Practice"
         >
+          {generator}
           <Button onClick={onLogExam}>
             <Plus />
             Log exam
@@ -706,6 +717,7 @@ export function ExamsPage(props: ExamsPageProps) {
       <PageHeader
         title="Practice"
       >
+        {generator}
         <Button variant="outline" onClick={exportReport}>
           <FileDown />
           Export report

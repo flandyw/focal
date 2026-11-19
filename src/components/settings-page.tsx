@@ -37,9 +37,10 @@ const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const satisfies rea
 const EFFORT_LABELS: Record<(typeof EFFORTS)[number], string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" }
 const STRENGTHS = { light: ["Light", 1], balanced: ["Balanced", 1.5], strong: ["Strong", 2] } as const
 
-export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjects, subjectCompletionYears, onSubjectCompletion, onCompleteYear, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, initialSection, recovery }: {
+export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjects, subjectCompletionYears, onSubjectCompletion, onCompleteYear, providers, examDifficulty, onSubjectsChange, onExamDifficultyChange, onExport, onImport, onReplayOnboarding, onStartTour, section, onSection, recovery }: {
   recovery: ReactNode
-  initialSection?: "ai" | "account"
+  section: string | null
+  onSection: (id: SectionId | null) => void
   sync: ReturnType<typeof useSupabaseSync>
   subjects: string[]
   selectedSubjects: string[]
@@ -61,7 +62,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
   const update = useUpdateState()
   const signedIn = Boolean(sync.user) && sync.status !== "sign-in-required"
   // null shows the overview list on phones; wider screens always show a section beside it.
-  const [open, setOpen] = useState<SectionId | null>(initialSection ?? (sync.configured && !signedIn ? "account" : null))
+  const open = section ?? (sync.configured && !signedIn ? "account" : null)
   const difficulty = resolveDifficultySettings(examDifficulty)
   const current = selectedSubjects.filter((subject) => !completedSubjects.some((name) => sameStudySubject(name, subject)))
   const syncLabel = sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"
@@ -85,7 +86,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
 
   // Phones swap the list and the detail in place: open a section at its top, and return focus to its row on the way back.
   function openSection(id: SectionId | null) {
-    setOpen(id)
+    onSection(id)
     if (!matchMedia("(max-width: 767px)").matches) return
     if (id) (import.meta.env.VITE_DESKTOP ? document.getElementById("main-content") : window)?.scrollTo({ top: 0 })
     requestAnimationFrame(() => document.getElementById(id ? "settings-section-title" : `settings-nav-${open}`)?.focus({ preventScroll: Boolean(id) }))

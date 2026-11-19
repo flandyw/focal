@@ -812,14 +812,20 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     })
   }
 
+  const reviewStoplight = useRef<{ mistakeId: string; reviewedAt: string; items: CurriculumArea[] } | null>(null)
+
   function reviewMistake(mistake: Mistake, rating: ReviewRating, context: PracticeContext = {}) {
     const completedAt = new Date().toISOString()
+    const itemIds = data.mistakes.find((item) => item.id === mistake.id)?.itemIds ?? []
+    reviewStoplight.current = { mistakeId: mistake.id, reviewedAt: completedAt, items: data.learning.curriculumAreas.filter((item) => itemIds.includes(item.id)) }
     setData((current) => ops.reviewMistake(current, mistake.id, rating, completedAt, context))
   }
 
   function undoMistakeReview(mistake: Mistake) {
     // ponytail: concurrent sync rebases union review history; removing a rating across conflicts needs review tombstones.
-    setData((current) => ops.undoMistakeReview(current, mistake, new Date().toISOString()))
+    const stoplight = reviewStoplight.current?.mistakeId === mistake.id ? reviewStoplight.current : undefined
+    reviewStoplight.current = null
+    setData((current) => ops.undoMistakeReview(current, mistake, new Date().toISOString(), stoplight))
   }
 
   function toggleMistakeSuspension(mistake: Mistake) {

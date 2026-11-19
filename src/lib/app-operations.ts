@@ -1,6 +1,6 @@
 import { getMistakeSchedule, recordMistakeReview, reduceMistakeReviews, type AppData, type ExamAttempt, type Mistake, type PracticeContext, type ReviewRating } from "./exam-data.js"
 import type { SacRecord } from "./sac.js"
-import { materialiseTask, type TaskDraft } from "./learning-workspace.js"
+import { materialiseTask, type CurriculumArea, type TaskDraft } from "./learning-workspace.js"
 
 // Pure AppData operations shared by the app and the MCP server, so both write the same records the same way.
 
@@ -38,9 +38,16 @@ export function reviewMistake(data: AppData, id: string, rating: ReviewRating, c
   return { ...data, mistakes: data.mistakes.map((item) => item.id === id ? recordMistakeReview(item, rating, completedAt, data.mistakeReviewPreferences, data.mistakes, context) : item) }
 }
 
-export function undoMistakeReview(data: AppData, snapshot: Mistake, updatedAt: string): AppData {
+export function undoMistakeReview(data: AppData, snapshot: Mistake, updatedAt: string, stoplight?: { reviewedAt: string; items: CurriculumArea[] }): AppData {
   if (!data.mistakes.some((item) => item.id === snapshot.id)) return data
-  return { ...data, mistakes: data.mistakes.map((item) => item.id === snapshot.id ? {
+  const curriculumAreas = data.learning.curriculumAreas.map((item) => {
+    const previous = stoplight?.items.find((before) => before.id === item.id)
+    if (!previous || item.ratedAt !== stoplight?.reviewedAt) return item
+    return { ...item, rating: previous.rating, ratedAt: previous.ratedAt, updatedAt }
+  })
+  const learning = curriculumAreas.every((item, index) => item === data.learning.curriculumAreas[index])
+    ? data.learning : { ...data.learning, curriculumAreas, updatedAt }
+  return { ...data, learning, mistakes: data.mistakes.map((item) => item.id === snapshot.id ? {
     ...item,
     reviewHistory: snapshot.reviewHistory,
     reviewState: snapshot.reviewState,

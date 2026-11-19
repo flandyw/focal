@@ -352,8 +352,11 @@ function PeriodDialog({ editor, periods, subjects, onClose, onSave, onDelete }: 
             <Field><FieldLabel htmlFor="tt-period">Period name</FieldLabel><Input id="tt-period" required value={draft.period} onChange={(e) => update({ period: e.target.value })} placeholder="Period 1, recess, or lunch" /></Field>
             <Field><FieldLabel htmlFor="tt-subject">Subject</FieldLabel><Input id="tt-subject" list="tt-subject-options" value={draft.subject} onChange={(e) => update({ subject: e.target.value })} placeholder="Choose or type a subject" /><datalist id="tt-subject-options">{subjects.map((subject) => <option key={subject} value={subject} />)}</datalist><FieldDescription>Leave blank for a break or other school activity.</FieldDescription></Field>
             <div>
-              <div className="grid grid-cols-2 gap-4"><Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field><Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field></div>
-              <div role="status" className="text-sm text-destructive">
+              <div className="grid grid-cols-2 gap-4">
+                <Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field>
+                <Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field>
+              </div>
+              <div id="tt-overlap" role="status" className="text-sm text-destructive">
                 {overlap ? <p className="mt-2 flex items-start gap-1.5"><TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />{overlap}. You can still save this period.</p> : null}
               </div>
             </div>

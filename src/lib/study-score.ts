@@ -1,5 +1,6 @@
 import {
   analyseAttempt,
+  analyseScore,
   findAttemptReferenceById,
   normaliseComparisonName,
   validateAttempt,
@@ -116,6 +117,41 @@ export function defaultExamWeight(subject: string): number {
 
 export function isTwoPaperMathematics(subject: string) {
   return /^(general mathematics|mathematical methods|specialist mathematics)$/.test(normaliseScalingStudyName(subject))
+}
+
+export function requiredExamPercentile(target: number, sacPercentile: number | null, examWeightPercent: number) {
+  if (!Number.isInteger(target) || target < 20 || target > 50 ||
+    !Number.isFinite(examWeightPercent) || examWeightPercent <= 0 || examWeightPercent > 100 ||
+    (sacPercentile !== null && (!Number.isFinite(sacPercentile) || sacPercentile <= 0 || sacPercentile >= 100))) return null
+  const examWeight = examWeightPercent / 100
+  const targetZ = (target - 30) / 7
+  const examZ = sacPercentile === null ? targetZ
+    : (targetZ - inverseNormalCdf(sacPercentile / 100) * (1 - examWeight)) / examWeight
+  const percentile = normalPercentile(examZ)
+  return { percentile, outOfReach: percentile > 99.9, alreadySecured: percentile < 0.1 }
+}
+
+export function targetExamMarks(subject: string, references: AssessmentReference[], percentile: number) {
+  const papers = isTwoPaperMathematics(subject) ? [1, 2] : [null]
+  return papers.flatMap((paper) => {
+    const reference = references
+      .filter((item) => sameStudy(item.studyName, subject) &&
+        (paper === null ? /exam/i.test(item.name) : paperNumber(item.name) === paper))
+      .toSorted((first, second) => second.year - first.year)[0]
+    if (!reference || reference.maxScore <= 0) return []
+    let lowerPercentage = 0
+    for (const band of reference.gradeBands.toSorted((first, second) => (first.minScore ?? 0) - (second.minScore ?? 0))) {
+      const percentage = band.percentage ?? 0
+      if (percentage > 0 && percentile >= lowerPercentage && percentile <= lowerPercentage + percentage &&
+        band.minScore !== null && band.maxScore !== null) {
+        const score = band.minScore + (percentile - lowerPercentage) / percentage * (band.maxScore - band.minScore)
+        if (analyseScore(score, reference).percentile === null) return []
+        return [{ reference, percentage: score / reference.maxScore * 100 }]
+      }
+      lowerPercentage += percentage
+    }
+    return []
+  })
 }
 
 function paperNumber(paper: string): 1 | 2 | null {

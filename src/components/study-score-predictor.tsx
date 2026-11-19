@@ -12,7 +12,7 @@ import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { StudyScoreTrendChart } from "./study-score-trend-chart"
 import { formatOrdinal, type AppData, type AssessmentReference } from "../lib/exam-data"
-import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore, sacPercentileFromRank } from "../lib/study-score"
+import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore, requiredExamPercentile, sacPercentileFromRank, targetExamMarks } from "../lib/study-score"
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
 
@@ -29,6 +29,10 @@ function sacInputs(subject: string) {
   } catch {
     return { sacMode: "rank", sacRank: "", sacCohort: "", schoolMedian: "", sacPercentile: "" }
   }
+}
+
+function targetInput(subject: string) {
+  try { return localStorage.getItem(`focal:study-score-target:${subject}`) } catch { return null }
 }
 
 export function StudyScorePredictor({
@@ -64,6 +68,8 @@ export function StudyScorePredictor({
     distributionYear: "automatic",
     scalingYear: "combined",
   }
+  const [savedTarget, setSavedTarget] = useState(() => ({ subject, value: targetInput(subject) }))
+  if (savedTarget.subject !== subject) setSavedTarget({ subject, value: targetInput(subject) })
   if (selectedSubject !== subject) setSubject(subject)
   if (savedInputs.subject !== subject) setSavedInputs(inputs)
   const { sacMode, sacRank, sacCohort, schoolMedian, sacPercentile, examWeight, distributionYear, scalingYear } = inputs
@@ -111,6 +117,13 @@ export function StudyScorePredictor({
     }),
     [data.attempts, examWeight, parsedSac, references, selectedDistributionYear, subject],
   )
+  const targetValue = (savedTarget.subject === subject ? savedTarget.value : targetInput(subject)) ?? String(Math.min(50, (prediction?.studyScore ?? 30) + 3))
+  const target = Number(targetValue)
+  const targetInvalid = !targetValue.trim() || !Number.isInteger(target) || target < 20 || target > 50
+  const requiredExam = prediction && !targetInvalid
+    ? requiredExamPercentile(target, parsedSac, prediction.examWeightPercent) : null
+  const targetMarks = requiredExam && !requiredExam.outOfReach && !requiredExam.alreadySecured
+    ? targetExamMarks(subject, references, requiredExam.percentile) : []
   const scalingYears = useMemo(
     () => [...new Set(scalingReferences
       .filter((reference) => normaliseScalingStudyName(reference.studyName) === normaliseScalingStudyName(subject))
@@ -338,6 +351,48 @@ export function StudyScorePredictor({
                       <div><p className="text-xs text-muted-foreground">SAC percentile used</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatOrdinal(prediction.sacPercentile)}</p></div>
                       <div><p className="text-xs text-muted-foreground">Combined percentile</p><p className="mt-1 text-xl font-semibold tabular-nums">{formatOrdinal(prediction.combinedPercentile)}</p></div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="grid gap-3 pt-6">
+                    <Field>
+                      <FieldLabel htmlFor="study-score-target">Target study score</FieldLabel>
+                      <Input
+                        id="study-score-target"
+                        className="max-w-32 tabular-nums"
+                        type="number"
+                        min="20"
+                        max="50"
+                        step="1"
+                        inputMode="numeric"
+                        value={targetValue}
+                        aria-invalid={targetInvalid || undefined}
+                        aria-describedby="study-score-target-description"
+                        onChange={(event) => {
+                          const value = event.target.value
+                          setSavedTarget({ subject, value })
+                          try { localStorage.setItem(`focal:study-score-target:${subject}`, value) } catch { /* Inputs still work for this session. */ }
+                        }}
+                      />
+                      <FieldDescription id="study-score-target-description">
+                        {targetInvalid ? "Enter a whole study score between 20 and 50." : "Approximate exam performance needed under the same assumptions as your prediction."}
+                      </FieldDescription>
+                    </Field>
+                    {!targetInvalid ? (
+                      <div className="grid gap-1 text-sm tabular-nums" aria-live="polite">
+                        {target <= prediction.studyScore ? <p>Your current prediction already meets this target; it is not a guaranteed result.</p> : null}
+                        {!requiredExam ? <p>The exam has no weighting, so this target depends entirely on SACs.</p>
+                          : requiredExam.outOfReach ? <p>This target is out of reach under these assumptions: it needs above the 99.9th exam percentile. Revisit your SAC estimate or target.</p>
+                          : requiredExam.alreadySecured ? <p>This target is already secured by SACs in this model (below the 0.1st exam percentile needed), not a guaranteed result.</p>
+                          : <>
+                            <p>You need about the {formatOrdinal(requiredExam.percentile)} percentile on {isTwoPaperMathematics(subject) ? "both exams" : "the exam"}.</p>
+                            {targetMarks.map(({ reference, percentage }) => (
+                              <p key={reference.id} className="text-muted-foreground">≈ {Math.round(percentage)}% on the {reference.year} {reference.name}</p>
+                            ))}
+                          </>}
+                      </div>
+                    ) : null}
                   </CardContent>
                 </Card>
 

@@ -17,14 +17,6 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root {...props} />
 }
 
-function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
-  return <SheetPrimitive.Trigger {...props} />
-}
-
-function SheetClose({ ...props }: SheetPrimitive.Close.Props) {
-  return <SheetPrimitive.Close {...props} />
-}
-
 function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
   return <SheetPrimitive.Portal {...props} />
 }
@@ -167,8 +159,6 @@ function SheetDescription({
 
 export {
   Sheet,
-  SheetTrigger,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetFooter,

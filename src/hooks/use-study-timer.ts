@@ -61,7 +61,7 @@ export interface StudyTimerEngine {
   addTime: (minutes: number) => void
   startOvertime: () => void
   startFreeStudy: () => void
-  finishFreeStudy: () => void
+  finishStudy: () => void
   returnToBreak: () => void
 }
 
@@ -379,7 +379,11 @@ export function useStudyTimer({
     addTime: (minutes) => dispatch({ type: "ADD_TIME", minutes }),
     startOvertime: () => dispatch({ type: "START_STUDY_OVERTIME", settings: settingsRef.current }),
     startFreeStudy: () => dispatch({ type: "START_FREE_STUDY", settings: settingsRef.current }),
-    finishFreeStudy: () => {
+    finishStudy: () => {
+      if (state.mode !== "free") {
+        dispatch({ type: "FINISH_WORK", settings: settingsRef.current })
+        return
+      }
       closeBlock(serverNow())
       sessionMirror.push({ action: "complete", at: serverNow() })
       dispatch({ type: "END_FREE_STUDY", settings: settingsRef.current })

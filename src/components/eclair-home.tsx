@@ -19,6 +19,8 @@ export interface EclairHomeProps {
   totalSeconds: number | null
   onBreak: boolean
   free: boolean
+  finishLabel?: string
+  canFinish: boolean
   /** Mode and preset are locked mid-block, exactly as on the regular page. */
   locked: boolean
   busy: boolean
@@ -340,7 +342,7 @@ const PAGES = 3
 type Overlay = null | "drawer" | "menu" | "shade" | "subject" | "rhythm"
 
 export function EclairHome(props: EclairHomeProps) {
-  const { actions, settings, busy, shared } = props
+  const { actions, settings, busy, shared, finishLabel, canFinish } = props
   const now = useTickingNow(1000)
   const [page, setPage] = useState(0)
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -366,7 +368,6 @@ export function EclairHome(props: EclairHomeProps) {
   const subjectChosen = shared || props.subject.trim() !== ""
   const start = () => (subjectChosen ? actions.toggle() : setOverlay("subject"))
   const toggleLabel = props.running ? "Pause" : shared ? "Resume" : "Start"
-  const canFinish = !busy && (shared || props.seconds > 0)
   const progress = props.totalSeconds ? ((props.totalSeconds - props.seconds) / props.totalSeconds) * 100 : null
   const goal = settings.dailyGoal && !props.free ? settings.dailyGoal : 0
   const idle = !props.running && (props.totalSeconds ? props.seconds === props.totalSeconds : props.seconds === 0)
@@ -417,8 +418,8 @@ export function EclairHome(props: EclairHomeProps) {
                   {props.onContinue && props.continueLabel ? <button className="ecl-continue" onClick={props.onContinue} type="button"><SkipForward />{props.continueLabel}</button> : null}
                   <div className="ecl-transport">
                     <button aria-label={toggleLabel} disabled={busy} onClick={start} type="button">{props.running ? <Pause className="ecl-solid" /> : <Play className="ecl-solid" />}</button>
-                    {props.free
-                      ? <button aria-label="Finish" disabled={!canFinish} onClick={actions.finish} type="button"><Square className="ecl-solid" /></button>
+                    {finishLabel
+                      ? <button aria-label={finishLabel} title={finishLabel} disabled={!canFinish} onClick={actions.finish} type="button"><Square className="ecl-solid" /></button>
                       : <button aria-label={props.onBreak ? "Skip break" : "Add 5 minutes"} onClick={() => (props.onBreak ? actions.skipBreak() : actions.addTime(5))} type="button">{props.onBreak ? <SkipForward /> : <span className="ecl-plus5">+5</span>}</button>}
                     <button aria-label={shared ? "Discard" : "Reset"} disabled={busy} onClick={actions.reset} type="button"><RotateCcw /></button>
                   </div>

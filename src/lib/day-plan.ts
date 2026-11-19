@@ -218,7 +218,7 @@ export function sessionItem(session: CanonicalStudySession, date: string, now = 
   const blocks = sessionBlocks(session, now).flatMap((block) => {
     const start = Math.max(first, Date.parse(block.start))
     const end = Math.min(last, Date.parse(block.end))
-    return end > start ? [{ start, end }] : []
+    return end > start || block.live && end === start && start < last ? [{ start, end }] : []
   })
   if (!blocks.length) return null
   return {

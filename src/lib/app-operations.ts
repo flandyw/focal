@@ -1,4 +1,4 @@
-import { recordMistakeReview, reduceMistakeReviews, type AppData, type ExamAttempt, type Mistake, type PracticeContext, type ReviewRating } from "./exam-data.js"
+import { getMistakeSchedule, recordMistakeReview, reduceMistakeReviews, type AppData, type ExamAttempt, type Mistake, type PracticeContext, type ReviewRating } from "./exam-data.js"
 import type { SacRecord } from "./sac.js"
 import { materialiseTask, type TaskDraft } from "./learning-workspace.js"
 
@@ -50,7 +50,7 @@ export function undoMistakeReview(data: AppData, snapshot: Mistake, updatedAt: s
     lapses: snapshot.lapses,
     lastReviewedAt: snapshot.lastReviewedAt,
     resolved: snapshot.resolved,
-    dueAt: snapshot.dueAt,
+    dueAt: snapshot.dueAt || getMistakeSchedule(snapshot).dueAt,
     updatedAt,
   } : item) }
 }

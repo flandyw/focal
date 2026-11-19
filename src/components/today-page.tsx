@@ -90,7 +90,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={greeting(new Date(now).getHours())} description={new Date(now).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}>
-        <Button onClick={() => focusSession ? onStartFocus(undefined, focusSession.title, focusSession.id) : onStartFocus(undefined, "")}>{focusSession ? `Resume ${focusSession.title}` : "Start studying"}</Button>
+        <Button className="min-w-0 max-w-full" title={focusSession ? `Resume ${focusSession.title}` : undefined} onClick={() => focusSession ? onStartFocus(undefined, focusSession.title, focusSession.id) : onStartFocus(undefined, "")}><span className="truncate">{focusSession ? `Resume ${focusSession.title}` : "Start studying"}</span></Button>
       </PageHeader>
 
       <section aria-label="Study stats" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border lg:grid-cols-4">

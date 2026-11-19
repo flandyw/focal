@@ -4,7 +4,7 @@ import { normaliseComparisonName } from "./exam-data"
 
 export function buildPracticePaperPrompt(subject: string, kind: "exam" | "sac", paper: string, minutes: number, weakAreas: string[], studies: VcaaStudyResources[], template: string, areaOfStudy = "") {
   const matching = studies.filter((study) => normaliseComparisonName(study.studyName) === normaliseComparisonName(subject))
-  const exams = getCachedVcaaExams(matching).filter((exam) => kind === "sac" || getVcaaExamPaper(exam) === paper || paper === "Exam")
+  const exams = getCachedVcaaExams(matching).filter((exam) => kind === "sac" || paper === "Exam" || [paper, "Exam"].includes(getVcaaExamPaper(exam)))
     .toSorted((a, b) => (b.year ?? 0) - (a.year ?? 0)).slice(0, 4)
   const references = [...new Map([...exams, ...exams.flatMap((exam) => {
     const companions = getVcaaExamCompanions(exam, matching.find((study) => study.pageUrl === exam.pageUrl))

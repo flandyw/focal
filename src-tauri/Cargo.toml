@@ -18,19 +18,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-fs = { version = "2", features = ["watch"] }
 tauri-plugin-dialog = "2"
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 tauri-plugin-notification = "2.7.0"
-futures-util = "0.3"
-tauri-plugin-os = "2.3.2"
 tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
-tokio = { version = "1", features = ["rt"] }
 tauri-plugin-updater = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-process = "2"

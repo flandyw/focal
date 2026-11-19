@@ -28,7 +28,6 @@
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     "notification:default",
-    "os:default",
     "sql:default",
     "sql:allow-execute",
     {

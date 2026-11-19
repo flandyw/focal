@@ -5,6 +5,7 @@ import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
 import { Button } from "../ui/button"
 import { PageHeader } from "../page-header"
+import { Meter, StatGrid, StatTile } from "../workspace-layout"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import {
@@ -20,7 +21,7 @@ import {
 import type { Project, StudySession } from"../../lib/types"
 import type { ExamAttempt } from "../../lib/exam-data"
 import { cn, getSessionEffectiveMinutes, getSessionSubjectIds, getSubjectById } from"../../lib/progress-utils"
-import { CalendarDays, ChevronLeft, ChevronRight, Download } from "lucide-react"
+import { CalendarCheck, CalendarDays, ChartNoAxesCombined, ChevronLeft, ChevronRight, Clock, Download, Flame, Gauge } from "lucide-react"
 import { getSubjectColor } from"../../lib/progress-chart-theme"
 import { useTickingNow } from "../../hooks/use-ticking-now"
 import { downloadExamFile } from "../../lib/host"
@@ -323,7 +324,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  return (
  <div className="h-full">
  <div className="space-y-8">
- <PageHeader title="Progress" />
+ <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Study time, consistency and exam results over time." />
  {weeklyReview}
  <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
  </div>
@@ -347,7 +348,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  >
  {/* Header row */}
  <motion.div variants={staggerItem}>
- <PageHeader title="Progress">
+ <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Study time, consistency and exam results over time.">
 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
  <Button
  type="button"
@@ -394,6 +395,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  comparison={periodComparison}
  range={periodDays}
  filterActive={isFilterActive}
+ spark={filteredConsistency.days.map((day) => day.minutes)}
  />
  </motion.div>
 
@@ -425,7 +427,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  variants={staggerContainer(0.05, 0)}
  initial={reduceMotion ? false :"initial"}
  animate={reduceMotion ? undefined :"animate"}
- className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-6 min-[900px]:grid-cols-2 [&>div]:min-w-0"
+ className="grid min-w-0 grid-cols-1 gap-5 min-[900px]:grid-cols-2 [&>div]:min-w-0"
  >
  <motion.div variants={staggerItem} className="min-[900px]:col-span-2">
  <ExamPerformanceChart attempts={filteredAttempts} range={periodDays} periodEnd={periodEnd} onLogExam={onLogExam} />
@@ -470,10 +472,10 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  stats={filteredConsistency.stats}
  />
  </motion.div>
- </> : <motion.div variants={staggerItem} className="border-t border-border/70 pt-5 min-[900px]:col-span-2">
+ </> : <motion.div variants={staggerItem} className="h-full rounded-lg border border-border bg-card p-4 sm:p-5 min-[900px]:col-span-2">
  <h2 className="focal-section-title">Study habits</h2>
  <p className="mt-1 mb-4 text-sm text-muted-foreground">Complete your first study session to see time trends, consistency, and your weekly rhythm.</p>
- <Button size="sm" variant="outline" onClick={onNewSession}>Start study session</Button>
+ <Button size="sm" onClick={onNewSession}>Start study session</Button>
  </motion.div>}
  </motion.div>
  </motion.div>
@@ -540,6 +542,7 @@ function KpiStrip({
  comparison,
  range,
  filterActive,
+ spark,
 }: {
  totalMinutes: number
  dailyAverage: number
@@ -550,29 +553,15 @@ function KpiStrip({
  comparison: ReturnType<typeof getStudyPeriodComparison>
  range: AnalyticsRange
  filterActive: boolean
+ spark: number[]
 }) {
  return (
- <div className="grid grid-cols-2 divide-x divide-y divide-border/50 border-b border-border/60 sm:grid-cols-4 sm:divide-y-0">
- <KpiCard
- label="Total time"
- value={formatMinutesShort(totalMinutes)}
- sub={formatComparison(comparison, range, filterActive)}
- />
- <KpiCard
- label="Daily average"
- value={formatMinutesLong(dailyAverage)}
- sub={filterActive ?"filtered" : undefined}
- />
- <KpiCard
- label="Days studied"
- value={`${daysStudied} / ${totalDays}`}
- />
- <KpiCard
- label="Current streak"
- value={`${currentStreak}d`}
- sub={`best ${longestStreak}d`}
- />
- </div>
+ <StatGrid>
+ <StatTile icon={Clock} label="Total time" value={formatMinutesShort(totalMinutes)} hint={formatComparison(comparison, range, filterActive)} spark={spark} />
+ <StatTile icon={Gauge} label="Daily average" value={formatMinutesLong(dailyAverage)} hint={filterActive ? "Filtered subjects" : "Across every day in range"} />
+ <StatTile icon={CalendarCheck} tone="success" label="Days studied" value={`${daysStudied} / ${totalDays}`} hint={<Meter value={daysStudied} max={totalDays} barClassName="bg-success" />} />
+ <StatTile icon={Flame} tone={currentStreak ? "warning" : "default"} label="Current streak" value={`${currentStreak}d`} hint={`Best ${longestStreak}d`} />
+ </StatGrid>
  )
 }
 
@@ -587,7 +576,7 @@ function AnalyticsHighlights({
 }) {
  const topSubject = topSubjectId ? getSubjectById(topSubjectId) : null
  return (
- <section className="border-t border-border/70 pt-5">
+ <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
  <h3 className="focal-section-title">Highlights</h3>
  <div className="mt-3 grid divide-y divide-border/50 border-y border-border/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
  <Highlight label="Most productive day" value={bestDay ? formatDay(bestDay.date) : "No study yet"} detail={bestDay ? formatMinutesLong(bestDay.minutes) : undefined} />
@@ -604,24 +593,6 @@ function Highlight({ label, value, detail }: { label: string; value: string; det
  <p className="text-caption text-muted-foreground">{label}</p>
  <p className="mt-1 truncate text-sm font-medium" title={value}>{value}</p>
  {detail ? <p className="text-caption tabular-nums text-muted-foreground">{detail}</p> : null}
- </div>
- )
-}
-
-function KpiCard({
- label,
- value,
- sub,
-}: {
- label: string
- value: string
- sub?: string
-}) {
- return (
- <div className="relative px-4 py-3">
- <div className="text-xs text-muted-foreground">{label}</div>
- <div className="focal-stat-value mt-1">{value}</div>
- {sub ? <div className="mt-1 text-xs text-muted-foreground">{sub}</div> : null}
  </div>
  )
 }

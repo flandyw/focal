@@ -72,7 +72,7 @@ export function ExamPerformanceChart({ attempts, range, periodEnd, onLogExam }: 
   }, [attempts, range, periodEnd])
 
   return (
-    <section className="min-w-0 border-t border-border/70 pt-5" aria-label="Exam performance">
+    <section className="min-w-0 h-full rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Exam performance">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="focal-section-title">Exam performance</h2>

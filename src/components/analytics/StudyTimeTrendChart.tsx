@@ -92,7 +92,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
 
   if (totalMinutes === 0) {
     return (
-      <section className="border-t border-border/70 pt-5">
+      <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
         <h3 className="focal-section-title mb-1">Study time trends</h3>
         <p className="text-xs text-muted-foreground">No study data for this period.</p>
       </section>
@@ -100,7 +100,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
   }
 
   return (
-    <section className="border-t border-border/70 pt-5">
+    <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <h3 className="focal-section-title mb-1">Study time trends</h3>
       <p className="mb-4 text-xs text-muted-foreground">Daily study time and a rolling average of up to 7 days, including days off.</p>
       <ResponsiveContainer width="100%" height={240} debounce={120}>

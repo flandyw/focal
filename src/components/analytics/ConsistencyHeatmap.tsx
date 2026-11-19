@@ -220,7 +220,7 @@ export function ConsistencyHeatmap({ days, stats }: ConsistencyHeatmapProps) {
   const hasAnyData = stats.totalStudyDays > 0
 
   return (
-    <section className="border-t border-border/70 pt-5">
+    <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="focal-section-title">Study consistency</h3>

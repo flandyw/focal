@@ -100,7 +100,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
   const axis = { tickLine: false, axisLine: false } as const
 
   return (
-    <section className="min-w-0 border-t border-border/70 pt-5" aria-label="Month to month">
+    <section className="min-w-0 h-full rounded-lg border border-border bg-card p-4 sm:p-5" aria-label="Month to month">
       <h2 className="focal-section-title">Month to month</h2>
       <p className="mt-1 text-xs text-muted-foreground">Calendar months up to {monthLabel(current.key, true)}, from all of your history. Follows the subject filter.</p>
 

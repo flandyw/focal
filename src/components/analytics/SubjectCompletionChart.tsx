@@ -9,7 +9,7 @@ interface SubjectCompletionChartProps {
 export function SubjectCompletionChart({ data }: SubjectCompletionChartProps) {
   if (data.length === 0) {
     return (
-      <section className="border-t border-border/70 pt-5">
+      <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
         <h3 className="focal-section-title mb-1">Completion rate</h3>
         <p className="text-xs text-muted-foreground">No session data for this period.</p>
       </section>
@@ -17,7 +17,7 @@ export function SubjectCompletionChart({ data }: SubjectCompletionChartProps) {
   }
 
   return (
-    <section className="border-t border-border/70 pt-5">
+    <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <h3 className="focal-section-title mb-4">Completion Rate by Subject</h3>
 
       <div className="space-y-3">

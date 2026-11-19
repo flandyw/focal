@@ -22,7 +22,7 @@ export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
   const best = data.reduce((best, day) => day.average > best.average ? day : best, data[0])
 
   return (
-    <section className="min-w-0 border-t border-border/70 pt-5">
+    <section className="min-w-0 h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <h3 className="mb-1 focal-section-title">Your weekly rhythm</h3>
       <p className="mb-4 text-xs text-muted-foreground">Average minutes for each weekday, including days without study.</p>
       {best.average > 0 ? <>

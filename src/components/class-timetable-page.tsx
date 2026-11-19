@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { subjectColor } from "../lib/studySubjects"
-import { ArrowRight, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, ClipboardPaste, Plus, RotateCcw, Settings2, Trash2, TriangleAlert } from "lucide-react"
+import { ArrowRight, CalendarClock, CalendarRange, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardCopy, ClipboardPaste, Plus, RotateCcw, Settings2, Trash2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -112,7 +112,9 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
     <WorkspacePage className="gap-5 lg:gap-6">
       {/* Same header as the calendar: where you are in the cycle, how to move, what you can add. */}
       <header data-slot="page-header" className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary compact:hidden"><CalendarRange className="size-5" strokeWidth={1.75} /></span>
+          <div className="min-w-0">
           <p className="text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase compact:hidden">Class timetable</p>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="focal-page-title" aria-live="polite">{!config ? "Class timetable" : days.length > 1 ? `Days ${firstDay}–${days.at(-1)}` : `Day ${firstDay}`}</h1>
@@ -128,6 +130,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
               ? `${cycleLength}-day cycle · ${totalPeriods} ${totalPeriods === 1 ? "period" : "periods"} · ${config.weekendTimetables ? "weekends included" : "weekdays only"} · ${today ? `today is Day ${today}` : "no school today"}`
               : "No timetable set up yet"}
           </p>
+          </div>
         </div>
         <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
           {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><RotateCcw />Today</Button> : null}

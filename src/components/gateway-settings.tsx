@@ -8,6 +8,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
   const [hasKey, setHasKey] = useState<boolean | null>(null)
   const [key, setKey] = useState("")
   const [busy, setBusy] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
 
@@ -31,6 +32,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
       return
     }
     setBusy(true)
+    setRemoving(remove)
     setError("")
     setMessage("")
     try {
@@ -42,7 +44,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
       setHasKey(!remove)
       setMessage(remove ? "Gateway key removed." : "Gateway key saved securely.")
     } catch { setError(remove ? "Could not remove your key. Try again." : "Could not save your key. Try again.") }
-    finally { setBusy(false) }
+    finally { setBusy(false); setRemoving(false) }
   }
 
   return <form className="grid max-w-xl gap-4 py-4" onSubmit={(event) => { event.preventDefault(); void save() }}>
@@ -53,8 +55,8 @@ export function GatewaySettings({ userId }: { userId: string }) {
       <FieldDescription id="gateway-key-help">Encrypted in Supabase Vault and used by the chat server. Your saved key is never displayed. Usage is billed to your Gateway account.</FieldDescription>
     </Field>
     <div className="flex flex-wrap gap-2">
-      <Button type="submit" disabled={busy || hasKey === null || !key.trim()}>{busy ? "Saving…" : hasKey ? "Replace key" : "Save key"}</Button>
-      {hasKey ? <Button variant="outline" disabled={busy} onClick={() => { void save(true) }}>Remove key</Button> : null}
+      <Button type="submit" disabled={busy || hasKey === null || !key.trim()}>{busy && !removing ? "Saving…" : hasKey ? "Replace key" : "Save key"}</Button>
+      {hasKey ? <Button variant="outline" disabled={busy} onClick={() => { void save(true) }}>{removing ? "Removing…" : "Remove key"}</Button> : null}
       {error && hasKey === null ? <Button variant="outline" onClick={() => { void load() }}>Retry</Button> : null}
     </div>
     {message ? <p role="status" className="text-sm">{message}</p> : null}

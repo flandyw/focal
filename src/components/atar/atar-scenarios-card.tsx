@@ -18,7 +18,7 @@ export function AtarScenariosCard({ saved, onLoad, onDelete }: { saved: SavedAta
                   <p className="truncate text-xs text-muted-foreground">{item.year} VTAC · {new Date(item.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p>
                 </div>
                 <Button variant="ghost" size="sm" aria-label={`Load saved ATAR ${item.atarLabel}, ${item.year} VTAC, saved ${new Date(item.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`} onClick={() => onLoad(item)}><RotateCcw />Load</Button>
-                <Button variant="ghost" size="icon-sm" aria-label={`Delete saved ATAR ${item.atarLabel}`} onClick={() => onDelete(item)}><Trash2 /></Button>
+                <Button variant="ghost" size="icon-sm" aria-label={`Delete saved ATAR ${item.atarLabel}, ${item.year} VTAC, saved ${new Date(item.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}`} onClick={() => onDelete(item)}><Trash2 /></Button>
               </li>
             ))}
           </ul>

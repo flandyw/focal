@@ -929,8 +929,8 @@ export function StudyTimeline({ date, nowMs, onDateChange, sessions, classes, ev
             <div className="flex items-start gap-2.5">
               {swatch(picked, "mt-1.5")}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{picked.title}</p>
-                <p className="truncate text-xs text-muted-foreground tabular-nums">
+                <p className="wrap-anywhere text-sm font-medium">{picked.title}</p>
+                <p className="wrap-anywhere text-xs text-muted-foreground tabular-nums">
                   {[picked.subject, `${clock(picked.start)}–${clock(picked.end)}`, duration(picked.end - picked.start), { class: "Class", event: "Event", done: "Done", todo: missed(picked) ? "Missed" : "Planned", live: "Studying now" }[picked.tone]].filter(Boolean).join(" · ")}
                 </p>
               </div>

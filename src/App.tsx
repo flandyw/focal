@@ -1,6 +1,7 @@
 import { setSubjects, setSubjectCompletion, completeSubjectYear, currentSubjectWork } from "./lib/subject-completion"
 import { isPaused, isRunning, isPlanned, studySessionSubjects } from "./lib/sync/sessionContract"
 import { continuableToday } from "./lib/day-plan"
+import { describeAdaptivePlan, planAdaptive } from "./lib/adaptive-plan"
 import { MotionConfig, motion } from "framer-motion"
 import { pageVariants } from "./lib/progress-motion"
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type SetStateAction } from "react"
@@ -598,6 +599,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     })
   }
 
+  // Plans from every current subject's work so subject-scoped runs still see the whole day's load; only tasks are written back.
+  function planAdaptively(subject?: string) {
+    const exams = timetable && { ...timetable, exams: timetable.exams.filter((exam) => activeSubject(exam.subject)) }
+    const result = planAdaptive({ ...currentWork, sessions: currentSessions, classTimetable: data.classTimetable }, exams, { subject })
+    saveCurrentLearning((current) => ({ ...current, tasks: result.learning.tasks, updatedAt: result.learning.updatedAt }))
+    toast(describeAdaptivePlan(result))
+  }
+
   function saveLearning(update: LearningWorkspaceUpdate) {
     void commitRecoverable((current) => ({ ...current, learning: typeof update === "function" ? update(current.learning) : update }))
   }
@@ -1067,7 +1076,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "today" ? <TodayPage now={now.getTime()} data={currentWork} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} dueMistakes={dueMistakeCount} onNavigate={setView} onStartFocus={startFocus} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "subjects" ? <SubjectOverview subject={selectedSubject} attempts={pageData.attempts} dueMistakes={dueMistakeCount} onNavigate={setView} onReview={() => openMistakeQueue(selectedSubject)} onOpenAttempt={(id) => openRecord("exams", id)} /> : null}
           {view === "timetable" ? <ClassTimetablePage config={data.classTimetable} subjects={data.subjects} onChange={saveClassTimetable} /> : null}
-          {view === "calendar" ? <CalendarPage data={{ ...data, events: currentWork.events, sacRecords: currentWork.sacRecords, mistakes: currentWork.mistakes, learning: currentWork.learning }} subjects={currentWork.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
+          {view === "calendar" ? <CalendarPage onAutoPlan={() => planAdaptively()} data={{ ...data, events: currentWork.events, sacRecords: currentWork.sacRecords, mistakes: currentWork.mistakes, learning: currentWork.learning }} subjects={currentWork.subjects} onPlanSessions={studySessionSync.plan} onLogStudy={(entry) => studySessionSync.log(entry, crypto.randomUUID())} onEditSession={studySessionSync.edit} onMergeSessions={studySessionSync.merge} onRemoveSession={removeStudySession} onConvertSession={async (session, events) => {
             // Persist the replacement before queuing deletion, so a failed conversion retains the study.
             const current = latestData.current
             const next = { ...current, events: [...current.events.filter((item) => !events.some((event) => event.id === item.id)), ...events] }
@@ -1079,7 +1088,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           }} classTimetable={data.classTimetable} onClassTimetableChange={saveClassTimetable} onEventsChange={saveEvents} onOpenTimetable={() => setView("timetable")} sessions={currentSessions} timetable={pageTimetable && { ...pageTimetable, exams: pageTimetable.exams.filter((exam) => activeSubject(exam.subject)) }} onChange={saveCurrentLearning} onNavigate={setView} onStartFocus={startFocus} /> : null}
           {view === "progress" ? <ProgressPage subject={subjectScoped ? selectedSubject : undefined} sessions={studySessionSync.sessions} data={pageData} onPlan={planWeeklyTasks} onLogExam={openNewExam} onNewSession={() => setView("focus")} /> : null}
           {view === "focus" ? <StudyTimerPage embedded={embedded} subjects={pageSubjects.filter(activeSubject)} preferredSubjects={currentWork.subjects} mode={timerMode} onModeChange={(mode) => { setTimerMode(mode); setRouteSearch(mode === "exam" ? "?timer=exam" : "") }} focusPreset={focusPreset} company={notificationUserId ? <FriendStudySessions key={notificationUserId} compact userId={notificationUserId} onOpenTimer={openFriendsTimer} onOpenFriends={() => setView("friends")} /> : undefined} sessions={currentSessions} onFocusSessionChange={queueFocusSession} onControlSession={studySessionSync.control} plannedActions={{ ...studySessionSync, remove: removeStudySession }} events={currentWork.events} classTimetable={currentWork.classTimetable} onStartFocus={startFocus} exam={{ progression: data.examProgression, onProgressionChange: saveExamProgression, attempts: data.attempts, references, studies: resourceStudies, preferredSubjects: currentWork.subjects, initialExam: timerPreset, activeSession: data.activeExamTimer, saveStatus: examSaveStatus, syncAction: examSyncAction, onLeave: () => { setTimerMode("focus"); setRouteSearch("") }, onSessionChange: saveActiveExamTimer, onSave: (attempt) => { setTimerPreset(null); saveTimedAttempt(attempt) } }} /> : null}
-          {view === "stoplight" ? <StoplightPage onRelatedMistakes={openMistakeQueue} data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /> : null}
+          {view === "stoplight" ? <StoplightPage onPlan={planAdaptively} onRelatedMistakes={openMistakeQueue} data={pageData} subjects={pageSubjects} onChange={saveSubjectLearning} onApplyLinks={applyLinks} /> : null}
           {view === "goals" ? <GoalsPage data={pageData} references={pageReferences} subjects={pageSubjects} onChange={saveSubjectLearning} subjectScoped={subjectScoped} onPlanGoal={planGoal} scalingReferences={scalingStatus === "ready" ? scalingReferences : undefined} /> : null}
           {view === "mistakes" ? <MistakesPage onSaveLearning={saveSubjectLearning} key={routeSearch} initialStatus={new URLSearchParams(routeSearch).get("status")} skillId={new URLSearchParams(routeSearch).get("skill")} workspaceSubject={subjectScoped ? selectedSubject : undefined} subjects={mistakeSubjects} onSubjectChange={(subject) => { setMistakesSubject(subject); setRouteSearch(`?${new URLSearchParams({ subject })}`) }} onSaveReviewPreferences={(mistakeReviewPreferences) => setData((current) => ({ ...current, mistakeReviewPreferences: { ...mistakeReviewPreferences, updatedAt: new Date().toISOString() } }))} onReduceReviews={(days, target) => {
             setData((current) => {

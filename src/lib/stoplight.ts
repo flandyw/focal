@@ -179,37 +179,6 @@ export function restoreItems(learning: LearningWorkspace, previous: CurriculumAr
 const TASK_MINUTES = 25
 const PLAN_DAYS = 7
 
-/** Spreads the weakest items over the next study days; items with a planned task are skipped. */
-export function planRevision(learning: LearningWorkspace, data: Pick<AppData, "attempts" | "mistakes">, subject?: string, now = new Date()) {
-  const evidence = buildItemEvidence(data, now)
-  const planned = new Set(learning.tasks.filter((task) => !task.archivedAt && task.status === "planned").map((task) => task.sourceId))
-  const score = (item: CurriculumArea) => {
-    const entry = evidence.get(item.id)
-    return (item.rating === "red" ? 30 : item.rating === "amber" ? 20 : 10) + Math.min(entry?.open ?? 0, 5) * 2 + (entry?.available ? 10 * (1 - entry.awarded / entry.available) : 0)
-  }
-  const queue = activeItems(learning)
-    .filter((item) => (!subject || item.subject === subject) && !planned.has(item.id) && (item.rating === "red" || item.rating === "amber" || isRecheckDue(item, now)))
-    .map((item) => ({ item, score: score(item) }))
-    .sort((a, b) => b.score - a.score)
-  const days: string[] = []
-  for (let offset = 0; days.length < PLAN_DAYS && offset < 14; offset += 1) {
-    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
-    if (learning.preferences.studyDays.includes(day.getDay())) days.push(localDate(day))
-  }
-  const perDay = Math.max(1, Math.floor(learning.preferences.dailyMinutes / TASK_MINUTES))
-  const tasks = queue.slice(0, days.length * perDay).map(({ item }, index) => materialiseTask({
-    kind: "topic-practice",
-    title: `Revise: ${item.name}`,
-    subject: item.subject,
-    detail: item.check ? `${itemGroup(item)} · Check: ${item.check}` : itemGroup(item),
-    durationMinutes: Math.min(TASK_MINUTES, learning.preferences.dailyMinutes),
-    plannedFor: days[Math.floor(index / perDay)],
-    sourceId: item.id,
-  }, now))
-  if (!tasks.length) return { learning, count: 0 }
-  return { learning: { ...learning, tasks: [...learning.tasks, ...tasks], updatedAt: now.toISOString() }, count: tasks.length }
-}
-
 export function planPatternRevision(learning: LearningWorkspace, data: Pick<AppData, "attempts" | "mistakes">, subject?: string, maxPatterns = 3, now = new Date()) {
   const planned = new Set(learning.tasks.filter((task) => !task.archivedAt && task.status === "planned").map((task) => task.sourceId))
   const queue = buildMistakePatterns(data.mistakes, data.attempts, now)

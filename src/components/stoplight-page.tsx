@@ -19,7 +19,7 @@ import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from ".
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import {
   RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
-  mergeStoplightItems, planRevision, setRating, setRatings, type ItemEvidence, type ItemLink,
+  mergeStoplightItems, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { cn, count } from "../lib/utils"
 import { useTickingNow } from "../hooks/use-ticking-now"
@@ -52,7 +52,8 @@ function evidenceText(evidence: ItemEvidence) {
   ].filter(Boolean).join(" · ")
 }
 
-export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes }: {
+export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
+  onPlan: (subject: string) => void
   onRelatedMistakes?: (subject: string, skill: string) => void
   data: AppData
   subjects: string[]
@@ -88,13 +89,6 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
     toast.success(`Checklist updated for ${importSubject}`)
   }
 
-  function planWeek() {
-    const result = planRevision(data.learning, data, subject, now)
-    if (!result.count) return toast("Nothing to plan: every red, amber or re-check item already has a task.")
-    onChange(result.learning)
-    toast.success(`Added ${result.count} revision task${result.count === 1 ? "" : "s"} to your calendar`)
-  }
-
   function applyRatings(ratings: Map<string, StoplightRating>) {
     onChange((current) => setRatings(current, ratings))
     toast.success(`Updated ${ratings.size} rating${ratings.size === 1 ? "" : "s"}`)
@@ -124,7 +118,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
-        {subject ? <Button onClick={planWeek}><CalendarPlus />Plan this week</Button> : null}
+        {subject ? <Button onClick={() => onPlan(subject)}><CalendarPlus />Plan this week</Button> : null}
       </PageHeader>
       {linking && progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
 

@@ -6,9 +6,10 @@ import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/clas
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
 import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace.js"
 import {
-  applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, planRevision, setRatings,
+  applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, setRatings,
 } from "../../src/lib/stoplight.js"
 import { isPaused, isPlanned, isRunning, studySessionActiveMilliseconds, studySessionPlan, studySessionSubjects, studySessionSwitches, studySessionSubjectSpans, type SubjectSwitch, type CanonicalStudySession } from "../../src/lib/sync/sessionContract.js"
+import { planAdaptive } from "../../src/lib/adaptive-plan.js"
 import { gradeReferences, mergeSessions, readAll, scalingReferences, sessionCommand, updateApp, vceTimetable } from "./store.js"
 import type { Define } from "./tools"
 import { day, instant, limit, nowIso, required, round } from "./util.js"
@@ -264,15 +265,16 @@ export function studyTools(define: Define) {
       return result
     })
 
-  define("plan_revision", "Turn the weakest stoplight items (red, amber, or due a re-check) into study tasks spread over the next 7 study days.",
+  define("plan_revision", "Adaptively plan the next 14 days: prep sessions before upcoming SACs/tracked exams, then red, amber and re-check-due stoplight items before their subject's next assessment. Fits each day's study budget plus timetable free periods around existing work, balances subjects, and reschedules or archives earlier planner tasks.",
     { subject: z.string().optional() }, "write", async ({ subject }) => {
-      let count = 0
+      const [timetable, { sessions }] = await Promise.all([vceTimetable(), readAll()])
+      let result: Omit<ReturnType<typeof planAdaptive>, "learning"> = { added: 0, moved: 0, dropped: 0, unplaced: 0 }
       await updateApp((data) => {
-        const plan = planRevision(data.learning, data, subject)
-        count = plan.count
-        return { ...data, learning: plan.learning }
+        const { learning, ...counts } = planAdaptive({ ...data, sessions }, timetable, { subject })
+        result = counts
+        return { ...data, learning }
       })
-      return { tasksCreated: count }
+      return result
     })
 
   /* ---------------------------------------------------------------- goals */

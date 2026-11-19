@@ -17,8 +17,6 @@ export type MistakeDraft = {
   marksLost: number
 }
 
-type IndexedMistakeDraft = MistakeDraft & { imageIndex: number }
-
 export type ChatGPTProgress = {
   phase: "connecting" | "thinking" | "writing" | "complete"
   tokens: number

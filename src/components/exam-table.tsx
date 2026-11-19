@@ -14,6 +14,7 @@ import { getExamIdFromHash, getExamTarget } from "../lib/exam-target"
 import { formatTimer } from "../lib/exam-timer"
 import { count } from "../lib/utils"
 import { useMinWidth } from "../hooks/use-mobile"
+import { RetakeComparison } from "./retake-comparison"
 
 const SORT_LABELS: Record<ExamSortKey, string> = { completedAt: "Date completed", examYear: "Exam year", mark: "Mark", result: "Result", comparison: "VCAA comparison" }
 
@@ -98,6 +99,7 @@ export function ExamTable({
   )
   const details = (attempt: ExamAttempt) => (
     <div className="grid gap-5">
+      <RetakeComparison key={attempt.id} attempt={attempt} attempts={attempts} />
       {attempt.timing ? <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm"><span className="tabular-nums"><span className="text-muted-foreground">Writing</span> {formatTimer(attempt.timing.actualWritingSeconds)}</span><span className={`tabular-nums ${attempt.timing.overtimeSeconds ? "text-destructive" : ""}`}><span className="text-muted-foreground">Overtime</span> {formatTimer(attempt.timing.overtimeSeconds)}</span><span className="tabular-nums"><span className="text-muted-foreground">Paused</span> {formatTimer(attempt.timing.pausedSeconds)}</span></div> : null}
                         {attempt.questionResults?.length ? <div className="overflow-x-auto rounded-lg border bg-card"><Table><TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Topic</TableHead><TableHead>Confidence</TableHead><TableHead className="text-right">Mark</TableHead></TableRow></TableHeader><TableBody>{attempt.questionResults.map((result) => <TableRow key={result.id}><TableCell className="font-medium">{result.label}</TableCell><TableCell><div>{result.areaOfStudy || "—"}</div>{result.examinerNote ? <div className="max-w-2xl text-xs text-muted-foreground">{result.examinerNote}</div> : null}</TableCell><TableCell className="capitalize">{result.confidence || "—"}</TableCell><TableCell className="text-right tabular-nums">{result.marksAwarded}/{result.maxMarks}</TableCell></TableRow>)}</TableBody></Table></div> : null}
                         <Suspense fallback={<Skeleton className="h-64 w-full" />}><AttemptDistributionChart attempt={attempt} references={references} comparisonYear={comparisonYear} /></Suspense>

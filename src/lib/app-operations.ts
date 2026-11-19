@@ -38,6 +38,23 @@ export function reviewMistake(data: AppData, id: string, rating: ReviewRating, c
   return { ...data, mistakes: data.mistakes.map((item) => item.id === id ? recordMistakeReview(item, rating, completedAt, data.mistakeReviewPreferences, data.mistakes, context) : item) }
 }
 
+export function undoMistakeReview(data: AppData, snapshot: Mistake, updatedAt: string): AppData {
+  if (!data.mistakes.some((item) => item.id === snapshot.id)) return data
+  return { ...data, mistakes: data.mistakes.map((item) => item.id === snapshot.id ? {
+    ...item,
+    reviewHistory: snapshot.reviewHistory,
+    reviewState: snapshot.reviewState,
+    intervalDays: snapshot.intervalDays,
+    easeFactor: snapshot.easeFactor,
+    repetitions: snapshot.repetitions,
+    lapses: snapshot.lapses,
+    lastReviewedAt: snapshot.lastReviewedAt,
+    resolved: snapshot.resolved,
+    dueAt: snapshot.dueAt,
+    updatedAt,
+  } : item) }
+}
+
 export function setMistakesSuspended(data: AppData, ids: string[], suspended: boolean, at: string): AppData {
   const selected = new Set(ids)
   return { ...data, mistakes: data.mistakes.map((mistake) => selected.has(mistake.id) ? { ...mistake, suspended, updatedAt: at } : mistake) }

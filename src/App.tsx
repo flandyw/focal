@@ -819,7 +819,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function undoMistakeReview(mistake: Mistake) {
     // ponytail: concurrent sync rebases union review history; removing a rating across conflicts needs review tombstones.
-    setData((current) => ops.saveMistakes(current, [{ ...mistake, updatedAt: new Date().toISOString() }]))
+    setData((current) => ops.undoMistakeReview(current, mistake, new Date().toISOString()))
   }
 
   function toggleMistakeSuspension(mistake: Mistake) {

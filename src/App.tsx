@@ -817,6 +817,10 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     setData((current) => ops.reviewMistake(current, mistake.id, rating, completedAt, context))
   }
 
+  function undoMistakeReview(mistake: Mistake) {
+    setData((current) => ops.saveMistakes(current, [mistake]))
+  }
+
   function toggleMistakeSuspension(mistake: Mistake) {
     setData((current) => ops.setMistakesSuspended(current, [mistake.id], !mistake.suspended, new Date().toISOString()))
     toast.success(mistake.suspended ? "Card returned to the review queue" : "Reviews paused for this card", { duration: 8000, action: { label: "Undo", onClick: () => toggleMistakeSuspension({ ...mistake, suspended: !mistake.suspended }) } })
@@ -1097,7 +1101,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
               return { ...next, mistakeReviewPreferences: { ...normalizeMistakeReviewPreferences(current.mistakeReviewPreferences), lighterUntil: new Date(mistakeReviewDayStart(now, days)).toISOString(), lighterDailyTarget: target, updatedAt: new Date(now).toISOString() } }
             })
             toast.success("Lighter review period started")
-          }} data={subjectScoped ? pageData : { ...pageData, mistakes: currentWork.mistakes }} studies={pageStudies} onLog={() => openNewMistake()} onEdit={(mistake) => openRecord("mistakes", mistake.id)} onReview={reviewMistake} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights: { ...mistakeInsights, subject: subjectScoped ? selectedSubject : undefined } }))} onSaveAlternativeDeck={(deck) => setData((current) => {
+          }} data={subjectScoped ? pageData : { ...pageData, mistakes: currentWork.mistakes }} studies={pageStudies} onLog={() => openNewMistake()} onEdit={(mistake) => openRecord("mistakes", mistake.id)} onReview={reviewMistake} onUndoReview={undoMistakeReview} onToggleSuspend={toggleMistakeSuspension} onSetSuspended={setMistakesSuspended} onDelete={deleteMistake} onImportMistakes={importMistakes} onApplyAutofills={applyAutofills} onApplyMergePlan={applyMistakeMergePlan} onApplyEdits={applyBulkEdits} onSaveInsights={(mistakeInsights) => setData((current) => ({ ...current, mistakeInsights: { ...mistakeInsights, subject: subjectScoped ? selectedSubject : undefined } }))} onSaveAlternativeDeck={(deck) => setData((current) => {
             const scopedIds = new Set(pageData.mistakes.map((mistake) => mistake.id))
             return { ...current, alternativeMistakeDeck: { ...deck, cards: [...(subjectScoped ? current.alternativeMistakeDeck?.cards ?? [] : []).filter((card) => !scopedIds.has(card.sourceMistakeId)), ...deck.cards] } }
           })} /> : null}

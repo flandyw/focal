@@ -52,6 +52,7 @@ import { StudyPlanCard } from "./study-plan-card"
 import { AI_ENABLED } from "../lib/host"
 import type { StudyPlan } from "../lib/study-plan"
 import {
+  canFinishWork,
   DEFAULT_SETTINGS,
   studyTimerTitle,
   loadFocusSession,
@@ -139,8 +140,8 @@ function formatClock(timestamp: number) {
 /** Real wall-clock endpoints, with the time actually worked called out separately: a block
  *  that was paused spans a gap, and reading its length as its duration would bill the pause. */
 function blockSummary(block: FocusBlock) {
-  const minutes = Math.max(0, Math.round(block.activeSeconds / 60))
-  return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${minutes} min`
+  const duration = block.activeSeconds < 60 ? `${block.activeSeconds} sec` : `${Math.round(block.activeSeconds / 60)} min`
+  return `${formatClock(block.startedAt)} – ${formatClock(block.endedAt)} · ${duration}`
 }
 
 function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, sessions, onControlSession, plannedActions, onTimedPaper, eclair, setEclair, examActive = false }: {
@@ -272,13 +273,13 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // Blocks only reach the record when they finish, so a reset throws this time away.
   const unsavedTime = !sharedSession && (local.state.mode === "free" || local.state.studyOvertime
     ? local.state.overtimeSeconds >= 60
-    : local.state.mode === "work" && local.state.totalSeconds - local.state.secondsLeft >= 60)
+    : canFinishWork(local.state))
   const sessionBusy = sharedBusy || local.sessionBusy || (!!sharedSession && !onControlSession)
   const actions = sharedSession ? {
     ...local,
     toggle: () => void controlShared(isRunning(sharedSession) ? "pause" : "resume"),
     reset: () => void (undoBlocks ? runShared((session) => plannedActions!.undoContinue(session, undoBlocks)) : controlShared("cancel")),
-    finishFreeStudy: () => void controlShared("complete"),
+    finishStudy: () => void controlShared("complete"),
     selectMode: () => {},
   } : local
 
@@ -297,6 +298,9 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   const requestReset = () => { if (sharedSession || unsavedTime) setConfirmingDiscard(true); else actions.reset() }
   const isFreeStudy = state.mode === "free"
+  const finishEarly = canFinishWork(state)
+  const finishLabel = isFreeStudy ? "Finish" : finishEarly ? "Finish early" : undefined
+  const canFinish = !sessionBusy && (finishEarly || (isFreeStudy && (!!sharedSession || state.overtimeSeconds > 0)))
   const displayMode = countdown ? (pastPlan ? "Overtime" : "Planned session") : isFreeStudy ? "Free study" : state.studyOvertime ? "Overtime" : MODE_LABEL[state.mode]
   const [notificationBlockedMode, setNotificationBlockedMode] = useState<string | null>(null)
   const [permission, setNotificationPermission] = useState<string>("default")
@@ -388,8 +392,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   // One authored moment: the readout re-enters when the phase changes, and a
   // single status line carries it for anyone not watching the animation.
-  /** One atomic apply: a plan never lands half-configured, and the block in
-   *  progress keeps its place (settings sync) rather than restarting. */
+  /** Apply the plan's rhythm without changing a countdown already in progress. */
   function applyPlan(plan: StudyPlan) {
     setSubject(plan.subject)
     setIntent(plan.intent)
@@ -483,8 +486,8 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               <Button className="w-full sm:w-auto sm:min-w-40" disabled={sessionBusy} aria-keyshortcuts="Space" onClick={toggleTimer} size="lg">
                 {state.running ? <><Pause />Pause</> : <><Play />{sharedSession ? "Resume" : "Start"}</>}
               </Button>
-              {isFreeStudy ? (
-                <Button className="flex-1 sm:flex-none" disabled={sessionBusy || (!sharedSession && state.overtimeSeconds === 0)} onClick={actions.finishFreeStudy} size="lg" variant="outline"><Square />Finish</Button>
+              {finishLabel ? (
+                <Button className="flex-1 sm:flex-none" disabled={!canFinish} onClick={actions.finishStudy} size="lg" variant="outline"><Square />{finishLabel}</Button>
               ) : null}
               <Button className="flex-1 sm:flex-none" disabled={sessionBusy} onClick={requestReset} size="lg" variant="outline"><RotateCcw />{sharedSession ? "Discard" : "Reset"}</Button>
               {onBreak ? <Button className="flex-1 sm:flex-none" onClick={actions.skipBreak} size="lg" variant="outline"><SkipForward />Skip break</Button> : null}
@@ -618,7 +621,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{undoBlocks ? "Discard the continued time?" : sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
-            <AlertDialogDescription>{undoBlocks ? `Only the time since you pressed Continue is removed. The ${Math.round(undoBlocks.reduce((total, block) => total + Date.parse(block.end) - Date.parse(block.start), 0) / 60_000)} min you logged before stays.` : sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : isFreeStudy ? "This study has not been logged yet and will be lost. Choose Finish instead to keep it." : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
+            <AlertDialogDescription>{undoBlocks ? `Only the time since you pressed Continue is removed. The ${Math.round(undoBlocks.reduce((total, block) => total + Date.parse(block.end) - Date.parse(block.start), 0) / 60_000)} min you logged before stays.` : sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : finishLabel ? `This study has not been logged yet and will be lost. Choose ${finishLabel} instead to keep it.` : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
@@ -632,6 +635,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         seconds={countdown ? Math.abs(remainingSeconds) : isFreeStudy || state.studyOvertime ? state.overtimeSeconds : state.secondsLeft}
         totalSeconds={countdown ? (pastPlan ? null : planSeconds) : isFreeStudy || state.studyOvertime ? null : state.totalSeconds}
         onBreak={onBreak} free={isFreeStudy} busy={sessionBusy} shared={!!sharedSession}
+        finishLabel={finishLabel} canFinish={canFinish}
         locked={state.running || state.overtimeSeconds > 0 || state.secondsLeft < state.totalSeconds}
         subject={subject} intent={intent} subjects={[...new Set([...preferredSubjects, ...subjects])]}
         settings={{ ...settings, notificationsEnabled }} focusSeconds={recordSeconds} blocks={recordCount} planBlocked={blockedPlan}
@@ -641,7 +645,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
           detail: new Date(studySessionPlan(session).blocks[0]?.start ?? now).toLocaleString("en-AU", { weekday: "short", hour: "numeric", minute: "2-digit" }),
           start: () => void startPlan(session) }))}
         actions={{
-          toggle: actions.toggle, reset: requestReset, finish: actions.finishFreeStudy, skipBreak: actions.skipBreak,
+          toggle: actions.toggle, reset: requestReset, finish: actions.finishStudy, skipBreak: actions.skipBreak,
           addTime: actions.addTime, selectMode: actions.selectMode, preset: applyPreset, setting: updateSettings,
           notifications: () => void toggleNotifications(), subject: setSubject, intent: setIntent,
           paper: () => { setEclair(false); onTimedPaper() }, exit: () => setEclair(false),
@@ -735,7 +739,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               value={settings.dailyGoal}
             />
           </div>
-          <p className="text-xs text-muted-foreground">Changes apply without losing your place.</p>
+          <p className="text-xs text-muted-foreground">New durations don’t change a block or break you’ve already started.</p>
             <Button
               className="w-full"
               onClick={() => updateSettings({

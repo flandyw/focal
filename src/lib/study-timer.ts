@@ -85,6 +85,7 @@ export type TimerAction =
   | { type: "START_STUDY_OVERTIME"; settings: TimerSettings }
   | { type: "START_FREE_STUDY"; settings: TimerSettings }
   | { type: "RETURN_TO_BREAK" }
+  | { type: "FINISH_WORK"; settings: TimerSettings }
   | { type: "END_FREE_STUDY"; settings: TimerSettings }
   | { type: "SYNC_SETTINGS"; settings: TimerSettings; previousSettings: TimerSettings }
 
@@ -220,6 +221,20 @@ export function saveSettings(settings: TimerSettings) {
 /* state machine                                                       */
 /* ------------------------------------------------------------------ */
 
+export function canFinishWork(state: TimerState): boolean {
+  return state.mode === "work" && state.secondsLeft < state.totalSeconds
+}
+
+function finishWork(state: TimerState, settings: TimerSettings): TimerState {
+  const cycles = state.cycles + 1
+  const mode = cycles % settings.longBreakEvery === 0 ? "long-break" : "break"
+  const totalSeconds = getDurationSeconds(mode, settings)
+  return {
+    running: settings.autoStartBreak, mode, secondsLeft: totalSeconds, totalSeconds,
+    cycles, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0,
+  }
+}
+
 /**
  * Walks a timer forward by `elapsedSeconds`, rolling through every mode
  * boundary it crosses. A single large tick (a throttled tab, a reload after
@@ -240,19 +255,7 @@ function advanceTimer(state: TimerState, settings: TimerSettings, elapsedSeconds
     if (remaining < next.secondsLeft) return { ...next, secondsLeft: next.secondsLeft - remaining }
     remaining -= next.secondsLeft
     if (next.mode === "work") {
-      const cycles = next.cycles + 1
-      const mode = cycles % settings.longBreakEvery === 0 ? "long-break" : "break"
-      const totalSeconds = getDurationSeconds(mode, settings)
-      next = {
-        running: settings.autoStartBreak,
-        mode,
-        secondsLeft: totalSeconds,
-        totalSeconds,
-        cycles,
-        studyOvertime: false,
-        overtimeSeconds: 0,
-        breakSeconds: 0,
-      }
+      next = finishWork(next, settings)
     } else {
       const totalSeconds = getDurationSeconds("work", settings)
       next = {
@@ -278,6 +281,8 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       return { running: false, mode: action.mode, secondsLeft: getDurationSeconds(action.mode, action.settings), totalSeconds: getDurationSeconds(action.mode, action.settings), cycles: 0, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     case "TICK":
       return advanceTimer(state, action.settings, action.seconds)
+    case "FINISH_WORK":
+      return canFinishWork(state) ? finishWork(state, action.settings) : state
     case "TOGGLE":
       return { ...state, running: !state.running, breakSeconds: state.mode === "free" ? 0 : state.breakSeconds }
     case "SET_RUNNING":
@@ -332,12 +337,13 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       if (!state.studyOvertime) return state
       return { ...state, running: true, studyOvertime: false, overtimeSeconds: 0, breakSeconds: 0 }
     case "SYNC_SETTINGS": {
-      if (state.mode === "free") return state
+      if (state.mode === "free" || state.running || state.studyOvertime || state.secondsLeft < state.totalSeconds) return state
       const oldDuration = getDurationSeconds(state.mode, action.previousSettings)
       const nextDuration = getDurationSeconds(state.mode, action.settings)
-      const secondsLeft = state.secondsLeft === oldDuration ? nextDuration : Math.min(state.secondsLeft, nextDuration)
-      const totalSeconds = state.totalSeconds === oldDuration ? nextDuration : Math.max(secondsLeft, state.totalSeconds)
-      return { ...state, secondsLeft, totalSeconds }
+      if (oldDuration === nextDuration) return state
+      const extra = Math.max(0, state.totalSeconds - oldDuration)
+      const totalSeconds = Math.min(MAX_DURATION_MINUTES * 60, nextDuration + extra)
+      return { ...state, secondsLeft: totalSeconds, totalSeconds }
     }
     default:
       return state
@@ -368,7 +374,7 @@ export function loadTimerState(settings: TimerSettings, now = Date.now(), onWork
     ? Math.min(now, parsed.updatedAt)
     : now
   const cycles = safeNonNegativeInteger(parsed.cycles)
-  const totalSeconds = Math.min(MAX_DURATION_MINUTES * 60, Math.max(duration, safeNonNegativeInteger(parsed.totalSeconds, duration)))
+  const totalSeconds = Math.min(MAX_DURATION_MINUTES * 60, safeNonNegativeInteger(parsed.totalSeconds, duration) || duration)
   const secondsLeft = Math.min(totalSeconds, Math.max(1, safeNonNegativeInteger(parsed.secondsLeft, duration)))
   const running = parsed.running === true
   const studyOvertime = parsed.studyOvertime === true && mode !== "work"

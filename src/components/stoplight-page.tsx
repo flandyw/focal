@@ -156,7 +156,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
             <MetricCard label="Re-check due" value={rechecks}><span>Green after 21 days, amber after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {/* Subject at a glance: one bar for the whole checklist, so the filters below read as slices of it. */}
             {subjectItems.length ? <div className="grid gap-2">
               <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${subject}: ${reds} red, ${subjectItems.filter((item) => item.rating === "amber").length} amber, ${green} green, ${subjectItems.filter((item) => !item.rating).length} unrated`}>
@@ -165,7 +165,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
               <p className="max-w-prose text-xs text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
             </div> : null}
             <div className="flex flex-wrap items-center gap-2">
-              <Input type="search" className="min-w-0 flex-1 sm:max-w-sm" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
+              <Input type="search" className="min-w-0 sm:max-w-sm sm:flex-auto sm:basis-48" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
               <div role="group" aria-label="Filter items" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 py-0.5">
                 {(Object.keys(FILTERS) as Filter[]).map((id) => {
                   const total = id === "all" ? subjectItems.length : subjectItems.filter((item) => id === "unrated" ? !item.rating : id === "recheck" ? isRecheckDue(item, now) : item.rating === id).length

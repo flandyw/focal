@@ -121,7 +121,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
               </div>
               <ul>{items.map((item) => {
                 const finished = isDayItemDone(item)
-                const action = item.kind === "task" && !finished ? "Start" : item.kind === "session" && (!finished || item.live || item.paused || item.continuable) && !(item.id === focusSession?.id && isRunning(focusSession)) ? item.live || item.paused ? "Resume" : item.continuable ? "Continue" : "Start" : null
+                const action = item.kind === "task" && !finished && item.status !== "skipped" ? "Start" : item.kind === "session" && (!finished || item.live || item.paused || item.continuable) && !(item.id === focusSession?.id && isRunning(focusSession)) ? item.live || item.paused ? "Resume" : item.continuable ? "Continue" : "Start" : null
                 return (
                   <li key={`${item.kind}:${item.id}`} className={row}>
                     <span className={cn("flex min-w-0 items-center gap-2", finished && "text-muted-foreground line-through")}>

@@ -25,17 +25,10 @@ export const MOTION_DURATION = {
   normal: 0.22,
   medium: 0.32,
   slow: 0.48,
-  page: 0.6,
 } as const
 
 /** Standard transitions for common purposes. */
 export const TRANSITION = {
-  /** For hover/tap micro-interactions — snappy spring. */
-  press: { type: "spring", stiffness: 520, damping: 34, mass: 0.65 } as Transition,
-  /** For state changes (hover, focus, toggle). */
-  state: { duration: MOTION_DURATION.fast, ease: MOTION_EASE_SNAPPY } as Transition,
-  /** For layout shifts (sidebar collapse, content resize). */
-  layout: { duration: MOTION_DURATION.normal, ease: MOTION_EASE } as Transition,
   /** For view/page enter/exit. */
   view: { duration: MOTION_DURATION.normal, ease: MOTION_EASE } as Transition,
   /** For entrance choreography (list stagger). */
@@ -72,21 +65,6 @@ export const staggerItem: Variants = {
   animate: { opacity: 1, y: 0, transition: TRANSITION.entrance },
   exit: { opacity: 0, y: -4, transition: TRANSITION.exit },
 }
-
-/* -------------------------- Hover / Tap props -------------------------- */
-
-/** Pressable element feel — subtle lift on hover, gentle press on tap. */
-export const pressable = (reduceMotion: boolean | null) => ({
-  whileHover: reduceMotion ? undefined : { scale: 1.02 },
-  whileTap: reduceMotion ? undefined : { scale: 0.97 },
-  transition: reduceMotion ? REDUCED_TRANSITION : TRANSITION.press,
-})
-
-/** Subtle hover lift (no scale change) for cards. */
-export const hoverLift = (reduceMotion: boolean | null) =>
-  reduceMotion
-    ? undefined
-    : { y: -2, transition: { duration: MOTION_DURATION.normal, ease: MOTION_EASE } }
 
 /* ------------------------------ App-wide ------------------------------ */
 

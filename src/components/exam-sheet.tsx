@@ -130,7 +130,7 @@ export function ExamSheet({ attempts, references, preferredSubjects, comparisonY
       examYear,
       paper: nextPaper,
       // An explicit type only stays valid for the same subject and paper; otherwise it is inferred from the paper text.
-      paperType: initialAttempt?.subject === subject.trim() && initialAttempt.paper === nextPaper ? initialAttempt.paperType : undefined,
+      paperType: initialAttempt?.subject.trim() === subject.trim() && initialAttempt.paper.trim() === nextPaper.trim() ? initialAttempt.paperType : undefined,
       completedAt,
       rawScore,
       rawMax,

@@ -72,7 +72,7 @@
   --stoplight-amber: #c48a24;
   --stoplight-green: var(--success);
   --chart-mean: var(--chart-3);
-  --chart-median: var(--chart-2);
+  --chart-median: var(--chart-4);
   --chart-deviation: var(--chart-5);
   --radius: 0.3rem;
   --sidebar: #eeeee5;

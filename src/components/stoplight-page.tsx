@@ -21,8 +21,8 @@ import {
   RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
   mergeStoplightItems, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
+import { sameStudySubject, subjectKey } from "../lib/studySubjects"
 import { cn, count } from "../lib/utils"
-import { useTickingNow } from "../hooks/use-ticking-now"
 import { Input } from "./ui/input"
 
 const FILTERS = { all: "All items", red: "Red", amber: "Amber", green: "Green", recheck: "Re-check due", unrated: "Unrated" } as const
@@ -52,19 +52,22 @@ function evidenceText(evidence: ItemEvidence) {
   ].filter(Boolean).join(" · ")
 }
 
-export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
+export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
   onPlan: (subject: string) => void
   onRelatedMistakes?: (subject: string, skill: string) => void
   data: AppData
   subjects: string[]
+  now: Date
+  filterQuery: string | null
+  onFilterChange: (filter: Filter) => void
   onChange: (learning: LearningWorkspaceUpdate) => void
   onApplyLinks: (links: ItemLink[]) => void
 }) {
   const items = useMemo(() => activeItems(data.learning), [data.learning])
-  const itemSubjects = useMemo(() => [...new Set(items.map((item) => item.subject))].toSorted((a, b) => a.localeCompare(b)), [items])
+  const itemSubjects = useMemo(() => [...new Map(items.map((item) => [subjectKey(item.subject), item.subject])).values()].toSorted((a, b) => a.localeCompare(b)), [items])
   const [chosen, setChosen] = useState("")
-  const subject = itemSubjects.includes(chosen) ? chosen : itemSubjects[0] ?? ""
-  const [filter, setFilter] = useState<Filter>("all")
+  const subject = itemSubjects.find((name) => sameStudySubject(name, chosen)) ?? itemSubjects[0] ?? ""
+  const filter: Filter = filterQuery && Object.hasOwn(FILTERS, filterQuery) ? filterQuery as Filter : "all"
   const [query, setQuery] = useState("")
   const needle = useDeferredValue(query.trim().toLowerCase())
   const [importOpen, setImportOpen] = useState(false)
@@ -72,10 +75,9 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
   const [revising, setRevising] = useState(false)
   const [linking, setLinking] = useState(false)
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
-  const now = useTickingNow()
   const evidence = useMemo(() => buildItemEvidence(data, now), [data, now])
   const unlinked = useMemo(() => collectLinkRecords(data), [data])
-  const subjectItems = useMemo(() => items.filter((item) => item.subject === subject), [items, subject])
+  const subjectItems = useMemo(() => items.filter((item) => sameStudySubject(item.subject, subject)), [items, subject])
   const groups = useMemo(() => groupBy(subjectItems.filter((item) =>
     (filter === "all" || filter === "unrated" && !item.rating || filter === "recheck" && isRecheckDue(item, now) || item.rating === filter) &&
     (!needle || `${item.name} ${item.group ?? ""} ${item.check ?? ""}`.toLowerCase().includes(needle))), itemGroup), [subjectItems, filter, now, needle])
@@ -114,7 +116,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
 
   return (
     <WorkspacePage>
-      <PageHeader title="Stoplight">
+      <PageHeader title="Skills" description="Rate your checklist and revisit skills that need practice.">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
@@ -130,7 +132,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
           <MetricGrid className="sm:grid-cols-4">
             <MetricCard label="Green" value={`${subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%`}><span>{green} of {count(subjectItems.length, "item")}</span></MetricCard>
             <MetricCard label="Red" value={reds}><span>{reds ? "Start here" : "Nothing red right now"}</span></MetricCard>
-            <MetricCard label="Re-check due" value={rechecks}><span>Greens fade after 21 days, ambers after 14</span></MetricCard>
+            <MetricCard label="Re-check due" value={rechecks}><span>Green after 21 days, amber after 14</span></MetricCard>
             <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
           </MetricGrid>
           <div className="grid gap-3">
@@ -146,7 +148,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
               <div role="group" aria-label="Filter items" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 py-0.5">
                 {(Object.keys(FILTERS) as Filter[]).map((id) => {
                   const total = id === "all" ? subjectItems.length : subjectItems.filter((item) => id === "unrated" ? !item.rating : id === "recheck" ? isRecheckDue(item, now) : item.rating === id).length
-                  return <Button key={id} size="sm" variant={filter === id ? "secondary" : "ghost"} aria-pressed={filter === id} disabled={!total && filter !== id} className="shrink-0" onClick={() => setFilter(id)}>
+                  return <Button key={id} size="sm" variant={filter === id ? "secondary" : "ghost"} aria-pressed={filter === id} disabled={!total && filter !== id} className="shrink-0" onClick={() => onFilterChange(id)}>
                     {id in SEGMENT ? <span aria-hidden className={cn("size-2 rounded-full", SEGMENT[id as StoplightRating])} /> : null}
                     {id === "all" ? "All" : FILTERS[id]}<span className="text-muted-foreground tabular-nums">{total}</span>
                   </Button>
@@ -199,7 +201,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
                 })}
               </ul></CollapsibleContent>
             </Collapsible>
-          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); setFilter("all") }}>Clear filters</Button></Empty>}
+          )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); onFilterChange("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
         <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Import it from your study design with any chatbot. Each key knowledge and skill becomes an item you can rate.</EmptyDescription></EmptyHeader><Button onClick={() => setImportOpen(true)}><Link2 />Import checklist</Button></Empty>

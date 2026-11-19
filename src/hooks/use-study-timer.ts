@@ -118,9 +118,8 @@ export function useStudyTimer({
   // `useState` gives the one stable ref object a lazy `useRef` initializer cannot.
   const [openBlockRef] = useState(() => ({ current: loadOpenBlock() as OpenBlock | null }))
   useEffect(() => {
-    settingsRef.current = settings
     stateRef.current = state
-  }, [settings, state])
+  }, [state])
 
   // The synced lifecycle of the focus session. Its acknowledged state only moves on a
   // server answer, every boundary is sent in the order it was crossed and retried until
@@ -337,11 +336,11 @@ export function useStudyTimer({
   }, [state])
 
   const updateSettings = useCallback((patch: Partial<TimerSettings>) => {
-    setSettings((current) => {
-      const next = { ...current, ...patch }
-      dispatch({ type: "SYNC_SETTINGS", settings: next, previousSettings: current })
-      return next
-    })
+    const previousSettings = settingsRef.current
+    const next = { ...previousSettings, ...patch }
+    settingsRef.current = next
+    setSettings(next)
+    dispatch({ type: "SYNC_SETTINGS", settings: next, previousSettings })
   }, [])
 
   const blocksToday = useMemo(() => countBlocksToday(blocks, new Date(now)), [blocks, now])

@@ -77,7 +77,7 @@ export function decideFocusSession(
 /**
  * The one boundary still owed between the session and the countdown, if any.
  *
- * A reload mid-block, or a server row adopted after a refusal, leaves them
+ * A reload mid-block or a server row adopted from another device leaves them
  * disagreeing with no transition left to notice it. Decisions are transitions;
  * this is the standing disagreement between two states.
  */
@@ -109,20 +109,6 @@ export type FocusSessionSink = (
 ) => Promise<FocusTimerSession | undefined> | FocusTimerSession | undefined
 
 /**
- * A command the server refused. It carries the row the server actually holds;
- * that row *is* the last acknowledged state, so the mirror adopts it and the
- * next attempt is built on the truth instead of a stale revision.
- */
-export class SessionRefusedError<T = FocusTimerSession> extends Error {
-  readonly canonical: T | undefined
-  constructor(message: string, canonical: T | undefined) {
-    super(message)
-    this.name = "SessionRefusedError"
-    this.canonical = canonical
-  }
-}
-
-/**
  * One boundary the user crossed, kept until the server has taken it. `start`
  * carries its minted session, `update` the corrected identity; the rest are
  * lifecycle moves stamped with the wall time they happened at.
@@ -146,10 +132,8 @@ export interface FocusSessionMirror {
   push(boundary: FocusSessionBoundary): void
   /** True while a command is on the wire: the lifecycle buttons are disabled. */
   busy(): boolean
-  /** Adopt a row another device changed this session into. Only while no boundary is
-   *  on its way: a boundary already crossed owns the session until the server answers,
-   *  and it adopts the server's row through the refusal path instead. Returns whether
-   *  the row was taken. */
+  /** Adopt a row another device changed this session into. Returns false if a
+   *  local boundary is still pending. */
   adopt(session: FocusTimerSession | undefined): boolean
   dispose(): void
 }
@@ -245,10 +229,7 @@ export function createFocusSessionMirror({
           commit(saved)
           boundaries.shift()
           attempts = 0
-        } catch (error) {
-          // A refusal carries the row the server holds; adopting it is what keeps
-          // the retry from re-sending a revision the server has already moved past.
-          if (error instanceof SessionRefusedError) commit(error.canonical)
+        } catch {
           attempts += 1
           setBusy(false)
           scheduleRetry()

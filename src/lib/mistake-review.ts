@@ -19,7 +19,7 @@ export function buildMistakePatterns(mistakes: Mistake[], attempts: ExamAttempt[
     const cards = group.mistakes.length
     const papers = new Set(group.mistakes.flatMap((mistake) => mistake.attemptId ? [mistake.attemptId] : [])).size
     const open = group.mistakes.filter((mistake) => !getMistakeSchedule(mistake).resolved).length
-    const lapses = group.mistakes.reduce((sum, mistake) => sum + (mistake.lapses ?? 0), 0)
+    const lapses = group.mistakes.reduce((sum, mistake) => sum + getMistakeSchedule(mistake).lapses, 0)
     const marksLost = group.mistakes.reduce((sum, mistake) => sum + (mistake.marksLost ?? 0), 0)
     const lastSeen = group.mistakes.map((mistake) => attemptMap.get(mistake.attemptId)?.completedAt ?? mistake.updatedAt ?? mistake.createdAt).sort().at(-1)!
     const ageDays = Math.max(0, (now.getTime() - Date.parse(lastSeen)) / DAY_MS)

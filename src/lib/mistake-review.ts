@@ -17,7 +17,7 @@ export function buildMistakePatterns(mistakes: Mistake[], attempts: ExamAttempt[
   // ponytail: count-based recurrence and weighted recency, not a statistical model; tune from review outcomes later.
   return [...groups].map(([key, group]) => {
     const cards = group.mistakes.length
-    const papers = new Set(group.mistakes.map((mistake) => mistake.attemptId ? `paper:${mistake.attemptId}` : `card:${mistake.id}`)).size
+    const papers = new Set(group.mistakes.flatMap((mistake) => mistake.attemptId ? [mistake.attemptId] : [])).size
     const open = group.mistakes.filter((mistake) => !getMistakeSchedule(mistake).resolved).length
     const lapses = group.mistakes.reduce((sum, mistake) => sum + (mistake.lapses ?? 0), 0)
     const marksLost = group.mistakes.reduce((sum, mistake) => sum + (mistake.marksLost ?? 0), 0)

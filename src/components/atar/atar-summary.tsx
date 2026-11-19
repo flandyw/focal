@@ -48,6 +48,11 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
             : model.gap === null ? `Target ${model.target.toFixed(2)}${model.targetAggregate !== null ? ` needs an aggregate of ${model.targetAggregate.toFixed(2)}` : ""}.`
             : model.gap > 0 ? <><span className="font-medium text-foreground">{model.gap.toFixed(2)} below target.</span>{model.aggregateGap !== null ? ` ${model.aggregateGap.toFixed(2)} more aggregate needed (${model.targetAggregate!.toFixed(2)}).` : ""}</>
             : <span className="font-medium text-foreground">On or above target by {Math.abs(model.gap).toFixed(2)}.</span>}
+          {model.targetPath ? <span className="mt-1 block">
+            {model.targetPath.reachable
+              ? `Reachable with ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(model.targetPath.steps.map((step) => `+${step.points} in ${step.name}`))}.`
+              : "The target isn't reachable with the current studies, even with study scores of 50."}
+          </span> : null}
         </p>
       </div>
     </section>

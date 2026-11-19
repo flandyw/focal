@@ -39,6 +39,7 @@ export type AtarModel = {
   /** Target minus estimated ATAR; negative once above target. */
   gap: number | null
   aggregateGap: number | null
+  targetPath: { steps: { name: string; points: number }[]; reachable: boolean } | null
   /** ATAR with every Focal estimate at the low/high end of its likely range; null without a Focal range. */
   range: { low: string; high: string; lowAtar: number | null; highAtar: number | null } | null
 }
@@ -103,6 +104,8 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
   }
   const results = modelRows.flatMap((item) => resultFor(item))
   const estimate = estimateAtar(results, year)
+  const estimateWithScores = (scores: Map<AtarModelRow, number>) =>
+    estimateAtar(modelRows.flatMap((item) => resultFor(item, scores.get(item) ?? item.rawScore)), year)
 
   const counted = new Map((estimate ? [...estimate.primaryFour, ...estimate.increments] : []).map((item) => [item.id, item]))
   for (const item of modelRows) {
@@ -111,7 +114,7 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
     item.contribution = hit?.contribution ?? 0
     if (estimate && item.rawScore !== null && item.rawScore < 50) {
       // +1 raw re-runs the full VTAC selection, so a study can enter or leave the counted six.
-      const bumped = estimateAtar(modelRows.flatMap((other) => other === item ? resultFor(other, item.rawScore! + 1) : resultFor(other)), year)
+      const bumped = estimateWithScores(new Map([[item, item.rawScore + 1]]))
       if (bumped) item.sensitivity = { aggregate: round(bumped.aggregate - estimate.aggregate), atar: bumped.atar !== null && estimate.atar !== null ? round(bumped.atar - estimate.atar) : null }
     }
   }
@@ -126,6 +129,29 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
   }
 
   const aggregateTarget = targetAggregate(target, year)
+  let targetPath: AtarModel["targetPath"] = null
+  if (target !== null && estimate && (aggregateTarget === null || estimate.aggregate < aggregateTarget)) {
+    const scores = new Map(modelRows.filter((item) => counted.has(item.row.id) && item.rawScore !== null).map((item) => [item, item.rawScore!]))
+    let aggregate = estimate.aggregate
+    // ponytail: greedy may not find the global minimum; upgrade to bounded dynamic programming for an optimal path.
+    while (aggregateTarget !== null && aggregate < aggregateTarget) {
+      let best: { item: AtarModelRow; aggregate: number } | null = null
+      for (const [item, score] of scores) {
+        if (score >= 50) continue
+        const bumped = estimateWithScores(new Map(scores).set(item, score + 1))
+        if (bumped && (!best || bumped.aggregate > best.aggregate)) best = { item, aggregate: bumped.aggregate }
+      }
+      if (!best) break
+      scores.set(best.item, scores.get(best.item)! + 1)
+      aggregate = best.aggregate
+    }
+    const reachable = aggregateTarget !== null && aggregate >= aggregateTarget
+    targetPath = {
+      reachable,
+      steps: reachable ? [...scores].flatMap(([item, score]) => score > item.rawScore!
+        ? [{ name: item.study!.studyName, points: score - item.rawScore! }] : []) : [],
+    }
+  }
   return {
     year,
     rows: modelRows,
@@ -135,6 +161,7 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
     targetAggregate: aggregateTarget,
     gap: target !== null && estimate?.atar != null ? round(target - estimate.atar) : null,
     aggregateGap: aggregateTarget !== null && estimate ? round(aggregateTarget - estimate.aggregate) : null,
+    targetPath,
     range,
   }
 }

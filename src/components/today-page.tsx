@@ -107,7 +107,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
 
       <AIOverview area="today" fingerprint={`${dueMistakes}:${items.length}:${done}:${next?.id ?? ""}`} />
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="flex flex-col gap-8">
         <section aria-labelledby="today-plan">
           <div className="mb-2 flex items-center justify-between gap-3">

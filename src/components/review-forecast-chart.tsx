@@ -4,13 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
 import type { Mistake } from "../lib/exam-data"
 import { buildReviewForecast } from "../lib/performance-insights"
+import { localDate } from "../lib/learning-workspace"
+import { useTickingNow } from "../hooks/use-ticking-now"
 
 const chartConfig = {
   due: { label: "Cards due", color: "var(--chart-4)" },
 }
 
 export function ReviewForecastChart({ mistakes }: { mistakes: Mistake[] }) {
-  const forecast = useMemo(() => buildReviewForecast(mistakes), [mistakes])
+  // Recompute only when the local calendar day changes, not on every minute tick.
+  const today = localDate(useTickingNow())
+  const forecast = useMemo(() => buildReviewForecast(mistakes, new Date(`${today}T00:00:00`)), [mistakes, today])
   const total = forecast.reduce((sum, day) => sum + day.due, 0)
   const busiest = forecast.reduce((current, day) => day.due > current.due ? day : current, forecast[0])
   const summary = total

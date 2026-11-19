@@ -121,13 +121,16 @@ export function ExamSheet({ attempts, references, preferredSubjects, comparisonY
     if (questionResults.length && Math.abs(questionMaximum - rawMax) < 0.01 && Math.abs(questionScore - rawScore) >= 0.01) return setError("The question marks and overall mark do not match. Use the breakdown total or correct the overall mark.")
 
     const timestamp = new Date().toISOString()
+    const nextPaper = showPaper ? paper.trim() : (initialAttempt?.subject === subject ? initialAttempt.paper : "Exam")
     onSave({
       id: initialAttempt?.id ?? crypto.randomUUID(),
       subject: subject.trim(),
       provider: provider.trim() || "Other",
       title: formatExamTitle(provider.trim() || "Other", examYear, subject),
       examYear,
-      paper: showPaper ? paper.trim() : (initialAttempt?.subject === subject ? initialAttempt.paper : "Exam"),
+      paper: nextPaper,
+      // An explicit type only stays valid for the same subject and paper; otherwise it is inferred from the paper text.
+      paperType: initialAttempt?.subject === subject.trim() && initialAttempt.paper === nextPaper ? initialAttempt.paperType : undefined,
       completedAt,
       rawScore,
       rawMax,

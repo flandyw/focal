@@ -499,7 +499,7 @@ export function buildPaperWeaknessMatrix(attempts: ExamAttempt[], mistakes: Mist
   const matrix = hasComparableResults ? rows : buildMistakeWeaknessMatrix(subjectAttempts, mistakes, curriculumAreas, config)
   if (config?.prerequisites) {
     const weakTopics = new Set(matrix.filter((row) => !["secure", "stable", "no evidence", "mistake-only evidence"].includes(row.diagnosis)).map((row) => row.areaOfStudy))
-    for (const row of matrix) row.weakPrerequisites = prerequisitesOf(config, row.areaOfStudy).filter((topic) => weakTopics.has(topic))
+    for (const row of matrix) if (weakTopics.has(row.areaOfStudy)) row.weakPrerequisites = prerequisitesOf(config, row.areaOfStudy).filter((topic) => weakTopics.has(topic))
   }
   return matrix
 }

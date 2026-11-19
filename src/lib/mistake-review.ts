@@ -1,6 +1,33 @@
-import { getMistakeSchedule, type Mistake, type MistakeReviewState } from "./exam-data.js"
+import { getMistakeSchedule, type ExamAttempt, type Mistake, type MistakeReviewState } from "./exam-data.js"
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+export function buildMistakePatterns(mistakes: Mistake[], attempts: ExamAttempt[], now = new Date()) {
+  const attemptMap = new Map(attempts.map((attempt) => [attempt.id, attempt]))
+  const groups = new Map<string, { subject: string; topic: string | null; category: Mistake["category"]; mistakes: Mistake[] }>()
+  for (const mistake of mistakes) {
+    if (mistake.suspended) continue
+    const subject = attemptMap.get(mistake.attemptId)?.subject ?? mistake.subject ?? ""
+    const topic = (mistake.topic ?? mistake.areaOfStudy)?.trim() || null
+    const key = JSON.stringify([subject.toLowerCase(), topic?.toLowerCase() ?? null, mistake.category])
+    const group = groups.get(key) ?? { subject, topic, category: mistake.category, mistakes: [] }
+    group.mistakes.push(mistake)
+    groups.set(key, group)
+  }
+  // ponytail: count-based recurrence and weighted recency, not a statistical model; tune from review outcomes later.
+  return [...groups].map(([key, group]) => {
+    const cards = group.mistakes.length
+    const papers = new Set(group.mistakes.flatMap((mistake) => mistake.attemptId ? [mistake.attemptId] : [])).size
+    const open = group.mistakes.filter((mistake) => !getMistakeSchedule(mistake).resolved).length
+    const lapses = group.mistakes.reduce((sum, mistake) => sum + getMistakeSchedule(mistake).lapses, 0)
+    const marksLost = group.mistakes.reduce((sum, mistake) => sum + (mistake.marksLost ?? 0), 0)
+    const lastSeen = group.mistakes.map((mistake) => attemptMap.get(mistake.attemptId)?.completedAt ?? mistake.updatedAt ?? mistake.createdAt).sort().at(-1)!
+    const ageDays = Math.max(0, (now.getTime() - Date.parse(lastSeen)) / DAY_MS)
+    const score = open * 10 + papers * 5 + lapses * 3 + 10 / (1 + ageDays)
+    return { key, subject: group.subject, topic: group.topic, category: group.category, cards, papers, open, lapses, marksLost, lastSeen, mistakeIds: group.mistakes.map((mistake) => mistake.id).sort(), score }
+  }).filter((pattern) => pattern.open > 0 && (pattern.papers >= 2 || pattern.cards >= 3))
+    .sort((a, b) => b.score - a.score || a.key.localeCompare(b.key))
+}
 
 export type MistakeProgressSummary = {
   activeCards: number

@@ -12,7 +12,8 @@ import { parseExamProgression, previewProgressionImport, progressionBySubject } 
 import { localDate } from "../../src/lib/learning-workspace.js"
 import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types.js"
 import { getPracticeProgress, practiceFeedback, practiceMissionCards } from "../../src/lib/mistake-practice.js"
-import { demoteGreens } from "../../src/lib/stoplight.js"
+import { demoteGreens, planPatternRevision } from "../../src/lib/stoplight.js"
+import { buildMistakePatterns } from "../../src/lib/mistake-review.js"
 import { applyMistakeChanges, diffMistake, planTopicBackfill, revertMistakes, validateTopic, type MistakeChange } from "../../src/lib/topics.js"
 import { computeSacStats, isCompletedSac, sacPercentage, validateSac } from "../../src/lib/sac.js"
 import type { CalendarEvent } from "../../src/lib/types"
@@ -150,16 +151,18 @@ export function recordTools(define: Define) {
   define("list_mistakes", "List mistake cards (the spaced-repetition revision queue), 50 at a time. status: due = due for review now, open = not yet mastered, resolved, suspended, all. By default the list is COMPACT: no questionText or correction and no inline SVG, which keeps a whole subject small enough to read; pass compact false (with a small limit) when you need the full text, e.g. to quiz a card. `fields` picks columns (id is always included). If `nextCursor` is not null, pass it back as `cursor` for the next page. `topic` filters by canonical topic; \"none\" finds cards with no stored topic (see backfill_topics / update_mistakes).", {
     status: z.enum(["due", "open", "resolved", "suspended", "all"]).default("all"), subject: z.string().optional(), category: category.optional(),
     attemptId: z.string().optional(), topic: z.string().optional(), search: z.string().optional(), limit,
+    ids: z.array(z.string()).max(200).optional().describe("Only these mistake ids"),
     compact: z.boolean().default(true).describe("Omit questionText and correction and strip inline SVG (default). false returns everything."),
     fields: z.array(z.enum(MISTAKE_FIELDS)).min(1).optional().describe("Only these columns, plus id"),
     cursor: z.string().optional().describe("nextCursor from the previous page"),
-  }, "read", async ({ status, subject, category, attemptId, topic, search, limit, compact, fields, cursor }) => {
+  }, "read", async ({ status, subject, category, attemptId, topic, search, limit, compact, fields, cursor, ids }) => {
     const { data } = await readAll()
     const now = Date.now()
     const needle = search?.toLowerCase()
     const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
     const schedules = new Map(data.mistakes.map((mistake) => [mistake.id, getMistakeSchedule(mistake)]))
     const rows = currentSubjectWork(data).mistakes.filter((mistake) => {
+      if (ids && !ids.includes(mistake.id)) return false
       const schedule = schedules.get(mistake.id)!
       if (status === "suspended" ? !mistake.suspended : status !== "all" && mistake.suspended) return false
       if (status === "due" && Date.parse(schedule.dueAt) > now) return false
@@ -351,6 +354,32 @@ export function recordTools(define: Define) {
     })
 
   /* ------------------------------------------------- insights and alt deck */
+
+  define("get_mistake_patterns", "Recurring mistake patterns, ranked by open cards, papers, lapses and recency, with source mistake ids.",
+    { subject: z.string().optional(), limit }, "read", async ({ subject, limit }) => {
+      const { data } = await readAll()
+      const current = currentSubjectWork(data)
+      return buildMistakePatterns(current.mistakes, data.attempts)
+        .filter((pattern) => !subject || pattern.subject.toLowerCase() === subject.toLowerCase()).slice(0, limit)
+    })
+
+  define("schedule_pattern_revision", "Plan follow-up tasks for recurring mistake patterns. Preview by default; existing planned follow-ups are skipped.", {
+    subject: z.string().optional(), maxPatterns: z.number().int().min(1).max(20).default(3), dryRun: z.boolean().default(true),
+  }, "write", async ({ subject, maxPatterns, dryRun }) => {
+    const plan = (data: AppData) => planPatternRevision(data.learning, { ...data, mistakes: currentSubjectWork(data).mistakes }, subject, maxPatterns)
+    if (dryRun) {
+      const { data } = await readAll()
+      const result = plan(data)
+      return { dryRun, count: result.count, tasks: result.learning.tasks.slice(data.learning.tasks.length) }
+    }
+    let tasks: AppData["learning"]["tasks"] = []
+    await updateApp((data) => {
+      const result = plan(data)
+      tasks = result.learning.tasks.slice(data.learning.tasks.length)
+      return { ...data, learning: result.learning }
+    })
+    return { dryRun, count: tasks.length, tasks }
+  })
 
   define("get_mistake_insights", "The saved mistake analysis (summary, biggest errors, next step, practice questions) and the alternative-question deck, as shown in the app.",
     {}, "read", async () => {

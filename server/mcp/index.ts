@@ -28,6 +28,9 @@ function registerPrompts(server: McpServer) {
     server.registerPrompt(name, { description, argsSchema: args }, ((a: unknown) => ({ messages: [{ role: "user" as const, content: { type: "text" as const, text: body(a as never) } }] })) as never)
   const opt = (describe: string) => z.string().optional().describe(describe)
 
+  prompt("mistake_followup", "Find recurring mistakes, analyse evidence, create alternatives and preview follow-up revision.", { subject: opt("Limit to one subject") }, ({ subject }) =>
+    `Help me fix recurring Focal mistakes${subject ? ` for ${subject}` : ""}. Call get_mistake_patterns with limit 5, then list_mistakes with ids from the top pattern, compact false and limit 5. If there are no patterns, say so and stop. Read the actual cards before saving save_mistake_insights with evidence from those cards. Use save_alternative_cards to create original alternatives for the top pattern's cards, grounded in their skills. Then call schedule_pattern_revision with dryRun true. Show me the proposed tasks and apply with dryRun false only after I explicitly confirm.`)
+
   prompt("daily_briefing", "Morning brief: today's plan, due reviews, upcoming SACs and VCE exams.", { date: opt("YYYY-MM-DD, default today") }, ({ date }) =>
     `Give me my Focal briefing for ${date ?? "today"}. Call get_overview, then get_day_plan${date ? ` for ${date}` : ""}, then list_mistakes with status "due" (compact), then get_practice_progress. Summarise in this order: the one thing to do first, the day's schedule, how many reviews are due (and which subjects), SACs/exams in the next 14 days with days to go, and today's practice quests. Keep it short. Do not write anything.`)
 

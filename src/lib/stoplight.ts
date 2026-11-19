@@ -1,5 +1,6 @@
 // Pure (no React/Tauri): the stoplight checklist, its chatbot import contract, and evidence from mistakes.
 import { parseJsonPayload } from "./calendarImport.js"
+import { buildMistakePatterns } from "./mistake-review.js"
 import { sameStudySubject } from "./studySubjects.js"
 import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data.js"
 import {
@@ -209,6 +210,28 @@ export function planRevision(learning: LearningWorkspace, data: Pick<AppData, "a
   return { learning: { ...learning, tasks: [...learning.tasks, ...tasks], updatedAt: now.toISOString() }, count: tasks.length }
 }
 
+export function planPatternRevision(learning: LearningWorkspace, data: Pick<AppData, "attempts" | "mistakes">, subject?: string, maxPatterns = 3, now = new Date()) {
+  const planned = new Set(learning.tasks.filter((task) => !task.archivedAt && task.status === "planned").map((task) => task.sourceId))
+  const queue = buildMistakePatterns(data.mistakes, data.attempts, now)
+    .filter((pattern) => (!subject || sameStudySubject(pattern.subject, subject)) && !planned.has(`mistake-pattern:${pattern.key}`))
+  const days: string[] = []
+  for (let offset = 0; days.length < PLAN_DAYS && offset < 14; offset += 1) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
+    if (learning.preferences.studyDays.includes(day.getDay())) days.push(localDate(day))
+  }
+  const perDay = Math.max(1, Math.floor(learning.preferences.dailyMinutes / TASK_MINUTES))
+  const tasks = queue.slice(0, Math.min(Math.max(0, Math.floor(maxPatterns)), days.length * perDay)).map((pattern, index) => materialiseTask({
+    kind: "mistake-review",
+    title: `Fix recurring: ${pattern.topic ?? (pattern.subject || "Mistakes")} · ${pattern.category}`,
+    subject: pattern.subject,
+    detail: `${pattern.cards} cards across ${pattern.papers} papers · ${pattern.open} open. Review the corrections, then retry unaided.`,
+    durationMinutes: Math.min(TASK_MINUTES, learning.preferences.dailyMinutes),
+    plannedFor: days[Math.floor(index / perDay)],
+    sourceId: `mistake-pattern:${pattern.key}`,
+  }, now))
+  if (!tasks.length) return { learning, count: 0 }
+  return { learning: { ...learning, tasks: [...learning.tasks, ...tasks], updatedAt: now.toISOString() }, count: tasks.length }
+}
 // --- Chatbot import ---
 
 export type ImportedItem = { group: string; name: string; check?: string; type?: StoplightType }

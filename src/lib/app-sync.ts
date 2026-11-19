@@ -316,7 +316,7 @@ export async function pushAppChanges(accountId: string, changes: readonly AppRow
  * Sends everything that is due, one flusher at a time across tabs. A stale answer rebases the
  * entry into a new one, so a few passes settle a burst of concurrent edits from other devices.
  */
-export function flushAppOutbox(accountId: string, deviceId = appSyncDeviceId()): Promise<void> {
+function flushAppOutbox(accountId: string, deviceId = appSyncDeviceId()): Promise<void> {
   return withFlushLock(`focal-app-outbox:${accountId}`, async () => {
     for (let pass = 0; pass < 4; pass++) {
       const now = Date.now()

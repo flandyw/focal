@@ -7,11 +7,11 @@ export const PRACTICE_FINISHES = [
   { id: "amber", label: "Amber", xp: 600, color: "#c89a49" },
 ] as const
 
-export function practiceDay(date: Date): string {
+function practiceDay(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-export function practiceWeek(now: Date): string {
+function practiceWeek(now: Date): string {
   const monday = new Date(now)
   monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7)
   return practiceDay(monday)
@@ -19,7 +19,7 @@ export function practiceWeek(now: Date): string {
 
 const recalled = (result: string) => result === "good" || result === "easy" || result === "correct"
 const shaky = (result: string) => result === "again" || result === "hard" || result === "incorrect" || result === "assisted"
-export function practiceHistory(mistake: Mistake) {
+function practiceHistory(mistake: Mistake) {
   return [...new Map((mistake.reviewHistory ?? []).map((review) => [review.id, review])).values()]
     .sort((a, b) => Date.parse(a.completedAt) - Date.parse(b.completedAt) || a.id.localeCompare(b.id))
 }

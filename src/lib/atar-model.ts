@@ -49,7 +49,7 @@ export function atarYears(scaling: ScalingReference[]) {
   return ATAR_AGGREGATE_REFERENCES.map((item) => item.year).filter((year) => scaling.some((reference) => reference.year === year)).toSorted((a, b) => b - a)
 }
 
-export function activeAtarTarget(data: Pick<AppData, "learning">) {
+function activeAtarTarget(data: Pick<AppData, "learning">) {
   return data.learning.goals.find((goal) => goal.kind === "atar" && !goal.archivedAt)?.target ?? null
 }
 

@@ -17,7 +17,7 @@ export type MistakeDraft = {
   marksLost: number
 }
 
-export type IndexedMistakeDraft = MistakeDraft & { imageIndex: number }
+type IndexedMistakeDraft = MistakeDraft & { imageIndex: number }
 
 export type ChatGPTProgress = {
   phase: "connecting" | "thinking" | "writing" | "complete"

@@ -6,7 +6,7 @@ import "./eclair-home.css"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { TIMER_PRESETS, formatFocusTime, type TimerSettings } from "../lib/study-timer"
 
-export interface EclairPlan { id: string; title: string; detail: string; start: () => void }
+interface EclairPlan { id: string; title: string; detail: string; start: () => void }
 
 export interface EclairHomeProps {
   display: string

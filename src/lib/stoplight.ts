@@ -10,7 +10,7 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000
 const RECHECK_DAYS = { green: 21, amber: 14 }
 const TYPES: StoplightType[] = ["recall", "technique", "apply", "practical"]
-export const UNGROUPED = "Ungrouped"
+const UNGROUPED = "Ungrouped"
 
 export const RATINGS: Array<{ id: StoplightRating; label: string; meaning: string }> = [
   { id: "red", label: "Red", meaning: "Can't start the check without notes" },
@@ -112,7 +112,7 @@ function mistakeProgress(mistake: Mistake) {
 }
 
 /** Apply newer practice evidence, preserving any later manual or chatbot rating. */
-export function progressStoplight(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()): LearningWorkspace {
+function progressStoplight(learning: LearningWorkspace, mistakes: Mistake[], now = new Date()): LearningWorkspace {
   const linked = new Map<string, { latest: ReturnType<typeof mistakeProgress>; timestamp: number; passed: boolean }>()
   for (const mistake of mistakes) {
     if (!mistake.itemIds?.length) continue

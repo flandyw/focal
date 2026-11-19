@@ -13,7 +13,7 @@ type PaperRules = {
 }
 
 // To add a subject, add an entry; subjects without one are never checked.
-export const PAPER_RULES: readonly PaperRules[] = [
+const PAPER_RULES: readonly PaperRules[] = [
   {
     subjects: ["mathematical methods", "mathematical methods cas", "specialist mathematics"],
     expectedRawMax: { exam1: [40], exam2: [80], combined: [120, 160] },

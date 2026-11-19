@@ -6,8 +6,8 @@ import { migrateSacRecords } from "./sac.js"
 import { withStoplightProgress } from "./stoplight.js"
 import { readSubjectCompletions } from "./subject-completion.js"
 
-export const TIMETABLE_ROW = "timetable_config"
-export const EPOCH = "1970-01-01T00:00:00.000Z"
+const TIMETABLE_ROW = "timetable_config"
+const EPOCH = "1970-01-01T00:00:00.000Z"
 
 export type Entity = "attempts" | "mistakes" | "user_state" | "events" | "timetable_config"
 type Operation = "put" | "delete"

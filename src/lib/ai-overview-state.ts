@@ -8,7 +8,7 @@ export const AIOverviewContext = createContext<{ userId?: string; onAction: (act
 const SETTINGS_KEY = "focal:ai-overviews:v1"
 export type OverviewSettings = { enabled: boolean; model: string }
 
-export function loadOverviewSettings(): OverviewSettings {
+function loadOverviewSettings(): OverviewSettings {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<OverviewSettings>
     return { enabled: saved.enabled !== false, model: typeof saved.model === "string" ? saved.model : "" }

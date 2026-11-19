@@ -22,7 +22,7 @@ export const macDesktop = () => Boolean(import.meta.env.VITE_DESKTOP && isTauri(
 
 /** "latest" = newest saved scenario, "live" = Focal estimates for your subjects, otherwise a pinned scenario id. */
 export type WidgetAtarSettings = { source: string; target: boolean; change: boolean; subjects: boolean }
-export type WidgetAtar = NonNullable<ReturnType<typeof atar>>
+type WidgetAtar = NonNullable<ReturnType<typeof atar>>
 type WidgetState = { settings: WidgetAtarSettings; tick: number; atar?: WidgetAtar | null; sentAt?: number; error?: string; focus?: boolean }
 // Device-local on purpose: the widget lives on this Mac, so synced account data stays unchanged.
 const SETTINGS_KEY = "focal.widget.atar"

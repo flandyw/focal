@@ -2,7 +2,7 @@ import type { AppData } from "./exam-data"
 import type { LearningWorkspace, LearningWorkspaceUpdate } from "./learning-workspace"
 import { sameStudySubject } from "./studySubjects"
 
-export function subjectLearning(learning: LearningWorkspace, subject: string): LearningWorkspace {
+function subjectLearning(learning: LearningWorkspace, subject: string): LearningWorkspace {
   return {
     ...learning,
     tasks: learning.tasks.filter((item) => sameStudySubject(item.subject, subject)),

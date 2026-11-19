@@ -61,18 +61,24 @@ export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
   const timestamp = now.getTime()
   const days = new Map<string, { cards: Set<string>; rematches: Set<string>; predictions: Set<string> }>()
   const weeks = new Map<string, { cards: Set<string>; target: number }>()
-  const practiced: Mistake[] = []
+  const practiced: { mistake: Mistake; weakness: number }[] = []
   let calibrated = 0, predictions = 0, established = 0
   for (const mistake of mistakes) {
     const history = practiceHistory(mistake)
     const recallDays = new Set<string>()
+    const recallDaysBefore = new Set<string>()
     let practicedBefore = false
+    let lastBefore = ""
     let previous = ""
     for (const review of history) {
       const date = new Date(review.completedAt)
       const day = practiceDay(date)
       if (!mistake.suspended) {
-        if (day < week) practicedBefore = true
+        if (day < week) {
+          practicedBefore = true
+          lastBefore = review.result
+          if (recalled(review.result)) recallDaysBefore.add(day)
+        }
         if (recallDays.size < 3 && recalled(review.result)) recallDays.add(day)
       }
       if (date.getTime() > timestamp) continue
@@ -93,7 +99,8 @@ export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
       }
       previous = review.result
     }
-    if (practicedBefore) practiced.push(mistake)
+    // Weakness only reads reviews from before this week, so the challenge stays fixed while it is being worked through.
+    if (practicedBefore) practiced.push({ mistake, weakness: (shaky(lastBefore) ? 2 : 0) + (recallDaysBefore.size < 3 ? 1 : 0) })
     if (recallDays.size >= 3 && !shaky(history.at(-1)?.result ?? "")) established++
   }
   // ponytail: rewards are derived from the shared review ledger, so retries and syncing cannot award XP twice.
@@ -107,10 +114,22 @@ export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
     { id: "confidence", label: "Call your confidence", detail: "Predict your recall on three cards", done: current?.predictions.size ?? 0, target: 3 },
   ]
   const weekly = weeks.get(week)
-  // ponytail: deterministic IDs keep the weekly selection identical in both clients; grow this into topic balancing if needed.
-  const pool = practiced.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  // ponytail: weakest pre-week cards first, one per topic per pass, with a weekly ID rotation breaking ties, so both clients pick the same five.
+  const pool = practiced.sort((a, b) => a.mistake.id < b.mistake.id ? -1 : a.mistake.id > b.mistake.id ? 1 : 0)
   const offset = pool.length ? Math.floor(Date.parse(`${week}T00:00:00Z`) / 604800000) % pool.length || 0 : 0
-  const challenge = Array.from({ length: Math.min(pool.length, 5) }, (_, index) => pool[(offset + index + pool.length) % pool.length])
+  const ranked = pool.map((entry, index) => ({ ...entry, turn: (index - offset + pool.length) % pool.length }))
+    .sort((a, b) => b.weakness - a.weakness || a.turn - b.turn).map(({ mistake }) => mistake)
+  const topicOf = (mistake: Mistake) => (mistake.topic ?? mistake.areaOfStudy ?? mistake.subject ?? "").trim().toLowerCase()
+  const challenge: Mistake[] = []
+  while (challenge.length < Math.min(ranked.length, 5)) {
+    const topics = new Set<string>()
+    for (const mistake of ranked) {
+      if (challenge.length === 5) break
+      if (challenge.includes(mistake) || topics.has(topicOf(mistake))) continue
+      challenge.push(mistake)
+      topics.add(topicOf(mistake))
+    }
+  }
   return { xp, level: Math.floor(xp / 100) + 1, todayXP: current ? dailyXP(current) : 0, todayCount: current?.cards.size ?? 0,
     quests, week, challenge, weeklyCount: weekly?.cards.size ?? 0, weeklyTarget: weekly?.target ?? challenge.length,
     weeklyComplete: !!weekly && weekly.cards.size >= weekly.target,

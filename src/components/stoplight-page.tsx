@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react"
 import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
+import { describeAdaptivePlan, planAdaptive } from "../lib/adaptive-plan"
 
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -19,7 +20,7 @@ import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from ".
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import {
   RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
-  mergeStoplightItems, planRevision, setRating, setRatings, type ItemEvidence, type ItemLink,
+  mergeStoplightItems, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { cn, count } from "../lib/utils"
 import { useTickingNow } from "../hooks/use-ticking-now"
@@ -89,10 +90,9 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
   }
 
   function planWeek() {
-    const result = planRevision(data.learning, data, subject, now)
-    if (!result.count) return toast("Nothing to plan: every red, amber or re-check item already has a task.")
+    const result = planAdaptive(data, null, { subject, now })
     onChange(result.learning)
-    toast.success(`Added ${result.count} revision task${result.count === 1 ? "" : "s"} to your calendar`)
+    toast(describeAdaptivePlan(result))
   }
 
   function applyRatings(ratings: Map<string, StoplightRating>) {

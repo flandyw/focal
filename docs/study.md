@@ -40,6 +40,17 @@ question-mark dataset. After saving, lost-mark questions without an existing
 mistake card can become editable revision cards. Add a diagnosis and correction
 before saving them.
 
+## Adaptive planning
+
+**Auto-plan** on the Calendar (and **Plan this week** on a Stoplight subject, or the `plan_revision` MCP tool) schedules the next 14 days:
+
+- Three prep sessions before each upcoming SAC, assessed calendar event or tracked VCAA exam, naming that subject's red items.
+- Red, amber and re-check-due stoplight items, strongest evidence of weakness first, each placed before its subject's next assessment.
+- Each day's budget is your daily study minutes on study days plus any Free/Study/Spare periods in your class timetable, minus work already on that day (tasks, sessions, SACs, events).
+- Tasks go to the least-loaded day that fits, keeping the same subject apart.
+
+Run it again any time: planner tasks still planned (including overdue ones) move to fit the new picture, ones whose item turned green or whose assessment passed are archived, and anything that doesn't fit is reported.
+
 ## Weekly review
 
 Progress starts with a Monday–Sunday review, defaulting to the last complete week.

@@ -91,6 +91,7 @@ export function ExamLibrary({
   const [query, setQuery] = useState("")
   const deferredQuery = useDeferredValue(query)
   const [completion, setCompletion] = useState<CompletionFilter>("all")
+  const [sort, setSort] = useState("newest")
   const [visibleCount, setVisibleCount] = useState(40)
   const resourcesByStudy = useMemo(() => new Map(studies.map((study) => [normaliseComparisonName(study.studyName), study])), [studies])
   const completedUrls = useMemo(() => new Set(exams.filter((exam) => isExamDone(exam.url, { completedExamIds, attempts, exam })).map((exam) => exam.url)), [completedExamIds, exams, attempts])
@@ -106,8 +107,10 @@ export function ExamLibrary({
         terms.every((term) => `${exam.studyName} ${exam.year ?? ""} ${exam.label} ${getVcaaExamPaper(exam)} ${getVcaaExamProvider(exam)}`.toLowerCase().includes(term))
     }).toSorted((first, second) =>
       (priorities.get(normaliseComparisonName(first.studyName)) ?? Infinity) - (priorities.get(normaliseComparisonName(second.studyName)) ?? Infinity) ||
-      (second.year ?? 0) - (first.year ?? 0) || paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
-  }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject])
+      Number(first.year === null) - Number(second.year === null) ||
+      (sort === "oldest" ? (first.year ?? 0) - (second.year ?? 0) : (second.year ?? 0) - (first.year ?? 0)) ||
+      paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
+  }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject, sort])
 
   const clearFilters = () => { setQuery(""); setSubject("all"); setCompletion("all"); setVisibleCount(40) }
   const focusSubject = subject === "all" ? firstPreferredSubject(subjects, preferredSubjects) || subjects[0] : subject
@@ -177,6 +180,10 @@ export function ExamLibrary({
         <Select value={completion} onValueChange={(value) => { setCompletion((value ?? "all") as CompletionFilter); setVisibleCount(40) }}>
           <SelectTrigger className="w-full sm:w-44" aria-label="Filter by completion"><SelectValue>{completion === "todo" ? "Not completed" : completion === "completed" ? "Completed" : "All papers"}</SelectValue></SelectTrigger>
           <SelectContent><SelectItem value="all">All papers</SelectItem><SelectItem value="todo">Not completed</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={(value) => { setSort(value ?? "newest"); setVisibleCount(40) }}>
+          <SelectTrigger className="w-full sm:w-44" aria-label="Sort papers by year"><SelectValue>{sort === "oldest" ? "Oldest first" : "Newest first"}</SelectValue></SelectTrigger>
+          <SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem></SelectContent>
         </Select>
         {query || completion !== "all" || subject !== "all" ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button> : null}
         <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{count(filtered.length, "exam")} · {formatReferenceFreshness(generatedAt)}</span>

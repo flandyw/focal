@@ -126,7 +126,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
                   <li key={`${item.kind}:${item.id}`} className={row}>
                     <span className={cn("flex min-w-0 items-center gap-2", finished && "text-muted-foreground line-through")}>
                       <span className={cn("grid size-4 shrink-0 place-items-center rounded-full border", finished ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{finished ? <Check aria-hidden className="size-3" /> : null}</span>
-                      {"startTime" in item && item.startTime ? <span className="tabular-nums text-muted-foreground">{item.startTime}</span> : null}
+                      {"startTime" in item && item.startTime ? <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{item.startTime}</span> : null}
                       <span className="truncate">{item.title}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">

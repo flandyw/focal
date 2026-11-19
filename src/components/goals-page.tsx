@@ -1,4 +1,4 @@
-import type { ScalingReference } from "../lib/scaling"
+import { normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
 import { useMemo, useState, type FormEvent } from "react"
 import { Archive, CalendarClock, CalendarPlus, CircleCheck, Flag, Gauge, Pencil, Plus, Target } from "lucide-react"
 import { toast } from "sonner"
@@ -121,7 +121,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
     const createdAt = new Date(goal.createdAt)
     const baselineAttempts = data.attempts.filter((attempt) => new Date(attempt.createdAt || attempt.completedAt).getTime() <= createdAt.getTime())
     const baseline = getGoalProgress(goal, { ...data, attempts: baselineAttempts }, references, scalingReferences).current
-    const newPapers = data.attempts.filter((attempt) => (!goal.subject || attempt.subject.toLowerCase() === goal.subject.toLowerCase()) && new Date(attempt.createdAt || attempt.completedAt).getTime() > createdAt.getTime()).length
+    const newPapers = data.attempts.filter((attempt) => (!goal.subject || (goal.kind === "study-score" ? normaliseScalingStudyName(attempt.subject) === normaliseScalingStudyName(goal.subject) : attempt.subject.toLowerCase() === goal.subject.toLowerCase())) && new Date(attempt.createdAt || attempt.completedAt).getTime() > createdAt.getTime()).length
     const setOn = createdAt.toLocaleDateString("en-AU", { day: "numeric", month: "short" })
     const change = baseline === null ? 0 : Number((progress.current - baseline).toFixed(1))
     const movement = !newPapers ? `No new papers since you set this on ${setOn}.`

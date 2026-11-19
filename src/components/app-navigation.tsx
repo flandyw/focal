@@ -209,7 +209,7 @@ export function AppSidebar({
   syncStatus: SyncStatus
   user: { email?: string } | null
   sessions: SessionSync["sessions"]
-  onViewChange: (view: AppView) => void
+  onViewChange: (view: AppView, id?: string) => void
   onSignOut: () => void
   onRetrySync: () => void
   onControlSession: SessionSync["control"]
@@ -234,8 +234,8 @@ export function AppSidebar({
     : syncStatus === "pending" ? "Changes queued" : user ? "Signed in" : "Not signed in"
   const accountTooltip = `${accountLabel} · ${accountStatus}. Open account menu`
 
-  function navigate(nextView: AppView) {
-    onViewChange(nextView)
+  function navigate(nextView: AppView, id?: string) {
+    onViewChange(nextView, id)
     setOpenMobile(false)
   }
 
@@ -350,10 +350,10 @@ export function AppSidebar({
                     Settings
                   </DropdownMenuItem>
                   {syncStatus === "error" ? <DropdownMenuItem onClick={onRetrySync}>Retry sync</DropdownMenuItem> : null}
-                  {user && syncStatus === "sign-in-required" ? <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in again</DropdownMenuItem> : null}
+                  {user && syncStatus === "sign-in-required" ? <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id, "account")}>Sign in again</DropdownMenuItem> : null}
                   {user
                     ? <DropdownMenuItem variant="destructive" onClick={() => onSignOut()}>Sign out</DropdownMenuItem>
-                    : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id)}>Sign in</DropdownMenuItem>}
+                    : <DropdownMenuItem onClick={() => navigate(SETTINGS_ITEM.id, "account")}>Sign in</DropdownMenuItem>}
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>

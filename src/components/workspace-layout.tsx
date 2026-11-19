@@ -39,7 +39,7 @@ export function Delta({ value, suffix = "", invert }: { value: number | null | u
   const good = invert ? value < 0 : value > 0
   return (
     <span className={cn("inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs font-medium tabular-nums", value === 0 ? "bg-muted text-muted-foreground" : good ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
-      <span aria-hidden>{value === 0 ? "–" : value > 0 ? "▲" : "▼"}</span>{Math.abs(value).toFixed(Number.isInteger(value) ? 0 : 1)}{suffix}
+      <span aria-hidden>{value === 0 ? "–" : value > 0 ? "▲" : "▼"}</span><span className="sr-only">{value === 0 ? "no change " : value > 0 ? "up " : "down "}</span>{Math.abs(value).toFixed(Number.isInteger(value) ? 0 : 1)}{suffix}
     </span>
   )
 }

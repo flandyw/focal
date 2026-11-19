@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react"
 import { swipe } from "../lib/mobile"
 import { motion, useReducedMotion } from "framer-motion"
-import { Archive, ArrowDown, ArrowUp, CalendarDays, CalendarPlus, LayoutGrid, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
+import { Archive, ArrowDown, ArrowUp, CalendarDays, CalendarPlus, CalendarSearch, LayoutGrid, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -10,6 +10,8 @@ import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "./ui/popover"
 import { Progress } from "./ui/progress"
 import { CalendarChatbotImportDialog } from "./calendar-chatbot-import"
 import { StudySessionDialog } from "./study-session-dialog"
@@ -140,6 +142,7 @@ export function CalendarPage({
 }) {
   const [month, setMonth] = useState(() => new Date())
   const [selected, setSelected] = useState(today)
+  const [dateJumpOpen, setDateJumpOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [arranging, setArranging] = useState(false)
   const customLayout = useAppearance().calendarOrder.join() !== CALENDAR_MODULES.join()
@@ -290,6 +293,27 @@ export function CalendarPage({
             <div className="flex items-center gap-0.5">
               <Button aria-label="Previous month" title="Previous month" onClick={() => selectDay(localDate(shiftMonth(month, -1)))} size="icon-sm" variant="ghost"><ChevronLeft /></Button>
               <Button aria-label="Next month" title="Next month" onClick={() => selectDay(localDate(shiftMonth(month, 1)))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
+              <Popover open={dateJumpOpen} onOpenChange={setDateJumpOpen}>
+                <PopoverTrigger render={<Button size="sm" variant="outline" className="ml-1" />} aria-label="Jump to date" title="Jump to date">
+                  <CalendarSearch /><span className="hidden sm:inline">Jump to date</span>
+                </PopoverTrigger>
+                <PopoverContent align="start">
+                  <PopoverTitle>Jump to date</PopoverTitle>
+                  <form className="flex items-end gap-2" onSubmit={(event) => {
+                    event.preventDefault()
+                    const date = new FormData(event.currentTarget).get("date")
+                    if (typeof date !== "string" || !date) return
+                    selectDay(date)
+                    setDateJumpOpen(false)
+                  }}>
+                    <div className="grid min-w-0 flex-1 gap-1.5">
+                      <Label htmlFor="calendar-jump-date">Date</Label>
+                      <Input id="calendar-jump-date" name="date" type="date" min="1000-01-01" max="9999-12-31" required defaultValue={selected} />
+                    </div>
+                    <Button type="submit">Go</Button>
+                  </form>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <p className="mt-2 text-sm text-muted-foreground tabular-nums">

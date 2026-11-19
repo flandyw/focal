@@ -19,7 +19,7 @@ import {
 } from"../../lib/progress-analytics"
 import type { Project, StudySession } from"../../lib/types"
 import type { ExamAttempt } from "../../lib/exam-data"
-import { cn, getSubjectById } from"../../lib/progress-utils"
+import { cn, getSessionEffectiveMinutes, getSessionSubjectIds, getSubjectById } from"../../lib/progress-utils"
 import { CalendarDays, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { getSubjectColor } from"../../lib/progress-chart-theme"
 import { useTickingNow } from "../../hooks/use-ticking-now"
@@ -204,14 +204,16 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [sessions, projects, periodDays, periodEnd],
  )
 
- const allSubjectIds = useMemo(
- () => Array.from(new Set([
- ...data.subjectBreakdown.map((d) => d.subjectId),
- ...data.subjectCompletion.map((d) => d.subjectId),
- ...attempts.map((attempt) => studySubjectId(attempt.subject)),
- ])),
- [data.subjectBreakdown, data.subjectCompletion, attempts],
- )
+ const allSubjectIds = useMemo(() => {
+ const ids = new Set(attempts.map((attempt) => studySubjectId(attempt.subject)))
+ const projectsById = new Map(projects.map((project) => [project.id, project]))
+ for (const session of sessions) {
+ const subjects = getSessionSubjectIds(session, session.projectId ? projectsById.get(session.projectId) : undefined)
+ for (const id of subjects) ids.add(id)
+ if (subjects.length === 0 && session.execution.state === "completed" && getSessionEffectiveMinutes(session) > 0) ids.add("_unassigned")
+ }
+ return [...ids].sort((a, b) => (getSubjectById(a)?.name ?? "Unassigned").localeCompare(getSubjectById(b)?.name ?? "Unassigned"))
+ }, [attempts, projects, sessions])
 
  const isFilterActive = !!subject || selectedSubjects !== null
  const activeSet = useMemo(

@@ -643,12 +643,12 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
     return visibleMistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= horizon).length
   }, [visibleMistakes, now])
 
-  // Cards falling due on each of the next seven days; overdue cards count as today.
+  // Cards falling due in each of the next seven 24-hour windows; overdue cards count in the first.
   const weekLoad = useMemo(() => {
     const days = Array.from({ length: 7 }, () => 0)
     for (const mistake of visibleMistakes) {
       if (mistake.suspended) continue
-      const day = Math.max(0, Math.floor((new Date(getMistakeSchedule(mistake).dueAt).getTime() - now.getTime()) / 86_400_000) + 1)
+      const day = Math.max(0, Math.floor((new Date(getMistakeSchedule(mistake).dueAt).getTime() - now.getTime()) / 86_400_000))
       if (day < 7) days[day]++
     }
     return days

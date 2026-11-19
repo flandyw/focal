@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
+import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Plus, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
@@ -10,6 +10,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { MarkdownPreview } from "./markdown-preview"
 import { PageHeader } from "./page-header"
+import { StoplightAddDialog, type SkillDraft } from "./stoplight-add"
 import { StoplightImportDialog } from "./stoplight-import"
 import { StoplightReviseDialog } from "./stoplight-revise"
 import { MetricCard, MetricGrid, WorkspacePage } from "./workspace-layout"
@@ -52,11 +53,14 @@ function evidenceText(evidence: ItemEvidence) {
   ].filter(Boolean).join(" · ")
 }
 
-export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
+const skillLabel = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+
+export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery, onFilterChange, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
   onPlan: (subject: string) => void
   onRelatedMistakes?: (subject: string, skill: string) => void
   data: AppData
   subjects: string[]
+  scopedSubject?: string
   now: Date
   filterQuery: string | null
   onFilterChange: (filter: Filter) => void
@@ -71,6 +75,7 @@ export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange
   const [query, setQuery] = useState("")
   const needle = useDeferredValue(query.trim().toLowerCase())
   const [importOpen, setImportOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const [viewing, setViewing] = useState<CurriculumArea | null>(null)
   const [revising, setRevising] = useState(false)
   const [linking, setLinking] = useState(false)
@@ -89,6 +94,21 @@ export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange
     onChange((current) => mergeStoplightItems(current, importSubject, imported).learning)
     setChosen(importSubject)
     toast.success(`Checklist updated for ${importSubject}`)
+  }
+
+  function addSkill(draft: SkillDraft) {
+    const timestamp = new Date().toISOString()
+    const skill = { ...draft, id: crypto.randomUUID(), createdAt: timestamp, updatedAt: timestamp }
+    const matches = (item: CurriculumArea) => sameStudySubject(item.subject, skill.subject) &&
+      skillLabel(itemGroup(item)) === skillLabel(itemGroup(skill)) && skillLabel(item.name) === skillLabel(skill.name)
+    if (items.some(matches)) return "A skill with this name already exists in this subject and group."
+    onChange((current) => activeItems(current).some(matches) ? current : {
+      ...current, curriculumAreas: [...current.curriculumAreas, skill], updatedAt: timestamp,
+    })
+    setChosen(skill.subject)
+    setQuery("")
+    if (filter !== "all" && filter !== "unrated") onFilterChange("all")
+    toast.success("Skill added")
   }
 
   function applyRatings(ratings: Map<string, StoplightRating>) {
@@ -117,6 +137,7 @@ export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange
   return (
     <WorkspacePage>
       <PageHeader title="Skills" description="Rate your checklist and revisit skills that need practice.">
+        <Button variant={subject ? "secondary" : "default"} onClick={() => setAddOpen(true)}><Plus />Add skill</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
@@ -174,12 +195,12 @@ export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange
                     <li key={item.id} className="grid gap-3 px-4 py-3 [contain-intrinsic-size:auto_5rem] [content-visibility:auto] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{item.name}</span>
+                          <span className="min-w-0 break-words font-medium">{item.name}</span>
                           {item.type ? <Badge variant="outline" className="capitalize">{item.type}</Badge> : null}
                           {isRecheckDue(item, now) ? <Badge variant="secondary">Re-check</Badge> : null}
                         </div>
                         {item.rating === "red" && onRelatedMistakes ? <Button variant="link" size="xs" className="h-auto p-0" onClick={() => onRelatedMistakes(item.subject, item.id)}>See related mistakes</Button> : null}
-                        {item.check ? <p className="text-sm text-muted-foreground">{item.check}</p> : null}
+                        {item.check ? <p className="break-words text-sm text-muted-foreground">{item.check}</p> : null}
                         {text ? <Button variant="link" size="xs" className="h-auto p-0 text-muted-foreground" onClick={() => setViewing(item)}>{text}</Button> : null}
                       </div>
                       <div role="radiogroup" aria-label={`Rate ${item.name}`} className="flex gap-1 max-sm:[&>*]:flex-1" onKeyDown={(event) => {
@@ -204,9 +225,10 @@ export function StoplightPage({ data, subjects, now, filterQuery, onFilterChange
           )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); onFilterChange("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
-        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Import it from your study design with any chatbot. Each key knowledge and skill becomes an item you can rate.</EmptyDescription></EmptyHeader><Button onClick={() => setImportOpen(true)}><Link2 />Import checklist</Button></Empty>
+        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Add the skills you want to practise one at a time, or import a checklist from your study design.</EmptyDescription></EmptyHeader></Empty>
       )}
 
+      {addOpen ? <StoplightAddDialog subjects={[...subjects, ...itemSubjects, ...data.subjects]} preferredSubjects={data.subjects} defaultSubject={scopedSubject || subject || data.subjects[0] || ""} scopedSubject={scopedSubject} onClose={() => setAddOpen(false)} onSave={addSkill} /> : null}
       <StoplightImportDialog key={String(importOpen)} open={importOpen} subjects={subjects} preferredSubjects={data.subjects} defaultSubject={subject || data.subjects[0] || ""} onOpenChange={setImportOpen} onImport={importItems} />
       <StoplightReviseDialog key={`${revising}${subject}`} open={revising} subject={subject} items={subjectItems} evidence={evidence} onOpenChange={setRevising} onApply={applyRatings} />
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => { if (!open) setViewing(null) }}>

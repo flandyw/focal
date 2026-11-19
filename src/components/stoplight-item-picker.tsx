@@ -21,8 +21,8 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
   return (
     <div className="grid gap-2">
       {chosen.length ? <div className="flex flex-wrap gap-1.5">{chosen.map((item) => (
-        <Badge key={item.id} variant="secondary" className="gap-1">
-          {item.name}
+        <Badge key={item.id} variant="secondary" className="max-w-full gap-1">
+          <span className="truncate" title={item.name}>{item.name}</span>
           <Button type="button" variant="ghost" size="icon-xs" className="size-4" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X /></Button>
         </Badge>
       ))}</div> : null}

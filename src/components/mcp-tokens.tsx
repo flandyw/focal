@@ -115,6 +115,7 @@ export function McpTokens() {
         </div>
       ) : null}
       {message ? <p role="status" className="text-sm text-destructive">{message}</p> : null}
+      {list === "ready" && !tokens.length ? <p className="text-sm text-muted-foreground">No access tokens yet.</p> : null}
       {list === "error" ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p>Could not load tokens.</p><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw />Retry</Button></div>
         : list === "loading" && !tokens.length ? <p role="status" className="text-sm text-muted-foreground">Loading tokens…</p> : null}
       {tokens.map((token) => (

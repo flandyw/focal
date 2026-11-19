@@ -1,5 +1,5 @@
 import { MISTAKE_EDIT_FIELDS, type MistakeEdit } from "./mistake-autofill"
-import { formatExamTitle, isMistakeDifficulty, MISTAKE_CATEGORIES, validateAttempt, validateMistakeMarks, type ExamAttempt, type Mistake, type MistakeCategory, type MistakeDifficulty } from "./exam-data"
+import { formatExamTitle, isMistakeDifficulty, MISTAKE_CATEGORIES, validateAttempt, validateMistakeMarks, validateQuestionResults, type QuestionResult, type ExamAttempt, type Mistake, type MistakeCategory, type MistakeDifficulty } from "./exam-data"
 
 export type ParsedMistakeDraft = {
   question: string
@@ -167,6 +167,24 @@ function parseExam(value: unknown, timestamp: string): ExamAttempt {
   const rawMax = coerceNumber(value.rawMax, "rawMax", 0)
   const scoreError = validateAttempt({ rawScore, rawMax })
   if (scoreError) throw new Error(`Exam: ${scoreError}`)
+  let questionResults: QuestionResult[] | undefined
+  if (value.questions !== undefined) {
+    if (!Array.isArray(value.questions)) throw new Error('Exam: "questions" must be an array.')
+    questionResults = value.questions.map((question: unknown) => {
+      if (!isRecord(question)) throw new Error("Exam: each question must be an object.")
+      return {
+        id: crypto.randomUUID(),
+        label: coerceString(question.label, "question label", 0),
+        marksAwarded: coerceNumber(question.marksAwarded, "marksAwarded", 0),
+        maxMarks: coerceNumber(question.maxMarks, "maxMarks", 0),
+        areaOfStudy: coerceOptionalString(question.areaOfStudy, "areaOfStudy", 0) || undefined,
+        confidence: "medium" as const,
+        examinerNote: coerceOptionalString(question.examinerNote, "examinerNote", 0) || undefined,
+      }
+    })
+    const error = validateQuestionResults(questionResults)
+    if (error) throw new Error(`Exam: ${error}`)
+  }
   return {
     id: crypto.randomUUID(),
     subject,
@@ -179,6 +197,7 @@ function parseExam(value: unknown, timestamp: string): ExamAttempt {
     rawMax,
     comment: coerceOptionalString(value.comment, "comment", 0) || undefined,
     referenceId: null,
+    ...(questionResults ? { questionResults } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   }

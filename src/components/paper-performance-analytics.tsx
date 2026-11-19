@@ -167,7 +167,7 @@ export function PaperPerformanceAnalytics({ attempts, mistakes, curriculumAreas 
           {matrix.length ? <Table>
             <TableHeader><TableRow><TableHead>{byTopic ? "Topic" : "Area of Study"}</TableHead><TableHead className="text-right">Exam 1</TableHead><TableHead className="text-right">Exam 2</TableHead><TableHead className="text-right">{fromMistakes ? "Gap (per 100)" : "Gap"}</TableHead><TableHead>Diagnosis</TableHead></TableRow></TableHeader>
             <TableBody>{matrix.map((row) => <TableRow key={row.areaOfStudy}>
-              <TableCell className="font-medium">{row.areaOfStudy}</TableCell>
+              <TableCell className="font-medium">{row.areaOfStudy}{row.weakPrerequisites.length ? <p className="mt-1 text-xs font-normal text-muted-foreground">Builds on: {row.weakPrerequisites.join("; ")}</p> : null}</TableCell>
               <TableCell className="text-right"><PaperCellButton cell={row.exam1} onClick={() => setSelectedCell({ area: row.areaOfStudy, cell: row.exam1 })} /></TableCell>
               <TableCell className="text-right"><PaperCellButton cell={row.exam2} onClick={() => setSelectedCell({ area: row.areaOfStudy, cell: row.exam2 })} /></TableCell>
               <TableCell className="text-right font-medium tabular-nums">{row.gap === null ? "—" : <span className="inline-flex items-center gap-1">{row.gap > 1 ? <ArrowUpRight className="size-3.5" /> : row.gap < -1 ? <ArrowDownRight className="size-3.5" /> : null}{row.gap >= 0 ? "+" : ""}{row.gap.toFixed(fromMistakes ? 2 : 0)}</span>}</TableCell>

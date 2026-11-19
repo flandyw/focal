@@ -79,6 +79,7 @@ before any backfill.
 - `get_exam_analytics { subject, groupBy?, paper? }`: `paperWeakness` rows have an Exam 1 and an Exam 2 cell with
   `mistakeCount`, `repeatMistakes`, `marksLost`, `cardsWithoutMarks`, `dominantCategory` and `lostByCategory`.
   Rows built from marked questions (`basis: "results"`) add mastery and trend; otherwise `basis: "mistakes"`.
+  `weakPrerequisites` lists transitive prerequisite topics with diagnoses other than `secure`, `stable`, or `no evidence`, nearest first; empty outside topic grouping or without a prerequisite map.
   Diagnoses and their thresholds (`WEAKNESS_THRESHOLDS` in `performance-insights.ts`): `no evidence`,
   `mistake-only evidence` (under 3 cards, or under 2 marks lost on each paper), `exam-1-only gap`,
   `exam-2-only gap` (a paper alone loses 2+ marks, or both do and one loses 3x the rate per 100 paper marks),

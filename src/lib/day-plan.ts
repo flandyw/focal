@@ -407,14 +407,17 @@ export function buildPlanCalendar(data: DayPlanSource, timetable: Timetable | nu
     ...(location ? [`LOCATION:${escapeCalendarText(location)}`] : []),
     "END:VEVENT",
   ])
-  const allDay = (date: string) => [`DTSTART;VALUE=DATE:${calendarDate(date)}`, `DTEND;VALUE=DATE:${nextCalendarDate(date)}`]
-  // Past or unreadable times are left out rather than written as broken entries.
+  // Past or unreadable dates are left out rather than written as broken entries.
+  const allDay = (date: string) => Number.isFinite(Date.parse(`${date}T00:00:00Z`))
+    ? [`DTSTART;VALUE=DATE:${calendarDate(date)}`, `DTEND;VALUE=DATE:${nextCalendarDate(date)}`] : null
+  // An instant (no end) carries DTSTART alone; iCalendar requires DTEND to be after DTSTART.
   const timed = (start: number, end: number) => Number.isFinite(start) && Number.isFinite(end) && end >= from
-    ? [`DTSTART:${icsTime(start)}`, `DTEND:${icsTime(Math.max(start, end))}`] : null
+    ? [`DTSTART:${icsTime(start)}`, ...(end > start ? [`DTEND:${icsTime(end)}`] : [])] : null
 
   for (const task of data.learning.tasks) {
-    if (task.archivedAt || task.status !== "planned" || task.plannedFor < today) continue
-    add(`task-${task.id}`, allDay(task.plannedFor), task.title, [task.subject, `${task.durationMinutes} min`, task.detail].filter(Boolean).join(" · "))
+    const dates = allDay(task.plannedFor)
+    if (task.archivedAt || task.status !== "planned" || task.plannedFor < today || !dates) continue
+    add(`task-${task.id}`, dates, task.title, [task.subject, `${task.durationMinutes} min`, task.detail].filter(Boolean).join(" · "))
   }
   for (const record of data.sacRecords) {
     if (isCompletedSac(record)) continue

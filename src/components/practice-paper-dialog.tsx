@@ -12,6 +12,7 @@ import { createMistakesFromImport, parseMistakeImport } from "../lib/mistake-jso
 import type { AppData, ExamAttempt, Mistake } from "../lib/exam-data"
 import type { VcaaStudyResources } from "../lib/vcaa-resources"
 import template from "../lib/worksheet-template.tex?raw"
+import { sameStudySubject } from "../lib/studySubjects"
 
 export function PracticePaperDialog({ data, studies, initialSubject, onOpenChange, onSave }: {
   data: AppData
@@ -38,8 +39,8 @@ export function PracticePaperDialog({ data, studies, initialSubject, onOpenChang
   }
   async function copyPrompt() {
     const weakAreas = [
-      ...data.mistakes.filter((mistake) => !mistake.resolved && mistake.areaOfStudy && (mistake.subject ?? data.attempts.find((attempt) => attempt.id === mistake.attemptId)?.subject) === subject).map((mistake) => mistake.areaOfStudy ?? ""),
-      ...data.learning.curriculumAreas.filter((item) => item.subject === subject && !item.archivedAt && (item.rating === "red" || item.rating === "amber")).map((item) => `${item.group ? `${item.group}: ` : ""}${item.name} (${item.rating})`),
+      ...data.mistakes.filter((mistake) => !mistake.resolved && mistake.areaOfStudy && sameStudySubject(mistake.subject ?? data.attempts.find((attempt) => attempt.id === mistake.attemptId)?.subject, subject)).map((mistake) => mistake.areaOfStudy ?? ""),
+      ...data.learning.curriculumAreas.filter((item) => sameStudySubject(item.subject, subject) && !item.archivedAt && (item.rating === "red" || item.rating === "amber")).map((item) => `${item.group ? `${item.group}: ` : ""}${item.name} (${item.rating})`),
     ]
     const prompt = buildPracticePaperPrompt(subject, kind, paper, Number(minutes), weakAreas, studies, template, area)
     try { await navigator.clipboard.writeText(prompt); setCopied(true); setManualPrompt(null) }

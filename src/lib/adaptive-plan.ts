@@ -1,6 +1,6 @@
 import { classPeriodsOn, subjectNameFor } from "./class-timetable.js"
 import { buildDayPlan, type DayPlanSource } from "./day-plan.js"
-import { localDate, materialiseTask, type LearningWorkspace, type StudyTask } from "./learning-workspace.js"
+import { localDate, materialiseTask, type StudyTask } from "./learning-workspace.js"
 import { isCompletedSac } from "./sac.js"
 import { activeItems, buildItemEvidence, isRecheckDue, itemGroup } from "./stoplight.js"
 import { sameStudySubject } from "./studySubjects.js"

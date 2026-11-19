@@ -1,7 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
 import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Link2, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
-import { describeAdaptivePlan, planAdaptive } from "../lib/adaptive-plan"
 
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -53,7 +52,8 @@ function evidenceText(evidence: ItemEvidence) {
   ].filter(Boolean).join(" · ")
 }
 
-export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes }: {
+export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelatedMistakes, onPlan }: {
+  onPlan: (subject: string) => void
   onRelatedMistakes?: (subject: string, skill: string) => void
   data: AppData
   subjects: string[]
@@ -89,12 +89,6 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
     toast.success(`Checklist updated for ${importSubject}`)
   }
 
-  function planWeek() {
-    const result = planAdaptive(data, null, { subject, now })
-    onChange(result.learning)
-    toast(describeAdaptivePlan(result))
-  }
-
   function applyRatings(ratings: Map<string, StoplightRating>) {
     onChange((current) => setRatings(current, ratings))
     toast.success(`Updated ${ratings.size} rating${ratings.size === 1 ? "" : "s"}`)
@@ -124,7 +118,7 @@ export function StoplightPage({ data, subjects, onChange, onApplyLinks, onRelate
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
         {subject ? <Button variant="outline" onClick={() => setRevising(true)}><GraduationCap />Revise with chatbot</Button> : null}
-        {subject ? <Button onClick={planWeek}><CalendarPlus />Plan this week</Button> : null}
+        {subject ? <Button onClick={() => onPlan(subject)}><CalendarPlus />Plan this week</Button> : null}
       </PageHeader>
       {linking && progress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(progress)}</p> : null}
 

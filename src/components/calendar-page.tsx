@@ -3,7 +3,6 @@ import { swipe } from "../lib/mobile"
 import { motion, useReducedMotion } from "framer-motion"
 import { Archive, ArrowDown, ArrowUp, CalendarDays, CalendarPlus, LayoutGrid, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
-import { describeAdaptivePlan, planAdaptive } from "../lib/adaptive-plan"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
 import { Badge } from "./ui/badge"
@@ -101,6 +100,7 @@ function shiftDay(date: string, amount: number) {
 
 export function CalendarPage({
   data,
+  onAutoPlan,
   sessions,
   onChange,
   onNavigate,
@@ -122,6 +122,7 @@ export function CalendarPage({
   /** The shared study sessions, so the web calendar lists the same sittings the desktop does. */
   sessions: CanonicalStudySession[]
   onChange: (update: LearningWorkspaceUpdate) => void
+  onAutoPlan: () => void
   onNavigate: (view: "mistakes" | "sacs" | "focus") => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   timetable: Timetable | null
@@ -195,12 +196,6 @@ export function CalendarPage({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update that study.")
     }
-  }
-
-  function autoPlan() {
-    const result = planAdaptive({ ...source, classTimetable }, timetable, { now: new Date() })
-    onChange(result.learning)
-    toast(describeAdaptivePlan(result))
   }
 
   function changeStatus(id: string, status: "completed" | "skipped" | "planned") {
@@ -304,7 +299,7 @@ export function CalendarPage({
         </div>
         <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
           <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</Button>
-          <Button onClick={autoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><CalendarPlus />Auto-plan</Button>
+          <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><CalendarPlus />Auto-plan</Button>
           <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
           <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>

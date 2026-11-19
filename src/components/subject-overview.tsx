@@ -58,7 +58,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
           </ul>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-            <p className="text-sm text-muted-foreground">No skill checklist yet. Import one from your study design in Skills.</p>
+            <p className="text-sm text-muted-foreground">No skill checklist yet. Add a skill or import a checklist in Skills.</p>
             <Button variant="outline" onClick={() => onOpenSkills(subject)}>Open Skills</Button>
           </div>
         )}

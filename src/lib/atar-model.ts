@@ -146,6 +146,12 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
       aggregate = best.aggregate
     }
     const reachable = aggregateTarget !== null && aggregate >= aggregateTarget
+    // Drop gains the target does not need, such as plateau steps in a study that never counts.
+    if (reachable) for (const [item, score] of scores) {
+      let next = score
+      while (next > item.rawScore! && (estimateWithScores(new Map(scores).set(item, next - 1))?.aggregate ?? 0) >= aggregateTarget) next--
+      scores.set(item, next)
+    }
     targetPath = {
       reachable,
       steps: reachable ? [...scores].flatMap(([item, score]) => score > item.rawScore!

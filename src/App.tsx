@@ -313,7 +313,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function openSkills(subject: string, filter?: string) {
     startTransition(() => {
-      if (subject !== selectedSubject) chooseSubject(subject)
+      chooseSubject(subject)
       setView("stoplight", undefined, skillFilterSearch(filter))
     })
   }

@@ -33,7 +33,7 @@ export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
             <CartesianGrid vertical={false} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} />
             <YAxis tickFormatter={(minutes) => `${minutes}m`} tickLine={false} axisLine={false} />
-            <ChartTooltip content={<ChartTooltipContent labelKey="label" formatter={(value, _, item) => <div className="grid gap-1"><span className="font-medium tabular-nums">{formatMinutes(Number(value))}m average</span><span className="text-muted-foreground">Studied on {item.payload.studied} of {item.payload.count} days</span></div>} />} />
+            <ChartTooltip content={<ChartTooltipContent formatter={(value, _, item) => <div className="grid gap-1"><span className="font-medium tabular-nums">{formatMinutes(Number(value))}m average</span><span className="text-muted-foreground">Studied on {item.payload.studied} of {item.payload.count} days</span></div>} />} />
             <Bar dataKey="average" fill="var(--color-average)" maxBarSize={36} radius={[3, 3, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>

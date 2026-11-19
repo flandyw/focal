@@ -218,7 +218,7 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
     lastRating.current = null
   }, [])
   useEffect(() => {
-    if (!current) clearUndo()
+    if (!session) clearUndo()
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "z" || !lastRating.current || !isReviewShortcut(event)) return
       event.preventDefault()
@@ -239,10 +239,8 @@ function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, 
     const reviewContext = { ...context, ...(session.weekly ? { challengeWeek: session.week, challengeSize: session.size } : {}) }
     onReview(current, rating, reviewContext)
     clearUndo()
-    if (remaining.length > 1) {
-      const toastId = toast.success("Review saved · Z to undo", { duration: 8000, action: { label: "Undo", onClick: () => { if (lastRating.current?.mistake === current) undoRating() } } })
-      lastRating.current = { mistake: current, feedback, toastId }
-    }
+    const toastId = toast.success("Review saved · Z to undo", { duration: 8000, action: { label: "Undo", onClick: () => { if (lastRating.current?.mistake === current) undoRating() } } })
+    lastRating.current = { mistake: current, feedback, toastId }
     setLatestReviewAt(Date.now())
     setFeedback(practiceFeedback(current, rating, context))
     if (settings.practiceSound) playPracticeSound()

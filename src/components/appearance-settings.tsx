@@ -47,11 +47,12 @@ function ColourSetting({ title, description, value, fallback, onChange }: { titl
     <Input type="color" aria-label={`${title} picker`} className="h-9 w-12 shrink-0 cursor-pointer p-1" value={value ?? fallback} onChange={(event) => { setDraft(null); onChange(event.target.value) }} />
     <Input aria-label={`${title} hex code`} aria-invalid={invalid || undefined} placeholder={fallback} className="w-28 font-mono text-sm" maxLength={7} value={draft ?? value ?? ""} onChange={(event) => {
       const next = event.target.value
-      setDraft(next)
-      if (/^#[0-9a-f]{6}$/i.test(next)) onChange(next)
+      const valid = /^#[0-9a-f]{6}$/i.test(next)
+      setDraft(valid || next === "" ? null : next)
+      if (valid) onChange(next)
       else if (next === "") onChange(null)
     }} />
-    <Button variant="ghost" size="sm" disabled={!value} onClick={() => { setDraft(null); onChange(null) }}>Clear</Button>
+    <Button variant="ghost" size="sm" disabled={!value && !draft} onClick={() => { setDraft(null); onChange(null) }}>Clear</Button>
     {invalid ? <p role="alert" className="w-full text-sm text-destructive">Enter a hex colour such as #1a2b3c.</p> : null}
   </Setting>
 }

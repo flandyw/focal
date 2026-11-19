@@ -162,12 +162,12 @@ export function AttemptDistributionChart({
   }
 
   const distributionLines = [
-    { key: "mean", score: stats.mean, stroke: "var(--chart-3)", dash: undefined },
-    { key: "median", score: stats.median, stroke: "var(--chart-4)", dash: "5 3" },
+    { key: "mean", score: stats.mean, stroke: "var(--chart-mean)", dash: undefined },
+    { key: "median", score: stats.median, stroke: "var(--chart-median)", dash: "5 3" },
     ...[1, 2, 3].flatMap((deviation) => [-1, 1].map((direction) => ({
       key: `${direction * deviation}sd`,
       score: stats.mean + direction * deviation * stats.stdDev,
-      stroke: "var(--chart-5)",
+      stroke: "var(--chart-deviation)",
       dash: "2 4",
     }))),
   ].filter((line) => line.score >= 0 && line.score <= reference.maxScore)

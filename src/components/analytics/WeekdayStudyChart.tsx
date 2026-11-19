@@ -4,6 +4,8 @@ import type { ConsistencyDay } from "../../lib/progress-analytics"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart"
 
 const config = { average: { label: "Daily average", color: "var(--chart-2)" } }
+// Keep sub-10-minute averages readable (0.2m, 4.5m) instead of rounding real study to zero.
+const formatMinutes = (minutes: number) => minutes >= 10 ? Math.round(minutes) : Number(minutes.toPrecision(2))
 
 export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
   const data = useMemo(() => {
@@ -17,7 +19,7 @@ export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
       weekday.count++
       if (day.minutes > 0) weekday.studied++
     }
-    return weekdays.map((day) => ({ ...day, average: day.count ? Math.round(day.minutes / day.count) : 0 }))
+    return weekdays.map((day) => ({ ...day, average: day.count ? day.minutes / day.count : 0 }))
   }, [days])
   const best = data.reduce((best, day) => day.average > best.average ? day : best, data[0])
 
@@ -31,12 +33,12 @@ export function WeekdayStudyChart({ days }: { days: ConsistencyDay[] }) {
             <CartesianGrid vertical={false} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} interval={0} />
             <YAxis tickFormatter={(minutes) => `${minutes}m`} tickLine={false} axisLine={false} />
-            <ChartTooltip content={<ChartTooltipContent labelKey="label" formatter={(value, _, item) => <div className="grid gap-1"><span className="font-medium tabular-nums">{Number(value)}m average</span><span className="text-muted-foreground">Studied on {item.payload.studied} of {item.payload.count} days</span></div>} />} />
+            <ChartTooltip content={<ChartTooltipContent formatter={(value, _, item) => <div className="grid gap-1"><span className="font-medium tabular-nums">{formatMinutes(Number(value))}m average</span><span className="text-muted-foreground">Studied on {item.payload.studied} of {item.payload.count} days</span></div>} />} />
             <Bar dataKey="average" fill="var(--color-average)" maxBarSize={36} radius={[3, 3, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>
-        <p className="mt-3 text-xs text-muted-foreground">Highest average: <span className="font-medium text-foreground">{best.label} · {best.average}m</span> · studied on {best.studied} of {best.count} days.</p>
-        <p className="sr-only">{data.map((day) => `${day.label}: ${day.average} minutes per day, studied on ${day.studied} of ${day.count} days.`).join(" ")}</p>
+        <p className="mt-3 text-xs text-muted-foreground">Highest average: <span className="font-medium text-foreground">{best.label} · {formatMinutes(best.average)}m</span> · studied on {best.studied} of {best.count} days.</p>
+        <p className="sr-only">{data.map((day) => `${day.label}: ${formatMinutes(day.average)} minutes per day, studied on ${day.studied} of ${day.count} days.`).join(" ")}</p>
       </> : <p className="text-xs text-muted-foreground">Complete a study session in this period to see your weekday pattern.</p>}
     </section>
   )

@@ -69,10 +69,10 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
       </div> : null}
       {value.length ? (
         <div className="divide-y rounded-lg border">
-          {value.map((result) => (
+          {value.map((result, index) => (
             <div key={result.id} className="grid gap-3 p-4">
               <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-3 sm:grid-cols-[minmax(8rem,1fr)_6rem_6rem_9rem_auto]">
-                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Item</span><Input aria-label="Assessment item label" autoFocus={!result.label} required value={result.label} onChange={(event) => update(result.id, { label: event.target.value })} placeholder="Section B, Question 4" /></Label>
+                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Item</span><Input aria-label={`Item ${index + 1} label`} autoFocus={!result.label} required value={result.label} onChange={(event) => update(result.id, { label: event.target.value })} placeholder="Section B, Question 4" /></Label>
                 <Label className="grid gap-1 text-xs text-muted-foreground"><span>Earned</span><Input data-earned aria-label={`${result.label} marks awarded`} type="number" required min="0" max={Number.isFinite(result.maxMarks) ? result.maxMarks : undefined} step="any" value={Number.isFinite(result.marksAwarded) ? result.marksAwarded : ""} onChange={(event) => update(result.id, { marksAwarded: event.target.valueAsNumber })} onKeyDown={(event) => {
                   if (event.key !== "Enter") return
                   event.preventDefault()

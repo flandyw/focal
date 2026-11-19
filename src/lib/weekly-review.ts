@@ -3,6 +3,7 @@ import { buildDayPlan } from "./day-plan.js"
 import { localDate, type TaskDraft } from "./learning-workspace.js"
 import { subjectWorkspace } from "./subject-workspace.js"
 import { sameStudySubject } from "./studySubjects.js"
+import { isCurrentSubject } from "./subject-completion.js"
 import { isDeleted, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
 
 export function weekStart(now: Date, offset = 0): Date {
@@ -23,6 +24,7 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
   const attempts = data.attempts.filter((attempt) => inWeek(attempt.completedAt))
   const subjects = data.subjects.length ? data.subjects : [...new Set(data.attempts.map((attempt) => attempt.subject))]
   const neglected = subjects.filter((subject) => {
+    if (!isCurrentSubject(data, subject)) return false
     const scoped = subjectWorkspace(data, subject)
     const ownSessions = sessions.filter((session) => !isDeleted(session) && studySessionSubjects(session).some((id) => sameStudySubject(id, subject)))
     const source = { ...scoped, sessions: ownSessions }
@@ -33,7 +35,6 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
   const windowStart = start.getTime(), windowEnd = end.getTime()
   let reviews = 0, recalled = 0
   for (const mistake of data.mistakes) {
-    if (mistake.suspended) continue
     let shaky = false
     for (const review of mistake.reviewHistory ?? []) {
       const at = Date.parse(review.completedAt)
@@ -42,6 +43,8 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
       if (review.result === "good" || review.result === "easy" || review.result === "correct") recalled++
       else if (["again", "hard", "incorrect", "assisted"].includes(review.result)) shaky = true
     }
+    // Past reviews still count after suspension; suspended cards just aren't actionable follow-ups.
+    if (mistake.suspended) continue
     const created = Date.parse(mistake.createdAt)
     if (!(created >= windowStart && created < windowEnd) && !shaky) continue
     const subject = attemptMap.get(mistake.attemptId)?.subject ?? mistake.subject ?? "Unassigned"

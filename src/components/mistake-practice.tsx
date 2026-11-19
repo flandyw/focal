@@ -20,8 +20,8 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl" onKeyDown={(event) => {
       if (finished || !card || (event.target as HTMLElement).closest("button, a, input, textarea")) return
       if (event.key === " ") { event.preventDefault(); setRevealed(!revealed) }
-      else if (event.key === "ArrowLeft" && index > 0) go(index - 1)
-      else if (event.key === "ArrowRight" && index < cards.length - 1) go(index + 1)
+      else if (event.key === "ArrowLeft") { event.preventDefault(); if (index > 0) go(index - 1) }
+      else if (event.key === "ArrowRight") { event.preventDefault(); if (index < cards.length - 1) go(index + 1) }
     }}>
       <DialogHeader>
         <DialogTitle>{finished ? "Practice complete" : "Practice your way"}</DialogTitle>

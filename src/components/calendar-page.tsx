@@ -687,7 +687,7 @@ function DayItemRow({
   const done = isDayItemDone(item)
   const isTask = item.kind === "task"
   const meta = [
-    item.kind === "task" ? item.subject : item.detail,
+    ...(item.kind === "task" ? [item.subject, item.detail] : [item.detail]),
     item.minutes ? `${Math.round(item.minutes)} min` : undefined,
     "startTime" in item ? item.startTime : undefined,
   ].filter(Boolean).join(" · ")

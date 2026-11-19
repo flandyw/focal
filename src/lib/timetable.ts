@@ -120,18 +120,44 @@ export function formatExamDate(entry: TimetableEntry): string {
   return startLabel
 }
 
-function escapeCalendarText(value: string): string {
+export function escapeCalendarText(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replaceAll("\n", "\\n")
 }
 
-function calendarDate(value: string): string {
+export function calendarDate(value: string): string {
   return value.replaceAll("-", "")
 }
 
-function nextCalendarDate(value: string): string {
+export function nextCalendarDate(value: string): string {
   const date = new Date(`${value}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + 1)
   return date.toISOString().slice(0, 10).replaceAll("-", "")
+}
+
+export function examCalendarEvent(entry: TimetableEntry, sourceUrl: string, stamp: string): string[] {
+  const dates = entry.startTime
+    ? [
+        `DTSTART;TZID=Australia/Melbourne:${calendarDate(entry.date)}T${entry.startTime.replace(":", "")}00`,
+        ...(entry.endTime ? [`DTEND;TZID=Australia/Melbourne:${calendarDate(entry.date)}T${entry.endTime.replace(":", "")}00`] : []),
+      ]
+    : [
+        `DTSTART;VALUE=DATE:${calendarDate(entry.date)}`,
+        `DTEND;VALUE=DATE:${nextCalendarDate(entry.dateEnd ?? entry.date)}`,
+      ]
+  const description = [
+    entry.readingMinutes === null ? null : `${entry.readingMinutes} minutes reading time`,
+    entry.scheduledNote ?? null,
+  ].filter(Boolean).join(". ")
+  return [
+    "BEGIN:VEVENT",
+    `UID:${escapeCalendarText(entry.id)}@examtrack.local`,
+    `DTSTAMP:${stamp}`,
+    ...dates,
+    `SUMMARY:${escapeCalendarText(`VCE ${formatExamLabel(entry)}`)}`,
+    ...(description ? [`DESCRIPTION:${escapeCalendarText(description)}`] : []),
+    `URL:${escapeCalendarText(sourceUrl)}`,
+    "END:VEVENT",
+  ]
 }
 
 export function buildTimetableCalendar(
@@ -140,31 +166,7 @@ export function buildTimetableCalendar(
   createdAt: Date = new Date(),
 ): string {
   const stamp = createdAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
-  const events = entries.toSorted((a, b) => a.date.localeCompare(b.date)).flatMap((entry) => {
-    const dates = entry.startTime
-      ? [
-          `DTSTART;TZID=Australia/Melbourne:${calendarDate(entry.date)}T${entry.startTime.replace(":", "")}00`,
-          ...(entry.endTime ? [`DTEND;TZID=Australia/Melbourne:${calendarDate(entry.date)}T${entry.endTime.replace(":", "")}00`] : []),
-        ]
-      : [
-          `DTSTART;VALUE=DATE:${calendarDate(entry.date)}`,
-          `DTEND;VALUE=DATE:${nextCalendarDate(entry.dateEnd ?? entry.date)}`,
-        ]
-    const description = [
-      entry.readingMinutes === null ? null : `${entry.readingMinutes} minutes reading time`,
-      entry.scheduledNote ?? null,
-    ].filter(Boolean).join(". ")
-    return [
-      "BEGIN:VEVENT",
-      `UID:${escapeCalendarText(entry.id)}@examtrack.local`,
-      `DTSTAMP:${stamp}`,
-      ...dates,
-      `SUMMARY:${escapeCalendarText(`VCE ${formatExamLabel(entry)}`)}`,
-      ...(description ? [`DESCRIPTION:${escapeCalendarText(description)}`] : []),
-      `URL:${escapeCalendarText(sourceUrl)}`,
-      "END:VEVENT",
-    ]
-  })
+  const events = entries.toSorted((a, b) => a.date.localeCompare(b.date)).flatMap((entry) => examCalendarEvent(entry, sourceUrl, stamp))
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",

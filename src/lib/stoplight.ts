@@ -210,8 +210,6 @@ export function planRevision(learning: LearningWorkspace, data: Pick<AppData, "a
   return { learning: { ...learning, tasks: [...learning.tasks, ...tasks], updatedAt: now.toISOString() }, count: tasks.length }
 }
 
-// --- Chatbot import ---
-
 export function planPatternRevision(learning: LearningWorkspace, data: Pick<AppData, "attempts" | "mistakes">, subject?: string, maxPatterns = 3, now = new Date()) {
   const planned = new Set(learning.tasks.filter((task) => !task.archivedAt && task.status === "planned").map((task) => task.sourceId))
   const queue = buildMistakePatterns(data.mistakes, data.attempts, now)
@@ -234,6 +232,7 @@ export function planPatternRevision(learning: LearningWorkspace, data: Pick<AppD
   if (!tasks.length) return { learning, count: 0 }
   return { learning: { ...learning, tasks: [...learning.tasks, ...tasks], updatedAt: now.toISOString() }, count: tasks.length }
 }
+// --- Chatbot import ---
 
 export type ImportedItem = { group: string; name: string; check?: string; type?: StoplightType }
 

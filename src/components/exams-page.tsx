@@ -357,7 +357,7 @@ function StatRow({ data }: { data: AppData }) {
       <StatTile icon={FileText} label="Practice exams" value={stats.count} hint={stats.count === 0 ? "Log your first paper to begin" : `${count(stats.subjects, "subject")}${stats.lastDate ? ` · last ${formatDate(stats.lastDate)}` : ""}`} className="md:order-first" />
       <StatTile icon={Trophy} tone="success" label="Best mark" value={`${stats.best.toFixed(1)}%`} hint="Your strongest recorded practice result" />
       <StatTile icon={Layers} tone={due ? "warning" : "default"} label="Mistakes due" value={total === 0 ? "—" : due}
-        hint={<span className="flex items-center gap-2"><Meter value={completion} className="min-w-8 flex-1" /><span className="shrink-0 tabular-nums">{total === 0 ? "none logged" : `${mature}/${total} mature`}</span></span>} />
+        hint={<span className="flex items-center gap-2"><Meter value={completion} className="min-w-8 flex-1" /><span className="shrink-0 tabular-nums">{total === 0 ? "none logged" : `${mature}/${total} mature`}</span></span>} className="max-md:col-span-2" />
     </StatGrid>
   )
 }

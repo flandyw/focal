@@ -161,7 +161,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
                   <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${subject}: ${reds} red, ${ambers} amber, ${green} green, ${unrated} unrated`}>
                     {RATINGS.map(({ id }) => { const n = subjectItems.filter((item) => item.rating === id).length; return n ? <div key={id} className={cn("focal-grow", SEGMENT[id])} style={{ width: `${n / subjectItems.length * 100}%` }} /> : null })}
                   </div>
-                  <dl className="grid grid-cols-4 gap-2 text-xs">
+                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-4">
                     {([["Green", green, SEGMENT.green], ["Amber", ambers, SEGMENT.amber], ["Red", reds, SEGMENT.red], ["Unrated", unrated, "bg-muted-foreground/40"]] as const).map(([label, total, tone]) => (
                       <div key={label} className="min-w-0"><dt className="flex items-center gap-1.5 truncate text-muted-foreground"><span aria-hidden className={cn("size-2 shrink-0 rounded-full", tone)} />{label}</dt><dd className="text-base font-semibold tabular-nums">{total}</dd></div>
                     ))}

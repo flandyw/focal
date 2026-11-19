@@ -158,7 +158,7 @@ export function ExamLibrary({
               <Badge variant="outline">VCAA source pack</Badge>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
+          <CardContent className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
             <div className="grid gap-3">
               <Progress value={recentExams.length ? recentCompleted / recentExams.length * 100 : 0} aria-label={`${recentCompleted} of ${recentExams.length} recent official papers completed`} />
               {nextExam && nextPreset ? (
@@ -175,7 +175,7 @@ export function ExamLibrary({
                 <div className="rounded-lg border bg-card p-4"><p className="font-medium">Recent official set complete</p><p className="mt-1 text-sm text-muted-foreground">Use the archive below for more papers, or revisit examiner reports and logged comparisons.</p></div>
               )}
             </div>
-            <div className="grid content-start gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 [&_a]:h-auto [&_a]:min-h-8 [&_a]:py-1.5 [&_a]:text-left [&_a]:whitespace-normal">
               <p className="text-sm font-medium">Prepare with official materials</p>
               {latestSpecification ? <Button nativeButton={false} className="justify-start" variant="outline" render={<a href={latestSpecification.url} target="_blank" rel="noreferrer" />}><ExternalLink />Current specifications</Button> : null}
               {samples.map((sample) => <Button nativeButton={false} key={sample.url} className="justify-start" variant="outline" render={<a href={sample.url} target="_blank" rel="noreferrer" />}><ExternalLink /><span className="truncate">{sample.label}</span></Button>)}

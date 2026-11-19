@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Check, Copy, Flame, HeartHandshake, Link2, Pencil, Plus, Settings2, Trash2, UserPlus } from "lucide-react"
+import { Check, Copy, Flame, HeartHandshake, Link2, Pencil, Plus, Settings2, Trash2, UserPlus, UsersRound } from "lucide-react"
 import { differenceInCalendarDays, format, formatDistanceToNow, subDays } from "date-fns"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
@@ -331,7 +331,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
   if (!signedIn) {
     return (
       <WorkspacePage>
-        <PageHeader title="Friends" />
+        <PageHeader icon={UsersRound} title="Friends" />
         <div className="grid max-w-md justify-items-start gap-3"><p className="text-sm text-muted-foreground">See who’s studying now, cheer each other on, and compare study time. Friends need an account, so nothing leaves this device until you sign in.</p><Button onClick={onSignIn}>Sign in to add friends</Button></div>
       </WorkspacePage>
     )
@@ -373,7 +373,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
 
   return (
     <WorkspacePage>
-      <PageHeader title="Friends" description="See who’s studying, keep each other going.">
+      <PageHeader icon={UsersRound} title="Friends" description="See who’s studying, keep each other going.">
         <Button variant="outline" onClick={() => setDialog("profile")}><Settings2 />Profile & sharing</Button>
         <Button onClick={() => setDialog("add")}><UserPlus />Add friend</Button>
       </PageHeader>

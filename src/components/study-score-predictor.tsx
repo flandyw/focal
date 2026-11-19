@@ -145,7 +145,7 @@ export function StudyScorePredictor({
 
   return (
     <div className="grid gap-8">
-      <PageHeader title="Study score" />
+      <PageHeader icon={TrendingUp} title="Study score" description="A predicted raw and scaled score from your practice papers and SAC results." />
 
       {subjects.length === 0 ? (
         <Empty className="min-h-80 border">
@@ -291,7 +291,7 @@ export function StudyScorePredictor({
             </CardContent>
           </Card>
 
-          <div className="grid gap-6">
+          <div className="grid gap-5">
             {prediction ? (
               <>
                 <Card>
@@ -304,8 +304,8 @@ export function StudyScorePredictor({
                       <Badge variant="outline">{prediction.confidence} confidence</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="grid gap-6">
-                    <div className="grid gap-6 sm:grid-cols-2">
+                  <CardContent className="grid gap-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Raw</p>
                         <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-1">

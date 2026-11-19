@@ -19,7 +19,7 @@ const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) 
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
 /** The personal starting page over the same day plan the calendar uses, with one way into each kind of work. */
-export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt }: {
+export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt, onOpenSac }: {
   now: number
   data: DayPlanSource
   sessions: CanonicalStudySession[]
@@ -28,6 +28,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
   onNavigate: (view: AppView) => void
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   onOpenAttempt: (id: string) => void
+  onOpenSac: (id: string) => void
 }) {
   const today = localDate(new Date(now))
   // Exam and SAC time already has its own rows; include focus sessions without counting assessments twice.
@@ -204,12 +205,14 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
             {upcoming.length ? <ul>{upcoming.map((item) => {
               const away = daysUntil(item.date, today)
               return (
-                <li key={`${item.kind}:${item.id}`} className={row}>
+                <li key={`${item.kind}:${item.id}`} className="border-b border-border last:border-b-0">
+                  <button type="button" className="flex w-full items-center justify-between gap-3 py-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => item.kind === "SAC" ? onOpenSac(item.id) : onNavigate("exams")}>
                   <span className="flex min-w-0 items-center gap-2">
                     <Badge variant={item.kind === "Exam" ? "default" : "secondary"}>{item.kind}</Badge>
                     <span className="truncate">{item.label}</span>
                   </span>
                   <Badge variant={away <= 3 ? "warning" : "outline"} className="shrink-0 tabular-nums">{away === 1 ? "Tomorrow" : `${away} days`}</Badge>
+                  </button>
                 </li>
               )
             })}</ul> : <p className="text-sm text-muted-foreground">No SACs or exams coming up.</p>}

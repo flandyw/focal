@@ -119,7 +119,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
                   {([["red", red, "red"], ["recheck", recheck, "to re-check"], ["unrated", unrated, "unrated"]] as const).map(([filter, matching, label]) => matching > 0 ? (
                     <Button key={filter} variant="secondary" size="sm" aria-label={`${matching} ${label} for ${name}`} onClick={() => onOpenSkills(name, filter)}>{matching} {label}</Button>
                   ) : null)}
-                  {red + recheck + unrated === 0 ? <span className="inline-flex items-center gap-1 text-xs text-success"><CircleCheck aria-hidden className="size-4" />All green</span> : null}
+                  {red + amber + recheck + unrated === 0 ? <span className="inline-flex items-center gap-1 text-xs text-success"><CircleCheck aria-hidden className="size-4" />All green</span> : null}
                   {subject === "all" ? <Button variant="outline" size="sm" aria-label={`Open checklist for ${name}`} onClick={() => onOpenSkills(name)}>Open<ArrowRight data-icon="inline-end" /></Button> : null}
                 </div>
               </li>

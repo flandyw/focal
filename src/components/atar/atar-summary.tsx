@@ -1,4 +1,5 @@
-import { Check, Circle } from "lucide-react"
+import { Check, Circle, Target } from "lucide-react"
+import { Meter } from "../workspace-layout"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import { isEnglishStudy } from "../../lib/atar"
@@ -18,7 +19,7 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
   ]
 
   return (
-    <section aria-label="Estimated ATAR" className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+    <section aria-label="Estimated ATAR" className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 rounded-lg border border-border bg-card p-4 sm:p-5">
       <div className="min-w-0">
         <p className="text-sm text-muted-foreground">Estimated ATAR</p>
         {estimate
@@ -39,8 +40,14 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
         )}
       </div>
       <div className="grid gap-2 sm:justify-items-end sm:text-right">
+        {estimate && model.target !== null ? (
+          <div className="grid w-full gap-1 sm:w-64" role="img" aria-label={`Estimate ${estimate.atarLabel} against a target of ${model.target.toFixed(2)}`}>
+            <Meter value={Number(estimate.atarLabel)} max={model.target} className="h-2" barClassName={model.gap !== null && model.gap <= 0 ? "bg-success" : undefined} />
+            <span className="flex justify-between text-xs text-muted-foreground tabular-nums"><span>{estimate.atarLabel}</span><span>Target {model.target.toFixed(2)}</span></span>
+          </div>
+        ) : null}
         <div className="flex items-center gap-3">
-          <Label htmlFor="atar-target">Target ATAR</Label>
+          <Label htmlFor="atar-target" className="inline-flex items-center gap-1.5"><Target aria-hidden className="size-4 text-muted-foreground" />Target ATAR</Label>
           <AtarTargetInput id="atar-target" target={model.target} onTargetChange={onTargetChange} />
         </div>
         <p className="max-w-xs text-sm text-muted-foreground tabular-nums text-pretty" aria-live="polite">

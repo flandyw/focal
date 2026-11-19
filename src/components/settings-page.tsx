@@ -2,7 +2,7 @@ import "./settings-page.css"
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { useTheme } from "next-themes"
 import { toast } from "sonner"
-import { ArrowDown, ArrowUp, Bell, BookOpen, ChevronLeft, ChevronRight, Cloud, Compass, Database, Download, Eye, EyeOff, LogOut, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X, type LucideIcon } from "lucide-react"
+import { ArrowDown, ArrowUp, Bell, BookOpen, ChevronLeft, ChevronRight, Cloud, Compass, Database, Download, Eye, EyeOff, LogOut, type LucideIcon, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Smartphone, Sparkles, Sun, Trash2, Upload, UserRound, X } from "lucide-react"
 import { sameStudySubject } from "../lib/studySubjects"
 import { validCompletionYear } from "@/lib/subject-completion"
 import { createChatGPTProvider, useChatGPT, type ChatGPTModel } from "../lib/chatgpt-client"
@@ -93,8 +93,8 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
   }
 
   return (
-    <div className="grid gap-6">
-      <PageHeader title="Settings" />
+    <div className="grid gap-5">
+      <PageHeader icon={SlidersHorizontal} title="Settings" description="Appearance, subjects, sync and data for this device." />
       <div className="grid gap-8 md:grid-cols-[17rem_minmax(0,1fr)] md:items-start lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-12">
         <nav aria-label="Settings sections" className={`grid gap-6 md:sticky md:top-4 ${showDetail ? "max-md:hidden" : ""}`}>
           {[...new Set(sections.map((item) => item.group))].map((group) => (

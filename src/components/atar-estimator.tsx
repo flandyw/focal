@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
-import { Save } from "lucide-react"
+import { Calculator, Save } from "lucide-react"
 import { Button } from "./ui/button"
 import { PageHeader } from "./page-header"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -82,8 +82,8 @@ export function AtarEstimator({
   }
 
   return (
-    <div className="grid gap-8">
-      <PageHeader title="ATAR" description="Your Unit 3/4 study scores combined into an ATAR under VTAC rules.">
+    <div className="grid gap-5">
+      <PageHeader icon={Calculator} title="ATAR" description="Your Unit 3/4 study scores combined into an ATAR under VTAC rules.">
         <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
           <SelectTrigger className="w-32" aria-label="VTAC report year"><SelectValue>{year} VTAC</SelectValue></SelectTrigger>
           <SelectContent>{years.map((item) => <SelectItem key={item} value={String(item)}>{item} VTAC</SelectItem>)}</SelectContent>
@@ -102,7 +102,7 @@ export function AtarEstimator({
         onRemove={(id) => setRows((current) => current.filter((row) => row.id !== id))}
         onLogPractice={onLogPractice}
       />
-      <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <AtarTrendCard history={history} target={model.target} />
         <AtarScenariosCard saved={savedEstimates} onLoad={loadEstimate} onDelete={deleteEstimate} />
       </div>

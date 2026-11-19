@@ -1,10 +1,11 @@
 import { useMemo } from "react"
 import { parseISO } from "date-fns"
-import { ArrowRight, Check, Flame } from "lucide-react"
+import { ArrowRight, CalendarClock, CalendarPlus, CalendarRange, ChartColumn, Check, CircleCheck, Clock, FileText, Flame, Hourglass, Layers, ListChecks, Play, Sun } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { PageHeader } from "./page-header"
 import { AIOverview } from "./ai-overview"
+import { Delta, EmptyState, Meter, Panel, StatGrid, StatTile } from "./workspace-layout"
 import { buildDayPlan, continuableToday, isDayItemDone, type DayPlanSource } from "../lib/day-plan"
 import { isCompletedSac } from "../lib/sac"
 import { isPaused, isRunning, type CanonicalStudySession } from "../lib/sync/sessionContract"
@@ -80,143 +81,114 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
     })
   }, [data.attempts])
 
-  const stats = [
-    { label: "Studied today", value: hours(todayMinutes), note: plan.plannedMinutes ? `${hours(plan.plannedMinutes)} still planned` : "Nothing else planned" },
-    { label: "This week", value: hours(weekMinutes), note: `${days.filter((day) => day.minutes > 0).length} of 7 days active` },
-    { label: "Streak", value: count(totalStreak, "day"), note: totalStreak ? (todayMinutes ? "Kept alive today" : "Study today to keep it") : "Start one today", flame: totalStreak > 0 },
-    { label: "Next up", value: next ? `${daysUntil(next.date, today)}d` : "—", note: next ? next.label : "No exams or SACs tracked" },
-  ]
-
-  const row = "flex items-center justify-between gap-3 border-b border-border py-3 text-sm last:border-b-0"
+  const row = "flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 text-sm last:border-b-0 sm:px-5"
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader title={greeting(new Date(now).getHours())} description={new Date(now).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}>
-        <Button className="min-w-0 max-w-full" title={focusSession ? `Resume ${focusSession.title}` : undefined} onClick={() => focusSession ? onStartFocus(undefined, focusSession.title, focusSession.id) : onStartFocus(undefined, "")}><span className="truncate">{focusSession ? `Resume ${focusSession.title}` : "Start studying"}</span></Button>
+    <div className="flex flex-col gap-5">
+      <PageHeader icon={Sun} title={greeting(new Date(now).getHours())} description={new Date(now).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}>
+        {dueMistakes ? <Button variant="outline" onClick={() => onNavigate("mistakes")}><Layers data-icon="inline-start" />Review {dueMistakes}</Button> : null}
+        <Button className="min-w-0 max-w-full" title={focusSession ? `Resume ${focusSession.title}` : undefined} onClick={() => focusSession ? onStartFocus(undefined, focusSession.title, focusSession.id) : onStartFocus(undefined, "")}><Play data-icon="inline-start" /><span className="truncate">{focusSession ? `Resume ${focusSession.title}` : "Start studying"}</span></Button>
       </PageHeader>
 
-      <section aria-label="Study stats" className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.label} className="flex min-w-0 flex-col gap-1 bg-background p-4">
-            <span className="text-xs text-muted-foreground">{stat.label}</span>
-            <span className="focal-stat-value flex items-center gap-1.5">
-              {stat.flame ? <Flame aria-hidden className="size-5 text-primary" /> : null}{stat.value}
-            </span>
-            <span className="truncate text-xs text-muted-foreground" title={stat.note}>{stat.note}</span>
-          </div>
-        ))}
-      </section>
+      <StatGrid>
+        <StatTile icon={Clock} label="Studied today" value={hours(todayMinutes)} hint={plan.plannedMinutes ? `${hours(plan.plannedMinutes)} still planned` : "Nothing else planned"} />
+        <StatTile icon={CalendarRange} label="This week" value={hours(weekMinutes)} hint={`${days.filter((day) => day.minutes > 0).length} of 7 days active`} spark={days.map((day) => day.minutes)} onClick={() => onNavigate("progress")} />
+        <StatTile icon={Flame} tone={totalStreak ? "warning" : "default"} label="Streak" value={count(totalStreak, "day")} hint={totalStreak ? (todayMinutes ? "Kept alive today" : "Study today to keep it") : "Start one today"} />
+        <StatTile icon={Hourglass} tone={next && daysUntil(next.date, today) <= 3 ? "danger" : "default"} label="Next up" value={next ? `${daysUntil(next.date, today)}d` : "—"} hint={next ? next.label : "No exams or SACs tracked"} onClick={next ? () => next.kind === "SAC" ? onOpenSac(next.id) : onNavigate("exams") : undefined} />
+      </StatGrid>
 
       <AIOverview area="today" fingerprint={`${dueMistakes}:${items.length}:${done}:${next?.id ?? ""}`} />
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="flex flex-col gap-8">
-        <section aria-labelledby="today-plan">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 id="today-plan" className="font-medium">Plan{items.length ? <span className="ml-2 text-sm font-normal text-muted-foreground tabular-nums">{done}/{items.length} done</span> : null}</h2>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate("calendar")}>Open calendar</Button>
-          </div>
-          {items.length ? (
-            <>
-              <div className="mb-2 h-1 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Plan progress" aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={done}>
-                <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(done / items.length) * 100}%` }} />
-              </div>
-              <ul>{items.map((item) => {
-                const finished = isDayItemDone(item)
-                const action = item.kind === "task" && !finished && item.status !== "skipped" ? "Start" : item.kind === "session" && (!finished || item.live || item.paused || item.continuable) && !(item.id === focusSession?.id && isRunning(focusSession)) ? item.live || item.paused ? "Resume" : item.continuable ? "Continue" : "Start" : null
-                return (
-                  <li key={`${item.kind}:${item.id}`} className={row}>
-                    <span className={cn("flex min-w-0 items-center gap-2", finished && "text-muted-foreground line-through")}>
-                      <span className={cn("grid size-4 shrink-0 place-items-center rounded-full border", finished ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{finished ? <Check aria-hidden className="size-3" /> : null}</span>
-                      {"startTime" in item && item.startTime ? <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{item.startTime}</span> : null}
-                      <span className="truncate">{item.title}</span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span className="text-muted-foreground tabular-nums">{item.minutes ? hours(item.minutes) : ""}</span>
-                      {action && (item.kind === "task" || item.kind === "session") ? <Button variant="ghost" size="sm" className="shrink-0" aria-label={`${action} ${item.title}`} onClick={() => item.kind === "task" ? onStartFocus(item.subject, item.title) : onStartFocus(undefined, item.title, item.id)}>{action}</Button> : null}
-                    </span>
-                  </li>
-                )
-              })}</ul>
-            </>
-          ) : (
-            <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-              Nothing planned yet.
-              <div className="mt-3 flex justify-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => onNavigate("calendar")}>Plan the day</Button>
-                <Button variant="ghost" size="sm" onClick={() => onStartFocus(undefined, "")}>Just start</Button>
-              </div>
-            </div>
-          )}
-        </section>
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-5">
+          <Panel flush id="today-plan" icon={ListChecks} title="Plan" description={items.length ? `${done} of ${items.length} done` : undefined} action={<Button variant="ghost" size="sm" onClick={() => onNavigate("calendar")}>Open calendar<ArrowRight data-icon="inline-end" /></Button>}>
+            {items.length ? (
+              <>
+                <div className="h-1 bg-muted" role="progressbar" aria-label="Plan progress" aria-valuemin={0} aria-valuemax={items.length} aria-valuenow={done}>
+                  <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${(done / items.length) * 100}%` }} />
+                </div>
+                <ul>{items.map((item) => {
+                  const finished = isDayItemDone(item)
+                  const action = item.kind === "task" && !finished && item.status !== "skipped" ? "Start" : item.kind === "session" && (!finished || item.live || item.paused || item.continuable) && !(item.id === focusSession?.id && isRunning(focusSession)) ? item.live || item.paused ? "Resume" : item.continuable ? "Continue" : "Start" : null
+                  return (
+                    <li key={`${item.kind}:${item.id}`} className={cn(row, "min-h-11")}>
+                      <span className={cn("flex min-w-0 items-center gap-2.5", finished && "text-muted-foreground line-through")}>
+                        <span className={cn("grid size-4 shrink-0 place-items-center rounded-full border transition-colors", finished ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{finished ? <Check aria-hidden className="size-3" /> : null}</span>
+                        {"startTime" in item && item.startTime ? <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">{item.startTime}</span> : null}
+                        <span className="truncate">{item.title}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted-foreground tabular-nums">{item.minutes ? hours(item.minutes) : ""}</span>
+                        {action && (item.kind === "task" || item.kind === "session") ? <Button variant="outline" size="sm" className="shrink-0" aria-label={`${action} ${item.title}`} onClick={() => item.kind === "task" ? onStartFocus(item.subject, item.title) : onStartFocus(undefined, item.title, item.id)}><Play data-icon="inline-start" />{action}</Button> : null}
+                      </span>
+                    </li>
+                  )
+                })}</ul>
+              </>
+            ) : (
+              <EmptyState icon={ListChecks} title="Nothing planned yet" description="Block out study on the calendar, or start a session now and it is logged here." action={<>
+                <Button size="sm" onClick={() => onNavigate("calendar")}><CalendarPlus data-icon="inline-start" />Plan the day</Button>
+                <Button variant="outline" size="sm" onClick={() => onStartFocus(undefined, "")}><Play data-icon="inline-start" />Just start</Button>
+              </>} />
+            )}
+          </Panel>
 
-        {papers.length ? (
-          <section aria-labelledby="today-papers">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h2 id="today-papers" className="font-medium">Recent papers</h2>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All papers</Button>
-            </div>
-            <ul>{papers.map(({ attempt, score, delta }) => (
+          <Panel flush id="today-papers" icon={FileText} title="Recent papers" description="Change is against your last paper in that subject" action={<Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All papers<ArrowRight data-icon="inline-end" /></Button>}>
+            {papers.length ? <ul>{papers.map(({ attempt, score, delta }) => (
               <li key={attempt.id} className="border-b border-border last:border-b-0">
-                <button type="button" className="flex w-full items-center gap-3 py-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onOpenAttempt(attempt.id)}>
+                <button type="button" className="focal-row-action flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-5" onClick={() => onOpenAttempt(attempt.id)}>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate">{attempt.title || `${attempt.provider} ${attempt.examYear} ${attempt.paper}`}</span>
+                    <span className="block truncate font-medium">{attempt.title || `${attempt.provider} ${attempt.examYear} ${attempt.paper}`}</span>
                     <span className="block truncate text-xs text-muted-foreground">{attempt.subject} · {parseISO(attempt.completedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}</span>
                   </span>
-                  <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-muted sm:block" aria-hidden><span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, score)}%` }} /></span>
-                  <span className="w-10 shrink-0 text-right font-medium tabular-nums">{score}%</span>
-                  <span className={cn("w-10 shrink-0 text-right text-xs tabular-nums", delta == null ? "text-muted-foreground" : delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : "text-muted-foreground")}>
-                    {delta == null ? "new" : delta > 0 ? `▲${delta}` : delta < 0 ? `▼${-delta}` : "±0"}
-                  </span>
+                  <Meter value={score} className="hidden w-24 sm:block" />
+                  <span className="w-10 shrink-0 text-right font-semibold tabular-nums">{score}%</span>
+                  <span className="flex w-12 shrink-0 justify-end">{delta == null ? <Badge variant="outline">new</Badge> : <Delta value={delta} />}</span>
                 </button>
               </li>
-            ))}</ul>
-          </section>
-        ) : null}
+            ))}</ul> : <EmptyState icon={FileText} title="No marked papers yet" description="Log a practice exam to see your marks and how they move." action={<Button size="sm" onClick={() => onNavigate("exams")}>Go to Practice<ArrowRight data-icon="inline-end" /></Button>} />}
+          </Panel>
         </div>
 
-        <div className="flex flex-col gap-8">
-          <section aria-labelledby="today-reviews" className="flex items-center justify-between gap-3 rounded-md border border-border p-4">
-            <div>
-              <h2 id="today-reviews" className="font-medium">Reviews due</h2>
-              <p className="text-sm text-muted-foreground">{dueMistakes ? `${count(dueMistakes, "mistake")} ready to review` : "Nothing due. Nice work."}</p>
+        <div className="flex flex-col gap-5">
+          <Panel id="today-reviews" icon={Layers} title="Reviews due">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="focal-stat-value">{dueMistakes}</span>
+                <span className="truncate text-sm text-muted-foreground">{dueMistakes ? `${dueMistakes === 1 ? "mistake" : "mistakes"} ready to review` : "Nothing due. Nice work."}</span>
+              </div>
+              {dueMistakes ? <Button onClick={() => onNavigate("mistakes")}>Review<ArrowRight data-icon="inline-end" /></Button> : <CircleCheck aria-hidden className="size-5 text-success" />}
             </div>
-            {dueMistakes ? <Button variant="outline" onClick={() => onNavigate("mistakes")}>Review <ArrowRight aria-hidden /></Button> : <Check aria-hidden className="size-5 text-primary" />}
-          </section>
+          </Panel>
 
-          <section aria-labelledby="today-week">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="today-week" className="font-medium">Last 7 days</h2>
-              <Button variant="ghost" size="sm" onClick={() => onNavigate("progress")}>Progress</Button>
-            </div>
-            <ol className="flex h-28 items-end gap-2">
+          <Panel id="today-week" icon={ChartColumn} title="Last 7 days" description={`${hours(weekMinutes)} total`} action={<Button variant="ghost" size="sm" onClick={() => onNavigate("progress")}>Progress<ArrowRight data-icon="inline-end" /></Button>}>
+            <ol className="flex h-32 items-end gap-2">
               {days.map((day, index) => (
                 <li key={index} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5" title={`${day.date.toLocaleDateString(undefined, { weekday: "long" })}: ${hours(day.minutes)}`}>
                   <span className="sr-only">{day.date.toLocaleDateString(undefined, { weekday: "long" })}: {hours(day.minutes)}</span>
                   {day.minutes ? <span aria-hidden className="text-[10px] tabular-nums text-muted-foreground">{hours(day.minutes)}</span> : null}
-                  <div className={cn("w-full rounded-sm transition-[height] duration-500", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 80)}%` }} />
-                  <span aria-hidden className={cn("text-[11px] text-muted-foreground", index === 6 && "font-medium text-foreground")}>{day.date.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
+                  <div className={cn("focal-bar w-full rounded-sm", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 80)}%`, animationDelay: `${index * 30}ms` }} />
+                  <span aria-hidden className={cn("text-[11px] text-muted-foreground", index === 6 && "font-semibold text-foreground")}>{day.date.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
                 </li>
               ))}
             </ol>
-          </section>
+          </Panel>
 
-          <section aria-labelledby="today-upcoming">
-            <h2 id="today-upcoming" className="mb-2 font-medium">Coming up</h2>
+          <Panel flush id="today-upcoming" icon={CalendarClock} title="Coming up">
             {upcoming.length ? <ul>{upcoming.map((item) => {
               const away = daysUntil(item.date, today)
               return (
                 <li key={`${item.kind}:${item.id}`} className="border-b border-border last:border-b-0">
-                  <button type="button" className="flex w-full items-center justify-between gap-3 py-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring" onClick={() => item.kind === "SAC" ? onOpenSac(item.id) : onNavigate("exams")}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Badge variant={item.kind === "Exam" ? "default" : "secondary"}>{item.kind}</Badge>
-                    <span className="truncate">{item.label}</span>
-                  </span>
-                  <Badge variant={away <= 3 ? "warning" : "outline"} className="shrink-0 tabular-nums">{away === 1 ? "Tomorrow" : `${away} days`}</Badge>
+                  <button type="button" className="focal-row-action flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-5" onClick={() => item.kind === "SAC" ? onOpenSac(item.id) : onNavigate("exams")}>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Badge variant={item.kind === "Exam" ? "default" : "secondary"}>{item.kind}</Badge>
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <Badge variant={away <= 3 ? "warning" : "outline"} className="shrink-0 tabular-nums">{away === 1 ? "Tomorrow" : `${away} days`}</Badge>
                   </button>
                 </li>
               )
-            })}</ul> : <p className="text-sm text-muted-foreground">No SACs or exams coming up.</p>}
-          </section>
+            })}</ul> : <EmptyState icon={CalendarClock} title="Nothing coming up" description="Track an exam or add a SAC to see a countdown here." action={<Button variant="outline" size="sm" onClick={() => onNavigate("sacs")}>Add a SAC</Button>} />}
+          </Panel>
         </div>
       </div>
     </div>

@@ -2,8 +2,12 @@ import { lazy, Suspense, useMemo, useState } from "react"
 import {
   ArrowDownRight,
   ArrowRight,
-  ArrowUpRight,
   BookOpenCheck,
+  FileText,
+  Layers,
+  Percent,
+  Sparkles,
+  Trophy,
   CalendarCheck2,
   FileDown,
   FilePlus2,
@@ -36,7 +40,7 @@ import { getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review
 import { buildFocusPriorities, buildSubjectOutlooks } from "../lib/performance-insights"
 import type { Timetable } from "../lib/timetable"
 import { PageHeader } from "./page-header"
-import { WorkspacePage } from "./workspace-layout"
+import { Delta, Meter, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
 import { UpcomingExamsCard } from "./upcoming-exams-card"
 import { PerformanceContextInsights } from "./performance-context-insights"
 import { ExamTable } from "./exam-table"
@@ -298,10 +302,10 @@ function NextActionNotice({ action }: { action: NextAction | null }) {
     // instead of wrapping. Upgrade path: a "details" popover if the text ever matters more than the CTA.
     <section
       aria-label="Next study action"
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed bg-accent/40 px-4 py-2.5"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-primary/25 bg-primary/5 px-4 py-2.5"
     >
-      <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background ring-1 ring-foreground/10">
-        <Icon className="size-3.5 text-foreground" aria-hidden />
+      <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10">
+        <Icon className="size-3.5 text-primary" aria-hidden />
       </div>
       <p className="text-sm font-medium leading-snug">{action.title}</p>
       <p className="hidden min-w-0 flex-1 truncate text-sm text-muted-foreground leading-snug sm:block">
@@ -340,76 +344,21 @@ function StatRow({ data }: { data: AppData }) {
   const total = data.mistakes.length
   const completion = total ? (mature / total) * 100 : 0
 
+  const marks = useMemo(() => data.attempts.filter((attempt) => attempt.rawMax > 0).toSorted((a, b) => a.completedAt.localeCompare(b.completedAt)).slice(-16).map((attempt) => (attempt.rawScore / attempt.rawMax) * 100), [data.attempts])
+  const split = stats.exam1Average !== null || stats.exam2Average !== null
+    ? `Exam 1 ${stats.exam1Average === null ? "—" : `${stats.exam1Average.toFixed(1)}%`} · Exam 2 ${stats.exam2Average === null ? "—" : `${stats.exam2Average.toFixed(1)}%`}`
+    : stats.count < 2 ? "Difficulty-adjusted planning estimate" : stats.trend === "flat" ? "Stable across your recent attempts" : "Against your earlier half"
+
   return (
-    // ponytail: cell borders come from each cell's own border-r/b plus a container border-t/l,
-    // so the rules stay on the exact column/row boundaries at every breakpoint. (The old
-    // per-breakpoint border-l/border-t mix drifted by one padding step on some columns.)
-    <div className="grid grid-cols-2 overflow-hidden border-y bg-transparent lg:grid-cols-4">
-      {/* The average leads on phones: full width, with the per-paper split beside the number. */}
-      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 border-b p-3 sm:p-5 lg:order-2 lg:col-span-1 lg:border-r">
-        <p className="text-sm text-muted-foreground">VCAA-aligned average</p>
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <p className="focal-stat-value tabular-nums">
-            {stats.count === 0 ? "—" : `${stats.average.toFixed(1)}%`}
-          </p>
-          {stats.count >= 2 && stats.trend !== "flat" ? (
-            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-foreground tabular-nums" title={stats.trend === "up" ? "Improving vs your earlier half" : "Dropping vs your earlier half"}>
-              {stats.trend === "up" ? (
-                <ArrowUpRight className="size-3.5" aria-hidden />
-              ) : (
-                <ArrowDownRight className="size-3.5" aria-hidden />
-              )}
-              {stats.trend === "up" ? "+" : ""}
-              {stats.trendDiff.toFixed(1)} pts
-            </span>
-          ) : null}
-          {stats.exam1Average !== null || stats.exam2Average !== null ? (
-            <p className="flex gap-3 text-sm tabular-nums max-lg:ml-auto lg:basis-full">
-              <span className="whitespace-nowrap"><span className="text-muted-foreground">Exam 1</span> <span className="font-semibold">{stats.exam1Average === null ? "—" : `${stats.exam1Average.toFixed(1)}%`}</span></span>
-              <span className="whitespace-nowrap"><span className="text-muted-foreground">Exam 2</span> <span className="font-semibold">{stats.exam2Average === null ? "—" : `${stats.exam2Average.toFixed(1)}%`}</span></span>
-            </p>
-          ) : null}
-        </div>
-        <p className="text-xs text-muted-foreground max-sm:hidden">
-          {stats.count < 2
-            ? "Difficulty-adjusted planning estimate"
-            : stats.trend === "flat"
-              ? "Stable across your recent attempts"
-              : stats.trend === "up"
-                ? "Improving vs your earlier half"
-                : "Dropping vs your earlier half"}
-        </p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-r border-b p-3 sm:p-5 lg:order-1">
-        <p className="text-sm text-muted-foreground">Practice exams</p>
-        <p className="focal-stat-value tabular-nums">{stats.count}</p>
-        <p className="text-xs text-muted-foreground">
-          {stats.count === 0
-            ? "Log your first paper to begin"
-            : <><span className="max-sm:hidden">{stats.subjects} subject{stats.subjects === 1 ? "" : "s"}</span>{stats.lastDate ? <><span className="max-sm:hidden"> · </span>last {formatDate(stats.lastDate)}</> : null}</>}
-        </p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5 border-b p-3 sm:p-5 lg:order-3 lg:border-r">
-        <p className="text-sm text-muted-foreground">Best mark</p>
-        <p className="focal-stat-value tabular-nums">{stats.best.toFixed(1)}%</p>
-        <p className="text-xs text-muted-foreground max-sm:hidden">Your strongest recorded practice result</p>
-      </div>
-      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 p-3 sm:p-5 lg:order-4 lg:col-span-1 lg:border-b">
-        <p className="text-sm text-muted-foreground">Mistakes due</p>
-        <div className="flex items-baseline gap-2">
-          <p className="focal-stat-value tabular-nums">{total === 0 ? "—" : due}</p>
-          <p className="text-xs text-muted-foreground">
-            {total === 0 ? "none logged" : `due of ${total}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Progress aria-label="Mature cards" value={completion} className="min-w-8 flex-1 lg:max-w-24" />
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {total === 0 ? "0/0" : `${mature}/${total} mature`}
-          </span>
-        </div>
-      </div>
-    </div>
+    <StatGrid>
+      <StatTile icon={Percent} label="VCAA-aligned average" value={stats.count === 0 ? "—" : `${stats.average.toFixed(1)}%`}
+        delta={stats.count >= 2 && stats.trend !== "flat" ? <span title={stats.trend === "up" ? "Improving vs your earlier half" : "Dropping vs your earlier half"}><Delta value={Number(stats.trendDiff.toFixed(1))} suffix=" pts" /></span> : null}
+        hint={split} spark={marks} className="max-md:order-first max-md:col-span-2" />
+      <StatTile icon={FileText} label="Practice exams" value={stats.count} hint={stats.count === 0 ? "Log your first paper to begin" : `${count(stats.subjects, "subject")}${stats.lastDate ? ` · last ${formatDate(stats.lastDate)}` : ""}`} className="md:order-first" />
+      <StatTile icon={Trophy} tone="success" label="Best mark" value={`${stats.best.toFixed(1)}%`} hint="Your strongest recorded practice result" />
+      <StatTile icon={Layers} tone={due ? "warning" : "default"} label="Mistakes due" value={total === 0 ? "—" : due}
+        hint={<span className="flex items-center gap-2"><Meter value={completion} className="min-w-8 flex-1" /><span className="shrink-0 tabular-nums">{total === 0 ? "none logged" : `${mature}/${total} mature`}</span></span>} className="max-md:col-span-2" />
+    </StatGrid>
   )
 }
 
@@ -629,10 +578,11 @@ export type ExamsPageProps = {
   scopedSubject?: string
 }
 
+
 export function ExamsPage(props: ExamsPageProps) {
   const [generatorOpen, setGeneratorOpen] = useState(false)
   const generator = <>
-    <Button variant="outline" onClick={() => setGeneratorOpen(true)}>Generate practice paper</Button>
+    <Button variant="outline" onClick={() => setGeneratorOpen(true)}><Sparkles />Generate practice paper</Button>
     {generatorOpen ? <PracticePaperDialog data={props.data} studies={props.studies} initialSubject={props.scopedSubject} onOpenChange={setGeneratorOpen} onSave={props.onImportMistakes} /> : null}
   </>
   const {
@@ -678,9 +628,7 @@ export function ExamsPage(props: ExamsPageProps) {
   if (data.attempts.length === 0) {
     return (
       <WorkspacePage>
-        <PageHeader
-          title="Practice"
-        >
+        <PageHeader icon={BookOpenCheck} title="Practice" description="Log papers, see where marks move and what to revise next.">
           {generator}
           <Button onClick={onLogExam}>
             <Plus />
@@ -714,9 +662,7 @@ export function ExamsPage(props: ExamsPageProps) {
 
   return (
     <WorkspacePage>
-      <PageHeader
-        title="Practice"
-      >
+      <PageHeader icon={BookOpenCheck} title="Practice" description="Log papers, see where marks move and what to revise next.">
         {generator}
         <Button variant="outline" onClick={exportReport}>
           <FileDown />
@@ -736,21 +682,21 @@ export function ExamsPage(props: ExamsPageProps) {
         </TabsList>
         <TabsContent value="overview" className="mt-4">
           {section === "overview" ? (
-            <div className="grid gap-6">
+            <div className="grid gap-5">
               {/* The next action leads: one card, full width, above the numbers and the
                   deadlines it competes with. */}
               <NextActionNotice action={nextAction} />
               <StatRow data={data} />
               {deadlineSection}
-              <div className="grid gap-6 lg:grid-cols-3">
-                <div className="min-w-0 lg:col-span-2">
+              <div className="grid gap-5 lg:grid-cols-5">
+                <div className="min-w-0 lg:col-span-3">
                   <RecentExams data={data} references={references} comparisonYear={comparisonYear} onLogExam={onLogExam} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 lg:col-span-2">
                   <SubjectBreakdown data={data} references={references} />
                 </div>
               </div>
-              <div className="grid gap-6">
+              <div className="grid gap-5">
                 <CoverageSummary data={data} />
                 <ExamActivityChart attempts={data.attempts} />
               </div>
@@ -760,7 +706,7 @@ export function ExamsPage(props: ExamsPageProps) {
         </TabsContent>
         <TabsContent value="insights" className="mt-4">
           {section === "insights" ? (
-            <div className="grid gap-6">
+            <div className="grid gap-5">
               <ImprovementSignals data={data} />
               <PerformanceContextInsights attempts={data.attempts} sacRecords={data.sacRecords} />
               <Suspense fallback={<Skeleton className="h-96 w-full" />}>
@@ -769,7 +715,7 @@ export function ExamsPage(props: ExamsPageProps) {
               <Suspense fallback={<Skeleton className="h-96 w-full" />}>
                 <PerformanceTrendChart attempts={data.attempts} references={references} preferredSubjects={data.subjects} difficultySettings={data.examDifficulty} />
               </Suspense>
-              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <SubjectBenchmarkChart attempts={data.attempts} references={references} mistakes={data.mistakes} />
                 </Suspense>
@@ -777,7 +723,7 @@ export function ExamsPage(props: ExamsPageProps) {
                   <VcaaPercentileTrendChart attempts={data.attempts} references={references} preferredSubjects={data.subjects} />
                 </Suspense>
               </div>
-              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <ImprovementOutlookChart attempts={data.attempts} difficultySettings={data.examDifficulty} />
                 </Suspense>
@@ -785,7 +731,7 @@ export function ExamsPage(props: ExamsPageProps) {
                   <ReviewForecastChart mistakes={data.mistakes} />
                 </Suspense>
               </div>
-              <div className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3">
+              <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
                   <FocusPriorityChart attempts={data.attempts} mistakes={data.mistakes} />
                 </Suspense>

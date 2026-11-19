@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ExternalLink, FileCheck2, Play } from "lucide-react"
+import { ChartColumn, ExternalLink, FileCheck2, Play } from "lucide-react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -103,16 +103,16 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
 
   if (!references.length) {
     return (
-      <div className="grid gap-6">
-        <PageHeader title="VCAA data" />
+      <div className="grid gap-5">
+        <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and scaling for every study." />
         <Card><CardContent className="grid justify-items-center gap-3 py-10 text-center text-sm text-muted-foreground"><p>VCAA reference data is unavailable. Check your connection, then reload.</p><Button variant="outline" onClick={() => window.location.reload()}>Reload</Button></CardContent></Card>
       </div>
     )
   }
 
   return (
-    <div className="grid gap-6">
-      <PageHeader title="VCAA data">
+    <div className="grid gap-5">
+      <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and scaling for every study.">
         {onOpenLibrary ? <Button variant="outline" onClick={onOpenLibrary}>Open VCAA library</Button> : null}
       </PageHeader>
 
@@ -146,7 +146,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Grade boundaries over time</CardTitle>

@@ -48,7 +48,7 @@ export function TimeOfDayChart({ data }: TimeOfDayChartProps) {
   }
 
   return (
-    <section className="border-t border-border/70 pt-5">
+    <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <h3 className="focal-section-title mb-4">Study Time of Day</h3>
       {hasData ? (
         <ResponsiveContainer width="100%" height={200} debounce={120}>

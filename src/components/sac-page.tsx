@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
-import { CalendarClock, Clock3, MoreHorizontal, Pencil, Play, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react"
+import { CalendarClock, CircleCheck, Clock3, GraduationCap, MoreHorizontal, Pencil, Percent, Play, Plus, Trash2, Trophy } from "lucide-react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { SacSheet } from "./sac-sheet"
 import { SacTimer } from "./sac-timer"
 import { PageHeader } from "./page-header"
+import { Delta, Meter, StatGrid, StatTile } from "./workspace-layout"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -58,13 +59,14 @@ function daysUntil(value: string) {
 
 function SacStatsRow({ records, today }: { records: SacRecord[]; today: string }) {
   const stats = useMemo(() => computeSacStats(records, today), [records, today])
+  const results = useMemo(() => records.filter(isCompletedSac).toSorted((a, b) => (a.completedAt ?? a.scheduledAt).localeCompare(b.completedAt ?? b.scheduledAt)).map((record) => sacPercentage(record)!), [records])
   return (
-    <div className="grid grid-cols-2 gap-y-6 rounded-lg border bg-card px-5 py-5 lg:grid-cols-4 lg:gap-y-0">
-      <div className="min-w-0 space-y-1.5 pr-4 sm:pr-6"><p className="text-sm text-muted-foreground">Completed SACs</p><p className="text-3xl font-semibold tabular-nums">{stats.completed}</p><p className="text-xs text-muted-foreground">{stats.upcoming} upcoming · {stats.total} tracked</p></div>
-      <div className="min-w-0 space-y-1.5 border-l pl-4 sm:pl-6"><p className="text-sm text-muted-foreground">Weighted average</p><div className="flex items-baseline gap-2"><p className="text-3xl font-semibold tabular-nums">{stats.average === null ? "—" : `${stats.average.toFixed(1)}%`}</p>{stats.trend !== null && Math.abs(stats.trend) >= 0.5 ? <span className={`inline-flex items-center text-xs font-medium tabular-nums ${stats.trend > 0 ? "text-success" : "text-destructive"}`}>{stats.trend > 0 ? <TrendingUp className="mr-1 size-3.5" /> : <TrendingDown className="mr-1 size-3.5" />}{stats.trend > 0 ? "+" : ""}{stats.trend.toFixed(1)} pts</span> : null}</div><p className="text-xs text-muted-foreground">Uses entered assessment weightings when available</p></div>
-      <div className="min-w-0 space-y-1.5 border-t border-l pt-6 pl-4 lg:border-t-0 lg:px-6 lg:pt-0"><p className="text-sm text-muted-foreground">Best result</p><p className="text-3xl font-semibold tabular-nums">{stats.best === null ? "—" : `${stats.best.toFixed(1)}%`}</p><p className="text-xs text-muted-foreground">Strongest completed assessment</p></div>
-      <div className="min-w-0 space-y-1.5 border-t border-l pt-6 pl-4 sm:pl-6 lg:border-t-0 lg:pt-0"><p className="text-sm text-muted-foreground">Timed work</p><p className="text-3xl font-semibold tabular-nums">{stats.totalTimedSeconds ? formatDuration(stats.totalTimedSeconds) : "—"}</p><p className="text-xs text-muted-foreground">Recorded by the SAC timer</p></div>
-    </div>
+    <StatGrid>
+      <StatTile icon={CircleCheck} tone="success" label="Completed SACs" value={stats.completed} hint={`${stats.upcoming} upcoming · ${stats.total} tracked`} />
+      <StatTile icon={Percent} label="Weighted average" value={stats.average === null ? "—" : `${stats.average.toFixed(1)}%`} delta={stats.trend !== null && Math.abs(stats.trend) >= 0.5 ? <Delta value={Number(stats.trend.toFixed(1))} suffix=" pp" /> : null} hint={stats.trend === null ? "Weighted by SAC weighting" : "First result to latest"} spark={results} />
+      <StatTile icon={Trophy} label="Best result" value={stats.best === null ? "—" : `${stats.best.toFixed(1)}%`} hint="Strongest completed assessment" />
+      <StatTile icon={Clock3} label="Timed work" value={stats.totalTimedSeconds ? formatDuration(stats.totalTimedSeconds) : "—"} hint="Recorded by the SAC timer" />
+    </StatGrid>
   )
 }
 
@@ -137,19 +139,19 @@ export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects
   }
 
   return (
-    <div className="grid gap-6">
-      <PageHeader title="SACs">
+    <div className="grid gap-5">
+      <PageHeader icon={GraduationCap} title="SACs" description="Plan school assessments, time them and chart the results.">
         <Button variant="outline" onClick={() => startTimer()}><Clock3 />Start timer</Button>
         <Button onClick={() => { setEditing(null); setSheetOpen(true) }}><Plus />Plan or log SAC</Button>
       </PageHeader>
       <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "timer")}>
         <TabsList><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="timer">Timer</TabsTrigger></TabsList>
-        <TabsContent value="overview" className="mt-4 grid gap-6">
+        <TabsContent value="overview" className="mt-4 grid gap-5">
           {records.length ? <>
-            {awaiting.length ? <Card><CardHeader><CardTitle>Awaiting results <span className="text-muted-foreground tabular-nums">{awaiting.length}</span></CardTitle><CardDescription>These dates have passed. Enter the mark when it comes back.</CardDescription></CardHeader><CardContent><ul className="divide-y rounded-lg border">{awaiting.map((record) => <li key={record.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{record.title}</p><p className="text-xs text-muted-foreground">{record.subject} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p></div><Button size="sm" variant="outline" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Enter result</Button></li>)}</ul></CardContent></Card> : null}
-            {upcoming.length ? <Card><CardHeader><CardTitle>Upcoming SACs</CardTitle>{upcoming.length > 6 ? <CardDescription>Next 6 of {upcoming.length}. The rest are listed under All SACs.</CardDescription> : null}</CardHeader><CardContent><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.slice(0, 6).map((record) => { const remaining = daysUntil(record.scheduledAt); return <div key={record.id} className="grid gap-3 rounded-lg border p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{record.title}</p><p className="truncate text-sm text-muted-foreground" title={`${record.subject} · ${record.provider}`}>{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · Unit {record.unit}</p></div><Badge className="shrink-0 tabular-nums" variant={remaining <= 7 ? "secondary" : "outline"}>{remaining === 0 ? "Today" : remaining === 1 ? "Tomorrow" : `${remaining} days`}</Badge></div><p className="text-xs text-muted-foreground tabular-nums">{formatDate(record.scheduledAt)} · {record.durationMinutes} min{record.areaOfStudy ? ` · ${record.areaOfStudy}` : ""}</p><div className="flex gap-2 [&>*]:flex-1"><Button variant="outline" size="sm" onClick={() => startTimer(record)}><Play />Start timer</Button><Button variant="ghost" size="sm" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Edit</Button></div></div> })}</div></CardContent></Card> : null}
             <SacStatsRow records={records} today={today} />
-            <div className="grid gap-6 lg:grid-cols-3"><div className="min-w-0 lg:col-span-2"><SacTrend records={records} /></div><Card><CardHeader><CardTitle>Subjects</CardTitle></CardHeader><CardContent><ul className="divide-y rounded-lg border">{subjectStats.map((entry) => <li key={entry.subject} className="flex items-center gap-3 px-4 py-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{entry.subject}</p><p className="text-xs text-muted-foreground">{entry.completed} completed · {entry.upcoming} upcoming</p></div><span className="text-sm font-semibold tabular-nums">{entry.average === null ? "—" : `${entry.average.toFixed(1)}%`}</span></li>)}</ul></CardContent></Card></div>
+            {awaiting.length ? <Card><CardHeader><CardTitle>Awaiting results <span className="text-muted-foreground tabular-nums">{awaiting.length}</span></CardTitle><CardDescription>These dates have passed. Enter the mark when it comes back.</CardDescription></CardHeader><CardContent><ul className="divide-y rounded-lg border">{awaiting.map((record) => <li key={record.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{record.title}</p><p className="text-xs text-muted-foreground">{record.subject} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p></div><Button size="sm" variant="outline" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Enter result</Button></li>)}</ul></CardContent></Card> : null}
+            {upcoming.length ? <Card><CardHeader><CardTitle>Upcoming SACs</CardTitle>{upcoming.length > 6 ? <CardDescription>Next 6 of {upcoming.length}. The rest are listed under All SACs.</CardDescription> : null}</CardHeader><CardContent><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.slice(0, 6).map((record) => { const remaining = daysUntil(record.scheduledAt); return <div key={record.id} className="focal-tile grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border p-4 hover:border-primary/40"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{record.title}</p><p className="truncate text-sm text-muted-foreground" title={`${record.subject} · ${record.provider}`}>{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · Unit {record.unit}</p></div><Badge className="shrink-0 tabular-nums" variant={remaining <= 7 ? "secondary" : "outline"}>{remaining === 0 ? "Today" : remaining === 1 ? "Tomorrow" : `${remaining} days`}</Badge></div><p className="text-xs text-muted-foreground tabular-nums">{formatDate(record.scheduledAt)} · {record.durationMinutes} min{record.areaOfStudy ? ` · ${record.areaOfStudy}` : ""}</p><div className="flex gap-2 [&>*]:flex-1"><Button variant="outline" size="sm" onClick={() => startTimer(record)}><Play />Start timer</Button><Button variant="ghost" size="sm" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Edit</Button></div></div> })}</div></CardContent></Card> : null}
+            <div className="grid gap-5 lg:grid-cols-3"><div className="min-w-0 lg:col-span-2"><SacTrend records={records} /></div><Card><CardHeader><CardTitle>Subjects</CardTitle></CardHeader><CardContent><ul className="grid gap-4">{subjectStats.map((entry) => <li key={entry.subject} className="grid gap-1.5"><div className="flex items-baseline justify-between gap-3"><p className="truncate text-sm font-medium">{entry.subject}</p><span className="text-sm font-semibold tabular-nums">{entry.average === null ? "—" : `${entry.average.toFixed(1)}%`}</span></div><Meter value={entry.average ?? 0} /><p className="text-xs text-muted-foreground">{entry.completed} completed · {entry.upcoming} upcoming</p></li>)}</ul></CardContent></Card></div>
             <section aria-labelledby="all-sacs-title" className="grid gap-4">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
@@ -164,7 +166,7 @@ export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects
                   </Select>
                 </div>
               </div>
-              {visibleRecords.length ? <div className="rounded-lg border">
+              {visibleRecords.length ? <div className="overflow-hidden rounded-lg border bg-card">
                 <Table>
                   <TableHeader><TableRow><TableHead>SAC</TableHead><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Result</TableHead><TableHead className="text-right">Timing</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
                   <TableBody>{visibleRecords.map((record) => {
@@ -177,7 +179,7 @@ export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects
                       </TableCell>
                       <TableCell className="whitespace-nowrap tabular-nums">{formatDate(record.scheduledAt)}</TableCell>
                       <TableCell><Badge variant={status === "completed" ? "success" : status === "awaiting" ? "secondary" : "outline"}>{sacStatusLabels[status]}</Badge></TableCell>
-                      <TableCell className="text-right tabular-nums">{percentage === null ? "—" : <><div>{percentage.toFixed(1)}%</div><div className="text-xs text-muted-foreground">{record.score}/{record.maxScore}</div></>}</TableCell>
+                      <TableCell className="text-right tabular-nums">{percentage === null ? "—" : <><div className="font-medium">{percentage.toFixed(1)}%</div><div className="text-xs text-muted-foreground">{record.score}/{record.maxScore}</div><Meter value={percentage} className="ml-auto mt-1 w-16" /></>}</TableCell>
                       <TableCell className="whitespace-nowrap text-right text-sm tabular-nums">{record.timing ? <><div>{formatDuration(record.timing.actualSeconds)}</div>{record.timing.overtimeSeconds ? <div className="text-xs text-destructive">+{formatDuration(record.timing.overtimeSeconds)} over</div> : null}</> : `${record.durationMinutes} min planned`}</TableCell>
                       <TableCell>
                         <DropdownMenu>

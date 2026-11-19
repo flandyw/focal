@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from "react"
 import { count } from "../lib/utils"
-import { BarChart3, Check, ExternalLink, FileCheck2, Play, Search } from "lucide-react"
+import { BarChart3, Check, CircleCheck, ExternalLink, FileCheck2, Library, ListFilter, Play, Search, Target } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -11,6 +11,7 @@ import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { SubjectCombobox } from "./subject-combobox"
 import { PageHeader } from "./page-header"
+import { Meter, StatGrid, StatTile } from "./workspace-layout"
 import { analyseAttempt, formatOrdinal, normaliseComparisonName, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
 import type { ExamTimerPreset } from "./exam-timer-mode"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
@@ -131,8 +132,16 @@ export function ExamLibrary({
     .toSorted((first, second) => (second.year ?? 0) - (first.year ?? 0)).slice(0, 2) ?? []
 
   return (
-    <div className="grid gap-6">
-      <PageHeader title="VCAA exam library" />
+    <div className="grid gap-5">
+      <PageHeader icon={Library} title="VCAA exam library" description="Official past papers with timers, reports and grade distributions.">
+        {nextExam && nextPreset && !selectedPaperId ? <Button onClick={() => onStart(nextPreset)}><Play />Start next paper</Button> : null}
+      </PageHeader>
+      {!selectedPaperId ? <StatGrid>
+        <StatTile icon={Library} label="Official papers" value={exams.length} hint={`${count(subjects.length, "subject")} in the library`} />
+        <StatTile icon={CircleCheck} tone="success" label="Completed" value={completedUrls.size} hint={<span className="flex items-center gap-2"><Meter value={completedUrls.size} max={exams.length} className="min-w-8 flex-1" barClassName="bg-success" /><span className="shrink-0 tabular-nums">{exams.length ? Math.round(completedUrls.size / exams.length * 100) : 0}%</span></span>} />
+        <StatTile icon={Target} label="Latest five years" value={recentExams.length ? `${recentCompleted} / ${recentExams.length}` : "—"} hint={focusSubject ? `${focusSubject} papers done` : "Choose a subject"} />
+        <StatTile icon={ListFilter} label="Showing" value={filtered.length} hint={filtered.length === exams.length ? "No filters applied" : "Matching your filters"} />
+      </StatGrid> : null}
       {selectedPaperId ? <Button variant="outline" className="justify-self-start" onClick={onClosePaper}>Back to all papers</Button> : null}
       {selectedPaperId && !filtered.length ? <p role="status">Paper not found in the current library.</p> : null}
       <Alert>
@@ -149,7 +158,7 @@ export function ExamLibrary({
               <Badge variant="outline">VCAA source pack</Badge>
             </div>
           </CardHeader>
-          <CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
+          <CardContent className="grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,1fr)]">
             <div className="grid gap-3">
               <Progress value={recentExams.length ? recentCompleted / recentExams.length * 100 : 0} aria-label={`${recentCompleted} of ${recentExams.length} recent official papers completed`} />
               {nextExam && nextPreset ? (
@@ -166,7 +175,7 @@ export function ExamLibrary({
                 <div className="rounded-lg border bg-card p-4"><p className="font-medium">Recent official set complete</p><p className="mt-1 text-sm text-muted-foreground">Use the archive below for more papers, or revisit examiner reports and logged comparisons.</p></div>
               )}
             </div>
-            <div className="grid content-start gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 [&_a]:h-auto [&_a]:min-h-8 [&_a]:py-1.5 [&_a]:text-left [&_a]:whitespace-normal">
               <p className="text-sm font-medium">Prepare with official materials</p>
               {latestSpecification ? <Button nativeButton={false} className="justify-start" variant="outline" render={<a href={latestSpecification.url} target="_blank" rel="noreferrer" />}><ExternalLink />Current specifications</Button> : null}
               {samples.map((sample) => <Button nativeButton={false} key={sample.url} className="justify-start" variant="outline" render={<a href={sample.url} target="_blank" rel="noreferrer" />}><ExternalLink /><span className="truncate">{sample.label}</span></Button>)}
@@ -206,7 +215,7 @@ export function ExamLibrary({
           const analysis = loggedAttempt ? analyseAttempt(loggedAttempt, reference) : null
           const provider = getVcaaExamProvider(exam)
           return (
-          <Card key={exam.url} className={`${selectedPaperId === exam.url ? "ring-2 ring-primary" : ""} min-w-0 gap-4 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${completed ? "bg-muted/20" : ""}`}>
+          <Card key={exam.url} className={`${selectedPaperId === exam.url ? "ring-2 ring-primary" : ""} focal-tile min-w-0 gap-4 hover:border-primary/40 [contain-intrinsic-size:auto_14rem] [content-visibility:auto] ${completed ? "bg-muted/20" : ""}`}>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

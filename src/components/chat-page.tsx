@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, getToolName, isToolUIPart } from "ai"
-import { ArrowUp, CalendarDays, Check, ChevronRight, Copy, LoaderCircle, PanelLeft, Plus, Square, Target, TrendingDown, TriangleAlert } from "lucide-react"
+import { ArrowUp, CalendarDays, Check, ChevronRight, Copy, LoaderCircle, MessagesSquare, PanelLeft, Plus, Square, Target, TrendingDown, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 import { CHAT_ENDPOINT, chatHeaders, gatewayCatalogSchema, type GatewayCatalog } from "../lib/gateway-client"
 import { chatMetadataSchema, deleteLocalChat, loadLocalChats, newLocalChat, saveChatSettings, saveLocalChat, type ChatMessage, type ChatSettings, type LocalChat } from "../lib/chat-history"
@@ -11,7 +11,7 @@ import { MarkdownPreview } from "./markdown-preview"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Bubble, BubbleContent } from "./ui/bubble"
 import { Button } from "./ui/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./ui/empty"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextarea } from "./ui/input-group"
 import { ModelSelector } from "./model-selector"
 import { Message, MessageContent, MessageFooter } from "./ui/message"
@@ -196,12 +196,13 @@ function ChatConversation({ chat, userId, subject, onSignIn, onSettings, catalog
               {messages.length === 0 ? (
                 <Empty className="min-h-[50dvh] bg-transparent p-4">
                   <EmptyHeader>
+                    <EmptyMedia variant="icon"><MessagesSquare /></EmptyMedia>
                     <EmptyTitle>{!userId ? "Sign in to chat" : !CHAT_ENDPOINT ? "Chat is not connected" : !catalog ? catalogError ? "Chat is unavailable" : "Loading chat…" : !catalog.hasKey ? "Add your Gateway key in Settings" : "What would help you study?"}</EmptyTitle>
                     <EmptyDescription>{!userId ? "Connect your account so the assistant can work with your study data." : !CHAT_ENDPOINT ? "The chat service has not been configured for this desktop build." : !catalog ? catalogError || "Loading your saved key status and available models." : !catalog.hasKey ? "Open Settings → AI to securely save your Vercel AI Gateway key." : "Review your progress, find what needs attention, or plan your next session."}</EmptyDescription>
                   </EmptyHeader>
                   {!userId ? <Button onClick={onSignIn}>Open sign-in settings</Button> : catalog && !catalog.hasKey ? <Button onClick={onSettings}>Open AI settings</Button> : available ? <div className="grid w-full max-w-2xl gap-2 sm:grid-cols-3">
                     {([[Target, "What should I focus on today?"], [TrendingDown, "Where am I losing marks?"], [CalendarDays, "Help me plan my study for this week."]] as const).map(([Icon, prompt]) => (
-                      <Button key={prompt} variant="ghost" className="h-auto flex-col items-start gap-3 whitespace-normal p-3 text-left font-normal" onClick={() => send(prompt)}>
+                      <Button key={prompt} variant="outline" className="focal-tile focal-tile-action h-auto flex-col items-start gap-3 whitespace-normal p-3 text-left font-normal" onClick={() => send(prompt)}>
                         <Icon aria-hidden className="text-primary" />{prompt}
                       </Button>
                     ))}

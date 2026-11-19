@@ -18,7 +18,7 @@ export function WeeklyReview({ data, sessions, onPlan }: { data: AppData; sessio
   const start = weekStart(now, offset)
   const first = localDate(start)
   const review = useMemo(() => buildWeeklyReview(data, sessions, new Date(`${first}T00:00:00`)), [data, sessions, first])
-  return <section className="grid gap-5 border-b pb-6" aria-labelledby="weekly-review-title">
+  return <section className="grid gap-5 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="weekly-review-title">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 id="weekly-review-title" className="focal-section-title">Weekly review</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(`${review.first}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}–{new Date(`${review.last}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}{offset === 0 ? " · this week so far" : ""}</p></div>
       <div className="flex gap-1"><Button variant="ghost" size="icon" aria-label="Previous review week" onClick={() => setOffset(offset - 1)}><ChevronLeft /></Button><Button variant="ghost" size="sm" onClick={() => setOffset(-1)}>Last week</Button><Button variant="ghost" size="icon" aria-label="Next review week" disabled={offset >= 0} onClick={() => setOffset(offset + 1)}><ChevronRight /></Button></div>

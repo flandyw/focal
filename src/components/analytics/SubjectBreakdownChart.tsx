@@ -40,7 +40,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
 
   if (data.length === 0) {
     return (
-      <section className="border-t border-border/70 pt-5">
+      <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
         <h3 className="focal-section-title mb-1">Subject breakdown</h3>
         <p className="text-xs text-muted-foreground">No study data for this period.</p>
       </section>
@@ -48,7 +48,7 @@ export function SubjectBreakdownChart({ data }: SubjectBreakdownChartProps) {
   }
 
   return (
-    <section className="border-t border-border/70 pt-5">
+    <section className="h-full rounded-lg border border-border bg-card p-4 sm:p-5">
       <h3 className="focal-section-title mb-4">Subject breakdown</h3>
 
       <div className="@container">

@@ -38,20 +38,22 @@ function validateGoal(kind: StudyGoalKind, subject: string, target: number, dead
   return null
 }
 
-function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
+function GoalEditSheet({ goal, data, subjects, scopedSubject, onClose, onSave }: {
   goal: StudyGoal
   data: AppData
   subjects: string[]
+  scopedSubject?: string
   onClose: () => void
   onSave: (goal: StudyGoal) => void
 }) {
   const [kind, setKind] = useState(goal.kind)
-  const [subject, setSubject] = useState(goal.subject ?? data.subjects[0] ?? "")
+  const initialSubject = goal.subject ?? scopedSubject ?? data.subjects[0] ?? ""
+  const [subject, setSubject] = useState(initialSubject)
   const [target, setTarget] = useState(goal.target)
   const [deadline, setDeadline] = useState(goal.deadline)
   const [error, setError] = useState<string | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
-  const dirty = kind !== goal.kind || target !== goal.target || deadline !== goal.deadline || (kind !== "atar" && subject !== (goal.subject ?? data.subjects[0] ?? ""))
+  const dirty = kind !== goal.kind || target !== goal.target || deadline !== goal.deadline || (kind !== "atar" && subject !== initialSubject)
   const now = useTickingNow()
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -80,10 +82,13 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
             <FieldLabel htmlFor="edit-goal-kind">Measure</FieldLabel>
             <Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}>
               <SelectTrigger id="edit-goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger>
-              <SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem><SelectItem value="atar">ATAR</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!scopedSubject ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent>
             </Select>
           </Field>
-          {kind !== "atar" ? <Field><FieldLabel htmlFor="edit-goal-subject">Subject</FieldLabel><SubjectCombobox id="edit-goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required /></Field> : null}
+          {kind !== "atar" ? <Field>
+            <FieldLabel htmlFor="edit-goal-subject">Subject</FieldLabel>
+            {scopedSubject ? <Input id="edit-goal-subject" value={subject} readOnly /> : <SubjectCombobox id="edit-goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required />}
+          </Field> : null}
           <Field data-invalid={error ? true : undefined}><FieldLabel htmlFor="edit-goal-target">Target</FieldLabel><Input id="edit-goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={Number.isFinite(target) ? target : ""} onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} required /></Field>
           <Field><FieldLabel htmlFor="edit-goal-deadline">By</FieldLabel><Input id="edit-goal-deadline" type="date" min={localDate(now)} value={deadline} onChange={(event) => { setDeadline(event.target.value); setError(null) }} required /></Field>
           <FieldError>{error}</FieldError>
@@ -95,17 +100,17 @@ function GoalEditSheet({ goal, data, subjects, onClose, onSave }: {
   )
 }
 
-export function GoalsPage({ data, references, subjects, subjectScoped = false, onChange, onPlanGoal, scalingReferences }: {
+export function GoalsPage({ data, references, subjects, scopedSubject, onChange, onPlanGoal, scalingReferences }: {
   data: AppData
   references: AssessmentReference[]
   subjects: string[]
-  subjectScoped?: boolean
+  scopedSubject?: string
   onChange: (learning: LearningWorkspaceUpdate) => void
   onPlanGoal: (goal: StudyGoal) => void
   scalingReferences?: ScalingReference[]
 }) {
   const [kind, setKind] = useState<StudyGoalKind>("exam-percentage")
-  const [subject, setSubject] = useState(data.subjects[0] ?? "")
+  const [subject, setSubject] = useState(scopedSubject ?? data.subjects[0] ?? "")
   const [target, setTarget] = useState(80)
   const [deadline, setDeadline] = useState(defaultDeadline)
   const [editingGoal, setEditingGoal] = useState<StudyGoal | null>(null)
@@ -152,8 +157,11 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
       <Card className="gap-5">
         <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription className="max-lg:hidden">Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
         <CardContent><form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
-          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!subjectScoped ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
-          {kind !== "atar" ? <Field className="xl:col-span-4"><FieldLabel htmlFor="goal-subject">Subject</FieldLabel><SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required /></Field> : <div className="hidden xl:col-span-4 xl:block" />}
+          <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!scopedSubject ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
+          {kind !== "atar" ? <Field className="xl:col-span-4">
+            <FieldLabel htmlFor="goal-subject">Subject</FieldLabel>
+            {scopedSubject ? <Input id="goal-subject" value={subject} readOnly /> : <SubjectCombobox id="goal-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required />}
+          </Field> : <div className="hidden xl:col-span-4 xl:block" />}
           <Field className="xl:col-span-2" data-invalid={error ? true : undefined}><FieldLabel htmlFor="goal-target">Target</FieldLabel><Input id="goal-target" type="number" min="1" max={kind === "study-score" ? 50 : kind === "atar" ? 99.95 : 100} step={kind === "atar" ? 0.05 : 1} value={Number.isFinite(target) ? target : ""} required onChange={(event) => { setTarget(event.target.valueAsNumber); setError(null) }} /></Field>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" min={localDate(now)} value={deadline} required onChange={(event) => { setDeadline(event.target.value); setError(null) }} /></Field>
           <Button type="submit" className="w-full xl:col-span-2"><Plus />Add goal</Button>
@@ -197,7 +205,7 @@ export function GoalsPage({ data, references, subjects, subjectScoped = false, o
         </Card>
       })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see your current baseline and the gap to close.</EmptyDescription></EmptyHeader></Empty>}
       {archivedGoals.length ? <Card><CardHeader><CardTitle>Archived goals</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 rounded-md border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</p><p className="text-xs text-muted-foreground tabular-nums">Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p></div><Button size="sm" variant="outline" onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</CardContent></Card> : null}
-      {editingGoal ? <GoalEditSheet key={editingGoal.id} goal={editingGoal} data={data} subjects={subjects} onClose={() => setEditingGoal(null)} onSave={saveEditedGoal} /> : null}
+      {editingGoal ? <GoalEditSheet key={editingGoal.id} goal={editingGoal} data={data} subjects={subjects} scopedSubject={scopedSubject} onClose={() => setEditingGoal(null)} onSave={saveEditedGoal} /> : null}
     </WorkspacePage>
   )
 }

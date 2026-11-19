@@ -1,20 +1,19 @@
 import type { ScalingReference } from "../lib/scaling"
 import { useMemo, useState, type FormEvent } from "react"
-import { Archive, CalendarPlus, Flag, Pencil, Plus } from "lucide-react"
+import { Archive, CalendarClock, CalendarPlus, CircleCheck, Flag, Gauge, Pencil, Plus, Target } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
 import { Field, FieldError, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
-import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "./ui/sheet"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
-import { WorkspacePage } from "./workspace-layout"
+import { Panel, Ring, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { canonicalNow } from "../lib/study-session-sync"
 import type { AppData, AssessmentReference } from "../lib/exam-data"
@@ -118,6 +117,10 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
   const now = useTickingNow()
   const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => ({ goal, progress: getGoalProgress(goal, data, references, scalingReferences) })), [data, references, scalingReferences])
   const archivedGoals = data.learning.goals.filter((goal) => goal.archivedAt)
+  const daysTo = (deadline: string) => Math.round((new Date(`${deadline}T00:00:00`).getTime() - new Date(`${localDate(now)}T00:00:00`).getTime()) / 86_400_000)
+  const isReached = ({ goal, progress: item }: (typeof progress)[number]) => item.current !== null && item.current >= goal.target
+  const reached = progress.filter(isReached).length
+  const nextDeadline = progress.filter((entry) => !isReached(entry) && daysTo(entry.goal.deadline) >= 0).map((entry) => daysTo(entry.goal.deadline)).sort((a, b) => a - b)[0]
 
   function commit(update: (current: LearningWorkspace) => LearningWorkspace) {
     onChange((current) => ({ ...update(current), updatedAt: new Date().toISOString() }))
@@ -153,10 +156,15 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
 
   return (
     <WorkspacePage>
-      <PageHeader title="Score goals" />
-      <Card className="gap-5">
-        <CardHeader><CardTitle>Set a goal</CardTitle><CardDescription className="max-lg:hidden">Predictions remain estimates. Goals show direction and evidence, not guaranteed outcomes.</CardDescription></CardHeader>
-        <CardContent><form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
+      <PageHeader icon={Target} title="Score goals" description="Targets with a deadline, measured against what you have logged." />
+      {progress.length ? <StatGrid>
+        <StatTile icon={Flag} label="Active goals" value={progress.length} hint={archivedGoals.length ? `${archivedGoals.length} archived` : "Each tracks one measure"} />
+        <StatTile icon={CircleCheck} tone="success" label="Reached" value={`${reached} / ${progress.length}`} hint={reached === progress.length ? "All targets met" : `${progress.length - reached} still open`} />
+        <StatTile icon={Gauge} label="Average progress" value={`${Math.round(progress.reduce((sum, { progress: item }) => sum + item.progress, 0) / progress.length)}%`} hint="Towards each target" />
+        <StatTile icon={CalendarClock} tone={nextDeadline != null && nextDeadline <= 14 ? "warning" : "default"} label="Next deadline" value={nextDeadline == null ? "—" : `${nextDeadline}d`} hint={nextDeadline == null ? "No open deadlines" : "Until the closest open goal"} />
+      </StatGrid> : null}
+      <Panel icon={Plus} title="Set a goal" description="Predictions are estimates. Goals show direction and evidence, not guaranteed outcomes.">
+        <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!scopedSubject ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
           {kind !== "atar" ? <Field className="xl:col-span-4">
             <FieldLabel htmlFor="goal-subject">Subject</FieldLabel>
@@ -166,16 +174,16 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-deadline">By</FieldLabel><Input id="goal-deadline" type="date" min={localDate(now)} value={deadline} required onChange={(event) => { setDeadline(event.target.value); setError(null) }} /></Field>
           <Button type="submit" className="w-full xl:col-span-2"><Plus />Add goal</Button>
           <FieldError className="sm:col-span-2 xl:col-span-full">{error}</FieldError>
-        </form></CardContent>
-      </Card>
+        </form>
+      </Panel>
 
       {progress.length ? <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 max-lg:order-first">{progress.map(({ goal, progress: item }) => {
         const achieved = item.current !== null && item.current >= goal.target
         const expired = !achieved && goal.deadline < localDate(now)
         const digits = goal.kind === "atar" ? 2 : 1
-        const daysLeft = Math.round((new Date(`${goal.deadline}T00:00:00`).getTime() - new Date(`${localDate(now)}T00:00:00`).getTime()) / 86_400_000)
+        const daysLeft = daysTo(goal.deadline)
         const status = expired ? "Expired" : achieved ? "Reached" : item.gap === null ? "Needs baseline" : `${item.gap.toFixed(digits)} to go`
-        return <Card key={goal.id} className="gap-5">
+        return <Card key={goal.id} className="focal-tile gap-4 hover:border-primary/40">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -187,17 +195,17 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
           </CardHeader>
           <CardContent className="grid gap-4">
             {/* The number is the point of the card: current against target, with the clock beside it. */}
-            <div className="flex items-end justify-between gap-4">
-              <p className="tabular-nums"><span className="focal-stat-value">{item.current === null ? "—" : item.current.toFixed(digits)}</span><span className="ml-1.5 text-sm text-muted-foreground">/ {goal.target}</span></p>
-              <p className={`text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{daysLeft < 0 ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
-            </div>
-            <div className="grid gap-1.5">
-              <Progress aria-label={`${goal.subject ? `${goal.subject} ` : ""}${kindLabel(goal.kind)} progress to ${goal.target}`} value={item.progress} />
-              <p className="text-xs text-muted-foreground">{item.label} · {item.evidence}</p>
+            <div className="flex min-w-0 items-center gap-4">
+              <Ring value={item.progress / 100} size={72} tone={expired ? "var(--destructive)" : achieved ? "var(--success)" : "var(--primary)"}><span role="progressbar" aria-label={`${goal.subject ? `${goal.subject} ` : ""}${kindLabel(goal.kind)} progress to ${goal.target}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(item.progress)} className="text-sm font-semibold tabular-nums">{Math.round(item.progress)}%</span></Ring>
+              <div className="min-w-0 flex-1">
+                <p className="tabular-nums"><span className="focal-stat-value">{item.current === null ? "—" : item.current.toFixed(digits)}</span><span className="ml-1.5 text-sm text-muted-foreground">/ {goal.target}</span></p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{item.label} · {item.evidence}</p>
+              </div>
+              <p className={`shrink-0 text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{daysLeft < 0 ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
             </div>
             <p className="text-sm text-pretty">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p>
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-              <Button size="sm" variant="outline" onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button>
+              <Button size="sm" variant={achieved ? "outline" : "default"} onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button>
               <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button>
               <Button size="sm" variant="ghost" onClick={() => removeGoal(goal.id)}><Archive />Archive</Button>
             </div>

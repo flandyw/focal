@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { CalendarPlus, ChevronDown, FileJson, GraduationCap, Plus, Sparkles, TrafficCone } from "lucide-react"
+import { CalendarPlus, ChartPie, ChevronDown, CircleAlert, FileJson, GraduationCap, Link2Off, ListChecks, Plus, RotateCcw, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
@@ -13,7 +13,7 @@ import { PageHeader } from "./page-header"
 import { StoplightAddDialog, type SkillDraft } from "./stoplight-add"
 import { StoplightImportDialog } from "./stoplight-import"
 import { StoplightReviseDialog } from "./stoplight-revise"
-import { MetricCard, MetricGrid, WorkspacePage } from "./workspace-layout"
+import { Panel, Ring, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
 import { AI_ENABLED } from "../lib/host"
 import type { AppData } from "../lib/exam-data"
 import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from "../lib/learning-workspace"
@@ -89,6 +89,8 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
   const green = subjectItems.filter((item) => item.rating === "green").length
   const reds = subjectItems.filter((item) => item.rating === "red").length
   const rechecks = subjectItems.filter((item) => isRecheckDue(item, now)).length
+  const ambers = subjectItems.filter((item) => item.rating === "amber").length
+  const unrated = subjectItems.filter((item) => !item.rating).length
 
   function importItems(importSubject: string, imported: Parameters<typeof mergeStoplightItems>[2]) {
     onChange((current) => mergeStoplightItems(current, importSubject, imported).learning)
@@ -136,7 +138,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
 
   return (
     <WorkspacePage>
-      <PageHeader title="Skills" description="Rate your checklist and revisit skills that need practice.">
+      <PageHeader icon={ListChecks} title="Skills" description="Rate your checklist and revisit skills that need practice.">
         <Button variant={subject ? "secondary" : "default"} onClick={() => setAddOpen(true)}><Plus />Add skill</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
@@ -150,20 +152,31 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
           <Tabs value={subject} onValueChange={(value) => setChosen(String(value))}>
             <TabsList>{itemSubjects.map((name) => <TabsTrigger key={name} value={name}>{name}</TabsTrigger>)}</TabsList>
           </Tabs>
-          <MetricGrid className="sm:grid-cols-4">
-            <MetricCard label="Green" value={`${subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%`}><span>{green} of {count(subjectItems.length, "item")}</span></MetricCard>
-            <MetricCard label="Red" value={reds}><span>{reds ? "Start here" : "Nothing red right now"}</span></MetricCard>
-            <MetricCard label="Re-check due" value={rechecks}><span>Green after 21 days, amber after 14</span></MetricCard>
-            <MetricCard label="Unlinked" value={unlinked.length}><span>Mistakes and questions without an item</span></MetricCard>
-          </MetricGrid>
-          <div className="grid grid-cols-1 gap-3">
-            {/* Subject at a glance: one bar for the whole checklist, so the filters below read as slices of it. */}
-            {subjectItems.length ? <div className="grid gap-2">
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${subject}: ${reds} red, ${subjectItems.filter((item) => item.rating === "amber").length} amber, ${green} green, ${subjectItems.filter((item) => !item.rating).length} unrated`}>
-                {RATINGS.map(({ id }) => { const n = subjectItems.filter((item) => item.rating === id).length; return n ? <div key={id} className={SEGMENT[id]} style={{ width: `${n / subjectItems.length * 100}%` }} /> : null })}
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            {/* Subject at a glance: one ring and bar for the whole checklist, so the filters below read as slices of it. */}
+            <Panel icon={ChartPie} title="Checklist" description={count(subjectItems.length, "item")}>
+              <div className="flex items-center gap-5">
+                <Ring value={subjectItems.length ? green / subjectItems.length : 0} tone="var(--stoplight-green)"><span className="block text-lg font-semibold tabular-nums">{subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%</span><span className="block text-[11px] text-muted-foreground">green</span></Ring>
+                <div className="grid min-w-0 flex-1 gap-2">
+                  <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${subject}: ${reds} red, ${ambers} amber, ${green} green, ${unrated} unrated`}>
+                    {RATINGS.map(({ id }) => { const n = subjectItems.filter((item) => item.rating === id).length; return n ? <div key={id} className={cn("focal-grow", SEGMENT[id])} style={{ width: `${n / subjectItems.length * 100}%` }} /> : null })}
+                  </div>
+                  <dl className="grid grid-cols-4 gap-2 text-xs">
+                    {([["Green", green, SEGMENT.green], ["Amber", ambers, SEGMENT.amber], ["Red", reds, SEGMENT.red], ["Unrated", unrated, "bg-muted-foreground/40"]] as const).map(([label, total, tone]) => (
+                      <div key={label} className="min-w-0"><dt className="flex items-center gap-1.5 truncate text-muted-foreground"><span aria-hidden className={cn("size-2 shrink-0 rounded-full", tone)} />{label}</dt><dd className="text-base font-semibold tabular-nums">{total}</dd></div>
+                    ))}
+                  </dl>
+                </div>
               </div>
-              <p className="max-w-prose text-xs text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
-            </div> : null}
+              <p className="mt-4 max-w-prose text-xs text-muted-foreground text-pretty">Good or Easy on every linked mistake turns an item green. Hard, Again or a new mistake brings green back to amber.</p>
+            </Panel>
+            <StatGrid className="md:grid-cols-3">
+              <StatTile icon={CircleAlert} tone={reds ? "danger" : "default"} label="Red" value={reds} hint={reds ? "Start here" : "Nothing red right now"} onClick={reds ? () => onFilterChange("red") : undefined} />
+              <StatTile icon={RotateCcw} tone={rechecks ? "warning" : "default"} label="Re-check due" value={rechecks} hint="Green after 21 days, amber after 14" onClick={rechecks ? () => onFilterChange("recheck") : undefined} />
+              <StatTile icon={Link2Off} label="Unlinked" value={unlinked.length} hint="Mistakes and questions without an item" className="max-md:col-span-2" />
+            </StatGrid>
+          </div>
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Input type="search" className="min-w-0 sm:max-w-sm sm:flex-auto sm:basis-48" aria-label="Search checklist" placeholder="Search knowledge, skills or checks" value={query} onChange={(event) => setQuery(event.target.value)} />
               <div role="group" aria-label="Filter items" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 py-0.5">
@@ -178,9 +191,9 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
             </div>
           </div>
           {groups.size ? [...groups].map(([group, groupItems]) => (
-            <Collapsible key={group} defaultOpen className="rounded-xl border">
-              <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-                <span className="min-w-0 truncate font-medium">{group}</span>
+            <Collapsible key={group} defaultOpen className="rounded-lg border bg-card">
+              <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between gap-3 px-4 py-3 text-left sm:px-5">
+                <span className="min-w-0 truncate text-sm font-semibold">{group}</span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
                   {groupItems.filter((item) => item.rating === "green").length}/{groupItems.length}<span className="sr-only"> green</span>
                   <CountBar items={groupItems} />
@@ -192,7 +205,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
                   const entry = evidence.get(item.id)
                   const text = entry ? evidenceText(entry) : ""
                   return (
-                    <li key={item.id} className="grid gap-3 px-4 py-3 [contain-intrinsic-size:auto_5rem] [content-visibility:auto] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <li key={item.id} className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/30 sm:px-5 [contain-intrinsic-size:auto_5rem] [content-visibility:auto] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="min-w-0 break-words font-medium">{item.name}</span>
@@ -225,7 +238,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
           )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); onFilterChange("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
-        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Add the skills you want to practise one at a time, or import a checklist from your study design.</EmptyDescription></EmptyHeader></Empty>
+        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Add the skills you want to practise one at a time, or import a checklist from your study design.</EmptyDescription></EmptyHeader><div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setAddOpen(true)}><Plus />Add skill</Button><Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button></div></Empty>
       )}
 
       {addOpen ? <StoplightAddDialog subjects={[...subjects, ...itemSubjects, ...data.subjects]} preferredSubjects={data.subjects} defaultSubject={scopedSubject || subject || data.subjects[0] || ""} scopedSubject={scopedSubject} onClose={() => setAddOpen(false)} onSave={addSkill} /> : null}

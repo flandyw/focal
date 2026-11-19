@@ -289,6 +289,24 @@
   .focal-navigation [data-sidebar="menu-badge"] { background: var(--sidebar-accent); border-radius: 2px; }
 }
 
+/* Shared data-display motion: tiles lift on hover, bars and lines draw in once. */
+.focal-tile { transition: border-color 120ms, box-shadow 120ms, translate 120ms var(--ease-spring); }
+.focal-tile-action:hover, .focal-row-action:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.focal-tile-action:hover { translate: 0 -1px; box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--foreground) 25%, transparent); }
+.focal-tile-action:active { translate: 0; }
+.focal-row-action { transition: background-color 120ms, border-color 120ms; }
+.focal-row-action:hover { background-color: color-mix(in srgb, var(--primary) 5%, transparent); }
+.focal-row-action .focal-row-arrow { opacity: 0; translate: -4px 0; transition: opacity 120ms, translate 120ms; }
+.focal-row-action:hover .focal-row-arrow, .focal-row-action:focus-visible .focal-row-arrow { opacity: 1; translate: 0; }
+.focal-grow { transform-origin: left; animation: focal-grow 600ms var(--ease-spring) both; }
+.focal-bar { transform-origin: bottom; animation: focal-bar 500ms var(--ease-spring) both; }
+@keyframes focal-bar { from { transform: scaleY(0); } }
+.focal-draw { stroke-dasharray: 1; animation: focal-draw 800ms var(--ease-spring) both; }
+.focal-ring { animation: focal-ring 800ms var(--ease-spring) both; }
+@keyframes focal-grow { from { transform: scaleX(0); } }
+@keyframes focal-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes focal-ring { from { stroke-dashoffset: 1; } }
+
 /* One brief transition leaves every section ready to use immediately. */
 :root { --ease-spring: cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes page-in { from { opacity: 0.7; } }

@@ -392,8 +392,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
 
   // One authored moment: the readout re-enters when the phase changes, and a
   // single status line carries it for anyone not watching the animation.
-  /** One atomic apply: a plan never lands half-configured, and the block in
-   *  progress keeps its place (settings sync) rather than restarting. */
+  /** Apply the plan's rhythm without changing a countdown already in progress. */
   function applyPlan(plan: StudyPlan) {
     setSubject(plan.subject)
     setIntent(plan.intent)
@@ -740,7 +739,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
               value={settings.dailyGoal}
             />
           </div>
-          <p className="text-xs text-muted-foreground">Changes apply without losing your place.</p>
+          <p className="text-xs text-muted-foreground">New durations don’t change a block or break you’ve already started.</p>
             <Button
               className="w-full"
               onClick={() => updateSettings({

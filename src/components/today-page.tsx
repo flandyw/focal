@@ -18,7 +18,7 @@ const hours = (raw: number) => { const minutes = Math.round(raw); return minutes
 const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) - Date.parse(today)) / DAY)
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
-/** The personal starting page: a read-only view over the same day plan the calendar uses, with one way into each kind of work. */
+/** The personal starting page over the same day plan the calendar uses, with one way into each kind of work. */
 export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt }: {
   now: number
   data: DayPlanSource
@@ -121,6 +121,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
               </div>
               <ul>{items.map((item) => {
                 const finished = isDayItemDone(item)
+                const action = item.kind === "task" && !finished ? "Start" : item.kind === "session" && (!finished || item.live || item.paused || item.continuable) && !(item.id === focusSession?.id && isRunning(focusSession)) ? item.live || item.paused ? "Resume" : item.continuable ? "Continue" : "Start" : null
                 return (
                   <li key={`${item.kind}:${item.id}`} className={row}>
                     <span className={cn("flex min-w-0 items-center gap-2", finished && "text-muted-foreground line-through")}>
@@ -128,7 +129,10 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
                       {"startTime" in item && item.startTime ? <span className="tabular-nums text-muted-foreground">{item.startTime}</span> : null}
                       <span className="truncate">{item.title}</span>
                     </span>
-                    <span className="shrink-0 text-muted-foreground tabular-nums">{item.minutes ? hours(item.minutes) : ""}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-muted-foreground tabular-nums">{item.minutes ? hours(item.minutes) : ""}</span>
+                      {action && (item.kind === "task" || item.kind === "session") ? <Button variant="ghost" size="sm" className="shrink-0" aria-label={`${action} ${item.title}`} onClick={() => item.kind === "task" ? onStartFocus(item.subject, item.title) : onStartFocus(undefined, item.title, item.id)}>{action}</Button> : null}
+                    </span>
                   </li>
                 )
               })}</ul>

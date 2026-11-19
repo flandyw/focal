@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 
-export interface GradientConfig {
+interface GradientConfig {
   from: string;
   via?: string;
   to: string;
@@ -214,5 +214,3 @@ export function VortexAngularSpinLoader({
     </div>
   );
 }
-
-export default VortexAngularSpinLoader;

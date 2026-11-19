@@ -52,7 +52,9 @@ import { MistakeExportDialog } from "./mistake-export-dialog"
 import { exportMistakes, type ExportFormat } from "../lib/mistake-export"
 import { MistakeRoundTripDialog } from "./mistake-roundtrip-dialog"
 import { matchesMathsExamFilter, type MathsExamFilter } from "../lib/mistake-filters"
-import { buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
+import { buildMistakePatterns, buildRevisionPriorities, formatReviewInterval, getMistakeProgress, getMistakeQueueCounts } from "../lib/mistake-review"
+import { planPatternRevision } from "../lib/stoplight"
+import type { LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import {
   getMistakeFieldValues,
   hasEmptyMistakeFields,
@@ -77,6 +79,7 @@ import { AIOverview } from "./ai-overview"
 type PageTab = "study" | "schedule" | "alternative" | "browse" | "insights"
 
 type MistakesPageProps = {
+  onSaveLearning: (learning: LearningWorkspaceUpdate) => void
   initialStatus?: string | null
   skillId?: string | null
   workspaceSubject?: string
@@ -457,7 +460,7 @@ function MistakeFieldMergeDialog({
   )
 }
 
-export function MistakesPage({ initialStatus, skillId, workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
+export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspaceSubject, subjects, onSubjectChange, onSaveReviewPreferences, onReduceReviews, data, studies, onLog, onEdit, onReview, onToggleSuspend, onSetSuspended, onDelete, onImportMistakes, onApplyAutofills, onApplyMergePlan, onApplyEdits, onSaveInsights, onSaveAlternativeDeck }: MistakesPageProps) {
   const now = useTickingNow(30_000)
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>(initialStatus === "due" ? "study" : "browse")
@@ -650,6 +653,7 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
         {tab !== "study" ? <div className="mt-4 flex flex-wrap items-end gap-3" role="group" aria-label="Mistake conditions">{conditions}</div> : null}
         <TabsContent value="insights" className="mt-4 grid gap-4">
           {progress ? <Card><CardHeader><CardTitle>Your progress</CardTitle><CardDescription>{progress.matureCards} of {progress.activeCards} active cards have reached a 21+ day interval.</CardDescription></CardHeader><CardContent className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-center lg:gap-8"><Progress value={progress.masteryPercent} aria-label="Mistake mastery" /><div className="grid grid-cols-3 gap-4 lg:gap-6"><div><p className="text-2xl font-semibold tabular-nums">{Math.round(progress.masteryPercent)}%</p><p className="text-xs text-muted-foreground">Mastery</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.recallRate === null ? "—" : Math.round(progress.recallRate) + "%"}</p><p className="text-xs text-muted-foreground">Recall · last 30 days</p></div><div><p className="text-2xl font-semibold tabular-nums">{progress.reviewsCompleted}</p><p className="text-xs text-muted-foreground">Reviews · last 30 days</p></div></div></CardContent></Card> : null}
+          <RecurringPatterns data={{ ...data, mistakes: visibleMistakes }} onSave={onSaveLearning} />
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
         <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
@@ -828,6 +832,19 @@ export function MistakesPage({ initialStatus, skillId, workspaceSubject, subject
       {mergeOpen ? <MistakeFieldMergeDialog mistakes={data.mistakes} onOpenChange={setMergeOpen} onApply={onApplyMergePlan} /> : null}
     </div>
   )
+}
+
+function RecurringPatterns({ data, onSave }: { data: AppData; onSave: (learning: LearningWorkspaceUpdate) => void }) {
+  const patterns = buildMistakePatterns(data.mistakes, data.attempts).slice(0, 5)
+  if (!patterns.length) return null
+  return <Card><CardHeader><CardTitle>Recurring mistakes</CardTitle><CardDescription>Repeated errors to target in your next revision.</CardDescription></CardHeader><CardContent className="grid gap-4">
+    <ul className="grid gap-3">{patterns.map((pattern) => <li key={pattern.key}><p className="text-sm font-medium">{pattern.topic ?? (pattern.subject || "Mistakes")} · {pattern.category}</p><p className="text-sm text-muted-foreground">{pattern.cards} cards across {pattern.papers} papers · {pattern.open} open</p></li>)}</ul>
+    <Button className="justify-self-start" variant="outline" onClick={() => {
+      const result = planPatternRevision(data.learning, data, undefined, 5)
+      if (result.count) onSave((learning) => planPatternRevision(learning, data, undefined, 5).learning)
+      toast.success(result.count ? `Planned ${count(result.count, "follow-up")}` : "No new follow-ups: already planned or no study days available")
+    }}>Plan follow-up</Button>
+  </CardContent></Card>
 }
 
 function ReviewPacing({ data, onSave, onReduce }: { data: AppData; onSave: (preferences: MistakeReviewPreferences) => void; onReduce: (days: number, target: number) => void }) {

@@ -1,5 +1,11 @@
 # Focal MCP server
 
+Recurring mistakes: `get_mistake_patterns` returns ranked patterns and source card ids (optional
+`subject`, `limit`). `schedule_pattern_revision` previews follow-up tasks by default; pass
+`dryRun: false` to save, with optional `subject` and `maxPatterns` (default 3). Existing planned
+follow-ups are skipped. The `mistake_followup` prompt guides evidence-based insights, alternative
+cards and a follow-up preview, requiring confirmation before scheduling.
+
 Lets an MCP client (Claude Code, Claude Desktop, ...) read and change a Focal account: exams,
 mistakes and reviews, SACs, calendar, study timer and sessions, stoplight, goals, tasks, timetable,
 settings, analytics, predictions, and the VCAA/VTAC reference data. Tools are grouped in

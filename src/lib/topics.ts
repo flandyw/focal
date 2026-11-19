@@ -82,7 +82,7 @@ const METHODS: SubjectTopics = {
   ],
 }
 
-export const TOPIC_CONFIGS: readonly SubjectTopics[] = [METHODS]
+const TOPIC_CONFIGS: readonly SubjectTopics[] = [METHODS]
 
 export function prerequisitesOf(config: SubjectTopics, topic: string): string[] {
   const seen = new Set([topic])
@@ -116,10 +116,10 @@ export function inferTopic(config: SubjectTopics, text: string): TopicMatch {
   return { topic: scored[0].topic, matched: true, ambiguous: scored[1]?.score === scored[0].score }
 }
 
-export type MistakeTopicMatch = TopicMatch & { basis: "areaOfStudy" | "text" | "none" }
+type MistakeTopicMatch = TopicMatch & { basis: "areaOfStudy" | "text" | "none" }
 
 /** The label first; only when it says nothing, the start of the card text (which can hold SVG, so it is capped). */
-export function inferMistakeTopic(config: SubjectTopics, mistake: Pick<Mistake, "areaOfStudy" | "question" | "questionText" | "explanation">): MistakeTopicMatch {
+function inferMistakeTopic(config: SubjectTopics, mistake: Pick<Mistake, "areaOfStudy" | "question" | "questionText" | "explanation">): MistakeTopicMatch {
   const byLabel = mistake.areaOfStudy?.trim() ? inferTopic(config, mistake.areaOfStudy) : undefined
   if (byLabel?.matched) return { ...byLabel, basis: "areaOfStudy" }
   const byText = inferTopic(config, [mistake.question, mistake.explanation, mistake.questionText?.slice(0, 500)].filter(Boolean).join(" "))

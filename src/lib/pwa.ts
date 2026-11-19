@@ -2,8 +2,6 @@ import { toast } from "sonner"
 import { supabase } from "./supabase"
 import { DESKTOP_NOTIFICATIONS_SINCE_KEY, NOTIFICATION_PREFERENCES_CHANGED, PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY, inQuietHours, loadNotificationPreferences, saveNotificationPreferences } from "./notification-preferences"
 
-export { PUSH_OWNER_KEY, PUSH_PREFERENCES_KEY } from "./notification-preferences"
-
 const PUSH_CHECKED_KEY = "focal:push-checked:v1"
 const PUSH_CHECK_MS = 6 * 3600_000
 

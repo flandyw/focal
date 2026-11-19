@@ -27,7 +27,7 @@ const same = (a: string, b: string) => normaliseComparisonName(a) === normaliseC
 const contains = (haystack: string, needle: string) => normaliseComparisonName(haystack).includes(normaliseComparisonName(needle))
 
 
-export function buildExamAnalytics(data: AppData, references: AssessmentReference[], { subject, groupBy = "topic", paper }: { subject?: string; groupBy?: MatrixGrouping; paper?: "Exam 1" | "Exam 2" }) {
+function buildExamAnalytics(data: AppData, references: AssessmentReference[], { subject, groupBy = "topic", paper }: { subject?: string; groupBy?: MatrixGrouping; paper?: "Exam 1" | "Exam 2" }) {
   const attempts = data.attempts.filter((a) => (!subject || same(a.subject, subject)) && (!paper || getAttemptMathsPaper(a) === (paper === "Exam 1" ? 1 : 2)))
   const attemptIds = new Set(attempts.map((a) => a.id))
   const mistakes = subject || paper ? data.mistakes.filter((m) => attemptIds.has(m.attemptId)) : data.mistakes

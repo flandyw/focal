@@ -11,7 +11,7 @@ export interface StudyTimeRange {
   end: string;
 }
 
-export interface StudyInterval {
+interface StudyInterval {
   start: string;
   end?: string;
   source: "manual" | "pomodoro" | "imported";
@@ -23,7 +23,7 @@ export type StudySessionExecution =
   | { state: "in-progress"; intervals: StudyInterval[] }
   | { state: "completed"; intervals: StudyInterval[]; completedAt: string; reportedMinutes?: number };
 
-export type NotionSyncSnapshot = Record<string, string | boolean | null>;
+type NotionSyncSnapshot = Record<string, string | boolean | null>;
 
 export interface NotionSource {
   type: "notion";

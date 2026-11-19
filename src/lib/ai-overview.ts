@@ -20,7 +20,7 @@ const overviewSchema = z.object({
   })),
   model: z.string(), createdAt: z.number(),
 })
-export type Overview = z.infer<typeof overviewSchema>
+type Overview = z.infer<typeof overviewSchema>
 
 /** A cached overview, or a reason not to ask again today (no key, failure backoff). */
 type Entry = { day: string; fingerprint: string; at: number; overview?: Overview; blockedUntil?: number; error?: string }

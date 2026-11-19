@@ -1,6 +1,6 @@
 import type { AppData } from "./exam-data"
 import type { LearningWorkspace, LearningWorkspaceUpdate } from "./learning-workspace"
-import { sameStudySubject } from "./studySubjects"
+import { sameStudySubject } from "./studySubjects.js"
 
 export function subjectLearning(learning: LearningWorkspace, subject: string): LearningWorkspace {
   return {

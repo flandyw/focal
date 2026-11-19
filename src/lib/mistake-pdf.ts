@@ -194,7 +194,7 @@ ${pages.join("\n\\newpage\n")}` : ""}
 }
 
 export async function downloadMistakesPdf(mistakes: Mistake[], attempts: ExamAttempt[], subject = "mistakes") {
-  const { downloadExamFile, MISTAKES_PDF_ENDPOINT } = await import("./host")
+  const { downloadExamFile, MISTAKES_PDF_ENDPOINT } = await import("./host.js")
   const response = await fetch(MISTAKES_PDF_ENDPOINT, {
     method: "POST",
     headers: { "content-type": "application/json" },

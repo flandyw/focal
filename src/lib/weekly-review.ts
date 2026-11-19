@@ -1,9 +1,9 @@
-import type { AppData } from "./exam-data"
-import { buildDayPlan } from "./day-plan"
-import { localDate, type TaskDraft } from "./learning-workspace"
-import { subjectWorkspace } from "./subject-workspace"
-import { sameStudySubject } from "./studySubjects"
-import { isDeleted, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract"
+import type { AppData } from "./exam-data.js"
+import { buildDayPlan } from "./day-plan.js"
+import { localDate, type TaskDraft } from "./learning-workspace.js"
+import { subjectWorkspace } from "./subject-workspace.js"
+import { sameStudySubject } from "./studySubjects.js"
+import { isDeleted, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
 
 export function weekStart(now: Date, offset = 0): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (now.getDay() + 6) % 7 + offset * 7)

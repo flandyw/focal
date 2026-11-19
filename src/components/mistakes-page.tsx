@@ -178,14 +178,14 @@ function AnswerPanel({ label, value }: { label: string; value?: string }) {
   )
 }
 
-function StudyQueue({ allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onUndoReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onUndoReview: (mistake: Mistake) => void; onBrowse: () => void }) {
+function StudyQueue({ initialCards, allMistakes, preferences, mistakes, conditions, attempts, studies, onReview, onUndoReview, onBrowse, onEdit, onReimport, onToggleSuspend, onSavePreferences }: { initialCards?: Mistake[]; allMistakes: Mistake[]; conditions: ReactNode; preferences?: MistakeReviewPreferences; onSavePreferences: (preferences: MistakeReviewPreferences) => void; onEdit: (mistake: Mistake) => void; onReimport: (mistake: Mistake) => void; onToggleSuspend: (mistake: Mistake) => void; mistakes: Mistake[]; attempts: ExamAttempt[]; studies: VcaaStudyResources[]; onReview: (mistake: Mistake, rating: ReviewRating, context?: PracticeContext) => void; onUndoReview: (mistake: Mistake) => void; onBrowse: () => void }) {
   const tick = useTickingNow(30_000)
   const [latestReviewAt, setLatestReviewAt] = useState(0)
   const nowMs = Math.max(tick.getTime(), latestReviewAt)
   const now = useMemo(() => new Date(nowMs), [nowMs])
   const settings = normalizeMistakeReviewPreferences(preferences)
   const progress = useMemo(() => getPracticeProgress(allMistakes, now), [allMistakes, now])
-  const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[]; weekly: boolean; week: string; size: number; initialXP: number } | null>(null)
+  const [session, setSession] = useState<{ ids: string[]; ratings: ReviewRating[]; weekly: boolean; week: string; size: number; initialXP: number } | null>(() => initialCards?.length ? { ids: initialCards.map((mistake) => mistake.id), ratings: [], weekly: false, week: progress.week, size: initialCards.length, initialXP: progress.xp } : null)
   const [feedback, setFeedback] = useState("")
   const [celebration, setCelebration] = useState(0)
   const [scope, setScope] = useState<"due" | "all">("due")
@@ -502,6 +502,11 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
   const now = useTickingNow(30_000)
   const [mathsExamFilter, setMathsExamFilter] = useState<MathsExamFilter>("all")
   const [tab, setTab] = useState<PageTab>(initialStatus === "due" ? "study" : "browse")
+  const [reviewCards, setReviewCards] = useState<Mistake[] | null>(null)
+  function changeTab(next: PageTab) {
+    setReviewCards(null)
+    setTab(next)
+  }
   const [search, setSearch] = useState("")
   const deferredSearch = useDeferredValue(search)
   const [browserFilter, setBrowserFilter] = useState<BrowserFilter>("all")
@@ -556,6 +561,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
     return filterMistakeLibrary(visibleMistakes, attemptMap, dueIds, { search: deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution })
   }, [visibleMistakes, attemptMap, dueIds, deferredSearch, browserFilter, category, topic, sort, examId, provider, resolution])
   const selectedMistakes = useMemo(() => browsedMistakes.filter((mistake) => selected.has(mistake.id)), [browsedMistakes, selected])
+  const reviewableMistakes = browsedMistakes.filter((mistake) => !mistake.suspended)
   // ponytail: pagination bounds DOM work; use virtualisation if continuous scrolling is needed.
   const pageSize = 24
   const pageCount = Math.max(1, Math.ceil(browsedMistakes.length / pageSize))
@@ -678,9 +684,9 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
       {tab !== "study" && data.mistakes.length ? <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You’re caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryCounts.mature} well-spaced</p></div></div>
-        <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => setTab("study")}>Review now<ArrowRight /></Button>
+        <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => changeTab("study")}>Review now<ArrowRight /></Button>
       </section> : null}
-      <Tabs value={tab} onValueChange={(value) => setTab(value as PageTab)} className="min-w-0">
+      <Tabs value={tab} onValueChange={(value) => changeTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>
           <TabsTrigger value="study" className="px-3">Review{counts.due ? ` (${counts.due})` : ""}</TabsTrigger>
@@ -694,7 +700,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
           <RecurringPatterns data={{ ...data, mistakes: visibleMistakes }} onSave={onSaveLearning} />
           {AI_ENABLED ? <MistakeInsights data={data} priorityCategory={topPriority?.category} onSave={onSaveInsights} /> : null}
         </TabsContent>
-        <TabsContent value="study" className="mt-4"><StudyQueue onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onUndoReview={onUndoReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => setTab("browse")} /></TabsContent>
+        <TabsContent value="study" className="mt-4">{tab === "study" && <StudyQueue initialCards={reviewCards ?? undefined} onSavePreferences={onSaveReviewPreferences} allMistakes={data.mistakes} preferences={data.mistakeReviewPreferences} mistakes={visibleMistakes} conditions={conditions} attempts={data.attempts} studies={studies} onReview={onReview} onUndoReview={onUndoReview} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onBrowse={() => changeTab("browse")} />}</TabsContent>
         <TabsContent value="schedule" className="mt-4 min-w-0">
           <ReviewPacing key={data.mistakeReviewPreferences?.updatedAt ?? "default"} data={data} onSave={onSaveReviewPreferences} onReduce={onReduceReviews} />
           {scheduleGroups.length ? (
@@ -822,6 +828,10 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
               {activeFilters.map((filter) => <Button key={filter.key} size="sm" variant="secondary" className="h-auto min-h-7 max-w-full py-1" onClick={() => { filter.clear(); clearSelection() }} aria-label={`Remove filter: ${filter.label}`}><span className="truncate">{filter.label}</span><X className="size-3" /></Button>)}
               <Button size="sm" variant="ghost" onClick={clearAllFilters}>Clear all</Button>
             </div> : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="sm" disabled={!reviewableMistakes.length} aria-describedby="library-review-description" onClick={() => { setReviewCards(reviewableMistakes); setTab("study") }}><BookOpenCheck />Review these ({reviewableMistakes.length})</Button>
+              <p id="library-review-description" className="text-xs text-muted-foreground">{reviewableMistakes.length ? "Includes cards not yet due; reviewing updates their schedules." : browsedMistakes.length ? "All matching cards have reviews paused." : "No matching cards to review."}</p>
+            </div>
             {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · ${currentPage * pageSize + 1}–${currentPage * pageSize + shownMistakes.length}` : ""}</span>

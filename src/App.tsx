@@ -227,7 +227,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
     : sync.status === "restoring" || sync.status === "reconnecting" ? "Saved on this device. Reconnecting to your account."
     : "Saved on this device. Sign in to save across devices."
   const examSyncAction = sync.status === "error" ? { label: "Retry sync", onClick: sync.retry }
-    : sync.status === "signed-out" || sync.status === "sign-in-required" ? { label: "Sign in", onClick: () => setView("settings") } : undefined
+    : sync.status === "signed-out" || sync.status === "sign-in-required" ? { label: "Sign in", onClick: () => setView("settings", "account") } : undefined
   const {
     references,
     referencesGeneratedAt,
@@ -999,7 +999,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {showSubjectMenu && <div className="-ml-2.5 mb-1 compact:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
-            <Button size="sm" onClick={() => setView("settings")}>Sign in again</Button>
+            <Button size="sm" onClick={() => setView("settings", "account")}>Sign in again</Button>
           </div> : null}
           <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open && !importing) setPendingImport(null) }}>
             <AlertDialogContent>
@@ -1115,7 +1115,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           {view === "predictor" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <StudyScorePredictor data={pageData} references={pageReferences} scalingReferences={scalingReferences} onLogExam={openNewExam} onOpenAtar={() => setView("atar")} />}</> : null}
           {view === "atar" ? <>{referencesStatus === "loading" || scalingStatus === "loading" ? PAGE_LOADING : <AtarEstimator onLogPractice={openNewExam} data={pageData} references={pageReferences} scalingReferences={scalingReferences} savedEstimates={data.atarEstimates} onSaveEstimate={saveAtarEstimate} onDeleteEstimate={deleteAtarEstimate} onTargetChange={setAtarTarget} />}</> : null}
           {view === "vcaa" ? <>{referencesLoading ? PAGE_LOADING : <VcaaExplorer key={vcaaSelection?.key ?? "vcaa-default"} references={pageReferences} attempts={pageData.attempts} preferredSubjects={pageData.subjects} studies={pageStudies} initialSelection={vcaaSelection} onOpenLibrary={() => setView("library")} onStart={(preset) => { setTimerPreset(preset); setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }} />}</> : null}
-          {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings")} onJoin={openFriendsTimer} /> : null}
+          {view === "friends" ? <FriendsPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} signedIn={Boolean(sync.user) && sync.status !== "sign-in-required"} userId={sync.user?.id} sessions={studySessionSync.sessions} onSignIn={() => setView("settings", "account")} onJoin={openFriendsTimer} /> : null}
           {view === "chat" ? <ChatPage key={`${sync.user?.id}:${sync.status === "sign-in-required"}`} userId={sync.status === "sign-in-required" ? undefined : sync.user?.id} subject={selectedSubject} onSignIn={() => setView("settings", "account")} onSettings={() => setView("settings", "ai")} /> : null}
           {view === "settings" ? <SettingsPage section={recordId ?? null} onSection={(id) => setView("settings", id ?? undefined)} sync={sync} subjects={pageSubjects} selectedSubjects={data.subjects} completedSubjects={data.completedSubjects} subjectCompletionYears={data.subjectCompletionYears} onSubjectCompletion={(subject, year) => setData((current) => setSubjectCompletion(current, subject, year))} onCompleteYear={(year, subjects) => setData((current) => completeSubjectYear(current, year, subjects))} providers={[...new Set(data.attempts.map((attempt) => attempt.provider))]} examDifficulty={data.examDifficulty} onSubjectsChange={saveSubjects} onExamDifficultyChange={saveExamDifficulty} onExport={() => { void Promise.resolve(downloadAppData(data)).then((saved) => { if (saved) toast.success("Backup exported") }, (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not export your data.")) }} onImport={importData} onReplayOnboarding={() => setGuide("onboarding")} onStartTour={() => setGuide("tour")} recovery={<RecoveryPanel key={recoveryOwner ?? "unavailable"} owner={recoveryOwner} data={data} sessions={studySessionSync.sessions} error={recovery.error} onBackup={() => recovery.backup()} onRestore={restoreRecovery} />} /> : null}
           </motion.div>

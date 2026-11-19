@@ -62,7 +62,7 @@ export function SettingsPage({ sync, subjects, selectedSubjects, completedSubjec
   const update = useUpdateState()
   const signedIn = Boolean(sync.user) && sync.status !== "sign-in-required"
   // null shows the overview list on phones; wider screens always show a section beside it.
-  const open = section ?? (sync.configured && !signedIn ? "account" : null)
+  const open = section
   const difficulty = resolveDifficultySettings(examDifficulty)
   const current = selectedSubjects.filter((subject) => !completedSubjects.some((name) => sameStudySubject(name, subject)))
   const syncLabel = sync.status === "synced" ? "Synced" : sync.status === "syncing" ? "Syncing"

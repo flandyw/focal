@@ -225,9 +225,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [subject, selectedSubjects, allSubjectIds],
  )
 
- const selectionState:"all" |"partial" = !isFilterActive || activeSet.size === allSubjectIds.length
- ?"all"
- :"partial"
+ const selectionState = selectedSubjects === null ? "all" : "partial"
 
  const filteredBreakdown = useMemo(
  () =>

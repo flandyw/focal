@@ -688,11 +688,11 @@ export function ExamsPage(props: ExamsPageProps) {
               <NextActionNotice action={nextAction} />
               <StatRow data={data} />
               {deadlineSection}
-              <div className="grid gap-5 lg:grid-cols-3">
-                <div className="min-w-0 lg:col-span-2">
+              <div className="grid gap-5 lg:grid-cols-5">
+                <div className="min-w-0 lg:col-span-3">
                   <RecentExams data={data} references={references} comparisonYear={comparisonYear} onLogExam={onLogExam} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 lg:col-span-2">
                   <SubjectBreakdown data={data} references={references} />
                 </div>
               </div>

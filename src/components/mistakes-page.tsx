@@ -1,10 +1,9 @@
-import { WorkspaceSplit } from "./workspace-layout"
 import { buzz } from "../lib/mobile"
 import { count } from "../lib/utils"
 import { sameStudySubject } from "../lib/studySubjects"
 import { isTwoPaperMathematics } from "../lib/study-score"
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { ArrowRight, BookOpenCheck, ChevronDown, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
+import { ArrowRight, BookOpenCheck, CalendarClock, ChevronDown, Layers, ShieldCheck, Tags, FileDown, FileJson, FileUp, Merge, MoreHorizontal, NotebookPen, Pencil, Play, Plus, Search, Shuffle, SkipForward, SlidersHorizontal, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { useMinWidth } from "../hooks/use-mobile"
@@ -19,6 +18,7 @@ import { MistakeAlternativeDeck } from "./mistake-alternative-deck"
 import { MistakeJsonImportDialog } from "./mistake-json-import"
 import { MistakeInsights } from "./mistake-insights"
 import { PageHeader } from "./page-header"
+import { Meter, StatGrid, StatTile, WorkspaceSplit } from "./workspace-layout"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -644,6 +644,22 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
     return visibleMistakes.filter((mistake) => !mistake.suspended && new Date(getMistakeSchedule(mistake).dueAt).getTime() <= horizon).length
   }, [visibleMistakes, now])
 
+  // Cards falling due on each of the next seven days; overdue cards count as today.
+  const weekLoad = useMemo(() => {
+    const days = Array.from({ length: 7 }, () => 0)
+    for (const mistake of visibleMistakes) {
+      if (mistake.suspended) continue
+      const day = Math.max(0, Math.floor((new Date(getMistakeSchedule(mistake).dueAt).getTime() - now.getTime()) / 86_400_000) + 1)
+      if (day < 7) days[day]++
+    }
+    return days
+  }, [visibleMistakes, now])
+  const topCategory = useMemo(() => {
+    const totals = new Map<string, number>()
+    for (const mistake of visibleMistakes) if (mistake.category) totals.set(mistake.category, (totals.get(mistake.category) ?? 0) + 1)
+    return [...totals].sort((a, b) => b[1] - a[1])[0]
+  }, [visibleMistakes])
+
   async function autofillEmptyFields() {
     setAutofilling(true)
     setAutofillProgress(null)
@@ -666,7 +682,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
   return (
     <div className="grid min-w-0 gap-5 lg:gap-6">
       {skillId ? <div className="flex flex-wrap items-center gap-2 text-sm"><span>Related mistakes · {data.learning.curriculumAreas.find((item) => item.id === skillId)?.name ?? "Selected skill"}</span><Button variant="ghost" size="sm" onClick={() => onSubjectChange(activeSubject)}>Clear skill filter</Button></div> : null}
-      <PageHeader title="Mistakes">
+      <PageHeader icon={Layers} title="Mistakes" description="Every error you have logged, spaced for review until it sticks.">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import from chatbot</Button>
         <Button onClick={onLog}><Plus />Add mistake</Button>
         <DropdownMenu>
@@ -682,10 +698,12 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
       </PageHeader>
       <AIOverview area="mistakes" subject={activeSubject} fingerprint={String(visibleMistakes.length)} />
       {autofilling && autofillProgress ? <p role="status" aria-live="polite" className="text-sm text-muted-foreground tabular-nums">{formatChatGPTProgress(autofillProgress)}</p> : null}
-      {tab !== "study" && data.mistakes.length ? <section className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="flex items-center gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><BookOpenCheck className="size-5" /></div><div><p className="font-medium">{summaryCounts.due ? "Your next practice round" : "You’re caught up"}</p><p className="text-sm text-muted-foreground tabular-nums">{summaryCounts.due} ready · {summaryCounts.mature} well-spaced</p></div></div>
-        <Button variant={summaryCounts.due ? "default" : "outline"} onClick={() => changeTab("study")}>Review now<ArrowRight /></Button>
-      </section> : null}
+      {tab !== "study" && data.mistakes.length ? <StatGrid>
+        <StatTile icon={BookOpenCheck} tone={summaryCounts.due ? "warning" : "success"} label={summaryCounts.due ? "Ready to review" : "You’re caught up"} value={summaryCounts.due} hint={<span className="inline-flex items-center gap-1 font-medium text-primary">Review now<ArrowRight aria-hidden className="size-3.5" /></span>} onClick={() => changeTab("study")} className="max-md:col-span-2" />
+        <StatTile icon={CalendarClock} label="Due in 7 days" value={dueThisWeekCount} hint="Daily load for the week ahead" spark={weekLoad} onClick={() => changeTab("schedule")} />
+        <StatTile icon={ShieldCheck} tone="success" label="Well-spaced" value={summaryCounts.mature} hint={<span className="flex items-center gap-2"><Meter value={summaryCounts.mature} max={visibleMistakes.length} className="min-w-8 flex-1" barClassName="bg-success" /><span className="shrink-0 tabular-nums">of {visibleMistakes.length}</span></span>} />
+        <StatTile icon={Tags} label="Most common error" value={<span className="block truncate text-xl">{topCategory?.[0] ?? "—"}</span>} hint={topCategory ? `${count(topCategory[1], "mistake")} · ${Math.round(topCategory[1] / visibleMistakes.length * 100)}% of the library` : "Tag mistakes with a category"} className="max-md:col-span-2" />
+      </StatGrid> : null}
       <Tabs value={tab} onValueChange={(value) => changeTab(value as PageTab)} className="min-w-0">
         <TabsList variant="line" className="h-auto! w-full! flex-nowrap justify-start gap-2 overflow-x-auto border-b pb-2">
           <TabsTrigger value="browse" className="px-3">Library</TabsTrigger>

@@ -418,7 +418,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
             </div>
           </div>
           {loading ? <div role="status" className="grid gap-2"><span className="sr-only">Loading friends</span>{[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 motion-reduce:animate-none" />)}</div> : null}
-          {board.length ? <ol className="divide-y border-y">
+          {board.length ? <ol className="min-w-0 divide-y border-y">
             {board.map(({ person, stats, rank }) => {
               const isMe = person.status === "me"
               const done = cheered(person.user_id)

@@ -340,9 +340,11 @@ export function timerReducer(state: TimerState, action: TimerAction): TimerState
       if (state.mode === "free") return state
       const oldDuration = getDurationSeconds(state.mode, action.previousSettings)
       const nextDuration = getDurationSeconds(state.mode, action.settings)
-      const secondsLeft = state.secondsLeft === oldDuration ? nextDuration : Math.min(state.secondsLeft, nextDuration)
-      const totalSeconds = state.totalSeconds === oldDuration ? nextDuration : Math.max(secondsLeft, state.totalSeconds)
-      return { ...state, secondsLeft, totalSeconds }
+      if (oldDuration === nextDuration) return state
+      const elapsed = state.totalSeconds - state.secondsLeft
+      const extra = Math.max(0, state.totalSeconds - oldDuration)
+      const totalSeconds = Math.min(MAX_DURATION_MINUTES * 60, Math.max(elapsed + 1, nextDuration + extra))
+      return { ...state, secondsLeft: totalSeconds - elapsed, totalSeconds }
     }
     default:
       return state

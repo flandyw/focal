@@ -131,7 +131,7 @@ export function buildAtarModel({ data, references, scaling, rows, year, target =
   const aggregateTarget = targetAggregate(target, year)
   let targetPath: AtarModel["targetPath"] = null
   if (target !== null && estimate && (aggregateTarget === null || estimate.aggregate < aggregateTarget)) {
-    const scores = new Map(modelRows.filter((item) => counted.has(item.row.id) && item.rawScore !== null).map((item) => [item, item.rawScore!]))
+    const scores = new Map(modelRows.filter((item) => item.study && item.rawScore !== null).map((item) => [item, item.rawScore!]))
     let aggregate = estimate.aggregate
     // ponytail: greedy may not find the global minimum; upgrade to bounded dynamic programming for an optimal path.
     while (aggregateTarget !== null && aggregate < aggregateTarget) {

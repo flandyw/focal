@@ -51,7 +51,7 @@ export function AtarSummary({ model, onTargetChange }: { model: AtarModel; onTar
           {model.targetPath ? <span className="mt-1 block">
             {model.targetPath.reachable
               ? `Reachable with ${new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(model.targetPath.steps.map((step) => `+${step.points} in ${step.name}`))}.`
-              : "The target isn't reachable with the current studies, even with study scores of 50."}
+              : "The target isn't reachable with the studies scored so far, even with study scores of 50."}
           </span> : null}
         </p>
       </div>

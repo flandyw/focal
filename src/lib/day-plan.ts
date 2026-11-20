@@ -1,9 +1,9 @@
 import { parseISO } from "date-fns"
 import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data.js"
 import { isCompletedSac, type SacRecord } from "./sac.js"
-import { formatExamLabel, getExamEnd, getExamStart, type Timetable, type TimetableEntry } from "./timetable.js"
+import { calendarDate, escapeCalendarText, examCalendarEvent, formatExamLabel, getExamEnd, getExamStart, nextCalendarDate, type Timetable, type TimetableEntry } from "./timetable.js"
 import { localDate, type LearningWorkspace, type StudyTask, type StudyTaskStatus } from "./learning-workspace.js"
-import { canContinue, isDeleted, isPaused, isRunning, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
+import { canContinue, isDeleted, isPaused, isPlanned, isRunning, studySessionSubjects, type CanonicalStudySession } from "./sync/sessionContract.js"
 import { subjectNameFor } from "./class-timetable.js"
 import { VCE_SUBJECTS, type CalendarEvent } from "./types.js"
 import { mergedStudyMilliseconds } from "./utils.js"
@@ -389,6 +389,66 @@ export function overdueTasks(tasks: StudyTask[], before: string): StudyTask[] {
   return tasks
     .filter((task) => !task.archivedAt && task.status === "planned" && task.plannedFor < before)
     .sort((a, b) => a.plannedFor.localeCompare(b.plannedFor) || a.createdAt.localeCompare(b.createdAt))
+}
+
+const icsTime = (time: number) => new Date(time).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
+
+/** Everything still ahead -- planned tasks and study, SACs, events and tracked exams --
+ *  as one .ics file a phone or school calendar can import. */
+export function buildPlanCalendar(data: DayPlanSource, timetable: Timetable | null, now = new Date()): { calendar: string; count: number } {
+  const today = localDate(now)
+  const from = new Date(`${today}T00:00:00`).getTime()
+  const stamp = icsTime(now.getTime())
+  const events: string[][] = []
+  const add = (uid: string, dates: string[], summary: string, description?: string, location?: string) => events.push([
+    "BEGIN:VEVENT", `UID:${escapeCalendarText(uid)}@focal.local`, `DTSTAMP:${stamp}`, ...dates,
+    `SUMMARY:${escapeCalendarText(summary)}`,
+    ...(description ? [`DESCRIPTION:${escapeCalendarText(description)}`] : []),
+    ...(location ? [`LOCATION:${escapeCalendarText(location)}`] : []),
+    "END:VEVENT",
+  ])
+  // Past or unreadable dates are left out rather than written as broken entries.
+  const allDay = (date: string) => Number.isFinite(Date.parse(`${date}T00:00:00Z`))
+    ? [`DTSTART;VALUE=DATE:${calendarDate(date)}`, `DTEND;VALUE=DATE:${nextCalendarDate(date)}`] : null
+  // An instant (no end) carries DTSTART alone; iCalendar requires DTEND to be after DTSTART.
+  const timed = (start: number, end: number) => Number.isFinite(start) && Number.isFinite(end) && end >= from
+    ? [`DTSTART:${icsTime(start)}`, ...(end > start ? [`DTEND:${icsTime(end)}`] : [])] : null
+
+  for (const task of data.learning.tasks) {
+    const dates = allDay(task.plannedFor)
+    if (task.archivedAt || task.status !== "planned" || task.plannedFor < today || !dates) continue
+    add(`task-${task.id}`, dates, task.title, [task.subject, `${task.durationMinutes} min`, task.detail].filter(Boolean).join(" · "))
+  }
+  for (const record of data.sacRecords) {
+    if (isCompletedSac(record)) continue
+    const start = Date.parse(record.scheduledAt)
+    const dates = record.scheduledAt.length > 10 ? timed(start, start + record.durationMinutes * 60_000)
+      : record.scheduledAt >= today ? allDay(record.scheduledAt) : null
+    if (dates) add(`sac-${record.id}`, dates, `SAC: ${record.title}`, [sacItem(record).detail, `${record.durationMinutes} min`].join(" · "))
+  }
+  for (const event of data.events ?? []) {
+    if (event.deleted_at || event.isFinished) continue
+    const start = Date.parse(event.startTime)
+    const dates = timed(start, event.endTime ? Date.parse(event.endTime) : start)
+    if (dates) add(`event-${event.id}`, dates, event.title,
+      [[eventTypeLabel(event.eventType), subjectNameFor(event.subjectId)].filter(Boolean).join(" · "), event.description].filter(Boolean).join("\n"), event.location)
+  }
+  for (const session of data.sessions ?? []) {
+    if (!isPlanned(session)) continue
+    const subjects = studySessionSubjects(session).map(subjectLabel).filter(Boolean).join(" · ") || subjectLabel(session.subject_id ?? undefined)
+    sessionBlocks(session, now.getTime()).forEach((block, index) => {
+      const dates = timed(Date.parse(block.start), Date.parse(block.end))
+      if (dates) add(`session-${session.id}-${index}`, dates, session.title, subjects ? `Study · ${subjects}` : "Study")
+    })
+  }
+  const tracked = new Set(data.trackedExamIds)
+  for (const entry of timetable?.exams ?? []) {
+    if (tracked.has(entry.id) && getExamEnd(entry).getTime() >= from) events.push(examCalendarEvent(entry, timetable?.sourceUrl ?? "", stamp))
+  }
+  return {
+    calendar: ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Focal//Study Plan//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Focal", ...events.flat(), "END:VCALENDAR", ""].join("\r\n"),
+    count: events.length,
+  }
 }
 
 /* ------------------------------------------------------------------ */

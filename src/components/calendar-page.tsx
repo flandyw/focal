@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react"
 import { swipe } from "../lib/mobile"
 import { motion, useReducedMotion } from "framer-motion"
-import { Archive, ArrowDown, ArrowUp, CalendarDays, CalendarPlus, CalendarSearch, LayoutGrid, ClipboardPaste, Check, ChevronLeft, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
+import { Archive, ArrowDown, ArrowUp, CalendarDays, CalendarPlus, CalendarSearch, LayoutGrid, ClipboardPaste, Check, ChevronLeft, Download, ChevronRight, MoreHorizontal, Play, Plus, RotateCcw, SkipForward, Timer } from "lucide-react"
 import { toast } from "sonner"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
@@ -24,6 +24,7 @@ import {
   archiveTask,
   buildCalendarMonth,
   buildDayPlan,
+  buildPlanCalendar,
   isDayItemDone,
   moveTask,
   overdueTasks,
@@ -37,6 +38,7 @@ import {
 import { classPeriodsOn, getTimetablePeriodError, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
 import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
 import type { Timetable } from "../lib/timetable"
+import { downloadExamFile } from "../lib/host"
 import { cn } from "../lib/utils"
 import type { CalendarEvent, TimetableConfig, TimetablePeriod } from "../lib/types"
 import type { TextEventDraft } from "../lib/calendarImport"
@@ -258,6 +260,16 @@ export function CalendarPage({
     toast("Event deleted", removed ? { duration: 8000, action: { label: "Undo", onClick: () => onEventsChange((current) => [...current, removed]) } } : undefined)
   }
 
+  function exportCalendar() {
+    const { calendar, count } = buildPlanCalendar(source, timetable)
+    if (!count) {
+      toast("Nothing upcoming to export")
+      return
+    }
+    void downloadExamFile(new Blob([calendar], { type: "text/calendar;charset=utf-8" }), "focal-calendar.ics")
+      .then((saved) => { if (saved) toast.success(`Exported ${count} upcoming item${count === 1 ? "" : "s"}`) })
+  }
+
   const classes = useMemo(() => classPeriodsOn(selected, classTimetable), [selected, classTimetable])
 
   function editClass(period: TimetablePeriod, patch: { startTime: string; endTime: string }) {
@@ -326,6 +338,7 @@ export function CalendarPage({
           <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><CalendarPlus />Auto-plan</Button>
           <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
           <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
+          <Button onClick={exportCalendar} title="Download upcoming tasks, study, SACs, events and tracked exams as an .ics file for your phone or school calendar" variant="outline"><Download />Export</Button>
           <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
         </div>
         <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />

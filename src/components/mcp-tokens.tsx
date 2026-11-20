@@ -120,8 +120,8 @@ export function McpTokens() {
         : list === "loading" && !tokens.length ? <p role="status" className="text-sm text-muted-foreground">Loading tokens…</p> : null}
       {tokens.map((token) => {
         const createdOn = new Date(token.created_at).toLocaleDateString("en-AU")
-        // Repeated names need the date to tell the buttons apart.
-        const label = tokens.some((other) => other.id !== token.id && other.name === token.name) ? `${token.name}, created ${createdOn}` : token.name
+        // Repeated names can be created on the same day, so include the time too.
+        const label = tokens.some((other) => other.id !== token.id && other.name === token.name) ? `${token.name}, created ${new Date(token.created_at).toLocaleString("en-AU")}` : token.name
         return <div key={token.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3 text-sm">
           <div className="min-w-0">
             <div className="font-medium break-words">{token.name}</div>

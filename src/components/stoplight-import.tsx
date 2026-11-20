@@ -91,13 +91,13 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
           <Field>
             <div className="flex items-center justify-between gap-3">
               <FieldLabel>2. Copy the prompt, attach your study design, send</FieldLabel>
-              <Button type="button" size="sm" variant="outline" onClick={() => void copyPrompt()}>
+              <Button type="button" size="sm" variant="outline" disabled={!subject.trim()} onClick={() => void copyPrompt()}>
                 {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
             {showPrompt && subject.trim() ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={buildStoplightPrompt(subject.trim())} /> : null}
           </Field>
-          <Field data-invalid={error ? true : undefined}>
+          <Field data-invalid={error && !items ? true : undefined}>
             <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply</FieldLabel>
             <Textarea
               id="stoplight-import-json"
@@ -106,7 +106,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               placeholder='{"groups":[{"group":"Unit 3 AOS 1","items":[{"name":"...","check":"..."}]}]}'
               value={text}
               onChange={(event) => { setText(event.target.value); setItems(null); setError(null) }}
-              aria-invalid={error ? true : undefined}
+              aria-invalid={error && !items ? true : undefined}
               aria-describedby={error ? "stoplight-import-json-error" : undefined}
             />
             {error ? <FieldError id="stoplight-import-json-error">{error}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}

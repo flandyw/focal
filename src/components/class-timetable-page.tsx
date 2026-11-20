@@ -134,7 +134,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
         </div>
         <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
           {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><RotateCcw />Today</Button> : null}
-          <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
+          <Button onClick={() => setImportOpen(true)} variant="outline"><span className="inline-flex items-center gap-2 text-sm"><ClipboardPaste />Import</span></Button>
           {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><Settings2 />Cycle settings</Button> : null}
           <Button onClick={addPeriod}><Plus />Add period</Button>
         </div>
@@ -145,7 +145,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           <EmptyHeader>
             <EmptyMedia variant="icon"><CalendarClock /></EmptyMedia>
             <EmptyTitle>No timetable yet</EmptyTitle>
-            <EmptyDescription>Import a screenshot of your school timetable, or add periods one at a time. Your classes then appear on the calendar, ready to plan study around.</EmptyDescription>
+            <EmptyDescription>Use Import to turn a screenshot into timetable data with a chatbot, or add periods one at a time. Your classes then appear on the calendar, ready to plan study around.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (

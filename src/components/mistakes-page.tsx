@@ -845,10 +845,10 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
               {activeFilters.map((filter) => <Button key={filter.key} size="sm" variant="secondary" className="h-auto min-h-7 max-w-full py-1" onClick={() => { filter.clear(); clearSelection() }} aria-label={`Remove filter: ${filter.label}`}><span className="truncate">{filter.label}</span><X className="size-3" /></Button>)}
               <Button size="sm" variant="ghost" onClick={clearAllFilters}>Clear all</Button>
             </div> : null}
-            <div className="flex flex-wrap items-center gap-3">
+            {data.mistakes.length ? <div className="flex flex-wrap items-center gap-3">
               <Button size="sm" disabled={!reviewableMistakes.length} aria-describedby="library-review-description" onClick={() => { setReviewCards(reviewableMistakes); setTab("study") }}><BookOpenCheck />Review these ({reviewableMistakes.length})</Button>
               <p id="library-review-description" className="text-xs text-muted-foreground">{reviewableMistakes.length ? "Includes cards not yet due; reviewing updates their schedules." : browsedMistakes.length ? "All matching cards have reviews paused." : "No matching cards to review."}</p>
-            </div>
+            </div> : null}
             {browsedMistakes.length ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground tabular-nums" role="status">{browsedMistakes.length} {browsedMistakes.length === 1 ? "mistake" : "mistakes"}{browsedMistakes.length !== visibleMistakes.length ? ` of ${visibleMistakes.length}` : ""}{shownMistakes.length < browsedMistakes.length ? ` · ${currentPage * pageSize + 1}–${currentPage * pageSize + shownMistakes.length}` : ""}</span>

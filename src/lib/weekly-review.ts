@@ -78,5 +78,9 @@ export function buildWeeklyReview(data: AppData, sessions: CanonicalStudySession
     ...repeated.slice(0, 2).map((row): TaskDraft => ({ kind: "mistake-review", title: `Review ${row.category.toLowerCase()} mistakes`, subject: row.subject === "Unassigned" ? undefined : row.subject, detail: `${row.cards} different mistakes appeared in the week of ${first}. Work through the correction, then retry without notes.`, durationMinutes: 20, plannedFor: date, sourceId: `weekly:${first}:${row.subject}:${row.category}` })),
     ...neglected.slice(0, 1).map((subject): TaskDraft => ({ kind: "topic-practice", title: `Check in on ${subject}`, subject, detail: `No completed study or assessment was recorded for this subject in the week of ${first}. Choose a topic and check what you remember.`, durationMinutes: 25, plannedFor: date, sourceId: `weekly:${first}:${subject}:check-in` })),
   ].filter((draft) => !existingSources.has(draft.sourceId))
-  return { first, last: days[6], planned, completed, taskCount: tasks.length, done, papers: attempts.length, reviews, recalled, repeated, improved, neglected, suggestions }
+  const hasData = plans.some((plan) => plan.items.some((item) => item.kind !== "mistakes")) || reviews > 0 || data.mistakes.some((mistake) => {
+    const created = Date.parse(mistake.createdAt)
+    return created >= windowStart && created < windowEnd
+  })
+  return { first, last: days[6], hasData, planned, completed, taskCount: tasks.length, done, papers: attempts.length, reviews, recalled, repeated, improved, neglected, suggestions }
 }

@@ -158,7 +158,7 @@ function ChartTooltipContent({
     const value =
       !labelKey && (typeof label === "string" || typeof label === "number")
         ? (config[label]?.label ?? label)
-        : itemConfig?.label
+        : labelKey ? itemConfig?.label : undefined
 
     if (labelFormatter) {
       return (

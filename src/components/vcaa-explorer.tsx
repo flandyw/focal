@@ -158,7 +158,7 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="year" tickLine={false} axisLine={false} allowDecimals={false} />
                 <YAxis domain={[0, 100]} width={42} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
-                <ChartTooltip content={<ChartTooltipContent formatter={(value, name) => <div className="flex flex-1 items-center justify-between gap-4"><span className="text-muted-foreground">{chartConfig[name as keyof typeof chartConfig]?.label}</span><span className="font-medium tabular-nums">{formatPercent(value == null ? null : Number(value))}</span></div>} />} />
+                <ChartTooltip filterNull={false} content={<ChartTooltipContent formatter={(value, name) => <div className="flex flex-1 items-center justify-between gap-4"><span className="text-muted-foreground">{chartConfig[name as keyof typeof chartConfig]?.label}</span><span className="font-medium tabular-nums">{formatPercent(value == null ? null : Number(value))}</span></div>} />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <ReferenceLine y={score} stroke="var(--foreground)" strokeDasharray="4 4" label={{ value: `You ${score.toFixed(1)}%`, position: "insideTopRight", fontSize: 11, fill: "var(--foreground)" }} />
                 <Line type="monotone" dataKey="aPlusCutoffPercentage" stroke="var(--color-aPlusCutoffPercentage)" strokeWidth={2} connectNulls isAnimationActive={false} />

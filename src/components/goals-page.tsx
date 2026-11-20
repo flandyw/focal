@@ -1,4 +1,4 @@
-import type { ScalingReference } from "../lib/scaling"
+import { normaliseScalingStudyName, type ScalingReference } from "../lib/scaling"
 import { useMemo, useState, type FormEvent } from "react"
 import { Archive, CalendarClock, CalendarPlus, CircleCheck, Flag, Gauge, Pencil, Plus, Target } from "lucide-react"
 import { toast } from "sonner"
@@ -115,7 +115,20 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
   const [editingGoal, setEditingGoal] = useState<StudyGoal | null>(null)
   const [error, setError] = useState<string | null>(null)
   const now = useTickingNow()
-  const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => ({ goal, progress: getGoalProgress(goal, data, references, scalingReferences) })), [data, references, scalingReferences])
+  const progress = useMemo(() => data.learning.goals.filter((goal) => !goal.archivedAt).map((goal) => {
+    const progress = getGoalProgress(goal, data, references, scalingReferences)
+    if (goal.kind === "atar" || progress.current === null) return { goal, progress, movement: "" }
+    const createdAt = new Date(goal.createdAt)
+    const baselineAttempts = data.attempts.filter((attempt) => new Date(attempt.createdAt || attempt.completedAt).getTime() <= createdAt.getTime())
+    const baseline = getGoalProgress(goal, { ...data, attempts: baselineAttempts }, references, scalingReferences).current
+    const newPapers = data.attempts.filter((attempt) => (!goal.subject || (goal.kind === "study-score" ? normaliseScalingStudyName(attempt.subject) === normaliseScalingStudyName(goal.subject) : attempt.subject.toLowerCase() === goal.subject.toLowerCase())) && new Date(attempt.createdAt || attempt.completedAt).getTime() > createdAt.getTime()).length
+    const setOn = createdAt.toLocaleDateString("en-AU", { day: "numeric", month: "short" })
+    const change = baseline === null ? 0 : Number((progress.current - baseline).toFixed(1))
+    const movement = !newPapers ? `No new papers since you set this on ${setOn}.`
+      : baseline === null ? `No baseline when you set this on ${setOn}; now ${progress.current.toFixed(1)}.`
+      : `${change === 0 ? "No change" : `${change > 0 ? "Up" : "Down"} ${Math.abs(change).toFixed(1)}`} since you set this on ${setOn}, from ${baseline.toFixed(1)} across ${newPapers} new paper${newPapers === 1 ? "" : "s"}.`
+    return { goal, progress, movement }
+  }), [data, references, scalingReferences])
   const archivedGoals = data.learning.goals.filter((goal) => goal.archivedAt)
   const daysTo = (deadline: string) => Math.round((new Date(`${deadline}T00:00:00`).getTime() - new Date(`${localDate(now)}T00:00:00`).getTime()) / 86_400_000)
   const isReached = ({ goal, progress: item }: (typeof progress)[number]) => item.current !== null && item.current >= goal.target
@@ -177,7 +190,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
         </form>
       </Panel>
 
-      {progress.length ? <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 max-lg:order-first">{progress.map(({ goal, progress: item }) => {
+      {progress.length ? <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 max-lg:order-first">{progress.map(({ goal, progress: item, movement }) => {
         const achieved = item.current !== null && item.current >= goal.target
         const expired = !achieved && goal.deadline < localDate(now)
         const digits = goal.kind === "atar" ? 2 : 1
@@ -203,7 +216,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
               </div>
               <p className={`shrink-0 text-right text-xs tabular-nums ${expired ? "text-destructive" : "text-muted-foreground"}`}>{daysLeft < 0 ? `Ended ${-daysLeft}d ago` : daysLeft === 0 ? "Due today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`}<span className="block">by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</span></p>
             </div>
-            <p className="text-sm text-pretty">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `Next milestone: close roughly ${Math.max(1, item.gap / 3).toFixed(1)} points in each of three review cycles.`}</p>
+            <p className="text-sm text-pretty">{expired ? "The deadline has passed. Edit it to keep going, or archive this goal." : item.gap === null ? "Log compatible evidence to calculate a pathway." : achieved ? "Maintain this result with spaced review and full-paper practice." : `${movement ? `${movement} ` : ""}About ${(item.gap / Math.max(1, daysLeft / 7)).toFixed(digits)} a week closes the gap by the deadline.`}</p>
             <div className="flex flex-wrap items-center gap-2 border-t pt-3">
               <Button size="sm" variant={achieved ? "outline" : "default"} onClick={() => onPlanGoal(goal)}><CalendarPlus />Plan work</Button>
               <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setEditingGoal(goal)}><Pencil />Edit</Button>

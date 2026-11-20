@@ -16,7 +16,7 @@ function openUsage() {
 /** Official Sign in with ChatGPT connection UI, wired to the local service. */
 export function ChatGPTConnection() {
   const chatgpt = useChatGPT()
-  if (chatgpt.status === "loading") return <p className="text-sm text-muted-foreground">Checking ChatGPT connection…</p>
+  if (chatgpt.status === "loading") return <p role="status" className="text-sm text-muted-foreground">Checking ChatGPT connection…</p>
   if (chatgpt.status === "unavailable") {
     return <p className="text-sm text-muted-foreground">The local ChatGPT service is not running. Restart Focal to try again.</p>
   }
@@ -30,7 +30,7 @@ export function ChatGPTConnection() {
             <p className="truncate text-sm font-medium">{identity?.name || "Connected with ChatGPT"}</p>
             <p className="truncate text-sm text-muted-foreground">{[identity?.email, sharing ? "Usage sharing on" : "Usage sharing off"].filter(Boolean).join(" · ")}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             {sharing
               ? <Button size="sm" variant="outline" aria-label="Manage ChatGPT usage (opens in browser)" onClick={openUsage}>Manage usage<ExternalLink /></Button>
               : <Button size="sm" variant="outline" onClick={() => void chatgpt.connect(true)}>Enable usage sharing</Button>}

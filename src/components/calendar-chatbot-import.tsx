@@ -119,8 +119,9 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
               value={text}
               onChange={(event) => { setText(event.target.value); setDrafts(null); setError(null) }}
               aria-invalid={error && !drafts ? true : undefined}
+              aria-describedby={error ? "calendar-import-json-error" : undefined}
             />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Nothing is added until you confirm the list below.</FieldDescription>}
+            {error ? <FieldError id="calendar-import-json-error">{error}</FieldError> : <FieldDescription>Nothing is added until you confirm the list below.</FieldDescription>}
           </Field>
           {drafts && rejectedCount > 0 ? <p role="status" className="text-sm text-destructive">{rejectedCount} invalid item{rejectedCount === 1 ? " was" : "s were"} left out of the preview. Check the reply for missing titles, invalid dates or times, or study sessions without a matching subject before importing.</p> : null}
           {drafts ? (

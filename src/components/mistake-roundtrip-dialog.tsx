@@ -88,8 +88,8 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
               </Button>
             </div>
             <Textarea id="mistake-roundtrip-json" rows={6} className="font-mono text-xs" spellCheck={false} placeholder='{"mistakes":[{"id":"…","correction":"…"}]}'
-              value={text} onChange={(event) => { reads.current++; setText(event.target.value); setResult(null); setError(null) }} aria-invalid={error ? true : undefined} />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only question label, question text, what went wrong, improved response and topic are replaced. Blank fields are ignored.</FieldDescription>}
+              value={text} onChange={(event) => { reads.current++; setText(event.target.value); setResult(null); setError(null) }} aria-invalid={error ? true : undefined} aria-describedby={error ? "mistake-roundtrip-json-error" : undefined} />
+            {error ? <FieldError id="mistake-roundtrip-json-error">{error}</FieldError> : <FieldDescription>Only question label, question text, what went wrong, improved response and topic are replaced. Blank fields are ignored.</FieldDescription>}
           </Field>
           {result ? (
             <div className="grid gap-3" aria-live="polite">

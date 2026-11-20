@@ -82,7 +82,10 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   const periods = useMemo(() => classPeriodsOn(date, classTimetable).filter((period) => !isTimetableBreakLabel(period.period)), [date, classTimetable])
   const suggestions = periods.filter((period) => subject ? periodMatchesSubject(period, subject) : Boolean(period.subject))
   const aligned = !multiDay && suggestions.some((period) => period.startTime === startTime && period.endTime === endTime)
-  const duration = !multiDay && toMinutes(endTime) > toMinutes(startTime) ? toMinutes(endTime) - toMinutes(startTime) : null
+  // Date-only parsing counts calendar days without daylight-saving shifts, so overnight events keep their duration.
+  const dayGap = endDate ? (Date.parse(endDate) - Date.parse(date)) / 86_400_000 : 0
+  const span = dayGap * 1440 + toMinutes(endTime) - toMinutes(startTime)
+  const duration = span > 0 ? span : null // blank or invalid fields give NaN
 
   // Moving the start carries the end with it, so a later start can't leave the event ending before it begins.
   function changeStart(next: string) {
@@ -90,7 +93,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
     const end = toMinutes(next) + (duration ?? 0)
     if (!duration || !next || (end >= 1440 && !date)) return
     setEndTime(fromMinutes(end))
-    setEndDate(end >= 1440 ? shiftDays(date, 1) : "")
+    setEndDate(end >= 1440 ? shiftDays(date, Math.floor(end / 1440)) : "")
   }
 
   function changeDate(next: string) {
@@ -111,7 +114,8 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
     if (!location && period.location) setLocation(period.location)
   }
 
-  function submit() {
+  /** Validates the visible fields; `copy` saves them as a new, unfinished event and leaves the original as it was. */
+  function submit(copy = false) {
     if (!title.trim()) return setError("Give the event a title.")
     if (!date) return setError("Choose a date.")
     if (!startTime || !endTime) return setError("Choose a start and end time.")
@@ -139,7 +143,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
         updated_at: now,
       }
     }
-    if (event) return onSave([make(date, event.id, event.created_at)], false)
+    if (event) return onSave([copy ? { ...make(date, crypto.randomUUID(), now), isFinished: false, finishedAt: undefined } : make(date, event.id, event.created_at)], copy)
     const days = [date]
     if (repeat !== "none") {
       for (let step = 1; days.length < MAX_OCCURRENCES; step++) {
@@ -149,12 +153,6 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
       }
     }
     onSave(days.map((day) => make(day, crypto.randomUUID(), now)), true)
-  }
-
-  function duplicate() {
-    if (!event) return
-    const now = new Date().toISOString()
-    onSave([{ ...event, id: crypto.randomUUID(), isFinished: false, finishedAt: undefined, created_at: now, updated_at: now }], true)
   }
 
   return (
@@ -285,7 +283,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           {event ? (
             <div className="flex gap-1.5">
               <Button onClick={() => onDelete(event.id)} type="button" variant="outline" className="text-destructive hover:text-destructive"><Trash2 />Delete</Button>
-              <Button onClick={duplicate} type="button" variant="outline"><Copy />Duplicate</Button>
+              <Button onClick={() => submit(true)} type="button" variant="outline"><Copy />Duplicate</Button>
             </div>
           ) : <span />}
           <div className="flex gap-1.5">

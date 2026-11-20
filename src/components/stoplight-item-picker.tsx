@@ -17,12 +17,18 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
 }) {
   const options = items.filter((item) => item.group && (!subject || sameStudySubject(item.subject, subject)) && !value.includes(item.id))
   const groups = groupBy(options, (item) => `${subject ? "" : `${item.subject} · `}${itemGroup(item)}`)
-  const chosen = value.flatMap((itemId) => items.find((item) => item.id === itemId) ?? [])
+  // Links to archived or deleted items still count toward the cap, so keep them visible and removable.
+  const missing = value.filter((itemId) => !items.some((item) => item.id === itemId))
+  const chosen = value.map((itemId) => {
+    const item = items.find((candidate) => candidate.id === itemId)
+    const index = missing.indexOf(itemId)
+    return { id: itemId, name: item?.name ?? `Unavailable item${missing.length > 1 ? ` ${index + 1}` : ""}`, missing: !item }
+  })
   return (
     <div className="grid gap-2">
       {chosen.length ? <div className="flex flex-wrap gap-1.5">{chosen.map((item) => (
-        <Badge key={item.id} variant="secondary" className="h-auto max-w-full gap-1 whitespace-normal">
-          <span className="min-w-0 break-words text-left">{item.name}</span>
+        <Badge key={item.id} variant={item.missing ? "outline" : "secondary"} className="h-auto max-w-full gap-1 whitespace-normal" title={item.missing ? "This item was archived or removed" : undefined}>
+          <span className={item.missing ? "min-w-0 break-words text-left text-muted-foreground" : "min-w-0 break-words text-left"}>{item.name}</span>
           <Button type="button" variant="ghost" size="icon-xs" className="size-4" aria-label={`Remove ${item.name}`} onClick={() => onChange(value.filter((itemId) => itemId !== item.id))}><X /></Button>
         </Badge>
       ))}</div> : null}

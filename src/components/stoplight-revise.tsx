@@ -33,6 +33,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [promptItems, setPromptItems] = useState<CurriculumArea[] | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
+  const promptRevision = useRef(0)
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
   function close() {
     if (text.trim()) setConfirmingClose(true)
@@ -41,21 +42,30 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const groups = groupBy(items, itemGroup)
   const selected = items.filter((item) => !skipped.has(itemGroup(item)))
 
-  function toggle(group: string) {
-    setSkipped((current) => { const next = new Set(current); if (!next.delete(group)) next.add(group); return next })
+  // Drops copy feedback and pending copies; the last copied or shown prompt's mapping stays until replaced.
+  function invalidatePrompt() {
+    promptRevision.current++
     setCopied(false)
     setManualPrompt(null)
   }
 
+  function toggle(group: string) {
+    setSkipped((current) => { const next = new Set(current); if (!next.delete(group)) next.add(group); return next })
+    invalidatePrompt()
+  }
+
   async function copyPrompt() {
+    const revision = ++promptRevision.current
     const prompt = buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined)
     try {
       await navigator.clipboard.writeText(prompt)
+      if (revision !== promptRevision.current) return
       setManualPrompt(null)
       setCopied(true)
       if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
       copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
+      if (revision !== promptRevision.current) return
       setManualPrompt(prompt)
       toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
@@ -83,7 +93,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <DialogDescription>Quiz in chat, or get a printable XeLaTeX worksheet and upload it back to be marked. Either way the chatbot suggests a red, amber or green rating for each item it tested.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
-          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); setCopied(false); setManualPrompt(null) }}>
+          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); invalidatePrompt() }}>
             <TabsList><TabsTrigger value="chat">Quiz in chat</TabsTrigger><TabsTrigger value="worksheet">Worksheet</TabsTrigger></TabsList>
           </Tabs>
           <Field>
@@ -114,8 +124,8 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="stoplight-revise-json">{worksheet ? "3. Upload your completed worksheet, then paste the marking reply" : `3. Say "done", then paste the chatbot's reply`}</FieldLabel>
             <Textarea id="stoplight-revise-json" rows={4} className="font-mono text-xs" placeholder='{"ratings":[{"n":1,"rating":"amber","marks":"2/3"}]}'
-              value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only the items it rated change. Clear this reply before choosing new groups or copying another prompt.</FieldDescription>}
+              value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} aria-describedby={error ? "stoplight-revise-json-error" : undefined} />
+            {error ? <FieldError id="stoplight-revise-json-error">{error}</FieldError> : <FieldDescription>Only the items it rated change. Clear this reply before choosing new groups or copying another prompt.</FieldDescription>}
           </Field>
         </FieldGroup>
         <DialogFooter>

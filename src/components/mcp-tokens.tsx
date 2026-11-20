@@ -118,17 +118,20 @@ export function McpTokens() {
       {list === "ready" && !tokens.length ? <p className="text-sm text-muted-foreground">No access tokens yet.</p> : null}
       {list === "error" ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p>Could not load tokens.</p><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw />Retry</Button></div>
         : list === "loading" && !tokens.length ? <p role="status" className="text-sm text-muted-foreground">Loading tokens…</p> : null}
-      {tokens.map((token) => (
-        <div key={token.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3 text-sm">
+      {tokens.map((token) => {
+        const createdOn = new Date(token.created_at).toLocaleDateString("en-AU")
+        // Repeated names need the date to tell the buttons apart.
+        const label = tokens.some((other) => other.id !== token.id && other.name === token.name) ? `${token.name}, created ${createdOn}` : token.name
+        return <div key={token.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3 text-sm">
           <div className="min-w-0">
             <div className="font-medium break-words">{token.name}</div>
-            <div className="text-muted-foreground">Created {new Date(token.created_at).toLocaleDateString("en-AU")} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString("en-AU")}` : "never used"}</div>
+            <div className="text-muted-foreground">Created {createdOn} · {token.last_used_at ? `used ${new Date(token.last_used_at).toLocaleDateString("en-AU")}` : "never used"}</div>
           </div>
           {revoking === token.id
-            ? <div className="flex shrink-0 gap-1.5"><Button variant="ghost" size="sm" disabled={!!pending} onClick={() => setRevoking(null)}>Keep</Button><Button variant="destructive" size="sm" disabled={!!pending} onClick={() => revoke(token.id)}><Trash2 />{pending === token.id ? "Revoking…" : "Revoke for good?"}</Button></div>
-            : <Button variant="outline" size="sm" disabled={!!pending} onClick={() => setRevoking(token.id)}><Trash2 />Revoke</Button>}
+            ? <div className="flex shrink-0 gap-1.5"><Button variant="ghost" size="sm" disabled={!!pending} aria-label={`Keep ${label}`} onClick={() => setRevoking(null)}>Keep</Button><Button variant="destructive" size="sm" disabled={!!pending} aria-label={pending === token.id ? `Revoking ${label}…` : `Revoke for good: ${label}`} onClick={() => revoke(token.id)}><Trash2 />{pending === token.id ? "Revoking…" : "Revoke for good?"}</Button></div>
+            : <Button variant="outline" size="sm" disabled={!!pending} aria-label={`Revoke ${label}`} onClick={() => setRevoking(token.id)}><Trash2 />Revoke</Button>}
         </div>
-      ))}
+      })}
     </div>
   )
 }

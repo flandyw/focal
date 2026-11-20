@@ -27,6 +27,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   const copiedTimer = useRef<number | null>(null)
   const [showPrompt, setShowPrompt] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
+  const promptRevision = useRef(0)
   const groups = items ? groupBy(items, (item) => item.group) : null
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
 
@@ -37,12 +38,15 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
 
   async function copyPrompt() {
     if (!subject.trim()) return setError("Choose a subject first.")
+    const revision = ++promptRevision.current
     try {
       await navigator.clipboard.writeText(buildStoplightPrompt(subject.trim()))
+      if (revision !== promptRevision.current) return
       setCopied(true)
       if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
       copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
+      if (revision !== promptRevision.current) return
       setShowPrompt(true)
       toast.error("Could not copy. Select the prompt below and copy it manually.")
     }
@@ -82,7 +86,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="stoplight-import-subject">1. Subject</FieldLabel>
-            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required />
+            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { promptRevision.current++; setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required />
           </Field>
           <Field>
             <div className="flex items-center justify-between gap-3">
@@ -93,7 +97,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
             </div>
             {showPrompt && subject.trim() ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={buildStoplightPrompt(subject.trim())} /> : null}
           </Field>
-          <Field>
+          <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply</FieldLabel>
             <Textarea
               id="stoplight-import-json"
@@ -102,8 +106,10 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               placeholder='{"groups":[{"group":"Unit 3 AOS 1","items":[{"name":"...","check":"..."}]}]}'
               value={text}
               onChange={(event) => { setText(event.target.value); setItems(null); setError(null) }}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "stoplight-import-json-error" : undefined}
             />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
+            {error ? <FieldError id="stoplight-import-json-error">{error}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
           </Field>
           {groups ? (
             <ul className="divide-y rounded-lg border" aria-label="Groups to import">

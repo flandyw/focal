@@ -33,22 +33,34 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [promptItems, setPromptItems] = useState<CurriculumArea[] | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
+  const copyingRef = useRef(false)
+  const [copying, setCopying] = useState(false)
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
   function close() {
+    if (copyingRef.current) return
     if (text.trim()) setConfirmingClose(true)
     else onOpenChange(false)
   }
   const groups = groupBy(items, itemGroup)
   const selected = items.filter((item) => !skipped.has(itemGroup(item)))
 
-  function toggle(group: string) {
-    setSkipped((current) => { const next = new Set(current); if (!next.delete(group)) next.add(group); return next })
+  // The last copied or shown prompt's mapping stays until replaced.
+  function invalidatePrompt() {
     setCopied(false)
     setManualPrompt(null)
   }
 
+  function toggle(group: string) {
+    setSkipped((current) => { const next = new Set(current); if (!next.delete(group)) next.add(group); return next })
+    invalidatePrompt()
+  }
+
   async function copyPrompt() {
+    if (copyingRef.current) return
     const prompt = buildRevisionPrompt(subject, selected, evidence, worksheet ? template : undefined)
+    // Clipboard writes can't be cancelled; serialize them and hold the selection until its mapping is saved.
+    copyingRef.current = true
+    setCopying(true)
     try {
       await navigator.clipboard.writeText(prompt)
       setManualPrompt(null)
@@ -58,12 +70,16 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
     } catch {
       setManualPrompt(prompt)
       toast.error("Could not copy. Select the prompt below and copy it manually.")
+    } finally {
+      copyingRef.current = false
+      setCopying(false)
     }
     // Ratings map by item number, so keep the items this exact prompt listed.
     setPromptItems(selected)
   }
 
   function apply() {
+    if (copyingRef.current) return
     let ratings = new Map<string, StoplightRating>()
     try { ratings = parseRatingsResponse(text, promptItems ?? selected) } catch { /* reported below */ }
     if (!ratings.size) return setError("Couldn't find any ratings. Paste the chatbot's JSON reply after telling it you're done.")
@@ -83,8 +99,8 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <DialogDescription>Quiz in chat, or get a printable XeLaTeX worksheet and upload it back to be marked. Either way the chatbot suggests a red, amber or green rating for each item it tested.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
-          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); setCopied(false); setManualPrompt(null) }}>
-            <TabsList><TabsTrigger value="chat">Quiz in chat</TabsTrigger><TabsTrigger value="worksheet">Worksheet</TabsTrigger></TabsList>
+          <Tabs value={worksheet ? "worksheet" : "chat"} onValueChange={(value) => { setWorksheet(value === "worksheet"); invalidatePrompt() }}>
+            <TabsList><TabsTrigger disabled={copying} value="chat">Quiz in chat</TabsTrigger><TabsTrigger disabled={copying} value="worksheet">Worksheet</TabsTrigger></TabsList>
           </Tabs>
           <Field>
             <FieldLabel>1. Choose what to revise</FieldLabel>
@@ -92,7 +108,7 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
               {[...groups].map(([group, groupItems]) => (
                 <li key={group}>
                   <Label className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                    <Checkbox disabled={!!text.trim()} checked={!skipped.has(group)} onCheckedChange={() => toggle(group)} />
+                    <Checkbox disabled={copying || !!text.trim()} checked={!skipped.has(group)} onCheckedChange={() => toggle(group)} />
                     <span className="min-w-0 flex-1 truncate font-medium">{group}</span>
                     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{groupItems.length} item{groupItems.length === 1 ? "" : "s"}</span>
                   </Label>
@@ -103,8 +119,8 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <Field>
             <div className="flex items-center justify-between gap-3">
               <FieldLabel>2. Copy the prompt and paste it into a chatbot that can run code</FieldLabel>
-              <Button type="button" size="sm" variant="outline" disabled={!selected.length || !!text.trim()} onClick={() => void copyPrompt()}>
-                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
+              <Button type="button" size="sm" variant="outline" disabled={copying || !selected.length || !!text.trim()} onClick={() => void copyPrompt()}>
+                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copying ? "Copying…" : copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
             {manualPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={manualPrompt} /> : null}
@@ -114,13 +130,13 @@ export function StoplightReviseDialog({ open, subject, items, evidence, onOpenCh
           <Field data-invalid={error ? true : undefined}>
             <FieldLabel htmlFor="stoplight-revise-json">{worksheet ? "3. Upload your completed worksheet, then paste the marking reply" : `3. Say "done", then paste the chatbot's reply`}</FieldLabel>
             <Textarea id="stoplight-revise-json" rows={4} className="font-mono text-xs" placeholder='{"ratings":[{"n":1,"rating":"amber","marks":"2/3"}]}'
-              value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} />
-            {error ? <FieldError>{error}</FieldError> : <FieldDescription>Only the items it rated change. Clear this reply before choosing new groups or copying another prompt.</FieldDescription>}
+              value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={error ? true : undefined} aria-describedby={error ? "stoplight-revise-json-error" : undefined} />
+            {error ? <FieldError id="stoplight-revise-json-error">{error}</FieldError> : <FieldDescription>Only the items it rated change. Clear this reply before choosing new groups or copying another prompt.</FieldDescription>}
           </Field>
         </FieldGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-          <Button type="button" disabled={!text.trim() || !(promptItems ?? selected).length} onClick={apply}><Check />Apply ratings</Button>
+          <Button type="button" variant="outline" disabled={copying} onClick={close}>Cancel</Button>
+          <Button type="button" disabled={copying || !text.trim() || !(promptItems ?? selected).length} onClick={apply}><Check />Apply ratings</Button>
         </DialogFooter>
       </DialogContent>
       <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setError(null); onOpenChange(false) }} />

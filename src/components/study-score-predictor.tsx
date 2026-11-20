@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Calculator, Info, Link2, TrendingUp } from "lucide-react"
+import { Calculator, CircleCheck, Info, Link2, Minus, Plus, Target, TrendingUp, TriangleAlert } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -8,10 +8,12 @@ import { Button } from "./ui/button"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Slider } from "./ui/slider"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
 import { StudyScoreTrendChart } from "./study-score-trend-chart"
-import { formatOrdinal, type AppData, type AssessmentReference } from "../lib/exam-data"
+import { Meter } from "./workspace-layout"
+import { formatOrdinal, formatReferenceName, type AppData, type AssessmentReference } from "../lib/exam-data"
 import { buildStudyScoreTrend, defaultExamWeight, isTwoPaperMathematics, predictStudyScore, requiredExamPercentile, sacPercentileFromRank, targetExamMarks } from "../lib/study-score"
 import { prioritiseSubjects } from "../lib/subjects"
 import { normaliseScalingStudyName, predictScaledStudyScore, type ScalingReference } from "../lib/scaling"
@@ -124,6 +126,21 @@ export function StudyScorePredictor({
     ? requiredExamPercentile(target, parsedSac, prediction.examWeightPercent) : null
   const targetMarks = requiredExam && !requiredExam.outOfReach && !requiredExam.alreadySecured
     ? targetExamMarks(subject, references, requiredExam.percentile) : []
+  function setTarget(value: string) {
+    setSavedTarget({ subject, value })
+    try { localStorage.setItem(`focal:study-score-target:${subject}`, value) } catch { /* Inputs still work for this session. */ }
+  }
+  // The stepper and slider start from the prediction when the typed target is unusable.
+  const targetBase = targetInvalid ? Math.min(50, Math.max(20, prediction?.studyScore ?? 30)) : target
+  const scalePosition = (score: number) => `${Math.min(100, Math.max(0, (score - 20) / 30 * 100))}%`
+  const targetGap = prediction ? target - prediction.studyScore : 0
+  const targetStatus = !prediction || targetInvalid ? null
+    : !requiredExam ? { variant: "secondary" as const, icon: Info, label: "Depends on SACs" }
+    : requiredExam.outOfReach ? { variant: "destructive" as const, icon: TriangleAlert, label: "Out of reach" }
+    : requiredExam.alreadySecured ? { variant: "success" as const, icon: CircleCheck, label: "Secured by SACs" }
+    : targetGap <= 0 ? { variant: "success" as const, icon: CircleCheck, label: "On track" }
+    : targetGap <= prediction.high - prediction.studyScore ? { variant: "default" as const, icon: TrendingUp, label: `${targetGap} above prediction` }
+    : { variant: "warning" as const, icon: TrendingUp, label: `Stretch: ${targetGap} above prediction` }
   const scalingYears = useMemo(
     () => [...new Set(scalingReferences
       .filter((reference) => normaliseScalingStudyName(reference.studyName) === normaliseScalingStudyName(subject))
@@ -355,48 +372,95 @@ export function StudyScorePredictor({
                 </Card>
 
                 <Card>
-                  <CardContent className="grid gap-3 pt-6">
-                    <Field>
-                      <FieldLabel htmlFor="study-score-target">Target study score</FieldLabel>
-                      <Input
-                        id="study-score-target"
-                        className="max-w-32 tabular-nums"
-                        type="number"
-                        min="20"
-                        max="50"
-                        step="1"
-                        inputMode="numeric"
-                        value={targetValue}
-                        aria-invalid={targetInvalid || undefined}
-                        aria-describedby="study-score-target-description"
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setSavedTarget({ subject, value })
-                          try { localStorage.setItem(`focal:study-score-target:${subject}`, value) } catch { /* Inputs still work for this session. */ }
-                        }}
-                      />
-                      <FieldDescription id="study-score-target-description">
-                        {targetInvalid ? "Enter a whole study score between 20 and 50." : "Approximate exam performance needed under the same assumptions as your prediction."}
-                      </FieldDescription>
-                    </Field>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 basis-64 items-start gap-3">
+                        <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Target className="size-4.5" strokeWidth={1.75} /></span>
+                        <div>
+                          <CardTitle><label id="study-score-target-label" htmlFor="study-score-target">Target study score</label></CardTitle>
+                          <CardDescription id="study-score-target-description" className={targetInvalid ? "text-destructive" : undefined}>
+                            {targetInvalid ? "Enter a whole study score between 20 and 50." : "What the exam needs to deliver, under the same assumptions as your prediction."}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      {targetStatus ? <Badge variant={targetStatus.variant}><targetStatus.icon />{targetStatus.label}</Badge> : null}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid gap-5">
+                    <div className="grid gap-x-8 gap-y-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+                      <div className="flex items-center gap-1.5">
+                        <Button variant="outline" size="icon" aria-label="Lower target" disabled={targetBase <= 20} onClick={() => setTarget(String(targetBase - 1))}><Minus /></Button>
+                        <Input
+                          id="study-score-target"
+                          className="h-12 w-20 [appearance:textfield] px-1 text-center text-3xl! font-semibold tabular-nums [&::-webkit-inner-spin-button]:appearance-none"
+                          type="number"
+                          min="20"
+                          max="50"
+                          step="1"
+                          inputMode="numeric"
+                          value={targetValue}
+                          aria-invalid={targetInvalid || undefined}
+                          aria-describedby="study-score-target-description"
+                          onChange={(event) => setTarget(event.target.value)}
+                        />
+                        <Button variant="outline" size="icon" aria-label="Raise target" disabled={targetBase >= 50} onClick={() => setTarget(String(targetBase + 1))}><Plus /></Button>
+                      </div>
+                      <div className="grid gap-2">
+                        <div className="relative py-2">
+                          {/* Inset by half the thumb so marks line up with the edge-aligned slider. */}
+                          <div aria-hidden className="pointer-events-none absolute inset-x-1.5 inset-y-0">
+                            <span className="absolute inset-y-1 rounded-sm bg-primary/15" style={{ left: scalePosition(prediction.low), right: `calc(100% - ${scalePosition(prediction.high)})` }} />
+                            <span className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-foreground" style={{ left: scalePosition(prediction.studyScore) }} />
+                          </div>
+                          <Slider aria-labelledby="study-score-target-label" min={20} max={50} step={1} value={targetBase} onValueChange={(value) => setTarget(String(value))} />
+                        </div>
+                        <div aria-hidden className="flex justify-between px-1.5 text-xs text-muted-foreground tabular-nums"><span>20</span><span>30</span><span>40</span><span>50</span></div>
+                        <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                          <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-3 w-0.5 rounded-full bg-foreground" />Predicted {prediction.studyScore}</span>
+                          <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2.5 w-4 rounded-sm bg-primary/15" />Likely range {prediction.low}–{prediction.high}</span>
+                          <span className="inline-flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full border border-ring bg-white" />Target{targetInvalid ? "" : ` ${target}`}</span>
+                        </p>
+                      </div>
+                    </div>
                     {!targetInvalid ? (
-                      <div className="grid gap-1 text-sm tabular-nums" aria-live="polite">
-                        {target <= prediction.studyScore ? <p>Your current prediction already meets this target; it is not a guaranteed result.</p> : null}
-                        {!requiredExam ? <p>The exam has no weighting, so this target depends entirely on SACs.</p>
-                          : requiredExam.outOfReach ? <p>This target is out of reach under these assumptions: it needs above the 99.9th exam percentile. Revisit your SAC estimate or target.</p>
-                          : requiredExam.alreadySecured ? <p>This target is already secured by SACs in this model (below the 0.1st exam percentile needed), not a guaranteed result.</p>
-                          : <>
-                            <p>You need about the {formatOrdinal(requiredExam.percentile)} percentile on {isTwoPaperMathematics(subject) ? "both exams" : "the exam"}.</p>
-                            {targetMarks.map(({ reference, percentage }) => (
-                              <p key={reference.id} className="text-muted-foreground">≈ {Math.round(percentage)}% on the {reference.year} {reference.name}</p>
-                            ))}
-                          </>}
+                      <div className="grid gap-3 text-sm tabular-nums" aria-live="polite">
+                        {!requiredExam ? <p className="rounded-lg border bg-muted/30 px-3 py-2">The exam has no weighting, so this target depends entirely on SACs.</p>
+                          : requiredExam.outOfReach ? <p className="rounded-lg border bg-muted/30 px-3 py-2">This target is out of reach under these assumptions: it needs above the 99.9th exam percentile. Revisit your SAC estimate or target.</p>
+                          : requiredExam.alreadySecured ? <p className="rounded-lg border bg-muted/30 px-3 py-2">This target is already secured by SACs in this model (below the 0.1st exam percentile needed), not a guaranteed result.</p>
+                          : (
+                            <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
+                              <div className="grid content-start gap-2 rounded-lg border bg-muted/30 p-3">
+                                <p className="text-xs text-muted-foreground">Percentile needed on {isTwoPaperMathematics(subject) ? "both exams" : "the exam"}</p>
+                                <p className="text-2xl font-semibold">{formatOrdinal(Math.min(99, requiredExam.percentile))}</p>
+                                <span aria-hidden className="relative block h-1.5 rounded-full bg-muted">
+                                  <span className={`block h-full rounded-full transition-[width] duration-200 ${targetGap <= 0 ? "bg-success" : "bg-primary"}`} style={{ width: `${prediction.examPercentile}%` }} />
+                                  <span className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded-full bg-foreground transition-[left] duration-200" style={{ left: `${requiredExam.percentile}%` }} />
+                                </span>
+                                <p className="text-xs text-muted-foreground">
+                                  Your exams now: {formatOrdinal(prediction.examPercentile)}
+                                  {targetGap > 0 && Math.round(requiredExam.percentile) > Math.round(prediction.examPercentile) ? ` · ${Math.round(requiredExam.percentile) - Math.round(prediction.examPercentile)} to go` : ""}
+                                </p>
+                              </div>
+                              {targetMarks.map(({ reference, percentage }) => (
+                                <div key={reference.id} className="grid content-start gap-2 rounded-lg border bg-muted/30 p-3">
+                                  <p className="truncate text-xs text-muted-foreground" title={`${reference.year} ${formatReferenceName(reference.name)}`}>{reference.year} {formatReferenceName(reference.name)}</p>
+                                  <p className="text-2xl font-semibold">≈ {Math.round(percentage)}%</p>
+                                  <Meter value={percentage} barClassName="transition-[width] duration-200" />
+                                  <p className="text-xs text-muted-foreground">Mark needed, based on this paper</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        <p className="text-xs text-muted-foreground">
+                          {targetGap <= 0 ? "Your current prediction already meets this target; it is not a guaranteed result. " : ""}
+                          {parsedSac === null && requiredExam ? "No SAC result entered, so SACs are assumed to match your exam percentile." : ""}
+                        </p>
                       </div>
                     ) : null}
                   </CardContent>
                 </Card>
 
-                <StudyScoreTrendChart points={studyScoreTrend} />
+                <StudyScoreTrendChart points={studyScoreTrend} target={targetInvalid ? undefined : target} />
 
                 <Card>
                   <CardHeader>

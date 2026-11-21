@@ -18,12 +18,19 @@ export function WeeklyReview({ data, sessions, onPlan }: { data: AppData; sessio
   const start = weekStart(now, offset)
   const first = localDate(start)
   const review = useMemo(() => buildWeeklyReview(data, sessions, new Date(`${first}T00:00:00`)), [data, sessions, first])
+  const previous = useMemo(() => buildWeeklyReview(data, sessions, weekStart(new Date(`${first}T00:00:00`), -1)), [data, sessions, first])
+  // ponytail: compare whole weeks; label the full-week baseline when this week is still in progress.
+  const delta = (value: number, before: number, time = false) => {
+    if (!previous.hasData) return null
+    const difference = value - before
+    return <span className="text-muted-foreground"> ({difference === 0 ? "same" : `${difference > 0 ? "+" : "−"}${time ? duration(Math.abs(difference)) : Math.abs(difference)}`} vs {offset === 0 ? "full previous week" : "previous week"})</span>
+  }
   return <section className="grid gap-5 rounded-lg border border-border bg-card p-4 sm:p-5" aria-labelledby="weekly-review-title">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 id="weekly-review-title" className="focal-section-title">Weekly review</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(`${review.first}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}–{new Date(`${review.last}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}{offset === 0 ? " · this week so far" : ""}</p></div>
       <div className="flex gap-1"><Button variant="ghost" size="icon" aria-label="Previous review week" onClick={() => setOffset(offset - 1)}><ChevronLeft /></Button><Button variant="ghost" size="sm" onClick={() => setOffset(-1)}>Last week</Button><Button variant="ghost" size="icon" aria-label="Next review week" disabled={offset >= 0} onClick={() => setOffset(offset + 1)}><ChevronRight /></Button></div>
     </div>
-    <p className="max-w-[75ch] text-sm leading-relaxed">You recorded <strong>{duration(review.completed)}</strong> of completed work out of {duration(review.planned)} currently recorded for this week, finished <strong>{review.done}/{review.taskCount} tasks</strong>, and logged <strong>{review.papers} paper{review.papers === 1 ? "" : "s"}</strong>. {review.reviews ? `${review.recalled}/${review.reviews} ${review.reviews === 1 ? "review was" : "reviews were"} recalled without help.` : "No mistake reviews were recorded."}</p>
+    <p className="max-w-[75ch] text-sm leading-relaxed">You recorded <strong>{duration(review.completed)}</strong>{delta(review.completed, previous.completed, true)} of completed work out of {duration(review.planned)} currently recorded for this week, finished <strong>{review.done}/{review.taskCount} tasks</strong>{delta(review.done, previous.done)}, and logged <strong>{review.papers} paper{review.papers === 1 ? "" : "s"}</strong>{delta(review.papers, previous.papers)}. {review.reviews ? <><strong>{review.recalled}/{review.reviews} reviews</strong> recalled without help{delta(review.recalled, previous.recalled)}.</> : <>No mistake reviews were recorded.{previous.reviews > 0 ? delta(review.recalled, previous.recalled) : null}</>}</p>
     <p className="text-xs text-muted-foreground">Based on current records. Moved or deleted plans are excluded; this is not a snapshot of your original schedule.</p>
     <div className="grid gap-5 md:grid-cols-3">
       <div><h3 className="text-sm font-medium">Recurring mistakes</h3>{review.repeated.length ? <ul className="mt-2 grid gap-2 text-sm text-muted-foreground">{review.repeated.slice(0, 3).map((row) => <li key={`${row.subject}:${row.category}`}>{row.subject}: {row.category.toLowerCase()} · {row.cards} different cards</li>)}</ul> : <p className="mt-2 text-sm text-muted-foreground">No repeated categories in new or difficult cards this week.</p>}</div>

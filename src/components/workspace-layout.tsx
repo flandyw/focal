@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { motion } from "framer-motion"
+import { ChevronRight } from "lucide-react"
 import type { GroupImperativeHandle } from "react-resizable-panels"
 import { savePaneSize, useAppearance } from "../lib/appearance"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resizable"
@@ -11,6 +12,15 @@ export function WorkspacePage({ children, className }: { children: ReactNode; cl
   // Fluid by design: the page never caps at a measure. Extra width is spent on
   // more columns (see the 2xl grids in the pages), never on longer lines.
   return <div className={cn("grid w-full min-w-0 grid-cols-1 gap-6 lg:gap-8", className)}>{children}</div>
+}
+
+export function ArchivedItems({ label, count, children, open }: { label: string; count: number; children: ReactNode; open?: boolean }) {
+  return <details open={open} className="group/archive min-w-0 rounded-lg border border-border bg-card">
+    <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+      <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground transition-transform group-open/archive:rotate-90" />{label} · {count}
+    </summary>
+    <div className="divide-y border-t">{children}</div>
+  </details>
 }
 
 /** Stat tiles sit on one grid everywhere: 2 columns on phones, then as many as fit. */

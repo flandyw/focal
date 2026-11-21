@@ -11,7 +11,7 @@ import { Progress } from "./ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { SubjectCombobox } from "./subject-combobox"
 import { PageHeader } from "./page-header"
-import { Meter, StatGrid, StatTile } from "./workspace-layout"
+import { ArchivedItems, Meter, StatGrid, StatTile } from "./workspace-layout"
 import { analyseAttempt, formatOrdinal, normaliseComparisonName, type AssessmentReference, type ExamAttempt } from "../lib/exam-data"
 import type { ExamTimerPreset } from "./exam-timer-mode"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
@@ -116,6 +116,32 @@ export function ExamLibrary({
   }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject, sort, session])
 
   const clearFilters = () => { setQuery(""); setSubject("all"); setCompletion("all"); setSession("all"); setVisibleCount(40) }
+  const pending = filtered.filter((exam) => !isCompleted(exam))
+  const completed = filtered.filter(isCompleted)
+  const completedRows = completed.map((exam) => {
+    const study = studies.find((item) => item.pageUrl === exam.pageUrl) ?? resourcesByStudy.get(normaliseComparisonName(exam.studyName))
+    const companion = getVcaaExamCompanions(exam, study)
+    const reference = findVcaaExamReference(exam, references)
+    const attempt = findVcaaExamAttempt(exam, attempts)
+    const analysis = attempt ? analyseAttempt(attempt, reference) : null
+    const preset = timerPreset(exam, reference)
+    return <div key={exam.url} className={`flex min-w-0 flex-wrap items-center gap-2 px-4 py-2 ${selectedPaperId === exam.url ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""}`}>
+      <Button variant="link" className="h-auto min-w-0 flex-1 basis-full justify-start p-0 text-sm text-inherit sm:basis-auto" onClick={() => onSelectPaper(exam.url)}><span className="truncate">{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span></Button>
+      <Badge variant={attempt ? "success" : "secondary"}>{analysis ? `Logged ${analysis.percentage.toFixed(1)}%` : "Done"}</Badge>
+      <div className="flex flex-wrap items-center gap-1">
+        {preset ? <Button size="sm" variant="ghost" onClick={() => onStart(preset)}>{attempt ? "Sit again" : "Start timed"}</Button> : null}
+        <Button size="sm" nativeButton={false} variant="ghost" render={<a href={exam.url} target="_blank" rel="noreferrer" />}>Open paper</Button>
+        {attempt && reference ? <Button size="sm" variant="ghost" onClick={() => onCompare(attempt)}>Compare</Button> : null}
+        {!attempt && completedExamIds.includes(exam.url) ? <Button size="sm" variant="ghost" aria-label={`Mark not done: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}>Mark not done</Button> : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        {companion.reports.map((report) => <a key={report.url} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={report.url} target="_blank" rel="noreferrer">{resourceLabel(report)}</a>)}
+        {companion.specification ? <a className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={companion.specification.url} target="_blank" rel="noreferrer">Specifications</a> : null}
+        {reference ? <a className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={reference.sourceUrl} target="_blank" rel="noreferrer">Grade distribution</a> : <span className="text-muted-foreground">No official distribution</span>}
+        {selectedPaperId === exam.url && analysis ? <span className="text-muted-foreground">{analysis.grade ? `Est. ${analysis.grade}${analysis.percentile !== null ? ` · ${formatOrdinal(analysis.percentile)} percentile` : ""}` : "No grade-band comparison"}</span> : null}
+      </div>
+    </div>
+  })
   const focusSubject = subject === "all" ? firstPreferredSubject(subjects, preferredSubjects) || subjects[0] : subject
   const focusStudy = resourcesByStudy.get(normaliseComparisonName(focusSubject))
   const focusExams = exams.filter((exam) => normaliseComparisonName(exam.studyName) === normaliseComparisonName(focusSubject) && exam.year !== null)
@@ -204,7 +230,7 @@ export function ExamLibrary({
         <span role="status" className="self-center text-sm tabular-nums text-muted-foreground">{count(filtered.length, "exam")} · {formatReferenceFreshness(generatedAt)}</span>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        {filtered.slice(0, visibleCount).map((exam) => {
+        {pending.slice(0, visibleCount).map((exam) => {
           const study = studies.find((item) => item.pageUrl === exam.pageUrl) ?? resourcesByStudy.get(normaliseComparisonName(exam.studyName))
           const reference = findVcaaExamReference(exam, references)
           const companion = getVcaaExamCompanions(exam, study)
@@ -251,7 +277,8 @@ export function ExamLibrary({
           </Card>
         )})}
       </div>
-      {filtered.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(filtered.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
+      {pending.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(pending.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
+      {completed.length ? completion === "completed" ? <div className="divide-y rounded-lg border bg-card">{completedRows}</div> : <ArchivedItems label="Completed papers" count={completed.length} open={selectedPaperId && completed.some((exam) => exam.url === selectedPaperId) ? true : undefined}>{completedRows}</ArchivedItems> : null}
       {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matches “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try another subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
     </div>
   )

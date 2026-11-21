@@ -7,6 +7,7 @@ import type { ExamAttempt, Mistake } from "../lib/exam-data"
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import { getMistakeEditChanges, MISTAKE_EDIT_FIELDS, MISTAKE_FIELD_LABELS as FIELD_LABELS, type MistakeEdit, type MistakeEditField } from "../lib/mistake-autofill"
 import { Button } from "./ui/button"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
@@ -39,6 +40,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
   const [progress, setProgress] = useState<ChatGPTProgress | null>(null)
   const [edits, setEdits] = useState<MistakeEdit[] | null>(null)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
+  const [confirmingClose, setConfirmingClose] = useState(false)
   const targets = scope === "selected" ? selected : scope === "current" ? current : mistakes
   const scopeLabels: Record<Scope, string> = { selected: `Selected (${selected.length})`, current: `Current filtered view (${current.length})`, all: `Everything (${mistakes.length})` }
   const fieldList = MISTAKE_EDIT_FIELDS.filter((field) => fields.has(field))
@@ -51,6 +53,13 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
     })
   }, [edits, mistakes, fields])
   const accepted = changes.filter(({ mistake }) => !skipped.has(mistake.id))
+
+  // A preview only exists after an instruction was typed, so the instruction alone marks unsaved work.
+  function requestClose() {
+    if (running) return
+    if (instruction.trim()) setConfirmingClose(true)
+    else onOpenChange(false)
+  }
 
   function toggleField(field: MistakeEditField) {
     setFields((value) => { const next = new Set(value); if (next.has(field)) next.delete(field); else next.add(field); return next })
@@ -86,8 +95,8 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!running) onOpenChange(open) }}>
-      <DialogContent className="sm:max-w-3xl">
+    <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit mistakes with ChatGPT</DialogTitle>
           <DialogDescription>Describe a change to make across many mistakes. You review every edit before anything is saved.</DialogDescription>
@@ -136,7 +145,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
           </div>
         )}
         <DialogFooter>
-          <Button type="button" variant="outline" disabled={running} onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" variant="outline" disabled={running} onClick={requestClose}>Cancel</Button>
           {edits === null ? (
             <Button type="button" disabled={!targets.length || !fields.size || !instruction.trim()} onClick={() => void run()}><Sparkles />Preview edits for {count(targets.length, "mistake")}</Button>
           ) : (
@@ -147,6 +156,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
           )}
         </DialogFooter>
       </DialogContent>
+      <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => onOpenChange(false)} />
     </Dialog>
   )
 }

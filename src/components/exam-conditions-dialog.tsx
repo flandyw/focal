@@ -33,6 +33,14 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
     error = cause instanceof Error ? cause.message : "Check the exam conditions."
   }
   const timer = preview ? getExamClock(preview, now) : undefined
+  // Point the shared error at the field(s) it is about; the half-step rule names whichever value is off-grid.
+  const offGrid = (value: string) => error?.startsWith("Use whole or half") && !Number.isInteger(Number(value) * 2)
+  const invalid = {
+    reading: error?.startsWith("Reading") || offGrid(reading),
+    writing: error?.startsWith("Writing") || offGrid(writing),
+    marks: error?.startsWith("Total marks") || error?.startsWith("Your questions use") || offGrid(marks),
+  }
+  const errorProps = (field: keyof typeof invalid) => invalid[field] ? { "aria-invalid": true, "aria-describedby": "edit-conditions-error" } : {}
 
   return <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
@@ -48,9 +56,9 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
         onClose()
       }} noValidate className="grid gap-5">
         <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <Field><FieldLabel htmlFor="edit-reading">Reading (min)</FieldLabel><Input id="edit-reading" type="number" min="0" max="180" step="0.5" value={reading} onChange={(event) => setReading(event.target.value)} autoFocus required /></Field>
-          <Field><FieldLabel htmlFor="edit-writing">Writing (min)</FieldLabel><Input id="edit-writing" type="number" min="1" max="360" step="0.5" value={writing} onChange={(event) => setWriting(event.target.value)} required /></Field>
-          <Field><FieldLabel htmlFor="edit-marks">Total marks</FieldLabel><Input id="edit-marks" type="number" min="0.5" max="500" step="0.5" value={marks} onChange={(event) => setMarks(event.target.value)} required /></Field>
+          <Field><FieldLabel htmlFor="edit-reading">Reading (min)</FieldLabel><Input id="edit-reading" type="number" min="0" max="180" step="0.5" value={reading} onChange={(event) => setReading(event.target.value)} autoFocus required {...errorProps("reading")} /></Field>
+          <Field><FieldLabel htmlFor="edit-writing">Writing (min)</FieldLabel><Input id="edit-writing" type="number" min="1" max="360" step="0.5" value={writing} onChange={(event) => setWriting(event.target.value)} required {...errorProps("writing")} /></Field>
+          <Field><FieldLabel htmlFor="edit-marks">Total marks</FieldLabel><Input id="edit-marks" type="number" min="0.5" max="500" step="0.5" value={marks} onChange={(event) => setMarks(event.target.value)} required {...errorProps("marks")} /></Field>
         </div>
         {timer && preview ? <div className="rounded-lg border bg-muted/30 p-4 text-sm">
           <p className="font-medium tabular-nums">After saving: {timer.phase === "overtime" ? `${formatTimer(timer.overtimeSeconds)} overtime` : `${formatTimer(timer.remainingSeconds)} ${timer.phase === "reading" ? "reading time" : "writing time"} remaining`}</p>
@@ -58,7 +66,7 @@ export function ExamConditionsDialog({ session, now, onSave, onClose }: {
           {timer.phase === "overtime" ? <p className="mt-2">The new duration is shorter than the time already used. Your exam will record overtime.</p> : null}
         </div> : null}
         <p className="text-sm text-muted-foreground">Changes save with this session across devices. Focal’s planned duration updates while keeping your recorded study intervals.</p>
-        {error ? <FieldError role={submitted ? "alert" : undefined}>{error}</FieldError> : null}
+        {error ? <FieldError id="edit-conditions-error" role={submitted ? "alert" : undefined}>{error}</FieldError> : null}
       </form>
       <DialogFooter><Button variant="outline" onClick={requestClose}>Cancel</Button><Button type="submit" form="exam-conditions-form">Save conditions</Button></DialogFooter>
     </DialogContent>

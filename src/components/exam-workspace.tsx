@@ -20,6 +20,8 @@ const nextStatus: Record<ExamWorkspaceStatus, ExamWorkspaceStatus> = {
 const statusIcon = { "not-started": Circle, "in-progress": CircleDot, done: CircleCheck, flagged: Flag }
 const statusLabel = { "not-started": "Not started", "in-progress": "In progress", done: "Done", flagged: "Flagged" }
 const confidences = [["low", "Low"], ["medium", "Med"], ["high", "High"]] as const
+// Offer everything left when the draft would overshoot or strand less than half a mark.
+const suggestMarks = (remaining: number, draft: number) => remaining > 0 && remaining - draft < 0.5 - 1e-9 ? remaining : draft
 
 /** The paper's questions as a checklist: tick them off, flag ones to return to, and the
  *  map prefills question-level marking when the paper is finished. */
@@ -29,7 +31,6 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   onChange: (items: ExamWorkspaceItem[]) => void
 }) {
   const [label, setLabel] = useState("")
-  const [marks, setMarks] = useState(1)
   const [checkpointCount, setCheckpointCount] = useState(10)
   const [error, setError] = useState<string | null>(null)
   const labelInput = useRef<HTMLInputElement>(null)
@@ -37,6 +38,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   const mappedMarks = items.reduce((total, item) => total + item.marks, 0)
   const flagged = items.filter((item) => item.status === "flagged").length
   const remainingMarks = Math.max(0, totalMarks - mappedMarks)
+  const [marks, setMarks] = useState(() => suggestMarks(remainingMarks, 1))
 
   function add() {
     if (!label.trim()) return setError("Enter a question or section label.")
@@ -49,6 +51,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])
     // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".
     setLabel(label.trim().replace(/\d+$/, (number) => String(Number(number) + 1)).replace(/^[^\d]*$/, ""))
+    setMarks(suggestMarks(remainder, marks))
     setError(null)
     labelInput.current?.focus()
   }
@@ -56,13 +59,17 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   function createCheckpoints() {
     if (!Number.isInteger(checkpointCount) || checkpointCount < 1 || checkpointCount > 30) return setError("Choose between 1 and 30 checkpoints.")
     const count = Math.max(1, Math.min(30, Math.round(checkpointCount)))
-    const halfMarkUnits = Math.round(totalMarks * 2)
+    const halfMarkUnits = Math.floor(totalMarks * 2)
     if (halfMarkUnits < count) return setError("Use fewer checkpoints for this mark total.")
     let remainingUnits = halfMarkUnits
+    let assigned = 0
     onChange(Array.from({ length: count }, (_, index): ExamWorkspaceItem => {
       const units = Math.floor(remainingUnits / (count - index))
       remainingUnits -= units
-      return { id: crypto.randomUUID(), label: `Checkpoint ${index + 1}`, marks: units / 2, status: "not-started", confidence: "medium" }
+      // The last checkpoint takes any off-grid remainder (e.g. a synced 10.25 total) so the split keeps the exact total.
+      const itemMarks = index === count - 1 ? totalMarks - assigned : units / 2
+      assigned += itemMarks
+      return { id: crypto.randomUUID(), label: `Checkpoint ${index + 1}`, marks: itemMarks, status: "not-started", confidence: "medium" }
     }))
     setError(null)
   }
@@ -115,7 +122,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
         <div className="flex flex-wrap items-center gap-2">
           {remainingMarks > 0 ? <>
             <Input ref={labelInput} className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
-            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" step="any" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" max={remainingMarks} step="any" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
             <Button size="sm" variant="outline" onClick={add}><Plus />Add</Button>
           </> : null}
           {!items.length ? <>

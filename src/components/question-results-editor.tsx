@@ -13,12 +13,16 @@ import { findMarkingTemplate, parseScoreTable, questionKey } from "../lib/markin
 import type { ExamAttempt } from "../lib/exam-data"
 import { validateQuestionResults, type QuestionConfidence, type QuestionResult } from "../lib/exam-data"
 
+// Display sums without floating-point dust (0.1 + 0.2), keeping real decimals.
+const formatSum = (marks: number) => Number(marks.toPrecision(12))
+
 export function QuestionResultsEditor({ value, onChange, attempts = [], paper, onUseTotal }: { value: QuestionResult[]; onChange: (value: QuestionResult[]) => void; attempts?: ExamAttempt[]; paper?: Pick<ExamAttempt, "subject" | "provider" | "paper" | "examYear">; onUseTotal?: (earned: number, maximum: number) => void }) {
   const [pasting, setPasting] = useState(false)
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
   const pasteId = useId()
   const editor = useRef<HTMLDivElement>(null)
+  const focusId = useRef<string | null>(null)
   const template = paper && findMarkingTemplate(attempts, paper)
   let preview: QuestionResult[] = []
   let previewError: string | null = null
@@ -37,7 +41,9 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
     const used = new Set(value.map((result) => questionKey(result.label)))
     let next = value.length + 1
     while (used.has(questionKey(`Item ${next}`))) next++
-    onChange([...value, { id: crypto.randomUUID(), label: `Item ${next}`, marksAwarded: 0, maxMarks: 1, confidence: "medium" }])
+    const id = crypto.randomUUID()
+    focusId.current = id
+    onChange([...value, { id, label: `Item ${next}`, marksAwarded: 0, maxMarks: 1, confidence: "medium" }])
   }
 
   return (
@@ -59,7 +65,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>
         <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setError(null) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} aria-invalid={previewError || error ? true : undefined} aria-describedby={previewError || error ? `${pasteId}-error` : undefined} />
         <FieldError id={`${pasteId}-error`}>{previewError ?? error}</FieldError>
-        {preview.length ? <p role="status" className="text-sm tabular-nums">{count(preview.length, "item")} · {preview.reduce((sum, result) => sum + result.marksAwarded, 0)} / {preview.reduce((sum, result) => sum + result.maxMarks, 0)} marks. These will be added to your breakdown.</p> : null}
+        {preview.length ? <p role="status" className="text-sm tabular-nums">{count(preview.length, "item")} · {formatSum(preview.reduce((sum, result) => sum + result.marksAwarded, 0))} / {formatSum(preview.reduce((sum, result) => sum + result.maxMarks, 0))} marks. These will be added to your breakdown.</p> : null}
         <div className="flex gap-2"><Button type="button" size="sm" disabled={!preview.length || !!previewError} onClick={() => {
           if (value.length + preview.length > 500) return setError("Keep the breakdown to 500 items or fewer.")
           const labels = [...value, ...preview].map((result) => questionKey(result.label))
@@ -72,7 +78,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
           {value.map((result, index) => (
             <div key={result.id} className="grid gap-3 p-4">
               <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-3 sm:grid-cols-[minmax(8rem,1fr)_6rem_6rem_9rem_auto]">
-                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Item</span><Input aria-label={`Item ${index + 1} label`} autoFocus={!result.label} required value={result.label} onChange={(event) => update(result.id, { label: event.target.value })} placeholder="Section B, Question 4" /></Label>
+                <Label className="grid gap-1 text-xs text-muted-foreground"><span>Item</span><Input aria-label={`Item ${index + 1} label`} ref={(node) => { if (node && focusId.current === result.id) { focusId.current = null; node.focus(); node.select() } }} required value={result.label} onChange={(event) => update(result.id, { label: event.target.value })} placeholder="Section B, Question 4" /></Label>
                 <Label className="grid gap-1 text-xs text-muted-foreground"><span>Earned</span><Input data-earned aria-label={`${result.label} marks awarded`} type="number" required min="0" max={Number.isFinite(result.maxMarks) ? result.maxMarks : undefined} step="any" value={Number.isFinite(result.marksAwarded) ? result.marksAwarded : ""} onChange={(event) => update(result.id, { marksAwarded: event.target.valueAsNumber })} onKeyDown={(event) => {
                   if (event.key !== "Enter") return
                   event.preventDefault()
@@ -92,7 +98,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
               </Collapsible>
             </div>
           ))}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm tabular-nums"><span>Items total {earned} / {maximum}{value.some((result) => !Number.isFinite(result.marksAwarded)) ? ` · ${value.filter((result) => !Number.isFinite(result.marksAwarded)).length} unmarked` : ""}</span>{onUseTotal ? <Button type="button" size="sm" variant="outline" disabled={!!validateQuestionResults(value)} onClick={() => onUseTotal(earned, maximum)}>Use as overall mark</Button> : null}<span className="w-full text-xs text-muted-foreground">Enter moves to the next earned mark. Shift+Enter moves back.</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm tabular-nums"><span>Items total {formatSum(earned)} / {formatSum(maximum)}{value.some((result) => !Number.isFinite(result.marksAwarded)) ? ` · ${value.filter((result) => !Number.isFinite(result.marksAwarded)).length} unmarked` : ""}</span>{onUseTotal ? <Button type="button" size="sm" variant="outline" disabled={!!validateQuestionResults(value)} onClick={() => onUseTotal(earned, maximum)}>Use as overall mark</Button> : null}<span className="w-full text-xs text-muted-foreground">Enter moves to the next earned mark. Shift+Enter moves back.</span></div>
         </div>
       ) : null}
     </Field>

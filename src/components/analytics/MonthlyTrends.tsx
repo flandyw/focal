@@ -8,7 +8,6 @@ import { type ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, Char
 
 const UNASSIGNED = "_unassigned"
 const MONTHS = 12
-const hours = (minutes: number) => Math.round(minutes / 6) / 10
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 const monthLabel = (key: string, year = false) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-AU", year ? { month: "long", year: "numeric" } : { month: "short" })
 
@@ -73,13 +72,13 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
       const top = Object.entries(bySubject).sort((a, b) => b[1] - a[1])[0]?.[0]
       return {
         key, label: monthLabel(key), minutes, days, studyDays,
-        ...Object.fromEntries(Object.entries(bySubject).map(([k, m]) => [k, hours(m)])),
+        ...Object.fromEntries(Object.entries(bySubject).map(([k, m]) => [k, m / 60])),
         consistency: Math.round(studyDays / days * 100),
-        perDay: studyDays ? hours(minutes / studyDays) : 0,
+        perDay: studyDays ? minutes / studyDays / 60 : 0,
         papers: marks.length,
         mark: marks.length ? Number((marks.reduce((sum, mark) => sum + mark, 0) / marks.length).toFixed(1)) : null,
         best: marks.length ? Math.max(...marks) : null,
-        cumulative: hours(cumulative),
+        cumulative: cumulative / 60,
         top: top ? subjects.find((subject) => subject.key === top)!.id : null,
       }
     })
@@ -124,7 +123,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
               <CartesianGrid vertical={false} />
               <XAxis dataKey="label" {...axis} interval={0} />
               <YAxis tickFormatter={(h) => `${h}h`} {...axis} />
-              <ChartTooltip content={<ChartTooltipContent labelKey="key" labelFormatter={(_, payload) => monthLabel(payload[0]?.payload.key, true)} formatter={(value, name) => <Row label={config[name as string]?.label} value={`${value}h`} />} />} />
+              <ChartTooltip content={<ChartTooltipContent labelKey="key" labelFormatter={(_, payload) => monthLabel(payload[0]?.payload.key, true)} formatter={(value, name) => <Row label={config[name as string]?.label} value={formatHours(Math.round(Number(value) * 60))} />} />} />
               {subjects.map(({ key }, index) => <Bar key={key} dataKey={key} stackId="hours" fill={`var(--color-${key})`} radius={index === subjects.length - 1 ? [3, 3, 0, 0] : 0} maxBarSize={36} isAnimationActive={false} />)}
               {subjects.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
             </BarChart>
@@ -171,7 +170,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
               <CartesianGrid vertical={false} />
               <XAxis dataKey="label" {...axis} interval={0} />
               <YAxis tickFormatter={(h) => `${h}h`} {...axis} />
-              <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => `End of ${monthLabel(payload[0]?.payload.key, true)}`} formatter={(value, _, item) => <Row label="Total" value={`${value}h (+${hours(item.payload.minutes)}h)`} />} />} />
+              <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => `End of ${monthLabel(payload[0]?.payload.key, true)}`} formatter={(value, _, item) => <Row label="Total" value={`${formatHours(Math.round(Number(value) * 60))} (+${formatHours(item.payload.minutes)})`} />} />} />
               <Area dataKey="cumulative" stroke="var(--color-cumulative)" fill="var(--color-cumulative)" fillOpacity={0.12} strokeWidth={2} isAnimationActive={false} />
             </AreaChart>
           </ChartContainer>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Check, Copy, Flame, HeartHandshake, Link2, LogIn, Pencil, Plus, Settings2, Trash2, UserPlus, UsersRound } from "lucide-react"
+import { CalendarClock, Check, Clock, Copy, Flame, HeartHandshake, Link2, LogIn, Pencil, Plus, Radio, Settings2, Sigma, Trash2, Trophy, UserPlus, UsersRound } from "lucide-react"
 import { differenceInCalendarDays, format, formatDistanceToNow, subDays } from "date-fns"
 import { toast } from "sonner"
 import { Button } from "./ui/button"
@@ -11,16 +11,17 @@ import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { PageHeader } from "./page-header"
-import { EmptyState, WorkspacePage } from "./workspace-layout"
+import { Delta, EmptyState, Panel, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
 import { useTickingNow } from "../hooks/use-ticking-now"
-import { getHeatColor, getSubjectColor } from "../lib/progress-chart-theme"
-import { getSubjectById } from "../lib/progress-utils"
+import { getHeatColor, getSubjectColor, heatLevel } from "../lib/progress-chart-theme"
+import { formatDuration as duration, subjectLabel as subjectName } from "../lib/progress-utils"
 import { supabase } from "../lib/supabase"
 import { cn } from "../lib/utils"
 import { Avatar, AvatarBadge, AvatarFallback } from "./ui/avatar"
 import { Checkbox } from "./ui/checkbox"
 import { Label } from "./ui/label"
 import { FriendStudySessions } from "./friend-study-sessions"
+import { FriendsInsights, type InsightRow } from "./friends-insights"
 import type { CanonicalStudySession } from "../lib/sync/sessionContract"
 
 type SharedExam = { subject: string | null; title: string | null; provider: string | null; examYear: number | null; paper: string | null; referenceId: string | null; rawScore: number | null; rawMax: number | null; completedAt: string | null }
@@ -42,7 +43,7 @@ type Person = {
 }
 type Profile = { username: string; display_name: string; status_message: string; share_exams: boolean; share_subjects: boolean; require_requests: boolean }
 type BlockedPerson = { user_id: string; username: string | null; display_name: string | null }
-type Period = "today" | "week" | "month"
+type Period = "today" | "week" | "month" | "quarter"
 type Cheer = { sender_id: string; recipient_id: string; sender_name: string; created_at: string; message?: string | null }
 type Group = { id: string; name: string; goal_minutes: number; owner_id: string; members: string[] }
 type Countdown = { user_id: string; title: string; starts: string }
@@ -51,18 +52,16 @@ const CHEER_MESSAGES = ["Good luck!", "Keep going!", "Join me?", "Nice work!"]
 const INVITE_BASE = import.meta.env.VITE_DESKTOP ? "https://focal.flandolf.me" : location.origin
 type StudyStats = ReturnType<typeof activity>
 
-const PERIOD_LABEL: Record<Period, string> = { today: "Today", week: "7 days", month: "30 days" }
-const PERIOD_DAYS: Record<Period, number> = { today: 1, week: 7, month: 30 }
+const PERIOD_LABEL: Record<Period, string> = { today: "Today", week: "7 days", month: "30 days", quarter: "12 weeks" }
+const PERIOD_DAYS: Record<Period, number> = { today: 1, week: 7, month: 30, quarter: 84 }
+const TILE_GRID = "md:grid-cols-3 2xl:grid-cols-6"
 const TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const personName = (person: Person) => person.nickname || person.display_name
 
-const duration = (ms: number) => ms < 60_000 ? "0m" : ms < 3_600_000 ? `${Math.floor(ms / 60_000)}m` : `${Math.floor(ms / 3_600_000)}h ${Math.floor(ms / 60_000) % 60}m`
 const clock = (ms: number) => [Math.floor(ms / 3_600_000), Math.floor(ms / 60_000) % 60, Math.floor(ms / 1000) % 60].map((n) => String(n).padStart(2, "0")).join(":")
 const dayKey = (date: Date) => format(date, "yyyy-MM-dd")
-const subjectName = (id: string | null) => getSubjectById(id ?? undefined)?.name ?? "General study"
 const percent = (exam: SharedExam) => exam.rawScore != null && exam.rawMax ? Math.round(exam.rawScore / exam.rawMax * 100) : null
-const heatLevel = (ms: number) => (ms <= 0 ? 0 : ms < 3_600_000 ? 1 : ms < 7_200_000 ? 2 : ms < 14_400_000 ? 3 : 4) as 0 | 1 | 2 | 3 | 4
 
 /** Activity for one person with the running block topped up to `now`, so live timers tick between fetches. */
 function activity(person: Person, now: Date, fetchedAt: number) {
@@ -79,7 +78,7 @@ function activity(person: Person, now: Date, fetchedAt: number) {
   for (let offset = 1; offset < 84 && day(offset) >= 60_000; offset++) streak++
   return {
     day, streak,
-    period: { today: day(0), week: sum(7), month: sum(30) } as Record<Period, number>,
+    period: { today: day(0), week: sum(7), month: sum(30), quarter: sum(84) } as Record<Period, number>,
     activeDays: (days: number) => Array.from({ length: days }, (_, offset) => day(offset)).filter((ms) => ms >= 60_000).length,
     total: person.total_ms + live,
     session: person.studying_since ? Math.max(0, now.getTime() - new Date(person.studying_since).getTime()) : 0,
@@ -327,6 +326,20 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
     }
     return rows
   }, [people, group, now, fetchedAt, period])
+  // The statistics follow the minute, not the second: live timers must not redraw every chart each tick.
+  const minute = Math.floor(now.getTime() / 60_000)
+  const insightRows = useMemo(() => people.flatMap((person, index): InsightRow[] => {
+    if ((person.status !== "me" && person.status !== "friend") || (group && !group.members.includes(person.user_id))) return []
+    const stats = activity(person, new Date(minute * 60_000), fetchedAt)
+    return [{
+      id: person.user_id, name: person.status === "me" ? "You" : personName(person), color: personColor(index), isMe: person.status === "me",
+      days: Array.from({ length: 84 }, (_, offset) => stats.day(offset)), streak: stats.streak, total: stats.total, blocks: person.today_blocks, subjects: person.subjects,
+      exams: person.exams?.flatMap((exam) => {
+        const score = percent(exam)
+        return score == null || !exam.completedAt ? [] : [{ title: `${exam.title ?? exam.subject ?? "Exam"}${exam.paper ? ` · ${exam.paper}` : ""}`, percent: score, at: Date.parse(exam.completedAt) }]
+      }) ?? null,
+    }]
+  }), [people, group, minute, fetchedAt])
 
   if (!signedIn) {
     return (
@@ -340,7 +353,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
   const requests = people.filter((person) => person.status === "incoming" || person.status === "outgoing")
   const incoming = requests.filter((person) => person.status === "incoming").length
   const friends = people.filter((person) => person.status === "friend")
-  const studying = board.filter(({ person }) => person.studying_since).length
+  const studying = board.filter(({ person }) => person.studying_since)
   const me = board.find(({ person }) => person.status === "me")
   const nextRival = me ? board.findLast((entry) => entry.score > me.score) : undefined
   const selected = board.find(({ person }) => person.user_id === selectedId)
@@ -371,6 +384,16 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
     : board[1].score === me.score ? "you’re tied for the lead"
     : `you lead by ${duration((me.score - board[1].score) * 60_000)}`
 
+  const days = PERIOD_DAYS[period]
+  const sparkDays = Math.max(14, days)
+  const others = board.filter(({ person }) => person.status !== "me")
+  const mine = me?.stats.period[period] ?? 0
+  // The period just before this one; twelve weeks is all the history there is, so it has none.
+  const previous = !me || period === "quarter" ? 0 : Array.from({ length: days }, (_, offset) => me.stats.day(days + offset)).reduce((a, b) => a + b, 0)
+  const friendsAverage = others.reduce((sum, { stats }) => sum + stats.period[period], 0) / (others.length || 1)
+  const combined = board.reduce((sum, { stats }) => sum + stats.period[period], 0)
+  const topStreak = board.reduce((best, entry) => entry.stats.streak > best.stats.streak ? entry : best, board[0])
+
   return (
     <WorkspacePage>
       <PageHeader icon={UsersRound} title="Friends" description="See who’s studying, keep each other going.">
@@ -383,10 +406,9 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
         <Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button>
       </div> : null}
 
-      {requests.length ? <section aria-labelledby="friend-requests" className="grid gap-2">
-        <h2 id="friend-requests" className="focal-section-title">Requests{incoming ? ` · ${incoming} to answer` : ""}</h2>
-        <ul className="divide-y border-y">
-          {requests.map((person) => <li key={person.user_id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+      {requests.length ? <Panel flush id="friend-requests" icon={UserPlus} title={`Requests${incoming ? ` · ${incoming} to answer` : ""}`}>
+        <ul className="divide-y">
+          {requests.map((person) => <li key={person.user_id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm sm:px-5">
             <PersonAvatar person={person} />
             <span className="min-w-0 flex-1"><span className="block truncate font-medium">{personName(person)}</span><span className="block truncate text-xs text-muted-foreground">@{person.username} · {person.status === "incoming" ? "wants to be friends" : "request sent"}</span></span>
             <div className="flex gap-2">
@@ -396,33 +418,44 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
             </div>
           </li>)}
         </ul>
-      </section> : null}
+      </Panel> : null}
+
+      <div className="grid min-w-0 gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="focal-section-title">Overview</h2>
+          <div className="flex flex-wrap items-center gap-3">
+          {groups.length ? <Select value={group?.id ?? "all"} onValueChange={(value) => { if (value) setGroupId(value) }}>
+            <SelectTrigger aria-label="Filter by group"><SelectValue>{group?.name ?? "Everyone"}</SelectValue></SelectTrigger>
+            <SelectContent><SelectItem value="all">Everyone</SelectItem>{groups.map((entry) => <SelectItem key={entry.id} value={entry.id}>{entry.name}</SelectItem>)}</SelectContent>
+          </Select> : null}
+          <Tabs value={period} onValueChange={(value) => setPeriod(value as Period)}>
+            <TabsList aria-label="Period">{(Object.keys(PERIOD_LABEL) as Period[]).map((key) => <TabsTrigger key={key} value={key}>{PERIOD_LABEL[key]}</TabsTrigger>)}</TabsList>
+          </Tabs>
+          </div>
+        </div>
+        {loading ? <StatGrid className={TILE_GRID}>{[0, 1, 2, 3, 4, 5].map((index) => <Skeleton key={index} className="h-28 motion-reduce:animate-none" />)}</StatGrid> : me ? <StatGrid className={TILE_GRID}>
+          <StatTile icon={Radio} tone={studying.length ? "success" : "default"} label="Studying now" value={<>{studying.length}<span className="text-base font-medium text-muted-foreground"> / {board.length}</span></>} hint={studying.map(({ person }) => person.status === "me" ? "You" : personName(person)).join(", ") || "No one right now"} />
+          <StatTile icon={Trophy} label={`Your rank · ${PERIOD_LABEL[period].toLowerCase()}`} value={<>#{me.rank}<span className="text-base font-medium text-muted-foreground"> of {board.length}</span></>} hint={standing ? standing[0].toUpperCase() + standing.slice(1) : "Add a friend to compete"} />
+          <StatTile icon={Clock} label="Your study time" value={duration(mine)} delta={period !== "today" && previous >= 60_000 ? <Delta value={Math.round((mine - previous) / previous * 100)} suffix="%" /> : undefined}
+            hint={period === "today" ? `Yesterday: ${duration(previous)}` : period === "quarter" ? `${duration(mine / days)} a day on average` : `Before that: ${duration(previous)}`}
+            spark={mine ? Array.from({ length: sparkDays }, (_, index) => me.stats.day(sparkDays - 1 - index)) : undefined} onClick={() => setSelectedId(me.person.user_id)} />
+          <StatTile icon={UsersRound} label="Friends’ average" value={others.length ? duration(friendsAverage) : "—"} hint={!others.length ? "Add a friend to compare" : Math.abs(mine - friendsAverage) < 60_000 ? "You’re level with it" : `You’re ${duration(Math.abs(mine - friendsAverage))} ${mine > friendsAverage ? "ahead" : "behind"}`} />
+          <StatTile icon={Flame} tone={me.stats.streak ? "warning" : "default"} label="Your streak" value={`${me.stats.streak}d`} hint={!topStreak.stats.streak ? "Study today to start one" : me.stats.streak >= topStreak.stats.streak ? "Longest on the list" : `${personName(topStreak.person)} leads with ${topStreak.stats.streak}d`} />
+          <StatTile icon={Sigma} label="Combined time" value={duration(combined)} hint={`${board.filter(({ score }) => score > 0).length} of ${board.length} studied`}
+            spark={combined ? Array.from({ length: sparkDays }, (_, index) => board.reduce((sum, { stats }) => sum + stats.day(sparkDays - 1 - index), 0)) : undefined} />
+        </StatGrid> : null}
+      </div>
 
       {userId ? <FriendStudySessions userId={userId} sessions={sessions} friends={friends.map((person) => ({ id: person.user_id, name: personName(person), studying: !!person.studying_since }))} onOpenTimer={onJoin} /> : null}
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem] xl:gap-12">
-        <section aria-labelledby="friends-board" className="grid min-w-0 content-start gap-3" aria-busy={loading}>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <h2 id="friends-board" className="focal-section-title">Study time</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{fetchedAt ? `${studying ? `${studying} of ${board.length} studying now` : "No one is studying right now"}${standing ? ` · ${standing}` : ""}` : "Loading…"}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {groups.length ? <Select value={group?.id ?? "all"} onValueChange={(value) => { if (value) setGroupId(value) }}>
-                <SelectTrigger aria-label="Filter by group"><SelectValue>{group?.name ?? "Everyone"}</SelectValue></SelectTrigger>
-                <SelectContent><SelectItem value="all">Everyone</SelectItem>{groups.map((entry) => <SelectItem key={entry.id} value={entry.id}>{entry.name}</SelectItem>)}</SelectContent>
-              </Select> : null}
-              <Tabs value={period} onValueChange={(value) => setPeriod(value as Period)}>
-                <TabsList aria-label="Period">{(Object.keys(PERIOD_LABEL) as Period[]).map((key) => <TabsTrigger key={key} value={key}>{PERIOD_LABEL[key]}</TabsTrigger>)}</TabsList>
-              </Tabs>
-            </div>
-          </div>
-          {loading ? <div role="status" className="grid gap-2"><span className="sr-only">Loading friends</span>{[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 motion-reduce:animate-none" />)}</div> : null}
-          {board.length ? <ol className="min-w-0 divide-y border-y">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <Panel flush id="friends-board" icon={Trophy} title="Leaderboard" description={period === "today" ? "Study time today" : `Study time over the last ${PERIOD_LABEL[period]}`} className="self-start">
+          {loading ? <div role="status" className="grid gap-2 p-4"><span className="sr-only">Loading friends</span>{[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 motion-reduce:animate-none" />)}</div> : null}
+          {board.length ? <ol className="min-w-0 divide-y">
             {board.map(({ person, stats, rank }) => {
               const isMe = person.status === "me"
               const done = cheered(person.user_id)
-              return <li key={person.user_id} className="flex min-w-0 items-center gap-2 py-1 sm:gap-4">
+              return <li key={person.user_id} className="flex min-w-0 items-center gap-2 px-2 py-1 sm:gap-4 sm:px-3">
                 <Button variant="ghost" onClick={() => setSelectedId(person.user_id)} aria-label={`${isMe ? "You" : personName(person)}, rank ${rank}, ${duration(stats.period[period])} ${period === "today" ? "today" : `in the last ${PERIOD_DAYS[period]} days`}. Open details`} className="h-auto min-w-0 flex-1 justify-start gap-3 px-1 py-2 text-left font-normal sm:px-2">
                   <span className={cn("w-5 shrink-0 text-center text-sm tabular-nums", rank === 1 && stats.period[period] >= 60_000 ? "font-semibold text-primary" : "text-muted-foreground")}>{rank}</span>
                   <PersonAvatar person={person} />
@@ -444,66 +477,67 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
               </li>
             })}
           </ol> : null}
-          {period === "today" && board.length ? <div className="hidden items-center gap-4 text-xs text-muted-foreground md:flex" aria-hidden>
+          {period === "today" && board.length ? <div className="hidden items-center gap-4 border-t px-3 py-2 text-xs text-muted-foreground md:flex" aria-hidden>
             <span className="flex-1" /><span className="flex w-44 justify-between 2xl:w-72"><span>12am</span><span>12pm</span><span>12am</span></span><span className="w-16" /><span className="w-9" />
           </div> : null}
-          {fetchedAt && !friends.length ? <div className="grid justify-items-start gap-2 py-2"><p className="text-sm text-muted-foreground">It’s just you so far. Add a friend to see who’s studying and compare your time.</p><Button variant="outline" size="sm" onClick={() => setDialog("add")}><UserPlus />Add friend</Button></div> : null}
-        </section>
+          {fetchedAt && !friends.length ? <div className="grid justify-items-start gap-2 p-4 sm:px-5"><p className="text-sm text-muted-foreground">It’s just you so far. Add a friend to see who’s studying and compare your time.</p><Button variant="outline" size="sm" onClick={() => setDialog("add")}><UserPlus />Add friend</Button></div> : null}
+        </Panel>
 
-        <aside className="grid min-w-0 content-start gap-8">
-          <section aria-labelledby="friends-cheers" className="grid gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="friends-cheers" className="focal-section-title">Cheers</h2>
-              <Select value={cheerMessage} onValueChange={(value) => { if (value) setCheerMessage(value) }}>
-                <SelectTrigger size="sm" aria-label="Message sent with your cheers"><SelectValue>{cheerMessage === "none" ? "No message" : cheerMessage}</SelectValue></SelectTrigger>
-                <SelectContent>{CHEER_MESSAGES.map((message) => <SelectItem key={message} value={message}>{message}</SelectItem>)}<SelectItem value="none">No message</SelectItem></SelectContent>
-              </Select>
+        <aside className="grid min-w-0 content-start gap-4 md:grid-cols-2 xl:grid-cols-1">
+          <Panel id="friends-cheers" icon={HeartHandshake} title="Cheers" action={
+          <Select value={cheerMessage} onValueChange={(value) => { if (value) setCheerMessage(value) }}>
+            <SelectTrigger size="sm" aria-label="Message sent with your cheers"><SelectValue>{cheerMessage === "none" ? "No message" : cheerMessage}</SelectValue></SelectTrigger>
+            <SelectContent>{CHEER_MESSAGES.map((message) => <SelectItem key={message} value={message}>{message}</SelectItem>)}<SelectItem value="none">No message</SelectItem></SelectContent>
+          </Select>
+          }>
+            <div className="grid gap-3">
+              {cheersError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Cheers are unavailable.</p><Button variant="outline" size="sm" onClick={() => void loadCheers()}>Retry</Button></div>
+                : !cheersLoaded ? <Skeleton className="h-10 motion-reduce:animate-none" />
+                : receivedCheers.length ? receivedCheers.map((cheer) => <div key={cheer.sender_id} className="flex min-w-0 items-center gap-3 text-sm">
+                  <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on{cheer.message ? <>: “{cheer.message}”</> : null}</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "d MMM yyyy, h:mmaaa")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
+                  <Button variant="outline" size="sm" disabled={cheerOff || cheered(cheer.sender_id)} onClick={() => { const friend = friends.find((person) => person.user_id === cheer.sender_id); if (friend) void cheerFriend(friend) }}>{cheered(cheer.sender_id) ? "Cheered" : "Cheer back"}</Button>
+                </div>) : <p className="text-sm text-muted-foreground">No cheers this week. Send one from the list, once per friend a day.</p>}
             </div>
-            {cheersError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Cheers are unavailable.</p><Button variant="outline" size="sm" onClick={() => void loadCheers()}>Retry</Button></div>
-              : !cheersLoaded ? <Skeleton className="h-10 motion-reduce:animate-none" />
-              : receivedCheers.length ? receivedCheers.map((cheer) => <div key={cheer.sender_id} className="flex min-w-0 items-center gap-3 text-sm">
-                <div className="min-w-0 flex-1"><p><span className="font-medium break-words">{cheer.sender_name}</span> cheered you on{cheer.message ? <>: “{cheer.message}”</> : null}</p><time className="text-xs text-muted-foreground" dateTime={cheer.created_at} title={format(new Date(cheer.created_at), "d MMM yyyy, h:mmaaa")}>{formatDistanceToNow(new Date(cheer.created_at), { addSuffix: true })}</time></div>
-                <Button variant="outline" size="sm" disabled={cheerOff || cheered(cheer.sender_id)} onClick={() => { const friend = friends.find((person) => person.user_id === cheer.sender_id); if (friend) void cheerFriend(friend) }}>{cheered(cheer.sender_id) ? "Cheered" : "Cheer back"}</Button>
-              </div>) : <p className="text-sm text-muted-foreground">No cheers this week. Send one from the list, once per friend a day.</p>}
-          </section>
+          </Panel>
 
-          <section aria-labelledby="friends-groups" className="grid gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="friends-groups" className="focal-section-title">Groups</h2>
-              <Button size="sm" variant="outline" disabled={!me} onClick={() => setEditing({ id: null, name: "", hours: "", members: [] })}><Plus />New group</Button>
+          <Panel id="friends-groups" icon={UsersRound} title="Groups" action={<Button size="sm" variant="outline" disabled={!me} onClick={() => setEditing({ id: null, name: "", hours: "", members: [] })}><Plus />New group</Button>}>
+            <div className="grid gap-3">
+              {groups.length ? groups.map((entry) => {
+                const members = entry.members.filter((id) => people.some((person) => person.user_id === id && (person.status === "me" || person.status === "friend")))
+                const total = members.reduce((sum, id) => sum + weekOf(id), 0)
+                const goal = entry.goal_minutes * 60_000
+                return <div key={entry.id} className="grid gap-1.5 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" aria-pressed={group?.id === entry.id} className="min-w-0 flex-1 justify-start truncate px-1 font-medium" onClick={() => setGroupId(group?.id === entry.id ? "all" : entry.id)} title="Show only this group in the list">{entry.name}{group?.id === entry.id ? " · showing" : ""}</Button>
+                    {entry.owner_id === me?.person.user_id ? <>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Edit ${entry.name}`} onClick={() => setEditing({ id: entry.id, name: entry.name, hours: entry.goal_minutes ? String(entry.goal_minutes / 60) : "", members: entry.members.filter((id) => id !== entry.owner_id) })}><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" aria-label={`Delete ${entry.name}`} disabled={!!pending} onClick={() => setDeletingGroup(entry)}><Trash2 /></Button>
+                    </> : null}
+                  </div>
+                  <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${entry.name}: ${duration(total)}${goal ? ` of ${duration(goal)} goal` : ""} in the last 7 days`}>
+                    {members.map((id) => <span key={id} title={`${nameOf(id)}: ${duration(weekOf(id))}`} style={{ width: `${weekOf(id) / Math.max(goal, total, 1) * 100}%`, background: colorOf(id) }} />)}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{members.length} {members.length === 1 ? "member" : "members"} · {duration(total)}{goal ? ` of ${duration(goal)}` : ""} in 7 days{goal && total >= goal ? " · goal reached" : ""}</p>
+                </div>
+              }) : <p className="text-sm text-muted-foreground">Group a class or study squad and set a shared weekly goal.</p>}
             </div>
-            {groups.length ? groups.map((entry) => {
-              const members = entry.members.filter((id) => people.some((person) => person.user_id === id && (person.status === "me" || person.status === "friend")))
-              const total = members.reduce((sum, id) => sum + weekOf(id), 0)
-              const goal = entry.goal_minutes * 60_000
-              return <div key={entry.id} className="grid gap-1.5 text-sm">
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" aria-pressed={group?.id === entry.id} className="min-w-0 flex-1 justify-start truncate px-1 font-medium" onClick={() => setGroupId(group?.id === entry.id ? "all" : entry.id)} title="Show only this group in the list">{entry.name}{group?.id === entry.id ? " · showing" : ""}</Button>
-                  {entry.owner_id === me?.person.user_id ? <>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Edit ${entry.name}`} onClick={() => setEditing({ id: entry.id, name: entry.name, hours: entry.goal_minutes ? String(entry.goal_minutes / 60) : "", members: entry.members.filter((id) => id !== entry.owner_id) })}><Pencil /></Button>
-                    <Button variant="ghost" size="icon-sm" aria-label={`Delete ${entry.name}`} disabled={!!pending} onClick={() => setDeletingGroup(entry)}><Trash2 /></Button>
-                  </> : null}
-                </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${entry.name}: ${duration(total)}${goal ? ` of ${duration(goal)} goal` : ""} in the last 7 days`}>
-                  {members.map((id) => <span key={id} title={`${nameOf(id)}: ${duration(weekOf(id))}`} style={{ width: `${weekOf(id) / Math.max(goal, total, 1) * 100}%`, background: colorOf(id) }} />)}
-                </div>
-                <p className="text-xs text-muted-foreground">{members.length} {members.length === 1 ? "member" : "members"} · {duration(total)}{goal ? ` of ${duration(goal)}` : ""} in 7 days{goal && total >= goal ? " · goal reached" : ""}</p>
-              </div>
-            }) : <p className="text-sm text-muted-foreground">Group a class or study squad and set a shared weekly goal.</p>}
-          </section>
+          </Panel>
 
-          {exams.length ? <section aria-labelledby="friends-exams" className="grid gap-3">
-            <h2 id="friends-exams" className="focal-section-title">Upcoming exams</h2>
-            {exams.map((entry, index) => {
-              const days = Math.max(0, differenceInCalendarDays(new Date(entry.starts), now))
-              return <div key={index} className="flex min-w-0 items-start gap-2 text-sm">
-                <span className="min-w-0 flex-1 break-words"><span className="font-medium">{nameOf(entry.user_id)}</span> · {entry.title}</span>
-                <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground" title={format(new Date(entry.starts), "EEE d MMM, h:mmaaa")}>{days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}</span>
-              </div>
-            })}
-          </section> : null}
+          {exams.length ? <Panel id="friends-exams" icon={CalendarClock} title="Upcoming exams">
+            <div className="grid gap-3">
+              {exams.map((entry, index) => {
+                const days = Math.max(0, differenceInCalendarDays(new Date(entry.starts), now))
+                return <div key={index} className="flex min-w-0 items-start gap-2 text-sm">
+                  <span className="min-w-0 flex-1 break-words"><span className="font-medium">{nameOf(entry.user_id)}</span> · {entry.title}</span>
+                  <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground" title={format(new Date(entry.starts), "EEE d MMM, h:mmaaa")}>{days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}</span>
+                </div>
+              })}
+            </div>
+          </Panel> : null}
         </aside>
       </div>
+
+      {insightRows.length ? <FriendsInsights rows={insightRows} days={days} at={minute * 60_000} scope={group?.name ?? "Everyone"} /> : null}
 
       {selected ? <FriendSheet key={selected.person.user_id} person={selected.person} stats={selected.stats} me={me} period={period} onPeriodChange={setPeriod} now={now} cheered={cheered(selected.person.user_id)} pending={pending} onSaveNickname={(nickname) => call("friends_set_nickname", { p_user_id: selected.person.user_id, p_nickname: nickname }, "Could not save this nickname.")} cheerDisabled={cheerOff} onCheer={() => void cheerFriend(selected.person)} onClose={() => { setSelectedId(null); setRemoving(false) }} onRemove={() => setRemoving(true)} /> : null}
 

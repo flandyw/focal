@@ -39,6 +39,11 @@ export function getSubjectById(id?: string) {
     ?? { id, name: id, shortCode: id, color: "var(--chart-2)" }
 }
 
+export const subjectLabel = (id: string | null) => getSubjectById(id ?? undefined)?.name ?? "General study"
+
+/** Whole minutes, e.g. "45m" or "3h 5m". */
+export const formatDuration = (ms: number) => ms < 60_000 ? "0m" : ms < 3_600_000 ? `${Math.floor(ms / 60_000)}m` : `${Math.floor(ms / 3_600_000)}h ${Math.floor(ms / 60_000) % 60}m`
+
 export function getSessionSubjectIds(session: StudySession, project?: Project): string[] {
   const ids = session.subjectIds.length > 0 ? session.subjectIds : project?.subjectId ? [project.subjectId] : []
   // Names, ids and short codes for one subject must group together.

@@ -336,7 +336,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
       days: Array.from({ length: 84 }, (_, offset) => stats.day(offset)), streak: stats.streak, total: stats.total, blocks: person.today_blocks, subjects: person.subjects,
       exams: person.exams?.flatMap((exam) => {
         const score = percent(exam)
-        return score == null || !exam.completedAt ? [] : [{ title: `${exam.title ?? exam.subject ?? "Exam"}${exam.paper ? ` · ${exam.paper}` : ""}`, percent: score, at: Date.parse(exam.completedAt) }]
+        return score == null || !exam.completedAt ? [] : [{ title: `${exam.title ?? exam.subject ?? "Exam"}${exam.paper ? ` · ${exam.paper}` : ""}`, percent: score, at: new Date(`${exam.completedAt.slice(0, 10)}T00:00:00`).getTime() }]
       }) ?? null,
     }]
   }), [people, group, minute, fetchedAt])

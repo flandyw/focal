@@ -19,6 +19,7 @@ import { AIOverviewSettings } from "./ai-overview-settings"
 import { AppearanceSettings } from "./appearance-settings"
 import { PushSettings } from "./push-settings"
 import { PageHeader } from "./page-header"
+import { ArchivedItems } from "./workspace-layout"
 import { SubjectCombobox } from "./subject-combobox"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -355,7 +356,7 @@ function SubjectsSection({ subjects, selectedSubjects, completedSubjects, subjec
         </Group>
       ) : null}
 
-      {years.map((completed) => (
+      {completedSubjects.length ? <ArchivedItems label="Archived subjects" count={completedSubjects.length}>{years.map((completed) => (
         <Group key={completed} title={`Completed in ${completed}`}>
           {completedSubjects.filter((subject) => subjectCompletionYears[subject] === completed).map((subject) => (
             <div key={subject} className="flex items-center gap-2 py-1.5 pr-2 pl-4">
@@ -365,7 +366,7 @@ function SubjectsSection({ subjects, selectedSubjects, completedSubjects, subjec
             </div>
           ))}
         </Group>
-      ))}
+      ))}</ArchivedItems> : null}
     </Panel>
   )
 }

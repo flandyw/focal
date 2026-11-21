@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { PageHeader } from "./page-header"
 import { SubjectCombobox } from "./subject-combobox"
-import { Panel, Ring, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
+import { ArchivedItems, Panel, Ring, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { canonicalNow } from "../lib/study-session-sync"
 import type { AppData, AssessmentReference } from "../lib/exam-data"
@@ -225,7 +225,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
           </CardContent>
         </Card>
       })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see your current baseline and the gap to close.</EmptyDescription></EmptyHeader></Empty>}
-      {archivedGoals.length ? <Card><CardHeader><CardTitle>Archived goals</CardTitle></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 rounded-md border p-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)}</p><p className="text-xs text-muted-foreground tabular-nums">Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p></div><Button size="sm" variant="outline" onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</CardContent></Card> : null}
+      {archivedGoals.length ? <ArchivedItems label="Archived goals" count={archivedGoals.length}>{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 px-4 py-2"><p className="min-w-0 truncate text-sm">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)} · Target {goal.target} by {new Date(`${goal.deadline}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</p><Button size="sm" variant="ghost" onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</ArchivedItems> : null}
       {editingGoal ? <GoalEditSheet key={editingGoal.id} goal={editingGoal} data={data} subjects={subjects} scopedSubject={scopedSubject} onClose={() => setEditingGoal(null)} onSave={saveEditedGoal} /> : null}
     </WorkspacePage>
   )

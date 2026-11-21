@@ -119,6 +119,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
             <Textarea
               autoFocus
               aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "mistake-import-json-error" : undefined}
               id="mistake-import-json"
               rows={6}
               className="font-mono text-xs"
@@ -182,7 +183,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
               </div>
             </Field>
           ) : null}
-          <FieldError>{error}</FieldError>
+          <FieldError id="mistake-import-json-error">{error}</FieldError>
         </FieldGroup>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>Cancel</Button>

@@ -29,9 +29,12 @@ const UNASSIGNED_ID = "_unassigned"
 
 function formatMinutes(value: number) {
   if (value === 0) return "0m"
-  if (value < 60) return `${value}m`
-  const h = Math.floor(value / 60)
-  const m = value % 60
+  // Keep sub-10-minute averages readable (0.14m, 4.5m) instead of rounding real study to zero.
+  if (value < 10) return `${Number(value.toPrecision(2))}m`
+  const rounded = Math.round(value)
+  if (rounded < 60) return `${rounded}m`
+  const h = Math.floor(rounded / 60)
+  const m = rounded % 60
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
@@ -69,7 +72,7 @@ export function StudyTimeTrendChart({ data, days }: StudyTimeTrendChartProps) {
         const subjectMap = dayMap.get(date) ?? new Map<string, number>()
         const window = days.slice(Math.max(0, index - 6), index + 1)
         const average = window.reduce((sum, day) => sum + day.minutes, 0) / window.length
-        return { date, average: Math.round(average), subjects: Object.fromEntries(subjectMap) }
+        return { date, average, subjects: Object.fromEntries(subjectMap) }
       })
 
       const total = sorted.reduce((sum, [, m]) => sum + m, 0)

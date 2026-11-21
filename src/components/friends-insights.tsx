@@ -116,7 +116,7 @@ export const FriendsInsights = memo(function FriendsInsights({ rows: unsorted, d
         </ul>
       </div>
 
-      {studiedEver || examRows.length ? <div className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      {studiedEver || examRows.length || rows.some((row) => row.total >= 60_000) ? <div className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-3">
         <Panel icon={TrendingUp} title="Cumulative study" description={`Running total, ${spanLabel}`}>
           {studiedInSpan ? <ChartContainer config={{}} className={chartClass} aria-label={`Running total of study time for each person over the ${spanLabel}`}>
             <LineChart accessibilityLayer data={data.cumulative} margin={margin}>

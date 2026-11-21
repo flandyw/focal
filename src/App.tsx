@@ -984,7 +984,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         onControlSession={studySessionSync.control}
         onLogExam={openNewExam}
         onLogPastStudy={() => setPastStudyId(crypto.randomUUID())}
-        onStartExam={() => { setTimerMode("exam"); setView("focus") }}
+        onStartExam={() => { setTimerMode("exam"); setView("focus", undefined, "?timer=exam") }}
         onLogMistake={() => openNewMistake()}
         onSearch={() => setCommandOpen(true)}
         commandOpen={commandOpen}

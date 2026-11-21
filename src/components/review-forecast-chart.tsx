@@ -2,6 +2,7 @@ import { useId, useMemo, useState } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
+import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "../lib/exam-data"
 import { MarkdownPreview } from "./markdown-preview"
 import { buildReviewForecast } from "../lib/performance-insights"
@@ -58,10 +59,10 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
         </p>
         <label className="mt-4 grid gap-2 text-sm font-medium">
           Review day
-          <select className="w-full rounded-md border bg-background p-2 text-sm" value={selected} onChange={(event) => setSelection(event.target.value)} aria-controls={listId}>
-            <option value="">Choose a day</option>
-            {forecast.map((day) => <option key={day.date} value={day.date}>{day.label} · {day.due} cards</option>)}
-          </select>
+          <NativeSelect className="w-full" value={selected} onChange={(event) => setSelection(event.target.value)} aria-controls={listId}>
+            <NativeSelectOption value="">Choose a day</NativeSelectOption>
+            {forecast.map((day) => <NativeSelectOption key={day.date} value={day.date}>{day.label} · {day.due} card{day.due === 1 ? "" : "s"}</NativeSelectOption>)}
+          </NativeSelect>
         </label>
         <div id={listId} aria-live="polite" className="mt-3 text-sm">
           {selectedDay ? <>

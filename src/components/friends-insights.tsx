@@ -95,7 +95,6 @@ export const FriendsInsights = memo(function FriendsInsights({ rows: unsorted, d
     return { now, rows, cumulative, weekly, weekdays, hourly, records, hasFriends: friends.length > 0, subjects: [...subjectTotals].sort((a, b) => b[1] - a[1]).map(([id]) => id) }
   }, [unsorted, days, span, comparable, at])
   const { now, rows, records } = data
-  const groupTotal = sum(records.map((record) => record.total))
   const range = (length: number) => length === 1 ? "today" : length === 84 ? "last 12 weeks" : `last ${length} days`
   const period = range(days)
   const spanLabel = range(span)
@@ -103,6 +102,7 @@ export const FriendsInsights = memo(function FriendsInsights({ rows: unsorted, d
   const studiedEver = rows.some((row) => row.days.some((ms) => ms >= 60_000))
   const examRows = rows.filter((row) => row.exams?.length)
   const share = records.filter((record) => record.total >= 60_000)
+  const groupTotal = sum(share.map((record) => record.total))
 
   return (
     <section aria-labelledby="friends-statistics" className="grid min-w-0 gap-4">

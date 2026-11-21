@@ -1,24 +1,35 @@
-import { useMemo } from "react"
+import { useId, useMemo, useState } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
-import type { Mistake } from "../lib/exam-data"
+import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake } from "../lib/exam-data"
+import { MarkdownPreview } from "./markdown-preview"
 import { buildReviewForecast } from "../lib/performance-insights"
 import { localDate } from "../lib/learning-workspace"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
 const chartConfig = {
-  due: { label: "Cards due", color: "var(--chart-4)" },
+  scheduled: { label: "Due that day", color: "var(--chart-4)" },
+  overdue: { label: "Overdue", color: "var(--chart-1)" },
 }
 
-export function ReviewForecastChart({ mistakes }: { mistakes: Mistake[] }) {
+export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[]; attempts: ExamAttempt[] }) {
   // Recompute only when the local calendar day changes, not on every minute tick.
   const today = localDate(useTickingNow())
   const forecast = useMemo(() => buildReviewForecast(mistakes, new Date(`${today}T00:00:00`)), [mistakes, today])
+  const [selection, setSelection] = useState<string | null>(null)
+  const selected = selection ?? (forecast[0].due ? today : "")
+  const listId = useId()
+  const selectedDay = forecast.find((day) => day.date === selected)
+  const cards = mistakes.filter((mistake) => {
+    if (mistake.suspended || !selectedDay) return false
+    const difference = localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), new Date(`${selected}T00:00:00`))
+    return difference === 0 || (selected === today && difference < 0)
+  })
   const total = forecast.reduce((sum, day) => sum + day.due, 0)
   const busiest = forecast.reduce((current, day) => day.due > current.due ? day : current, forecast[0])
   const summary = total
-    ? `${total} card${total === 1 ? "" : "s"} due over 14 days; the largest load is ${busiest.due} on ${busiest.label.toLowerCase()}.`
+    ? `${total} card${total === 1 ? "" : "s"} due over 14 days${forecast[0].overdue ? ` (${forecast[0].overdue} overdue)` : ""}; the largest load is ${busiest.due} on ${busiest.label.toLowerCase()}.`
     : "No active mistake cards are due in the next 14 days."
 
   return (
@@ -29,17 +40,44 @@ export function ReviewForecastChart({ mistakes }: { mistakes: Mistake[] }) {
       </CardHeader>
       <CardContent className="min-w-0">
         <ChartContainer config={chartConfig} className="h-72 w-full min-w-0 aspect-auto" role="img" aria-label={summary}>
-          <BarChart data={forecast} margin={{ left: 0, right: 8, top: 8, bottom: 4 }} accessibilityLayer>
+          <BarChart data={forecast.map((day) => ({ ...day, scheduled: day.due - day.overdue }))} margin={{ left: 0, right: 8, top: 8, bottom: 4 }} accessibilityLayer onClick={(state) => {
+            if (state.activeTooltipIndex == null) return
+            const day = forecast[Number(state.activeTooltipIndex)]
+            if (day) setSelection(day.date)
+          }}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={20} tick={{ fontSize: 10 }} />
             <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={30} />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="due" fill="var(--color-due)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="scheduled" stackId="due" fill="var(--color-scheduled)" isAnimationActive={false} />
+            <Bar dataKey="overdue" stackId="due" fill="var(--color-overdue)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
           </BarChart>
         </ChartContainer>
         <p className="mt-3 text-xs text-muted-foreground">
-          Overdue cards are included in today. Use quieter days for a timed paper; clear heavier review days before adding new cards.
+          Today stacks cards due today with overdue cards. Select a bar or choose a day to see its cards. Use quieter days for a timed paper.
         </p>
+        <label className="mt-4 grid gap-2 text-sm font-medium">
+          Review day
+          <select className="w-full rounded-md border bg-background p-2 text-sm" value={selected} onChange={(event) => setSelection(event.target.value)} aria-controls={listId}>
+            <option value="">Choose a day</option>
+            {forecast.map((day) => <option key={day.date} value={day.date}>{day.label} · {day.due} cards</option>)}
+          </select>
+        </label>
+        <div id={listId} aria-live="polite" className="mt-3 text-sm">
+          {selectedDay ? <>
+            <h3 className="font-medium">{selectedDay.label} · {cards.length} card{cards.length === 1 ? "" : "s"}</h3>
+            {cards.length ? <ul className="mt-2 grid gap-3">
+              {cards.slice(0, 8).map((mistake) => <li key={mistake.id} className="min-w-0 break-words">
+                <MarkdownPreview inline>{mistake.question}</MarkdownPreview>
+                <p className="text-xs text-muted-foreground">
+                  {attempts.find((attempt) => attempt.id === mistake.attemptId)?.subject ?? mistake.subject ?? "Uncategorised"}
+                  {localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), new Date(`${today}T00:00:00`)) < 0 ? " · Overdue" : ""}
+                </p>
+              </li>)}
+            </ul> : <p className="mt-2 text-muted-foreground">No cards due this day.</p>}
+            {cards.length > 8 ? <p className="mt-2 text-muted-foreground">+{cards.length - 8} more</p> : null}
+          </> : <p className="text-muted-foreground">Choose a day to see its cards.</p>}
+        </div>
       </CardContent>
     </Card>
   )

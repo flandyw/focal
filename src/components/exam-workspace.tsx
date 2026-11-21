@@ -45,7 +45,7 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
     if (items.some((item) => questionKey(item.label) === questionKey(label))) return setError("That question or section is already mapped.")
     if (!Number.isFinite(marks) || marks < 0.5) return setError("Marks must be at least 0.5.")
     if (marks > remainingMarks) return setError(`Only ${count(remainingMarks, "mark")} left to map.`)
-    const remainder = remainingMarks - marks
+    const remainder = Math.max(0, totalMarks - (mappedMarks + marks))
     // Ignore floating-point dust at the zero and half-mark boundaries.
     if (remainder > 1e-9 && remainder < 0.5 - 1e-9) return setError("Use all remaining marks, or leave at least 0.5 marks to map.")
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])

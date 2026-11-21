@@ -96,7 +96,7 @@ export function MistakeBulkEditDialog({ mistakes, current, selected, attempts, o
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Edit mistakes with ChatGPT</DialogTitle>
           <DialogDescription>Describe a change to make across many mistakes. You review every edit before anything is saved.</DialogDescription>

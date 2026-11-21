@@ -139,7 +139,7 @@ export function MonthlyTrends({ points, attempts, periodEnd }: {
               <YAxis yAxisId="hours" orientation="right" tickFormatter={(h) => `${h}h`} {...axis} width={36} />
               <ChartTooltip content={<ChartTooltipContent labelFormatter={(_, payload) => monthLabel(payload[0]?.payload.key, true)} formatter={(value, name, item) => name === "consistency"
                 ? <Row label="Days studied" value={`${item.payload.studyDays} of ${item.payload.days} · ${value}%`} />
-                : <Row label="Per study day" value={formatHours(Math.round(Number(value) * 60))} />} />} />
+                : <Row label="Per study day" value={formatHours(Math.round(item.payload.studyDays ? item.payload.minutes / item.payload.studyDays : 0))} />} />} />
               <Bar yAxisId="pct" dataKey="consistency" fill="var(--color-consistency)" fillOpacity={0.55} radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false} />
               <Line yAxisId="hours" dataKey="perDay" stroke="var(--color-perDay)" strokeWidth={1.5} dot={{ r: 2.5, fill: "var(--background)" }} isAnimationActive={false} />
               <ChartLegend content={<ChartLegendContent />} />

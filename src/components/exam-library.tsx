@@ -119,17 +119,26 @@ export function ExamLibrary({
   const pending = filtered.filter((exam) => !isCompleted(exam))
   const completed = filtered.filter(isCompleted)
   const completedRows = completed.map((exam) => {
+    const study = studies.find((item) => item.pageUrl === exam.pageUrl) ?? resourcesByStudy.get(normaliseComparisonName(exam.studyName))
+    const companion = getVcaaExamCompanions(exam, study)
     const reference = findVcaaExamReference(exam, references)
     const attempt = findVcaaExamAttempt(exam, attempts)
+    const analysis = attempt ? analyseAttempt(attempt, reference) : null
     const preset = timerPreset(exam, reference)
     return <div key={exam.url} className={`flex min-w-0 flex-wrap items-center gap-2 px-4 py-2 ${selectedPaperId === exam.url ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""}`}>
-      <span className="min-w-0 flex-1 truncate text-sm" title={`${exam.year ?? "Unknown year"} · ${getVcaaExamPaper(exam)} · ${exam.studyName}`}>{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span>
-      <Badge variant={attempt ? "success" : "secondary"}>{attempt ? `Logged ${analyseAttempt(attempt, reference).percentage.toFixed(1)}%` : "Done"}</Badge>
+      <Button variant="link" className="h-auto min-w-0 flex-1 justify-start p-0 text-sm text-inherit" onClick={() => onSelectPaper(exam.url)}><span className="truncate">{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span></Button>
+      <Badge variant={attempt ? "success" : "secondary"}>{analysis ? `Logged ${analysis.percentage.toFixed(1)}%` : "Done"}</Badge>
       <div className="flex flex-wrap items-center gap-1">
         {preset ? <Button size="sm" variant="ghost" onClick={() => onStart(preset)}>{attempt ? "Sit again" : "Start timed"}</Button> : null}
         <Button size="sm" nativeButton={false} variant="ghost" render={<a href={exam.url} target="_blank" rel="noreferrer" />}>Open paper</Button>
         {attempt && reference ? <Button size="sm" variant="ghost" onClick={() => onCompare(attempt)}>Compare</Button> : null}
         {completedExamIds.includes(exam.url) ? <Button size="sm" variant="ghost" aria-label={`Mark not done: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}>Mark not done</Button> : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+        {companion.reports.map((report) => <a key={report.url} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={report.url} target="_blank" rel="noreferrer">{resourceLabel(report)}</a>)}
+        {companion.specification ? <a className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={companion.specification.url} target="_blank" rel="noreferrer">Specifications</a> : null}
+        {reference ? <a className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={reference.sourceUrl} target="_blank" rel="noreferrer">Grade distribution</a> : <span className="text-muted-foreground">No official distribution</span>}
+        {selectedPaperId === exam.url && analysis ? <span className="text-muted-foreground">{analysis.grade ? `Est. ${analysis.grade}${analysis.percentile !== null ? ` · ${formatOrdinal(analysis.percentile)} percentile` : ""}` : "No grade-band comparison"}</span> : null}
       </div>
     </div>
   })

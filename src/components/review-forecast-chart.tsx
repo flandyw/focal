@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
 import { NativeSelect, NativeSelectOption } from "./ui/native-select"
@@ -40,7 +40,7 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
         <CardDescription>{summary}</CardDescription>
       </CardHeader>
       <CardContent className="min-w-0">
-        <ChartContainer config={chartConfig} className="h-72 w-full min-w-0 aspect-auto" role="img" aria-label={summary}>
+        <ChartContainer config={chartConfig} className="h-72 w-full min-w-0 aspect-auto [&_:focus:not(:focus-visible)]:outline-none [&_:focus-visible]:outline-solid [&_:focus-visible]:outline-2 [&_:focus-visible]:outline-offset-2 [&_:focus-visible]:outline-ring" role="img" aria-label={summary}>
           <BarChart data={forecast.map((day) => ({ ...day, scheduled: day.due - day.overdue }))} margin={{ left: 0, right: 8, top: 8, bottom: 4 }} accessibilityLayer onClick={(state) => {
             if (state.activeTooltipIndex == null) return
             const day = forecast[Number(state.activeTooltipIndex)]
@@ -50,8 +50,12 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
             <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={20} tick={{ fontSize: 10 }} />
             <YAxis allowDecimals={false} tickLine={false} axisLine={false} width={30} />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="scheduled" stackId="due" fill="var(--color-scheduled)" isAnimationActive={false} />
-            <Bar dataKey="overdue" stackId="due" fill="var(--color-overdue)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            <Bar dataKey="scheduled" stackId="due" fill="var(--color-scheduled)" isAnimationActive={false}>
+              {forecast.map((day) => <Cell key={day.date} opacity={!selectedDay || day.date === selected ? 1 : 0.35} />)}
+            </Bar>
+            <Bar dataKey="overdue" stackId="due" fill="var(--color-overdue)" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+              {forecast.map((day) => <Cell key={day.date} opacity={!selectedDay || day.date === selected ? 1 : 0.35} />)}
+            </Bar>
           </BarChart>
         </ChartContainer>
         <p className="mt-3 text-xs text-muted-foreground">

@@ -313,6 +313,12 @@ export function parseStoplightResponse(content: string): ImportedItem[] {
   })
 }
 
+/** The import shape without ratings or ids, so a classmate can paste it into Import checklist. */
+export function buildChecklistShare(items: CurriculumArea[]) {
+  const groups = [...groupBy(items, itemGroup)].map(([group, list]) => ({ group, items: list.map(({ name, type, check }) => ({ name, type, check })) }))
+  return JSON.stringify({ groups }, null, 2)
+}
+
 /** Adds new items, refreshes check/type on existing ones. Ratings and ids are never touched, so links survive a re-import. */
 export function mergeStoplightItems(learning: LearningWorkspace, subject: string, imported: ImportedItem[], now = new Date()) {
   const timestamp = now.toISOString()

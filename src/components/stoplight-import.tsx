@@ -98,7 +98,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
             {showPrompt && subject.trim() ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={buildStoplightPrompt(subject.trim())} /> : null}
           </Field>
           <Field data-invalid={error && !items ? true : undefined}>
-            <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply</FieldLabel>
+            <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply or a shared checklist</FieldLabel>
             <Textarea
               id="stoplight-import-json"
               rows={5}

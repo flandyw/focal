@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react"
-import { CalendarPlus, ChartPie, ChevronDown, CircleAlert, FileJson, GraduationCap, Link2Off, ListChecks, Plus, RotateCcw, Sparkles, TrafficCone } from "lucide-react"
+import { CalendarPlus, ChartPie, ClipboardCopy, ChevronDown, CircleAlert, FileJson, GraduationCap, Link2Off, ListChecks, Plus, RotateCcw, Sparkles, TrafficCone } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "./ui/badge"
@@ -14,12 +14,12 @@ import { StoplightAddDialog, type SkillDraft } from "./stoplight-add"
 import { StoplightImportDialog } from "./stoplight-import"
 import { StoplightReviseDialog } from "./stoplight-revise"
 import { Panel, Ring, StatGrid, StatTile, WorkspacePage } from "./workspace-layout"
-import { AI_ENABLED } from "../lib/host"
+import { AI_ENABLED, downloadExamFile } from "../lib/host"
 import type { AppData } from "../lib/exam-data"
 import type { CurriculumArea, LearningWorkspaceUpdate, StoplightRating } from "../lib/learning-workspace"
 import { formatChatGPTProgress, type ChatGPTProgress } from "../lib/mistake-ai-core"
 import {
-  RATINGS, groupBy, activeItems, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
+  RATINGS, groupBy, activeItems, buildChecklistShare, buildItemEvidence, collectLinkRecords, isRecheckDue, itemGroup,
   mergeStoplightItems, setRating, setRatings, type ItemEvidence, type ItemLink,
 } from "../lib/stoplight"
 import { sameStudySubject, subjectKey } from "../lib/studySubjects"
@@ -113,6 +113,17 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
     toast.success("Skill added")
   }
 
+  async function shareChecklist() {
+    const text = buildChecklistShare(subjectItems)
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`Copied ${count(subjectItems.length, "item")}`, { description: "Classmates can paste it into Import checklist. Ratings stay private." })
+    } catch {
+      const name = `${subject.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "skills"}-checklist.json`
+      if (await downloadExamFile(new Blob([text], { type: "application/json" }), name)) toast.success("Checklist downloaded", { description: "Clipboard access was blocked, so the checklist was saved as a file instead." })
+    }
+  }
+
   function applyRatings(ratings: Map<string, StoplightRating>) {
     onChange((current) => setRatings(current, ratings))
     toast.success(`Updated ${ratings.size} rating${ratings.size === 1 ? "" : "s"}`)
@@ -154,7 +165,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
           </Tabs>
           <div className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             {/* Subject at a glance: one ring and bar for the whole checklist, so the filters below read as slices of it. */}
-            <Panel icon={ChartPie} title="Checklist" description={count(subjectItems.length, "item")}>
+            <Panel icon={ChartPie} title="Checklist" description={count(subjectItems.length, "item")} action={<Button size="sm" variant="ghost" aria-label={`Share ${subject} checklist`} onClick={() => void shareChecklist()}><ClipboardCopy />Share</Button>}>
               <div className="flex items-center gap-5">
                 <Ring value={subjectItems.length ? green / subjectItems.length : 0} tone="var(--stoplight-green)"><span className="block text-lg font-semibold tabular-nums">{subjectItems.length ? Math.round(green / subjectItems.length * 100) : 0}%</span><span className="block text-[11px] text-muted-foreground">green</span></Ring>
                 <div className="grid min-w-0 flex-1 gap-2">

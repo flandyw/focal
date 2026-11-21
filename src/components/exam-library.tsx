@@ -132,7 +132,7 @@ export function ExamLibrary({
         {preset ? <Button size="sm" variant="ghost" onClick={() => onStart(preset)}>{attempt ? "Sit again" : "Start timed"}</Button> : null}
         <Button size="sm" nativeButton={false} variant="ghost" render={<a href={exam.url} target="_blank" rel="noreferrer" />}>Open paper</Button>
         {attempt && reference ? <Button size="sm" variant="ghost" onClick={() => onCompare(attempt)}>Compare</Button> : null}
-        {completedExamIds.includes(exam.url) ? <Button size="sm" variant="ghost" aria-label={`Mark not done: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}>Mark not done</Button> : null}
+        {!attempt && completedExamIds.includes(exam.url) ? <Button size="sm" variant="ghost" aria-label={`Mark not done: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)}`} onClick={() => onToggleCompleted(exam.url)}>Mark not done</Button> : null}
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
         {companion.reports.map((report) => <a key={report.url} className="font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" href={report.url} target="_blank" rel="noreferrer">{resourceLabel(report)}</a>)}

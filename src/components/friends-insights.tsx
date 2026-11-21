@@ -73,11 +73,11 @@ export const FriendsInsights = memo(function FriendsInsights({ rows: unsorted, d
       label, you: me ? weekdayAverage(me, weekday) : 0,
       friends: friends.length ? sum(friends.map((row) => weekdayAverage(row, weekday))) / friends.length : 0,
     }))
-    const midnight = new Date(at).setHours(0, 0, 0, 0)
     const hourly = Array.from({ length: 24 }, (_, hour) => {
-      const from = midnight + hour * HOUR
+      // Clock hours, not offsets from midnight, so a daylight-saving day still lands in the right bars.
+      const from = new Date(at).setHours(hour, 0, 0, 0), to = new Date(at).setHours(hour + 1, 0, 0, 0)
       const point: Record<string, number | string> = { label: hourLabel(hour) }
-      for (const row of rows) point[row.id] = sum((row.blocks ?? []).map(([start, end]) => Math.max(0, Math.min(end ? Date.parse(end) : at, from + HOUR) - Math.max(Date.parse(start), from)))) / 60_000
+      for (const row of rows) point[row.id] = sum((row.blocks ?? []).map(([start, end]) => Math.max(0, Math.min(end ? Date.parse(end) : at, to) - Math.max(Date.parse(start), from)))) / 60_000
       return point
     })
     const subjectTotals = new Map<string, number>()

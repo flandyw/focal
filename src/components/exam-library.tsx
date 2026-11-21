@@ -126,7 +126,7 @@ export function ExamLibrary({
     const analysis = attempt ? analyseAttempt(attempt, reference) : null
     const preset = timerPreset(exam, reference)
     return <div key={exam.url} className={`flex min-w-0 flex-wrap items-center gap-2 px-4 py-2 ${selectedPaperId === exam.url ? "bg-primary/5 ring-2 ring-inset ring-primary" : ""}`}>
-      <Button variant="link" className="h-auto min-w-0 flex-1 justify-start p-0 text-sm text-inherit" onClick={() => onSelectPaper(exam.url)}><span className="truncate">{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span></Button>
+      <Button variant="link" className="h-auto min-w-0 flex-1 basis-full justify-start p-0 text-sm text-inherit sm:basis-auto" onClick={() => onSelectPaper(exam.url)}><span className="truncate">{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span></Button>
       <Badge variant={attempt ? "success" : "secondary"}>{analysis ? `Logged ${analysis.percentage.toFixed(1)}%` : "Done"}</Badge>
       <div className="flex flex-wrap items-center gap-1">
         {preset ? <Button size="sm" variant="ghost" onClick={() => onStart(preset)}>{attempt ? "Sit again" : "Start timed"}</Button> : null}

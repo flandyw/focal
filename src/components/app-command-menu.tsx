@@ -62,7 +62,7 @@ export function AppCommandMenu({
   }
 
   return (
-    <Command className="mx-2 size-auto rounded-none! bg-transparent p-0 group-data-[collapsible=icon]:hidden">
+    <Command className="mx-2 size-auto shrink-0 rounded-none! bg-transparent p-0 group-data-[collapsible=icon]:hidden">
       <Label ref={anchor} className="h-8 rounded-xs px-3 font-normal text-sidebar-foreground/90 focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
         <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
         <CommandPrimitive.Input

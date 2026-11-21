@@ -47,7 +47,7 @@ function StudyTargetPopover({ preferences, onChange }: { preferences: StudyPrefe
         }}>
           <div className="grid gap-1.5">
             <Label htmlFor="today-target-minutes">Minutes a day</Label>
-            <Input id="today-target-minutes" type="number" inputMode="numeric" min={5} max={1440} step={5} required value={Number.isFinite(minutes) ? minutes : ""} aria-invalid={!valid || undefined} onChange={(event) => setMinutes(event.target.valueAsNumber)} />
+            <Input id="today-target-minutes" type="number" inputMode="numeric" min={5} max={1440} required value={Number.isFinite(minutes) ? minutes : ""} aria-invalid={!valid || undefined} onChange={(event) => setMinutes(event.target.valueAsNumber)} />
             {!valid ? <p className="text-xs text-destructive">Enter whole minutes from 5 to 1440.</p> : null}
           </div>
           <div className="grid gap-1.5">

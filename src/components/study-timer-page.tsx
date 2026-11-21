@@ -349,7 +349,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
   // Every block lands in the study record under a subject, so there is nothing
   // to start until one is chosen.
   const subjectChosen = !!sharedSession || subject.trim() !== ""
-  const statusLabel = countdown ? (state.running ? (pastPlan ? "Past planned time" : "Running") : "Paused") : isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : "Held") : state.running ? "Running" : "Paused"
+  const statusLabel = countdown ? (state.running ? (pastPlan ? "Past planned time" : "Running") : "Paused") : isFreeStudy || state.studyOvertime ? (state.running ? "Counting up" : state.overtimeSeconds > 0 ? "Paused" : "Ready") : state.running ? "Running" : "Paused"
   const inSet = state.cycles === 0 ? 0 : state.cycles % settings.longBreakEvery || settings.longBreakEvery
 
   const todaysBlocks = useMemo(() => {

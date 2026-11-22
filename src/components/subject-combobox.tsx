@@ -22,6 +22,7 @@ export function SubjectCombobox({
   allowCustom = false,
   required = false,
   placeholder = "Search subjects",
+  ...aria
 }: {
   subjects: string[]
   preferredSubjects: string[]
@@ -33,6 +34,8 @@ export function SubjectCombobox({
   allowCustom?: boolean
   required?: boolean
   placeholder?: string
+  "aria-invalid"?: boolean
+  "aria-describedby"?: string
 }) {
   const items = useMemo(() => [
     ...(includeAll ? [ALL_SUBJECTS] : []),
@@ -49,7 +52,7 @@ export function SubjectCombobox({
       onValueChange={(next) => onValueChange(includeAll && next === ALL_SUBJECTS ? "all" : (next ?? ""))}
       autoHighlight
     >
-      <ComboboxInput id={id} aria-label={id ? undefined : placeholder} className={className} placeholder={placeholder} showClear={allowCustom} required={required} />
+      <ComboboxInput id={id} aria-label={id ? undefined : placeholder} className={className} placeholder={placeholder} showClear={allowCustom} required={required} {...aria} />
       <ComboboxContent>
         <ComboboxEmpty>{allowCustom ? "Use the subject you typed, or choose a suggestion." : "No matching subjects."}</ComboboxEmpty>
         <ComboboxList>

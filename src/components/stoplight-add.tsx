@@ -21,7 +21,8 @@ export function StoplightAddDialog({ subjects, preferredSubjects, defaultSubject
   const [name, setName] = useState("")
   const [group, setGroup] = useState("")
   const [check, setCheck] = useState("")
-  const [error, setError] = useState<string>()
+  const [error, setError] = useState<{ message: string; field?: "subject" | "name" }>()
+  const errorProps = (field: "subject" | "name") => error?.field === field ? { "aria-invalid": true, "aria-describedby": "add-skill-error" } : {}
   const [confirmingClose, setConfirmingClose] = useState(false)
 
   function close() {
@@ -32,10 +33,10 @@ export function StoplightAddDialog({ subjects, preferredSubjects, defaultSubject
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const target = scopedSubject ?? subject.trim()
-    if (!target || target.toLowerCase() === "all") return setError("Choose a subject for this skill.")
-    if (!name.trim()) return setError("Enter a skill name.")
+    if (!target || target.toLowerCase() === "all") return setError({ message: "Choose a subject for this skill.", field: "subject" })
+    if (!name.trim()) return setError({ message: "Enter a skill name.", field: "name" })
     const failure = onSave({ subject: target, name: name.trim(), group: group.trim() || "General", check: check.trim() || undefined })
-    if (failure) return setError(failure)
+    if (failure) return setError({ message: failure })
     onClose()
   }
 
@@ -50,12 +51,12 @@ export function StoplightAddDialog({ subjects, preferredSubjects, defaultSubject
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="add-skill-subject">Subject</FieldLabel>
-              {scopedSubject ? <Input id="add-skill-subject" value={scopedSubject} readOnly /> : <SubjectCombobox id="add-skill-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(undefined) }} allowCustom required />}
+              {scopedSubject ? <Input id="add-skill-subject" value={scopedSubject} readOnly {...errorProps("subject")} /> : <SubjectCombobox id="add-skill-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(undefined) }} allowCustom required {...errorProps("subject")} />}
             </Field>
-            <Field><FieldLabel htmlFor="add-skill-name">Skill name</FieldLabel><Input id="add-skill-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} required /></Field>
+            <Field><FieldLabel htmlFor="add-skill-name">Skill name</FieldLabel><Input id="add-skill-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={200} required {...errorProps("name")} /></Field>
             <Field><FieldLabel htmlFor="add-skill-group">Group (optional)</FieldLabel><Input id="add-skill-group" value={group} onChange={(event) => setGroup(event.target.value)} maxLength={200} placeholder="General" /></Field>
             <Field><FieldLabel htmlFor="add-skill-check">Self-check (optional)</FieldLabel><Input id="add-skill-check" value={check} onChange={(event) => setCheck(event.target.value)} maxLength={200} placeholder="What could you do without notes?" /></Field>
-            <FieldError>{error}</FieldError>
+            <FieldError id="add-skill-error">{error?.message}</FieldError>
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>Cancel</Button>

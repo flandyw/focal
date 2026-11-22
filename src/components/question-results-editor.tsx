@@ -19,7 +19,7 @@ const formatSum = (marks: number) => Number(marks.toPrecision(12))
 export function QuestionResultsEditor({ value, onChange, attempts = [], paper, onUseTotal }: { value: QuestionResult[]; onChange: (value: QuestionResult[]) => void; attempts?: ExamAttempt[]; paper?: Pick<ExamAttempt, "subject" | "provider" | "paper" | "examYear">; onUseTotal?: (earned: number, maximum: number) => void }) {
   const [pasting, setPasting] = useState(false)
   const [text, setText] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const [tried, setTried] = useState(false)
   const pasteId = useId()
   const editor = useRef<HTMLDivElement>(null)
   const focusId = useRef<string | null>(null)
@@ -33,6 +33,11 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
   const earned = value.reduce((sum, result) => sum + (result.marksAwarded || 0), 0)
   const maximum = value.reduce((sum, result) => sum + (result.maxMarks || 0), 0)
   const full = value.length >= 500
+  // Re-checked every render, so renaming or removing existing items clears a stale error.
+  const labels = preview.length ? [...value, ...preview].map((result) => questionKey(result.label)) : []
+  const addError = value.length + preview.length > 500 ? "Keep the breakdown to 500 items or fewer."
+    : new Set(labels).size !== labels.length ? "Some question labels already exist. Rename them or remove the existing items first." : null
+  const error = tried ? addError : null
   function update(id: string, patch: Partial<QuestionResult>) {
     onChange(value.map((result) => result.id === id ? { ...result, ...patch } : result))
   }
@@ -63,13 +68,11 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
       {pasting ? <div id={pasteId} className="grid gap-3 rounded-lg border p-3">
         <Label htmlFor={`${pasteId}-text`}>Scores from a spreadsheet</Label>
         <p className="text-sm text-muted-foreground">Paste tab-separated or CSV rows: item, earned, out of, optional topic and feedback. Two columns (earned, out of) also work. A header is optional.</p>
-        <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setError(null) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} aria-invalid={previewError || error ? true : undefined} aria-describedby={previewError || error ? `${pasteId}-error` : undefined} />
+        <Textarea id={`${pasteId}-text`} value={text} onChange={(event) => { setText(event.target.value); setTried(false) }} rows={4} placeholder={'Q1,2,3,Algebra\nQ2,4,4,Functions'} aria-invalid={previewError || error ? true : undefined} aria-describedby={previewError || error ? `${pasteId}-error` : undefined} />
         <FieldError id={`${pasteId}-error`}>{previewError ?? error}</FieldError>
         {preview.length ? <p role="status" className="text-sm tabular-nums">{count(preview.length, "item")} · {formatSum(preview.reduce((sum, result) => sum + result.marksAwarded, 0))} / {formatSum(preview.reduce((sum, result) => sum + result.maxMarks, 0))} marks. These will be added to your breakdown.</p> : null}
         <div className="flex gap-2"><Button type="button" size="sm" disabled={!preview.length || !!previewError} onClick={() => {
-          if (value.length + preview.length > 500) return setError("Keep the breakdown to 500 items or fewer.")
-          const labels = [...value, ...preview].map((result) => questionKey(result.label))
-          if (new Set(labels).size !== labels.length) return setError("Some question labels already exist. Rename them or remove the existing items first.")
+          if (addError) return setTried(true)
           onChange([...value, ...preview]); setText(""); setPasting(false)
         }}>Add scores</Button><Button type="button" size="sm" variant="ghost" onClick={() => setPasting(false)}>Cancel</Button></div>
       </div> : null}

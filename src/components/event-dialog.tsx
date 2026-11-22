@@ -68,7 +68,8 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   const [finished, setFinished] = useState(Boolean(event?.isFinished))
   const [repeat, setRepeat] = useState("none")
   const [repeatUntil, setRepeatUntil] = useState("")
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; fields: string[] } | null>(null)
+  const errorProps = (field: string) => error?.fields.includes(field) ? { "aria-invalid": true, "aria-describedby": "event-error" } : {}
   const [confirmingClose, setConfirmingClose] = useState(false)
   const snapshot = JSON.stringify({ title, type, subject, date, endDate, startTime, endTime, location, description, finished, repeat, repeatUntil })
   const [initialSnapshot] = useState(snapshot)
@@ -110,20 +111,21 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
     setStartTime(period.startTime)
     setEndTime(period.endTime)
     setEndDate("")
+    setError(null)
     if (!subject && period.subject) setSubject(periodSubjectName(period))
     if (!location && period.location) setLocation(period.location)
   }
 
   /** Validates the visible fields; `copy` saves them as a new, unfinished event and leaves the original as it was. */
   function submit(copy = false) {
-    if (!title.trim()) return setError("Give the event a title.")
-    if (!date) return setError("Choose a date.")
-    if (!startTime || !endTime) return setError("Choose a start and end time.")
+    if (!title.trim()) return setError({ message: "Give the event a title.", fields: ["title"] })
+    if (!date) return setError({ message: "Choose a date.", fields: ["date"] })
+    if (!startTime || !endTime) return setError({ message: "Choose a start and end time.", fields: [...(startTime ? [] : ["start"]), ...(endTime ? [] : ["end"])] })
     const finish = endDate || date
     if (finish < date || (finish === date && toMinutes(endTime) <= toMinutes(startTime))) {
-      return setError(finish < date ? "The end date can't be before the start." : "The end time must be after the start time.")
+      return setError(finish < date ? { message: "The end date can't be before the start.", fields: ["end-date"] } : { message: "The end time must be after the start time.", fields: ["end"] })
     }
-    if (!event && repeat !== "none" && (!repeatUntil || repeatUntil < date)) return setError("Choose the date the repeat ends.")
+    if (!event && repeat !== "none" && (!repeatUntil || repeatUntil < date)) return setError({ message: "Choose the date the repeat ends.", fields: ["repeat-until"] })
     const now = new Date().toISOString()
     const make = (day: string, id: string, created: string): CalendarEvent => {
       const offset = Math.round((new Date(`${finish}T00:00:00`).getTime() - new Date(`${date}T00:00:00`).getTime()) / 86_400_000)
@@ -166,7 +168,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="event-title">Title</FieldLabel>
-            <Input autoFocus autoComplete="off" enterKeyHint="done" id="event-title" value={title} onChange={(e) => { setTitle(e.target.value); setError(null) }} placeholder="Methods SAC 2" />
+            <Input autoFocus autoComplete="off" enterKeyHint="done" id="event-title" {...errorProps("title")} value={title} onChange={(e) => { setTitle(e.target.value); setError(null) }} placeholder="Methods SAC 2" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
@@ -195,19 +197,19 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Field>
               <FieldLabel htmlFor="event-date">Date</FieldLabel>
-              <Input id="event-date" type="date" value={date} onChange={(e) => changeDate(e.target.value)} />
+              <Input id="event-date" {...errorProps("date")} type="date" value={date} onChange={(e) => changeDate(e.target.value)} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-end-date">Ends on <span className="text-muted-foreground">(optional)</span></FieldLabel>
-              <Input id="event-end-date" type="date" min={date} value={endDate} onChange={(e) => { setEndDate(e.target.value); setError(null) }} />
+              <Input id="event-end-date" {...errorProps("end-date")} type="date" min={date} value={endDate} onChange={(e) => { setEndDate(e.target.value); setError(null) }} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-start">Start</FieldLabel>
-              <Input id="event-start" type="time" value={startTime} onChange={(e) => { changeStart(e.target.value); setError(null) }} />
+              <Input id="event-start" {...errorProps("start")} type="time" value={startTime} onChange={(e) => { changeStart(e.target.value); setError(null) }} />
             </Field>
             <Field>
               <FieldLabel htmlFor="event-end">End</FieldLabel>
-              <Input id="event-end" type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setError(null) }} />
+              <Input id="event-end" {...errorProps("end")} type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setError(null) }} />
             </Field>
           </div>
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Duration">
@@ -215,7 +217,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               <Button
                 key={minutes}
                 aria-pressed={duration === minutes}
-                onClick={() => { const end = toMinutes(startTime) + minutes; setEndTime(fromMinutes(end)); setEndDate(end >= 1440 ? shiftDays(date, 1) : "") }}
+                onClick={() => { const end = toMinutes(startTime) + minutes; setEndTime(fromMinutes(end)); setEndDate(end >= 1440 ? shiftDays(date, 1) : ""); setError(null) }}
                 disabled={!startTime || !date}
                 size="sm"
                 type="button"
@@ -236,7 +238,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               {!aligned ? <p className="text-xs text-muted-foreground">Pick a class to use its time.</p> : null}
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.map((period, index) => (
-                  <Button key={`${period.period}-${index}`} onClick={() => align(period)} size="sm" type="button" className="tabular-nums" aria-pressed={period.startTime === startTime && period.endTime === endTime} variant={period.startTime === startTime && period.endTime === endTime ? "secondary" : "outline"}>
+                  <Button key={`${period.period}-${index}`} onClick={() => align(period)} size="sm" type="button" className="tabular-nums" aria-pressed={!multiDay && period.startTime === startTime && period.endTime === endTime} variant={!multiDay && period.startTime === startTime && period.endTime === endTime ? "secondary" : "outline"}>
                     {period.period} · {periodSubjectName(period)} · {period.startTime}–{period.endTime}
                   </Button>
                 ))}
@@ -262,7 +264,7 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="event-repeat">Repeat</FieldLabel>
-                <Select items={REPEATS} value={repeat} onValueChange={(value) => value && setRepeat(value)}>
+                <Select items={REPEATS} value={repeat} onValueChange={(value) => { if (value) { setRepeat(value); setError(null) } }}>
                   <SelectTrigger className="w-full" id="event-repeat"><SelectValue /></SelectTrigger>
                   <SelectContent>{REPEATS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
                 </Select>
@@ -270,13 +272,13 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
               {repeat !== "none" ? (
                 <Field>
                   <FieldLabel htmlFor="event-repeat-until">Until</FieldLabel>
-                  <Input id="event-repeat-until" type="date" min={date} value={repeatUntil} onChange={(e) => { setRepeatUntil(e.target.value); setError(null) }} />
+                  <Input id="event-repeat-until" {...errorProps("repeat-until")} type="date" min={date} value={repeatUntil} onChange={(e) => { setRepeatUntil(e.target.value); setError(null) }} />
                   <FieldDescription>Up to {MAX_OCCURRENCES} occurrences.</FieldDescription>
                 </Field>
               ) : null}
             </div>
           )}
-          {error ? <FieldError role="alert">{error}</FieldError> : null}
+          {error ? <FieldError id="event-error">{error.message}</FieldError> : null}
         </FieldGroup>
         </form>
         <DialogFooter className="sm:justify-between">

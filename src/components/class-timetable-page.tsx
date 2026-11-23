@@ -338,6 +338,8 @@ function PeriodDialog({ editor, periods, subjects, onClose, onSave, onDelete }: 
   const [error, setError] = useState<string | null>(null)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const overlap = overlapLabel(draft, periods, editor.original)
+  const invalidFields = error ? ({ "Add a period name.": ["period"], "Use a valid start and end time.": ["start", "end"], "End time must be after start time.": ["end"] } as Record<string, string[]>)[error] ?? [] : []
+  const describe = (field: string) => ({ "aria-invalid": invalidFields.includes(field) || undefined, "aria-describedby": [field !== "period" && overlap && "tt-overlap", invalidFields.includes(field) && "tt-error"].filter(Boolean).join(" ") || undefined })
   function update(patch: Partial<TimetablePeriod>) { setDraft({ ...draft, ...patch }); setError(null) }
   function requestClose() { if (JSON.stringify(draft) !== JSON.stringify(editor.draft)) setConfirmingClose(true); else onClose() }
   return (
@@ -352,19 +354,19 @@ function PeriodDialog({ editor, periods, subjects, onClose, onSave, onDelete }: 
           onSave(next)
         }}>
           <FieldGroup>
-            <Field><FieldLabel htmlFor="tt-period">Period name</FieldLabel><Input id="tt-period" required value={draft.period} onChange={(e) => update({ period: e.target.value })} placeholder="Period 1, recess, or lunch" /></Field>
+            <Field><FieldLabel htmlFor="tt-period">Period name</FieldLabel><Input id="tt-period" {...describe("period")} required value={draft.period} onChange={(e) => update({ period: e.target.value })} placeholder="Period 1, recess, or lunch" /></Field>
             <Field><FieldLabel htmlFor="tt-subject">Subject</FieldLabel><Input id="tt-subject" list="tt-subject-options" value={draft.subject} onChange={(e) => update({ subject: e.target.value })} placeholder="Choose or type a subject" /><datalist id="tt-subject-options">{subjects.map((subject) => <option key={subject} value={subject} />)}</datalist><FieldDescription>Leave blank for a break or other school activity.</FieldDescription></Field>
             <div>
               <div className="grid grid-cols-2 gap-4">
-                <Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field>
-                <Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input aria-describedby={overlap ? "tt-overlap" : undefined} id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field>
+                <Field><FieldLabel htmlFor="tt-start">Starts</FieldLabel><Input {...describe("start")} id="tt-start" required type="time" value={draft.startTime} onChange={(e) => update({ startTime: e.target.value })} /></Field>
+                <Field><FieldLabel htmlFor="tt-end">Ends</FieldLabel><Input {...describe("end")} id="tt-end" required type="time" value={draft.endTime} onChange={(e) => update({ endTime: e.target.value })} /></Field>
               </div>
               <div id="tt-overlap" role="status" className="text-sm text-destructive">
                 {overlap ? <p className="mt-2 flex items-start gap-1.5"><TriangleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />{overlap}. You can still save this period.</p> : null}
               </div>
             </div>
             <Field><FieldLabel htmlFor="tt-room">Room <span className="font-normal text-muted-foreground">(optional)</span></FieldLabel><Input id="tt-room" value={draft.location ?? ""} onChange={(e) => update({ location: e.target.value })} placeholder="e.g. B12" /></Field>
-            {error ? <FieldError role="alert">{error}</FieldError> : null}
+            {error ? <FieldError id="tt-error" role="alert">{error}</FieldError> : null}
           </FieldGroup>
           <DialogFooter>{onDelete ? <Button className="sm:mr-auto" onClick={onDelete} type="button" variant="ghost"><Trash2 />Remove</Button> : null}<Button onClick={requestClose} type="button" variant="outline">Cancel</Button><Button type="submit">{editor.original ? "Save changes" : "Add period"}</Button></DialogFooter>
         </form>

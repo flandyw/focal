@@ -40,7 +40,11 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
   const [weighting, setWeighting] = useState(initialRecord?.weighting?.toString() ?? "")
   const [notes, setNotes] = useState(initialRecord?.notes ?? "")
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialRecord?.performanceContext ?? {})
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; fields?: string[] } | null>(null)
+  const errorProps = (field: string) => error?.fields?.includes(field) ? { "aria-invalid": true, "aria-describedby": "sac-error" } : {}
+  const mark = score.trim() === "" ? NaN : Number(score)
+  const maximum = maxScore.trim() === "" ? NaN : Number(maxScore)
+  const percent = Number.isFinite(maximum) && maximum > 0 && mark >= 0 && mark <= maximum ? mark / maximum * 100 : null
   const [initialSnapshot] = useState(() => JSON.stringify({
     subject, provider, title, sacNumber, unit, areaOfStudy, scheduledAt, durationMinutes,
     score, maxScore, weighting, notes, performanceContext,
@@ -62,7 +66,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (unit === null) {
-      setError("Choose the unit for this assessment.")
+      setError({ message: "Choose the unit for this assessment.", fields: ["unit"] })
       return
     }
     const parsedScore = score.trim() === "" ? undefined : Number(score)
@@ -81,7 +85,18 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
     }
     const validationError = validateSac(candidate)
     if (validationError) {
-      setError(validationError)
+      const blank = (value: string, field: string) => value.trim() ? [] : [field]
+      const fields = ({
+        "Subject, school/provider, and SAC title are required.": [...blank(subject, "subject"), ...blank(provider, "provider"), ...blank(title, "title")],
+        "SAC date is required.": ["date"],
+        "Duration must be greater than zero.": ["duration"],
+        "Enter both the mark and maximum, or leave both blank.": [parsedScore === undefined ? "score" : "maximum"],
+        "Maximum mark must be greater than zero.": ["maximum"],
+        "Mark must be zero or greater.": ["score"],
+        "Mark cannot exceed the maximum.": ["score"],
+        "Weighting must be between 0 and 100%.": ["weighting"],
+      } as Record<string, string[]>)[validationError]
+      setError({ message: validationError, fields })
       return
     }
     const timestamp = new Date().toISOString()
@@ -112,17 +127,17 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="sac-subject">Subject</FieldLabel>
-                {scopedSubject ? <Input id="sac-subject" value={subject} readOnly /> : <SubjectCombobox id="sac-subject" subjects={options} preferredSubjects={preferredSubjects} value={subject} onValueChange={setSubject} allowCustom required placeholder="Search or enter a subject" />}
+                {scopedSubject ? <Input id="sac-subject" value={subject} readOnly {...errorProps("subject")} /> : <SubjectCombobox id="sac-subject" subjects={options} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setError(null) }} allowCustom required placeholder="Search or enter a subject" {...errorProps("subject")} />}
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-provider">School / provider</FieldLabel>
-                <Input id="sac-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="School or practice provider" required />
+                <Input id="sac-provider" value={provider} onChange={(event) => setProvider(event.target.value)} placeholder="School or practice provider" required {...errorProps("provider")} />
               </Field>
             </div>
             <div className="grid gap-5 sm:grid-cols-[1fr_10rem]">
               <Field>
                 <FieldLabel htmlFor="sac-title">SAC title</FieldLabel>
-                <Input id="sac-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Outcome assessment" required />
+                <Input id="sac-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Outcome assessment" required {...errorProps("title")} />
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-number">SAC number <span className="text-muted-foreground">(optional)</span></FieldLabel>
@@ -133,7 +148,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
               <Field>
                 <FieldLabel htmlFor="sac-unit">Unit</FieldLabel>
                 <Select items={SAC_UNITS.map((option) => ({ value: String(option), label: `Unit ${option}` }))} value={unit === null ? null : String(unit)} onValueChange={(value) => { setUnit(value === null ? null : Number(value) as SacUnit); setError(null) }}>
-                  <SelectTrigger id="sac-unit" className="w-full"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                  <SelectTrigger id="sac-unit" className="w-full" {...errorProps("unit")}><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>{SAC_UNITS.map((option) => <SelectItem key={option} value={String(option)}>Unit {option}</SelectItem>)}</SelectContent>
                 </Select>
                 <FieldDescription>Set this per subject so accelerated students can mix Units 1/2 and 3/4.</FieldDescription>
@@ -146,27 +161,27 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
             <div className="grid gap-5 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="sac-date">Date</FieldLabel>
-                <Input id="sac-date" type="date" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} required />
+                <Input id="sac-date" type="date" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} required {...errorProps("date")} />
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-duration">Time allowed (min)</FieldLabel>
-                <Input id="sac-duration" type="number" inputMode="numeric" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required />
+                <Input id="sac-duration" type="number" inputMode="numeric" min="1" max="360" value={Number.isFinite(durationMinutes) ? durationMinutes : ""} onChange={(event) => setDurationMinutes(event.target.valueAsNumber)} required {...errorProps("duration")} />
               </Field>
             </div>
             <div className="border-t pt-5">
-              <p className="mb-4 flex items-baseline justify-between gap-3 text-sm font-medium">Result{Number(maxScore) > 0 && score.trim() !== "" && Number.isFinite(Number(score)) ? <span className="font-semibold tabular-nums">{(Number(score) / Number(maxScore) * 100).toFixed(1)}%</span> : <span className="font-normal text-muted-foreground">(optional)</span>}</p>
+              <p className="mb-4 flex items-baseline justify-between gap-3 text-sm font-medium">Result{percent !== null ? <span className="font-semibold tabular-nums">{percent.toFixed(1)}%</span> : <span className="font-normal text-muted-foreground">(optional)</span>}</p>
               <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
                 <Field>
                   <FieldLabel htmlFor="sac-score">Mark</FieldLabel>
-                  <Input id="sac-score" type="number" min="0" step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" />
+                  <Input id="sac-score" type="number" min="0" step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="—" {...errorProps("score")} />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="sac-maximum">Out of</FieldLabel>
-                  <Input id="sac-maximum" type="number" min="0.5" step="any" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" />
+                  <Input id="sac-maximum" type="number" min="0.5" step="any" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="—" {...errorProps("maximum")} />
                 </Field>
                 <Field className="col-span-2 sm:col-span-1">
                   <FieldLabel htmlFor="sac-weighting">Weighting % <span className="text-muted-foreground">(optional)</span></FieldLabel>
-                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="any" value={weighting} onChange={(event) => setWeighting(event.target.value)} />
+                  <Input id="sac-weighting" type="number" min="0.1" max="100" step="any" value={weighting} onChange={(event) => setWeighting(event.target.value)} {...errorProps("weighting")} />
                 </Field>
               </div>
               <FieldDescription className="mt-2">Leave mark and maximum blank to track this as an upcoming SAC.</FieldDescription>
@@ -176,7 +191,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
               <FieldLabel htmlFor="sac-notes">Notes <span className="text-muted-foreground">(optional)</span></FieldLabel>
               <Textarea id="sac-notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Topics to revise or feedback from your teacher" />
             </Field>
-            <FieldError>{error}</FieldError>
+            <FieldError id="sac-error">{error?.message}</FieldError>
           </FieldGroup>
         </form>
         <SheetFooter><Button type="submit" form="sac-form">{initialRecord ? "Save changes" : "Save SAC"}</Button></SheetFooter>

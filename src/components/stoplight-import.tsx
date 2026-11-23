@@ -22,38 +22,45 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
   const [subject, setSubject] = useState(defaultSubject)
   const [text, setText] = useState("")
   const [items, setItems] = useState<ImportedItem[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; target?: "subject" | "json" } | null>(null)
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | null>(null)
   const [showPrompt, setShowPrompt] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
-  const promptRevision = useRef(0)
+  const copyingRef = useRef(false)
+  const [copying, setCopying] = useState(false)
   const groups = items ? groupBy(items, (item) => item.group) : null
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
 
   function close() {
+    if (copyingRef.current) return
     if (text.trim()) setConfirmingClose(true)
     else onOpenChange(false)
   }
 
   async function copyPrompt() {
-    if (!subject.trim()) return setError("Choose a subject first.")
-    const revision = ++promptRevision.current
+    if (copyingRef.current) return
+    if (!subject.trim()) return setError({ message: "Choose a subject first.", target: "subject" })
+    // Clipboard writes can't be cancelled; serialize them and hold the subject until this one settles.
+    copyingRef.current = true
+    setCopying(true)
     try {
       await navigator.clipboard.writeText(buildStoplightPrompt(subject.trim()))
-      if (revision !== promptRevision.current) return
       setCopied(true)
       if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
       copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      if (revision !== promptRevision.current) return
       setShowPrompt(true)
       toast.error("Could not copy. Select the prompt below and copy it manually.")
+    } finally {
+      copyingRef.current = false
+      setCopying(false)
     }
   }
 
   function review() {
-    if (!subject.trim()) return setError("Choose a subject first.")
+    if (copyingRef.current) return
+    if (!subject.trim()) return setError({ message: "Choose a subject first.", target: "subject" })
     try {
       const parsed = parseStoplightResponse(text)
       if (!parsed.length) throw new Error("none")
@@ -61,14 +68,14 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
       setError(null)
     } catch {
       setItems(null)
-      setError("Couldn't find any items. Paste the chatbot's full JSON reply; each item needs a name.")
+      setError({ message: "Couldn't find any items. Paste the chatbot's full JSON reply; each item needs a name.", target: "json" })
     }
   }
 
   function add() {
-    if (!items || !subject.trim()) return
+    if (copyingRef.current || !items || !subject.trim()) return
     try { onImport(subject.trim(), items) } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not save the checklist. Your reply is still here; try again.")
+      setError({ message: failure instanceof Error ? failure.message : "Could not save the checklist. Your reply is still here; try again." })
       return
     }
     setText("")
@@ -86,18 +93,19 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="stoplight-import-subject">1. Subject</FieldLabel>
-            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { promptRevision.current++; setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required />
+            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required disabled={copying} aria-invalid={error?.target === "subject" || undefined} aria-describedby={error?.target === "subject" ? "stoplight-import-subject-error" : undefined} />
+            {error?.target === "subject" ? <FieldError id="stoplight-import-subject-error">{error.message}</FieldError> : null}
           </Field>
           <Field>
             <div className="flex items-center justify-between gap-3">
               <FieldLabel>2. Copy the prompt, attach your study design, send</FieldLabel>
-              <Button type="button" size="sm" variant="outline" disabled={!subject.trim()} onClick={() => void copyPrompt()}>
-                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
+              <Button type="button" size="sm" variant="outline" disabled={copying || !subject.trim()} onClick={() => void copyPrompt()}>
+                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copying ? "Copying…" : copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
             {showPrompt && subject.trim() ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={buildStoplightPrompt(subject.trim())} /> : null}
           </Field>
-          <Field data-invalid={error && !items ? true : undefined}>
+          <Field data-invalid={error?.target === "json" || undefined}>
             <FieldLabel htmlFor="stoplight-import-json">3. Paste the chatbot's reply or a shared checklist</FieldLabel>
             <Textarea
               id="stoplight-import-json"
@@ -106,10 +114,10 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               placeholder='{"groups":[{"group":"Unit 3 AOS 1","items":[{"name":"...","check":"..."}]}]}'
               value={text}
               onChange={(event) => { setText(event.target.value); setItems(null); setError(null) }}
-              aria-invalid={error && !items ? true : undefined}
-              aria-describedby={error ? "stoplight-import-json-error" : undefined}
+              aria-invalid={error?.target === "json" || undefined}
+              aria-describedby={error?.target === "json" ? "stoplight-import-json-error" : undefined}
             />
-            {error ? <FieldError id="stoplight-import-json-error">{error}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
+            {error && error.target !== "subject" ? <FieldError id="stoplight-import-json-error">{error.message}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
           </Field>
           {groups ? (
             <ul className="divide-y rounded-lg border" aria-label="Groups to import">
@@ -123,10 +131,10 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
           ) : null}
         </FieldGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+          <Button type="button" variant="outline" disabled={copying} onClick={close}>Cancel</Button>
           {items
-            ? <Button type="button" disabled={!subject.trim()} onClick={add}><Check />Add {items.length} item{items.length === 1 ? "" : "s"}</Button>
-            : <Button type="button" disabled={!text.trim() || !subject.trim()} onClick={review}>Review items</Button>}
+            ? <Button type="button" disabled={copying || !subject.trim()} onClick={add}><Check />Add {items.length} item{items.length === 1 ? "" : "s"}</Button>
+            : <Button type="button" disabled={copying || !text.trim() || !subject.trim()} onClick={review}>Review items</Button>}
         </DialogFooter>
       </DialogContent>
       <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setText(""); setItems(null); setError(null); onOpenChange(false) }} />

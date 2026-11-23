@@ -36,6 +36,7 @@ export function SubjectCombobox({
   placeholder?: string
   "aria-invalid"?: boolean
   "aria-describedby"?: string
+  disabled?: boolean
 }) {
   const items = useMemo(() => [
     ...(includeAll ? [ALL_SUBJECTS] : []),

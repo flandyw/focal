@@ -30,18 +30,22 @@ export function AppCommandMenu({
   onStartExam: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const anchor = useRef<HTMLLabelElement>(null)
   const [query, setQuery] = useState("")
   const [rect, setRect] = useState<DOMRect>()
 
   useEffect(() => {
     let frame: number
     if (open) {
-      const position = () => setRect(input.current?.getBoundingClientRect())
+      const position = () => setRect(anchor.current?.getBoundingClientRect())
       const frame = requestAnimationFrame(() => { input.current?.focus(); position() })
+      const observer = new ResizeObserver(position)
+      if (anchor.current) observer.observe(anchor.current)
       window.addEventListener("resize", position)
       window.addEventListener("scroll", position, true)
       return () => {
         cancelAnimationFrame(frame)
+        observer.disconnect()
         window.removeEventListener("resize", position)
         window.removeEventListener("scroll", position, true)
       }
@@ -58,13 +62,13 @@ export function AppCommandMenu({
   }
 
   return (
-    <Command className="mx-2 size-auto rounded-none! bg-transparent p-0 group-data-[collapsible=icon]:hidden">
-      <Label className="h-8 rounded-xs px-3 font-normal text-sidebar-foreground/90 focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
+    <Command className="mx-2 size-auto shrink-0 rounded-none! bg-transparent p-0 group-data-[collapsible=icon]:hidden">
+      <Label ref={anchor} className="h-8 rounded-xs px-3 font-normal text-sidebar-foreground/90 focus-within:bg-sidebar-accent hover:bg-sidebar-accent">
         <Search className="size-4 shrink-0 opacity-70" strokeWidth={1.5} aria-hidden />
         <CommandPrimitive.Input
           ref={input}
           aria-label="Search pages and actions"
-          placeholder="Search pages and actions"
+          placeholder="Search"
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
@@ -83,8 +87,8 @@ export function AppCommandMenu({
           style={{ top: rect.bottom + 6, left: Math.max(16, Math.min(rect.left, window.innerWidth - Math.min(Math.max(rect.width, 272), window.innerWidth - 32) - 16)), width: Math.min(Math.max(rect.width, 272), window.innerWidth - 32) }}
           className="fixed z-50 rounded-sm border border-sidebar-border bg-popover p-1.5 shadow-lg"
         >
-          <CommandList className="max-h-[min(24rem,60dvh)] overflow-y-auto overscroll-contain outline-none" style={{ maxHeight: Math.max(44, window.innerHeight - rect.bottom - 24) }}>
-            <CommandEmpty className="px-3 py-3 text-[13px] text-muted-foreground">No matching actions. Try a page name or “log”.</CommandEmpty>
+          <CommandList className="overflow-y-auto overscroll-contain outline-none" style={{ maxHeight: `min(24rem, 60dvh, ${Math.max(44, window.innerHeight - rect.bottom - 24)}px)` }}>
+            <CommandEmpty className="px-3 py-3 text-[13px] text-muted-foreground">No matches. Try a page name or “log”.</CommandEmpty>
             <CommandGroup heading={<div className={headingClass}>Quick actions</div>} className="p-0">
               <CommandItem value="log practice exam add result" onSelect={() => run(onLogExam)} className={itemClass}>
                 Log practice exam
@@ -101,7 +105,7 @@ export function AppCommandMenu({
             </CommandGroup>
             <CommandGroup heading={<div className={headingClass}>Go to</div>} className="p-0">
               {ALL_NAVIGATION.map((item) => (
-                <CommandItem key={item.id} value={`${item.label} ${item.description}`} onSelect={() => run(() => onViewChange(item.id))} className={itemClass}>
+                <CommandItem key={item.id} value={item.label} keywords={[item.id, item.description]} onSelect={() => run(() => onViewChange(item.id))} className={itemClass}>
                   {item.label}
                 </CommandItem>
               ))}
@@ -144,6 +148,7 @@ export function MobileSearch({
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState("")
+  if (!open && query) setQuery("")
 
   function run(action: () => void) {
     onOpenChange(false)
@@ -154,11 +159,11 @@ export function MobileSearch({
     { label: "Log practice exam", value: "log practice exam add result", Icon: Plus, action: onLogExam },
     { label: "Log mistake", value: "log mistake add revision card", Icon: Plus, action: onLogMistake },
     { label: "Log past study", value: "log past study record session", Icon: History, action: onLogPastStudy },
-    { label: "Start timed paper", value: "start timed paper exam timer practice", Icon: Timer, action: onStartExam },
+    { label: "Start timed paper", value: "Start timed paper", keywords: ["exam", "timer", "practice"], Icon: Timer, action: onStartExam },
   ]
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) setQuery("") }}>
+    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Popup
           initialFocus={input}
@@ -192,10 +197,10 @@ export function MobileSearch({
               <DialogPrimitive.Close render={<Button variant="ghost" className="h-11 px-2 text-[15px] text-primary" />}>Cancel</DialogPrimitive.Close>
             </div>
             <CommandList className="max-h-none flex-1 overscroll-contain px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <CommandEmpty className="px-6 py-12 text-center text-[15px] text-muted-foreground">No results for “{query}”.<br />Try a page name or “log”.</CommandEmpty>
+              <CommandEmpty className="px-6 py-12 text-center text-[15px] wrap-anywhere text-muted-foreground">No results for “{query}”.<br />Try a page name or “log”.</CommandEmpty>
               <CommandGroup heading={<div className={mobileHeadingClass}>Quick actions</div>} className="p-0">
-                {actions.map(({ label, value, Icon, action }) => (
-                  <CommandItem key={label} value={value} onSelect={() => run(action)} className={mobileItemClass}>
+                {actions.map(({ label, value, keywords, Icon, action }) => (
+                  <CommandItem key={label} value={value} keywords={keywords} onSelect={() => run(action)} className={mobileItemClass}>
                     <Icon className="size-5! text-primary" strokeWidth={1.75} aria-hidden />
                     {label}
                   </CommandItem>
@@ -205,7 +210,7 @@ export function MobileSearch({
                 {ALL_NAVIGATION.map((item) => {
                   const Icon = icons[item.id] ?? Settings2
                   return (
-                    <CommandItem key={item.id} value={`${item.label} ${item.description}`} onSelect={() => run(() => onViewChange(item.id))} className={mobileItemClass}>
+                    <CommandItem key={item.id} value={item.label} keywords={[item.id, item.description]} onSelect={() => run(() => onViewChange(item.id))} className={mobileItemClass}>
                       <Icon className="size-5! text-muted-foreground" strokeWidth={1.5} aria-hidden />
                       <span className="flex min-w-0 flex-col">
                         <span>{item.label}</span>

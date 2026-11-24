@@ -95,8 +95,8 @@ const KIND_LABEL: Record<DayItem["kind"], string> = {
 /** The three open lines a day cell can afford before it starts lying about what is there. */
 const CELL_LINES = 3
 
-/** Seven days plus the week's total; a phone drops the total and keeps the days. */
-const WEEK_GRID = "grid grid-cols-7 sm:grid-cols-[repeat(7,minmax(0,1fr))_4.5rem]"
+/** Seven days plus the week's total when the month pane has room. */
+const WEEK_GRID = "grid grid-cols-7 @xl:grid-cols-[repeat(7,minmax(0,1fr))_4.5rem]"
 
 function shiftDay(date: string, amount: number) {
   const [year, month, day] = date.split("-").map(Number)
@@ -387,10 +387,10 @@ export function CalendarPage({
       /> : null}
 
       <CalendarModules arranging={arranging} modules={{ month: (
-        <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+        <section aria-label={monthLabel} className="@container min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
-            {weekdayLabels().map((label) => <div className="py-2 text-center sm:px-2 sm:text-left" key={label}>{label}</div>)}
-            <div className="hidden px-2 py-2 text-right sm:block">Week</div>
+            {weekdayLabels().map((label) => <div className="py-2 text-center @xl:px-2 @xl:text-left" key={label}>{label}</div>)}
+            <div className="hidden px-2 py-2 text-right @xl:block">Week</div>
           </div>
           <div key={monthLabel}>
           {weeks.map((week) => (
@@ -406,7 +406,7 @@ export function CalendarPage({
               ))}
               {/* The week's total sits where the eye lands at the end of the row, which is what
                   the separate six-bar chart under the grid used to make you scroll for. */}
-              <div className="hidden flex-col items-end gap-1.5 border-l border-border px-2 py-2.5 sm:flex">
+              <div className="hidden flex-col items-end gap-1.5 border-l border-border px-2 py-2.5 @xl:flex">
                 <span className={cn("text-xs tabular-nums", week.minutes ? "font-medium" : "text-muted-foreground")}>{week.minutes ? formatMinutes(week.minutes) : "–"}</span>
                 {week.minutes ? (
                   <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -558,7 +558,7 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-calendar-date="${next}"]`)?.focus())
       }}
       className={cn(
-        "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset sm:min-h-32 sm:p-1",
+        "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset @xl:min-h-32",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
         active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
@@ -570,18 +570,18 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
           "grid size-6 place-items-center rounded-full text-xs font-medium tabular-nums",
           day.isToday && "bg-primary text-primary-foreground",
         )}>{day.day}</span>
-        {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums sm:inline">{formatMinutes(day.minutes)}</span> : null}
+        {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums @xl:inline">{formatMinutes(day.minutes)}</span> : null}
       </span>
 
-      {/* Phone cells show markers and the day panel carries the words. */}
+      {/* Narrow cells show markers and the day panel carries the words. */}
       {open.length ? (
-        <span aria-hidden className="flex flex-wrap items-center gap-0.5 px-1 sm:hidden">
+        <span aria-hidden className="flex flex-wrap items-center gap-0.5 px-1 @xl:hidden">
           {visible.map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
           {overflow > 0 ? <span className="text-[0.625rem] leading-none text-muted-foreground tabular-nums">+{overflow}</span> : null}
         </span>
       ) : null}
 
-      <span className="hidden min-w-0 flex-col gap-0.5 sm:flex">
+      <span className="hidden min-w-0 flex-col gap-0.5 @xl:flex">
         {visible.map((item) => {
           const fixed = item.kind === "exam" || item.kind === "sac"
           return (

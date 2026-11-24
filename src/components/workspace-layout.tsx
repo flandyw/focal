@@ -31,7 +31,7 @@ export function StatGrid({ children, className }: { children: ReactNode; classNa
 const TONES = { default: "text-primary bg-primary/10", success: "text-success bg-success/10", warning: "text-warning bg-warning/10", danger: "text-destructive bg-destructive/10" } as const
 
 /** Inline trend line; decorative, so the tile's text carries the meaning. */
-export function Sparkline({ values, className }: { values: number[]; className?: string }) {
+function Sparkline({ values, className }: { values: number[]; className?: string }) {
   if (values.length < 2) return null
   const min = Math.min(...values), span = Math.max(...values) - min || 1
   const points = values.map((value, index) => `${(index / (values.length - 1)) * 100},${27 - ((value - min) / span) * 24}`).join(" ")
@@ -44,11 +44,10 @@ export function Sparkline({ values, className }: { values: number[]; className?:
 }
 
 /** Change against the previous period: an arrow and sign as well as colour. */
-export function Delta({ value, suffix = "", invert }: { value: number | null | undefined; suffix?: string; invert?: boolean }) {
+export function Delta({ value, suffix = "" }: { value: number | null | undefined; suffix?: string }) {
   if (value == null || !Number.isFinite(value)) return null
-  const good = invert ? value < 0 : value > 0
   return (
-    <span className={cn("inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs font-medium tabular-nums", value === 0 ? "bg-muted text-muted-foreground" : good ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
+    <span className={cn("inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs font-medium tabular-nums", value === 0 ? "bg-muted text-muted-foreground" : value > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive")}>
       <span aria-hidden>{value === 0 ? "–" : value > 0 ? "▲" : "▼"}</span><span className="sr-only">{value === 0 ? "no change " : value > 0 ? "up " : "down "}</span>{Math.abs(value).toFixed(Number.isInteger(value) ? 0 : 1)}{suffix}
     </span>
   )
@@ -77,7 +76,7 @@ export function StatTile({ icon: Icon, label, value, hint, delta, spark, tone = 
         {delta}
       </div>
       {hint ? <div className="truncate text-xs text-muted-foreground">{hint}</div> : null}
-      {spark && spark.length > 1 ? <Sparkline values={spark} className={cn("mt-auto", tone === "success" && "text-success", tone === "warning" && "text-warning", tone === "danger" && "text-destructive")} /> : null}
+      {spark ? <Sparkline values={spark} className={cn("mt-auto", tone === "success" && "text-success", tone === "warning" && "text-warning", tone === "danger" && "text-destructive")} /> : null}
     </Tag>
   )
 }
@@ -119,10 +118,10 @@ export function Meter({ value, max = 100, className, barClassName }: { value: nu
 }
 
 /** Progress ring with its value in the middle. */
-export function Ring({ value, size = 88, children, className, tone = "var(--primary)" }: { value: number; size?: number; children?: ReactNode; className?: string; tone?: string }) {
+export function Ring({ value, size = 88, children, tone }: { value: number; size?: number; children?: ReactNode; tone: string }) {
   const clamped = Math.max(0, Math.min(1, value))
   return (
-    <span className={cn("relative inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
+    <span className="relative inline-flex shrink-0 items-center justify-center" style={{ width: size, height: size }}>
       <svg aria-hidden viewBox="0 0 36 36" className="absolute inset-0 -rotate-90">
         <circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--muted)" strokeWidth="3" />
         {clamped > 0 ? <circle cx="18" cy="18" r="15.5" fill="none" stroke={tone} strokeWidth="3" strokeLinecap="round" pathLength={1} strokeDasharray="1" strokeDashoffset={1 - clamped} className="focal-ring" /> : null}

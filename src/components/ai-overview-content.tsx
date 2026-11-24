@@ -3,7 +3,7 @@ import { RefreshCw, Sparkles } from "lucide-react"
 import { generateOverview, needsRefresh, readOverview, type OverviewArea } from "../lib/ai-overview"
 import { AIOverviewContext, type OverviewSettings } from "../lib/ai-overview-state"
 import { CHAT_ENDPOINT } from "../lib/gateway-client"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import { Button } from "./ui/button"
 import { Skeleton } from "./ui/skeleton"
 

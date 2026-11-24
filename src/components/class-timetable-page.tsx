@@ -24,7 +24,7 @@ import {
   parseTimetableImport,
   periodSubjectName,
 } from "../lib/class-timetable"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import { swipe } from "../lib/mobile"
 import { cn } from "../lib/utils"
 import type { SchoolHoliday, TimetableConfig, TimetablePeriod } from "../lib/types"

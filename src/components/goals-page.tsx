@@ -17,7 +17,8 @@ import { ArchivedItems, Panel, Ring, StatGrid, StatTile, WorkspacePage } from ".
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { canonicalNow } from "../lib/study-session-sync"
 import type { AppData, AssessmentReference } from "../lib/exam-data"
-import { getGoalProgress, localDate, type LearningWorkspace, type LearningWorkspaceUpdate, type StudyGoal, type StudyGoalKind } from "../lib/learning-workspace"
+import { getGoalProgress, type LearningWorkspace, type LearningWorkspaceUpdate, type StudyGoal, type StudyGoalKind } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 
 function defaultDeadline() {
   const date = new Date()

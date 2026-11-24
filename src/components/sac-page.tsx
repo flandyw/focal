@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { buildSacSubjectStats, computeSacStats, getUpcomingSacs, isCompletedSac, sacPercentage, type SacRecord } from "../lib/sac"
 import type { SacTimerSession } from "../lib/ongoing-timers"
 import { useTickingNow } from "../hooks/use-ticking-now"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 
 type SacPageProps = {
   openTimerRequest?: number

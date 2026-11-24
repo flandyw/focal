@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import type { AppData } from "../lib/exam-data"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import { deletedSince, recoveryCounts, saveRecovery } from "../lib/recovery"
 import type { CanonicalStudySession } from "../lib/sync/sessionContract"
 

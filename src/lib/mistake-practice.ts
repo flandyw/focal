@@ -1,3 +1,4 @@
+import { localDate } from "./local-date.js"
 import { getMistakeSchedule, normalizeMistakeReviewPreferences, type Mistake, type MistakeReviewPreferences, type PracticeContext, type ReviewRating } from "./exam-data.js"
 
 export const PRACTICE_FINISHES = [
@@ -7,14 +8,10 @@ export const PRACTICE_FINISHES = [
   { id: "amber", label: "Amber", xp: 600, color: "#c89a49" },
 ] as const
 
-function practiceDay(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-}
-
 function practiceWeek(now: Date): string {
   const monday = new Date(now)
   monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7)
-  return practiceDay(monday)
+  return localDate(monday)
 }
 
 const recalled = (result: string) => result === "good" || result === "easy" || result === "correct"
@@ -31,19 +28,19 @@ export function recallStrength(mistake: Mistake): number {
   const days = new Set<string>()
   const reviews = new Map((mistake.reviewHistory ?? []).map((review) => [review.id, review]))
   for (const review of reviews.values()) {
-    if (recalled(review.result)) days.add(practiceDay(new Date(review.completedAt)))
+    if (recalled(review.result)) days.add(localDate(new Date(review.completedAt)))
     if (days.size === 3) break
   }
   return days.size
 }
 
 export function practiceMissionCards(mistakes: Mistake[], mission: string, now: Date): Mistake[] {
-  const today = practiceDay(now)
+  const today = localDate(now)
   return mistakes.flatMap((mistake) => {
     if (mistake.suspended) return []
     const history = practiceHistory(mistake)
     if (mission === "rematch" && !shaky(history.at(-1)?.result ?? "")) return []
-    if (history.some((review, i) => practiceDay(new Date(review.completedAt)) === today && (mission === "confidence" ? !!review.confidence : mission === "rematch" ? i > 0 && shaky(history[i - 1].result) : true))) return []
+    if (history.some((review, i) => localDate(new Date(review.completedAt)) === today && (mission === "confidence" ? !!review.confidence : mission === "rematch" ? i > 0 && shaky(history[i - 1].result) : true))) return []
     return [{ mistake, due: Date.parse(getMistakeSchedule(mistake).dueAt) }]
   }).sort((a, b) => a.due - b.due || a.mistake.id.localeCompare(b.mistake.id)).map(({ mistake }) => mistake)
 }
@@ -56,7 +53,7 @@ export function practiceFeedback(mistake: Mistake, rating: ReviewRating, context
 }
 
 export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
-  const today = practiceDay(now)
+  const today = localDate(now)
   const week = practiceWeek(now)
   const timestamp = now.getTime()
   const days = new Map<string, { cards: Set<string>; rematches: Set<string>; predictions: Set<string> }>()
@@ -72,7 +69,7 @@ export function getPracticeProgress(mistakes: Mistake[], now = new Date()) {
     let previous = ""
     for (const review of history) {
       const date = new Date(review.completedAt)
-      const day = practiceDay(date)
+      const day = localDate(date)
       if (!mistake.suspended) {
         if (day < week) {
           practicedBefore = true

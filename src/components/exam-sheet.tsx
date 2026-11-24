@@ -16,7 +16,7 @@ import { getKnownExamMarks } from "../lib/exam-conditions"
 import { firstPreferredSubject, prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import { count } from "../lib/utils"
 
 type ExamEntryProps = {

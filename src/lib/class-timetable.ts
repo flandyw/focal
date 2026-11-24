@@ -1,3 +1,4 @@
+import { localDate } from "./local-date.js"
 import { VCE_SUBJECTS, type TimetableConfig, type TimetablePeriod } from "./types.js"
 import { getDayLabelForDate, getTimetablePeriodsForDate, resolveTimetableSubject } from "./class-timetable-core.js"
 import { normaliseComparisonName } from "./exam-data.js"
@@ -13,7 +14,7 @@ export {
 /** The class timetable shares its shape (and sync row) with the desktop app. */
 export function defaultClassTimetable(now = new Date()): TimetableConfig {
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
-  const day1Starts = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`
+  const day1Starts = localDate(monday)
   return { enabled: true, day1Starts, holidays: [], entries: [], cycleLength: 10, weekendTimetables: false }
 }
 

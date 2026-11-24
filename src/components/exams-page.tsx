@@ -728,7 +728,7 @@ export function ExamsPage(props: ExamsPageProps) {
                   <ImprovementOutlookChart attempts={data.attempts} difficultySettings={data.examDifficulty} />
                 </Suspense>
                 <Suspense fallback={<Skeleton className="h-80 w-full" />}>
-                  <ReviewForecastChart mistakes={data.mistakes} />
+                  <ReviewForecastChart mistakes={data.mistakes} attempts={data.attempts} />
                 </Suspense>
               </div>
               <div className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-3">

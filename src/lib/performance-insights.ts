@@ -775,6 +775,7 @@ export type ReviewForecastDay = {
   date: string
   label: string
   due: number
+  overdue: number
 }
 
 function startOfLocalDay(date: Date) {
@@ -790,6 +791,7 @@ export function buildReviewForecast(mistakes: Mistake[], now = new Date(), days 
       date: localDate(date),
       label: index === 0 ? "Today" : date.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
       due: 0,
+      overdue: 0,
     }
   })
   if (!result.length) return result
@@ -798,7 +800,10 @@ export function buildReviewForecast(mistakes: Mistake[], now = new Date(), days 
     if (mistake.suspended) continue
     const dueAt = new Date(getMistakeSchedule(mistake).dueAt)
     const index = localDayDifference(dueAt, start)
-    if (index < 0) result[0].due += 1
+    if (index < 0) {
+      result[0].due += 1
+      result[0].overdue += 1
+    }
     else if (index < result.length) result[index].due += 1
   }
   return result

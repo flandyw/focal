@@ -48,14 +48,15 @@ export async function exportMistakes(format: ExportFormat, mistakes: Mistake[], 
   const ext = format === "markdown" ? "md" : format === "anki" ? "tsv" : format
   const text = format === "json" ? JSON.stringify({ instructions: ROUND_TRIP_INSTRUCTIONS, mistakes: rows }, null, 2)
     : format === "csv" ? [Object.keys(rows[0] ?? {}).map(csvCell).join(","), ...rows.map((row) => Object.values(row).map(csvCell).join(","))].join("\n")
-    : format === "anki" ? ["#separator:tab", "#html:true", "#columns:Front\tBack", ...rows.map((row) => {
+    : format === "anki" ? ["#separator:tab", "#html:true", "#guid column:3", "#columns:Front\tBack\tGUID", ...rows.map((row) => {
       const context = [row.subject, row.exam].filter(Boolean).join(" · ")
       const front = [`<strong>${ankiText(row.question)}</strong>`, context && ankiText(context), row.questionText && ankiText(row.questionText)].filter(Boolean).join("<br>")
       const back = [
         row.correction && `<strong>Correction</strong><br>${ankiText(row.correction)}`,
         row.explanation && `<strong>What went wrong</strong><br>${ankiText(row.explanation)}`,
       ].filter(Boolean).join("<br><br>")
-      return `${front}\t${back}`
+      const guid = `focal:${encodeURIComponent(JSON.stringify(row.id).slice(1, -1))}`
+      return `${front}\t${back}\t${guid}`
     })].join("\n")
     : rows.map((row) => [
       `## ${row.question}${row.exam ? ` — ${row.exam}` : ""}`,

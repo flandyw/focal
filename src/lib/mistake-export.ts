@@ -3,7 +3,7 @@ import { getMistakeSchedule, type ExamAttempt, type Mistake } from "./exam-data"
 import { downloadMistakesPdf } from "./mistake-pdf"
 import { csvCell } from "./csv"
 
-export type ExportFormat = "pdf" | "markdown" | "csv" | "json"
+export type ExportFormat = "pdf" | "markdown" | "csv" | "json" | "anki"
 
 /** Embedded in the JSON export so the chatbot sees the contract with the data. Keep in step with parseMistakeRoundTrip. */
 const ROUND_TRIP_INSTRUCTIONS = [
@@ -35,13 +35,28 @@ function toRows(mistakes: Mistake[], attempts: ExamAttempt[]) {
   })
 }
 
+function ankiText(text: string) {
+  // ponytail: escape text and preserve line breaks; richer Markdown and media would need a packaged deck.
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+    .replaceAll("\t", " ").replace(/\r\n?|\n/g, "<br>")
+}
+
 export async function exportMistakes(format: ExportFormat, mistakes: Mistake[], attempts: ExamAttempt[], name = "mistakes") {
   if (format === "pdf") return downloadMistakesPdf(mistakes, attempts, name)
   const rows = toRows(mistakes, attempts)
-  const types = { json: "application/json", csv: "text/csv", markdown: "text/markdown" }
-  const ext = format === "markdown" ? "md" : format
+  const types = { json: "application/json", csv: "text/csv", markdown: "text/markdown", anki: "text/tab-separated-values" }
+  const ext = format === "markdown" ? "md" : format === "anki" ? "tsv" : format
   const text = format === "json" ? JSON.stringify({ instructions: ROUND_TRIP_INSTRUCTIONS, mistakes: rows }, null, 2)
     : format === "csv" ? [Object.keys(rows[0] ?? {}).map(csvCell).join(","), ...rows.map((row) => Object.values(row).map(csvCell).join(","))].join("\n")
+    : format === "anki" ? ["#separator:tab", "#html:true", "#columns:Front\tBack", ...rows.map((row) => {
+      const context = [row.subject, row.exam].filter(Boolean).join(" · ")
+      const front = [`<strong>${ankiText(row.question)}</strong>`, context && ankiText(context), row.questionText && ankiText(row.questionText)].filter(Boolean).join("<br>")
+      const back = [
+        row.correction && `<strong>Correction</strong><br>${ankiText(row.correction)}`,
+        row.explanation && `<strong>What went wrong</strong><br>${ankiText(row.explanation)}`,
+      ].filter(Boolean).join("<br><br>")
+      return `${front}\t${back}`
+    })].join("\n")
     : rows.map((row) => [
       `## ${row.question}${row.exam ? ` — ${row.exam}` : ""}`,
       `*${[row.category, row.areaOfStudy, row.difficulty !== "" ? `Difficulty ${row.difficulty}/5` : "", row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,

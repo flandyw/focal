@@ -689,9 +689,7 @@ function DaySection({ title, count, muted, children }: { title: string; count: n
  * borders and six padding boxes saying "these are separate", which is what `divide-y` and a
  * kind mark say in the space of one hairline.
  *
- * ponytail: the row is one line wide, so only the two things you do while scanning stay on
- * it (start, finish) and the rare ones -- reschedule, archive, skip -- hide behind "more".
- * Upgrade path if it is still tight at 2xl: a right-hand actions column on `xl` and up.
+ * Keep start and finish visible; reschedule, archive and skip stay behind "more".
  */
 function DayItemRow({
   item,
@@ -718,6 +716,7 @@ function DayItemRow({
   const [moveTo, setMoveTo] = useState("")
   const done = isDayItemDone(item)
   const isTask = item.kind === "task"
+  const isPlannedTask = isTask && item.status === "planned"
   const meta = [
     ...(item.kind === "task" ? [item.subject, item.detail] : [item.detail]),
     item.minutes ? `${Math.round(item.minutes)} min` : undefined,
@@ -725,8 +724,8 @@ function DayItemRow({
   ].filter(Boolean).join(" · ")
 
   return (
-    <li className="animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
-      <div className="flex items-center gap-2">
+    <li className="@container animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
+      <div className={cn("flex items-center gap-2", isPlannedTask && "@max-xs:grid @max-xs:grid-cols-[auto_minmax(0,1fr)] @max-xs:gap-y-1")}>
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
           <p className={cn("text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
@@ -744,12 +743,12 @@ function DayItemRow({
           ) : item.kind === "mistakes" || item.kind === "event" ? null : (
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
-        <span className="flex shrink-0 items-center gap-0.5">
+        <span className={cn("flex shrink-0 items-center gap-0.5", isPlannedTask && "@max-xs:col-start-2")}>
           {item.kind === "session" && (!done || item.live) ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" variant="outline"><Timer />{item.live ? "Open timer" : "Start"}</Button> : null}
           {item.kind === "session" && done && !item.live && item.continuable ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
           {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}
           {isTask ? (
-            item.status === "planned" ? (
+            isPlannedTask ? (
               <>
                 <Button onClick={() => onStartFocus(item.subject, item.title)} size="sm" variant="outline"><Timer />Focus</Button>
                 <Button aria-label={`Mark ${item.title} done`} onClick={() => onStatus(item.id, "completed")} size="icon-sm" variant="ghost"><Check /></Button>
@@ -783,7 +782,7 @@ function DayItemRow({
       </div>
       {more ? (
         <div className="mt-1 flex animate-in flex-wrap items-center gap-1.5 pl-3.5 duration-400 ease-[var(--ease-spring)] fade-in-0 slide-in-from-top-2">
-          {isTask && item.status === "planned" ? (
+          {isPlannedTask ? (
             <Button aria-label={`Skip ${item.title}`} onClick={() => onStatus(item.id, "skipped")} size="sm" variant="outline"><SkipForward />Skip</Button>
           ) : null}
           <Input

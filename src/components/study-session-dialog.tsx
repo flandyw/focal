@@ -48,7 +48,8 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   const busyRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; fields: string[] } | null>(null)
+  const errorProps = (field: string) => error?.fields.includes(field) ? { "aria-invalid": true, "aria-describedby": "session-error" } : {}
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [initial] = useState(() => JSON.stringify({ title, notes, topics, blocks, eventType, location }))
   const dirty = initial !== JSON.stringify({ title, notes, topics, blocks, eventType, location })
@@ -89,18 +90,22 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
     setError(null)
   }
 
+  // Validation errors carry the ids of the fields they reject so those fields can point at the message.
+  const invalid = (message: string, fields: string[]) => Object.assign(new Error(message), { fields })
+
   function patch(): StudySessionEdit {
-    if (!title.trim() || title.trim().length > 512) throw new Error("Add a title (up to 512 characters).")
+    if (!title.trim() || title.trim().length > 512) throw invalid("Add a title (up to 512 characters).", ["session-title"])
     if (!blocks.length || blocks.length > 100) throw new Error("Add between 1 and 100 time blocks.")
     const sorted = blocks.map((block) => {
       const start = new Date(block.start), end = new Date(block.end)
       if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end.getTime() - start.getTime() > 86_400_000) {
-        throw new Error("Each block needs a valid start and end, must end after it starts, and can be up to 24 hours long.")
+        throw invalid("Each block needs a valid start and end, must end after it starts, and can be up to 24 hours long.", [`session-start-${block.id}`, `session-end-${block.id}`])
       }
-      return { start: start.toISOString(), end: end.toISOString(), subject: block.subject }
+      return { id: block.id, start: start.toISOString(), end: end.toISOString(), subject: block.subject }
     }).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
-    if (sorted.some((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))) throw new Error("Time blocks can’t overlap.")
-    if (sorted.some((block) => !block.subject) && sorted.some((block) => block.subject)) throw new Error("Give every block a subject, or leave them all blank.")
+    const overlap = sorted.findIndex((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))
+    if (overlap > 0) throw invalid("Time blocks can’t overlap.", [`session-end-${sorted[overlap - 1].id}`, `session-start-${sorted[overlap].id}`])
+    if (sorted.some((block) => !block.subject) && sorted.some((block) => block.subject)) throw invalid("Give every block a subject, or leave them all blank.", sorted.flatMap((block) => block.subject ? [] : [`session-subject-${block.id}`]))
     const subjectIds = [...new Set(sorted.flatMap((block) => block.subject ? [block.subject] : []))]
     const subjectSwitches = subjectIds.length > 1
       ? sorted.reduce<SubjectSwitch[]>((list, block) => list.at(-1)?.subjectId === block.subject ? list : [...list, { at: block.start, subjectId: block.subject }], [])
@@ -157,7 +162,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
       toast({ save: creating ? "Study session planned" : "Study session updated", duplicate: "Study session duplicated", delete: "Study session deleted", convert: "Study session converted to event" }[action])
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn’t save that change.")
+      setError({ message: e instanceof Error ? e.message : "Couldn’t save that change.", fields: e instanceof Error && "fields" in e ? e.fields as string[] : [] })
     } finally { busyRef.current = false; setBusy(false) }
   }
 
@@ -172,7 +177,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="session-title">Title</FieldLabel>
-              <Input autoFocus id="session-title" maxLength={512} placeholder="e.g. Organic chemistry revision" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(converting ? "convert" : "save") } }} />
+              <Input autoFocus id="session-title" {...errorProps("session-title")} maxLength={512} placeholder="e.g. Organic chemistry revision" value={title} onChange={(e) => { setTitle(e.target.value); setError(null) }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(converting ? "convert" : "save") } }} />
             </Field>
             <div className="grid gap-3" role="group" aria-label="Time blocks">
               <p className="text-sm font-medium tabular-nums">Time blocks · {Math.round(totalMinutes) >= 60 ? `${Math.floor(Math.round(totalMinutes) / 60)}h ${Math.round(totalMinutes) % 60}m` : `${Math.round(totalMinutes)} min`} total</p>
@@ -183,15 +188,15 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               </div> : null}
               {blocks.map((block, index) => (
                 <div key={block.id} className="grid gap-2 rounded-lg border p-3" role="group" aria-labelledby={`session-block-${block.id}`}>
-                  <div className="flex min-h-6 items-center justify-between"><span id={`session-block-${block.id}`} className="text-xs font-medium tabular-nums">Block {index + 1}{Number.isFinite(Date.parse(block.end) - Date.parse(block.start)) && Date.parse(block.end) > Date.parse(block.start) ? <span className="font-normal text-muted-foreground"> · {Math.round((Date.parse(block.end) - Date.parse(block.start)) / 60_000)} min</span> : null}</span>{blocks.length > 1 ? <Button aria-label={`Remove block ${index + 1}`} size="icon-xs" variant="ghost" onClick={() => setBlocks((current) => current.filter((item) => item.id !== block.id))}><Trash2 /></Button> : null}</div>
+                  <div className="flex min-h-6 items-center justify-between"><span id={`session-block-${block.id}`} className="text-xs font-medium tabular-nums">Block {index + 1}{Number.isFinite(Date.parse(block.end) - Date.parse(block.start)) && Date.parse(block.end) > Date.parse(block.start) ? <span className="font-normal text-muted-foreground"> · {Math.round((Date.parse(block.end) - Date.parse(block.start)) / 60_000)} min</span> : null}</span>{blocks.length > 1 ? <Button aria-label={`Remove block ${index + 1}`} size="icon-xs" variant="ghost" onClick={() => { setBlocks((current) => current.filter((item) => item.id !== block.id)); setError(null) }}><Trash2 /></Button> : null}</div>
                   <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                    <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
-                    <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
+                    <Field className="min-w-0"><FieldLabel htmlFor={`session-start-${block.id}`}>Start</FieldLabel><Input className="min-w-0 w-full" id={`session-start-${block.id}`} {...errorProps(`session-start-${block.id}`)} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.start} onChange={(e) => updateBlock(block.id, { start: e.target.value })} /></Field>
+                    <Field className="min-w-0"><FieldLabel htmlFor={`session-end-${block.id}`}>End</FieldLabel><Input className="min-w-0 w-full" id={`session-end-${block.id}`} {...errorProps(`session-end-${block.id}`)} type="datetime-local" step={session.started_at === null ? 60 : "0.001"} value={block.end} onChange={(e) => updateBlock(block.id, { end: e.target.value })} /></Field>
                   </div>
                   <Field className="min-w-0">
                     <FieldLabel htmlFor={`session-subject-${block.id}`}>Subject</FieldLabel>
                     <Select items={[{ value: "__none", label: "No subject" }, ...options.map((option) => ({ value: option.id, label: option.name }))]} value={block.subject || "__none"} onValueChange={(value) => updateBlock(block.id, { subject: !value || value === "__none" ? "" : value })}>
-                      <SelectTrigger id={`session-subject-${block.id}`} className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id={`session-subject-${block.id}`} {...errorProps(`session-subject-${block.id}`)} className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="__none">No subject</SelectItem>{options.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </Field>
@@ -211,7 +216,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               <Field><FieldLabel htmlFor="session-event-type">Event type</FieldLabel><Select items={EVENT_TYPES} value={eventType} onValueChange={(value) => value && setEventType(value as EventType)}><SelectTrigger id="session-event-type" className="w-full"><SelectValue /></SelectTrigger><SelectContent>{EVENT_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></Field>
               <Field><FieldLabel htmlFor="session-location">Location <span className="text-muted-foreground">(optional)</span></FieldLabel><Input id="session-location" autoComplete="off" value={location} onChange={(e) => setLocation(e.target.value)} /></Field>
             </div> : null}
-            {error ? <FieldError role="alert">{error}</FieldError> : null}
+            {error ? <FieldError id="session-error">{error.message}</FieldError> : null}
           </FieldGroup>
         </fieldset>
         <DialogFooter className="flex-wrap sm:justify-between">
@@ -220,7 +225,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
               <Button disabled={busy} variant={confirmDelete ? "destructive" : "outline"} onClick={() => confirmDelete ? void submit("delete") : setConfirmDelete(true)}><Trash2 />{confirmDelete ? "Delete for good?" : "Delete"}</Button>
               {confirmDelete ? <Button disabled={busy} variant="ghost" onClick={() => setConfirmDelete(false)}>Keep session</Button> : null}
               <Button disabled={busy} variant="outline" onClick={() => submit("duplicate")}><Copy />Duplicate</Button>
-              {onContinue && continuableToday(session) ? <Button disabled={busy} variant="outline" onClick={() => dirty ? setError("Save your changes before continuing this session.") : onContinue(session)}><Play />Continue</Button> : null}
+              {onContinue && continuableToday(session) ? <Button disabled={busy} variant="outline" onClick={() => dirty ? setError({ message: "Save your changes before continuing this session.", fields: [] }) : onContinue(session)}><Play />Continue</Button> : null}
               {allowConvert && !session.completed && session.started_at === null ? <Button disabled={busy} variant="outline" onClick={() => { setConverting(true); setConfirmDelete(false) }}><CalendarPlus />Convert to event</Button> : null}
             </>}
           </div>

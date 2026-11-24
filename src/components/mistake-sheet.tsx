@@ -552,14 +552,14 @@ export function MistakeSheet({
               <div className="grid gap-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-total-marks">Total marks</FieldLabel>
-                  <Input id="mistake-total-marks" type="number" inputMode="decimal" min="0.5" step="any" value={totalMarks || ""} aria-invalid={Boolean(marksError)} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
+                  <Input id="mistake-total-marks" type="number" inputMode="decimal" min="0.5" step="any" value={totalMarks || ""} aria-invalid={Boolean(marksError)} aria-describedby={marksError ? "mistake-marks-error" : undefined} onChange={(event) => setTotalMarks(event.target.valueAsNumber)} required />
                 </Field>
                 <Field data-invalid={Boolean(marksError) || undefined}>
                   <FieldLabel htmlFor="mistake-marks-lost">Marks lost</FieldLabel>
-                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="any" value={Number.isFinite(marksLost) ? marksLost : ""} aria-invalid={Boolean(marksError)} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
+                  <Input id="mistake-marks-lost" type="number" inputMode="decimal" min="0" step="any" value={Number.isFinite(marksLost) ? marksLost : ""} aria-invalid={Boolean(marksError)} aria-describedby={marksError ? "mistake-marks-error" : undefined} onChange={(event) => setMarksLost(event.target.valueAsNumber)} required />
                 </Field>
                 <Button type="button" variant="outline" disabled={!(totalMarks > 0)} onClick={() => setMarksLost(totalMarks)}>All marks</Button>
-                {marksError ? <FieldError className="sm:col-span-3">{marksError}</FieldError> : null}
+                {marksError ? <FieldError id="mistake-marks-error" className="sm:col-span-3">{marksError}</FieldError> : null}
               </div>
 
               <Field>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { ImageIcon } from "lucide-react"
 import type { MistakeAttachment } from "../lib/exam-data"
 import { createMistakeAttachmentUrls } from "../lib/mistake-attachments"
+import { count } from "../lib/utils"
 import { Button } from "./ui/button"
 
 function Unavailable({ name, onRetry }: { name: string; onRetry: () => void }) {
@@ -76,20 +77,23 @@ export function MistakeAttachments({ attachments }: { attachments?: MistakeAttac
   const [result, setResult] = useState<{ pathKey: string; urls?: Record<string, string>; failed?: boolean }>({ pathKey: "" })
   const currentResult = result.pathKey === pathKey ? result : undefined
   const [attempt, setAttempt] = useState(0)
+  const [loadingStatus, setLoadingStatus] = useState("")
   const retry = () => setAttempt((value) => value + 1)
 
   useEffect(() => {
     let cancelled = false
     const paths = pathKey ? pathKey.split("\u0000") : []
-    if (!paths.length) return
+    // Populate the empty live region in a later task so its first message can be announced.
+    const timer = window.setTimeout(() => setLoadingStatus(paths.length ? `Loading ${count(paths.length, "saved image")}…` : ""), 0)
+    if (!paths.length) return () => window.clearTimeout(timer)
     createMistakeAttachmentUrls(paths)
       .then((items) => {
-        if (!cancelled) setResult({ pathKey, urls: Object.fromEntries(items.map((item) => [item.path, item.signedUrl])) })
+        if (!cancelled) { window.clearTimeout(timer); setLoadingStatus(""); setResult({ pathKey, urls: Object.fromEntries(items.map((item) => [item.path, item.signedUrl])) }) }
       })
       .catch(() => {
-        if (!cancelled) setResult({ pathKey, failed: true })
+        if (!cancelled) { window.clearTimeout(timer); setLoadingStatus(""); setResult({ pathKey, failed: true }) }
       })
-    return () => { cancelled = true }
+    return () => { cancelled = true; window.clearTimeout(timer) }
   }, [pathKey, attempt])
 
   if (!attachments?.length) return null
@@ -101,12 +105,13 @@ export function MistakeAttachments({ attachments }: { attachments?: MistakeAttac
 
   return (
     <div aria-label="Question images" className="my-3 grid min-w-0 grid-cols-1 justify-items-start gap-3">
+      <span role="status" className="sr-only">{currentResult ? "" : loadingStatus}</span>
       {attachments.map((attachment) => currentResult?.urls?.[attachment.storagePath] ? (
         <MistakeImage key={attachment.id} attachment={attachment} url={currentResult.urls[attachment.storagePath]} onRetry={retry} />
       ) : currentResult?.urls ? (
         <Unavailable key={attachment.id} name={attachment.name} onRetry={retry} />
       ) : (
-        <div key={attachment.id} className="flex h-32 w-full items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon className="size-5" /></div>
+        <div key={attachment.id} className="flex h-32 w-full items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon aria-hidden="true" className="size-5" /></div>
       ))}
     </div>
   )

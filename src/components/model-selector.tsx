@@ -105,7 +105,7 @@ export function ModelSelector({ catalog, value, onValueChange, favourites, onTog
               {hasSpeed ? <option value="speed">Fastest output · AA</option> : null}
             </NativeSelect>
           </label>
-          {filtered ? <Button size="sm" variant="ghost" className="justify-self-start" onClick={reset}>Reset filters</Button> : null}
+          {filtered ? <Button size="sm" variant="ghost" className="justify-self-start" onClick={() => { if (view !== "favourites") setView("all"); setPrice(""); setCapability(""); setSort("") }}>Reset filters</Button> : null}
         </div> : null}
         </div>
         <div className="flex justify-between gap-3 px-4 pb-1 text-xs text-muted-foreground" aria-live="polite">

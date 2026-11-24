@@ -4,7 +4,7 @@ import { localStudyTime, pastStudyBlocks, type PastStudyLog } from "../../lib/pa
 import { count } from "../../lib/utils"
 import { Button } from "../ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible"
-import { Field, FieldGroup, FieldLabel } from "../ui/field"
+import { Field, FieldError, FieldGroup, FieldLabel } from "../ui/field"
 import { Input } from "../ui/input"
 import { NativeSelect, NativeSelectOption } from "../ui/native-select"
 import { Textarea } from "../ui/textarea"
@@ -22,6 +22,15 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
   const [title, setTitle] = useState("")
   const [notes, setNotes] = useState("")
   const [error, setError] = useState("")
+  // Which part the error is about, so only those controls point at it; save failures mark nothing.
+  const [errorFor, setErrorFor] = useState<"subject" | "blocks" | null>(null)
+  const errorId = `${id}-error`
+  const subjectError = error && errorFor === "subject" ? { "aria-invalid": true, "aria-describedby": errorId } : {}
+  // pastStudyBlocks stays the authority; checking each row alone finds which block is wrong (overlaps mark none).
+  const rowError = (row: { start: string; minutes: string }) => {
+    if (!error || errorFor !== "blocks") return {}
+    try { pastStudyBlocks([row]); return { "aria-describedby": errorId } } catch { return { "aria-invalid": true, "aria-describedby": errorId } }
+  }
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
   const [original] = useState(() => JSON.stringify([subjectId, rows, title, notes]))
@@ -38,14 +47,18 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
     event.preventDefault()
     if (saving.current) return
     setError("")
+    let step: typeof errorFor = "subject"
     try {
       const subject = subjects.find((item) => item.id === subjectId)
       if (!subject) throw new Error("Choose a subject.")
+      step = "blocks"
       const blocks = pastStudyBlocks(rows)
+      step = null
       saving.current = true
       setBusy(true)
       await onSave({ subjectId, title: title.trim() || `${subject.name} study`, notes: notes.trim() || undefined, blocks })
     } catch (failure) {
+      setErrorFor(step)
       setError(failure instanceof Error ? failure.message : "Couldn’t save just now. Your details are still here, so give it another try.")
     } finally {
       saving.current = false
@@ -56,7 +69,7 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
       {!subjects.length ? <p role="status" className="text-sm text-muted-foreground">Add a subject in Settings first so you can log study.</p> : null}
       <Field>
         <FieldLabel htmlFor={`${id}-subject`}>Subject</FieldLabel>
-        <NativeSelect autoFocus id={`${id}-subject`} className="w-full" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} required>
+        <NativeSelect autoFocus id={`${id}-subject`} className="w-full" {...subjectError} value={subjectId} onChange={(event) => setSubjectId(event.target.value)} required>
           <NativeSelectOption value="" disabled>Choose a subject</NativeSelectOption>
           {subjects.map((subject) => <NativeSelectOption key={subject.id} value={subject.id}>{subject.name}</NativeSelectOption>)}
         </NativeSelect>
@@ -66,11 +79,11 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
         {rows.map((row, index) => <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_8rem]">
           <Field>
             <FieldLabel htmlFor={`${id}-start-${index}`}>{rows.length > 1 ? `Block ${index + 1} started` : "Started"}</FieldLabel>
-            <Input id={`${id}-start-${index}`} type="datetime-local" required value={row.start} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, start: event.target.value } : item))} />
+            <Input id={`${id}-start-${index}`} {...rowError(row)} type="datetime-local" required value={row.start} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, start: event.target.value } : item))} />
           </Field>
           <Field>
             <FieldLabel htmlFor={`${id}-minutes-${index}`}>Minutes studied</FieldLabel>
-            <Input id={`${id}-minutes-${index}`} type="number" inputMode="numeric" min="1" max="1440" step="1" required value={row.minutes} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, minutes: event.target.value } : item))} />
+            <Input id={`${id}-minutes-${index}`} {...rowError(row)} type="number" inputMode="numeric" min="1" max="1440" step="1" required value={row.minutes} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, minutes: event.target.value } : item))} />
           </Field>
           {rows.length > 1 && <Button type="button" variant="link" className="h-auto justify-self-start p-0" onClick={() => { setRows(rows.filter((_, i) => i !== index)); setError("") }}>Remove block {index + 1}</Button>}
         </div>)}
@@ -93,7 +106,7 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
       </Collapsible>
     </fieldset>
     {preview && <p className="rounded-lg bg-muted p-3 text-sm tabular-nums" role="status">{preview}</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     <div className="flex justify-end gap-2">
       <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>Cancel</Button>
       <Button type="submit" disabled={busy || !subjects.length}>{busy ? "Saving…" : "Log study"}</Button>

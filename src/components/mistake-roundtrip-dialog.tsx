@@ -27,6 +27,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
   const [error, setError] = useState<string | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const reads = useRef(0)
+  const [loading, setLoading] = useState(false)
   const [skipped, setSkipped] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<ReturnType<typeof parseMistakeRoundTrip> | null>(null)
   const changes = useMemo(() => {
@@ -80,15 +81,19 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
                 <FileUp />Load file
                 <Input type="file" accept=".json,application/json,.txt" className="sr-only" onChange={(event) => {
                   const file = event.target.files?.[0]
+                  if (!file) return
                   // Only the latest read or paste wins; a slow older file must not overwrite it.
-                  const request = file ? ++reads.current : 0
-                  void file?.text().then((content) => { if (request === reads.current) { setText(content); setResult(null); setError(null) } }, () => { if (request === reads.current) setError("Could not read that file. Try again or paste its contents.") })
+                  const request = ++reads.current
+                  // Drop the old preview now so it can't be applied while the new file loads.
+                  setResult(null); setError(null); setLoading(true)
+                  void file.text().then((content) => { if (request === reads.current) { setText(content); setLoading(false) } }, () => { if (request === reads.current) { setError("Could not read that file. Try again or paste its contents."); setLoading(false) } })
                   event.target.value = ""
                 }} />
               </Button>
             </div>
             <Textarea id="mistake-roundtrip-json" rows={6} className="font-mono text-xs" spellCheck={false} placeholder='{"mistakes":[{"id":"…","correction":"…"}]}'
-              value={text} onChange={(event) => { reads.current++; setText(event.target.value); setResult(null); setError(null) }} aria-invalid={error ? true : undefined} aria-describedby={error ? "mistake-roundtrip-json-error" : undefined} />
+              value={text} onChange={(event) => { reads.current++; setText(event.target.value); setResult(null); setError(null); setLoading(false) }} aria-invalid={error ? true : undefined} aria-describedby={error ? "mistake-roundtrip-json-error" : undefined} />
+            <p role="status" className="sr-only">{loading ? "Loading file…" : ""}</p>
             {error ? <FieldError id="mistake-roundtrip-json-error">{error}</FieldError> : <FieldDescription>Only question label, question text, what went wrong, improved response and topic are replaced. Blank fields are ignored.</FieldDescription>}
           </Field>
           {result ? (
@@ -120,7 +125,7 @@ export function MistakeRoundTripDialog({ mistakes, singleMistake = false, onExpo
           <Button type="button" variant="outline" onClick={close}>Cancel</Button>
           {result
             ? <Button type="button" disabled={!accepted.length} onClick={apply}><Check />Apply {accepted.length} {accepted.length === 1 ? "edit" : "edits"}</Button>
-            : <Button type="button" disabled={!text.trim()} onClick={review}>Review changes</Button>}
+            : <Button type="button" disabled={loading || !text.trim()} onClick={review}>{loading ? "Loading file…" : "Review changes"}</Button>}
         </DialogFooter>
       </DialogContent>
       <DiscardChangesDialog open={confirming !== null} onKeep={() => setConfirming(null)} onDiscard={() => { if (confirming === "export") onExport(); else onOpenChange(false) }} />

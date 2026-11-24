@@ -163,7 +163,7 @@ function getHighlights(
  }
 }
 
-function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
+function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange, periodEnd: number) {
  const rows = ["date,subject,minutes,hours"]
  for (const point of points) {
  const subject = getSubjectById(point.subjectId)?.name ??"Unassigned"
@@ -175,7 +175,10 @@ function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
  ].join(","))
  }
  const blob = new Blob(["\uFEFF", rows.join("\n")], { type:"text/csv;charset=utf-8" })
- return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${localDate(new Date())}.csv`)
+ const start = new Date(periodEnd)
+ start.setDate(start.getDate() - (range - 1))
+ // Name the file after the period it covers, which may be a past week or month.
+ return downloadExamFile(blob, range === 0 ? `focal-analytics-all-${localDate(new Date())}.csv` : `focal-analytics-${localDate(start)}-to-${localDate(new Date(periodEnd))}.csv`)
 }
 
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
@@ -299,8 +302,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  )
 
  const handleExport = useCallback(() => {
- void exportAnalyticsCsv(filteredTimeTrends, range).then((saved) => { if (saved) toast.success("Study CSV downloaded") })
- }, [filteredTimeTrends, range])
+ void exportAnalyticsCsv(filteredTimeTrends, periodDays, periodEnd).then((saved) => { if (saved) toast.success("Study CSV downloaded") })
+ }, [filteredTimeTrends, periodDays, periodEnd])
 
  const handleToggleSubject = useCallback(
  (sid: string) => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { ImageIcon } from "lucide-react"
 import type { MistakeAttachment } from "../lib/exam-data"
 import { createMistakeAttachmentUrls } from "../lib/mistake-attachments"
+import { count } from "../lib/utils"
 import { Button } from "./ui/button"
 
 function Unavailable({ name, onRetry }: { name: string; onRetry: () => void }) {
@@ -101,12 +102,13 @@ export function MistakeAttachments({ attachments }: { attachments?: MistakeAttac
 
   return (
     <div aria-label="Question images" className="my-3 grid min-w-0 grid-cols-1 justify-items-start gap-3">
+      <span role="status" className="sr-only">{currentResult ? "" : `Loading ${count(attachments.length, "saved image")}…`}</span>
       {attachments.map((attachment) => currentResult?.urls?.[attachment.storagePath] ? (
         <MistakeImage key={attachment.id} attachment={attachment} url={currentResult.urls[attachment.storagePath]} onRetry={retry} />
       ) : currentResult?.urls ? (
         <Unavailable key={attachment.id} name={attachment.name} onRetry={retry} />
       ) : (
-        <div key={attachment.id} className="flex h-32 w-full items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon className="size-5" /></div>
+        <div key={attachment.id} className="flex h-32 w-full items-center justify-center rounded-lg border bg-muted/30 text-muted-foreground"><ImageIcon aria-hidden="true" className="size-5" /></div>
       ))}
     </div>
   )

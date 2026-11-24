@@ -3,12 +3,12 @@ import { Button } from "./ui/button"
 import { downloadAppData } from "../lib/storage"
 
 type ErrorBoundaryProps = { children: ReactNode }
-type ErrorBoundaryState = { error: Error | null; backupError: string | null }
+type ErrorBoundaryState = { error: Error | null; backupError: string | null; exporting: boolean }
 
 export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null, backupError: null }
+  state: ErrorBoundaryState = { error: null, backupError: null, exporting: false }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error, backupError: null }
   }
 
@@ -16,13 +16,22 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
     console.error(error, info.componentStack)
   }
 
+  private exporting = false
+
   private exportBackup = async () => {
+    // A second click would open another save dialog while the first is still open.
+    if (this.exporting) return
+    this.exporting = true
+    this.setState({ exporting: true })
     try {
       await downloadAppData()
       this.setState({ backupError: null })
     } catch (exportError) {
       console.error(exportError)
       this.setState({ backupError: "Couldn’t export your backup. Try again before reloading." })
+    } finally {
+      this.exporting = false
+      this.setState({ exporting: false })
     }
   }
 
@@ -47,7 +56,7 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
         {this.state.backupError ? <p role="alert" className="text-sm text-destructive">{this.state.backupError}</p> : null}
         <div className="flex flex-wrap justify-center gap-2">
           {!loadError ? <Button variant="outline" onClick={() => this.setState({ error: null })}>Try again</Button> : null}
-          <Button variant="outline" onClick={this.exportBackup}>Export backup</Button>
+          <Button variant="outline" disabled={this.state.exporting} onClick={this.exportBackup}>{this.state.exporting ? "Exporting…" : "Export backup"}</Button>
           <Button onClick={this.reload}>Reload</Button>
         </div>
       </div>

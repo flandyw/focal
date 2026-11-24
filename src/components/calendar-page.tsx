@@ -725,7 +725,7 @@ function DayItemRow({
 
   return (
     <li className="@container animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
-      <div className={cn("flex items-center gap-2", isPlannedTask && "@max-xs:grid @max-xs:grid-cols-[auto_minmax(0,1fr)] @max-xs:gap-y-1")}>
+      <div className={cn("flex items-center gap-2", isTask && "@max-xs:grid @max-xs:grid-cols-[auto_minmax(0,1fr)] @max-xs:gap-y-1")}>
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
           <p className={cn("text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
@@ -734,16 +734,12 @@ function DayItemRow({
           {item.kind === "session" ? (
             item.live ? <Badge className="shrink-0" variant="outline">{item.paused ? "Paused" : "Studying"}</Badge>
               : done ? <Badge className="shrink-0" variant="secondary">Done</Badge> : null
-          ) : item.kind === "task" ? (
-            done ? (
-              <Badge className="shrink-0" variant="secondary">Done</Badge>
-            ) : item.status === "skipped" ? (
-              <Badge className="shrink-0" variant="outline">Skipped</Badge>
-            ) : null
-          ) : item.kind === "mistakes" || item.kind === "event" ? null : (
+          ) : item.kind === "task" || item.kind === "mistakes" || item.kind === "event" ? null : (
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
-        <span className={cn("flex shrink-0 items-center gap-0.5", isPlannedTask && "@max-xs:col-start-2")}>
+        <span className={cn("flex shrink-0 items-center gap-0.5", isTask && "@max-xs:col-start-2")}>
+          {isTask && (done ? <Badge className="mr-1.5 shrink-0" variant="secondary">Done</Badge>
+            : item.status === "skipped" ? <Badge className="mr-1.5 shrink-0" variant="outline">Skipped</Badge> : null)}
           {item.kind === "session" && (!done || item.live) ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" variant="outline"><Timer />{item.live ? "Open timer" : "Start"}</Button> : null}
           {item.kind === "session" && done && !item.live && item.continuable ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
           {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}

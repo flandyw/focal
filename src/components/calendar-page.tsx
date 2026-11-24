@@ -334,13 +334,13 @@ export function CalendarPage({
             {summary.assessments ? ` · ${summary.assessments} assessment${summary.assessments === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
-          <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</Button>
-          <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><CalendarPlus />Auto-plan</Button>
-          <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
-          <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
-          <Button onClick={exportCalendar} title="Download upcoming tasks, study, SACs, events and tracked exams as an .ics file for your phone or school calendar" variant="outline"><Download />Export</Button>
-          <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
+        <div data-tour="page-actions" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap [&>button]:max-sm:h-11 [&>button]:max-sm:px-1 [&>button]:max-sm:text-xs [&>button>span]:flex [&>button>span]:items-center [&>button>span]:gap-1.5">
+          <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}><span>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</span></Button>
+          <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><span><CalendarPlus />Auto-plan</span></Button>
+          <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><span><RotateCcw />Today</span></Button>
+          <Button onClick={() => setImportOpen(true)} variant="outline"><span><ClipboardPaste />Import</span></Button>
+          <Button onClick={exportCalendar} title="Download upcoming tasks, study, SACs, events and tracked exams as an .ics file for your phone or school calendar" variant="outline"><span><Download />Export</span></Button>
+          <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><span><Plus />Add event</span></Button>
         </div>
         <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />
       </header>
@@ -389,7 +389,7 @@ export function CalendarPage({
       <CalendarModules arranging={arranging} modules={{ month: (
         <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
-            {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
+            {weekdayLabels().map((label) => <div className="py-2 text-center sm:px-2 sm:text-left" key={label}>{label}</div>)}
             <div className="hidden px-2 py-2 text-right sm:block">Week</div>
           </div>
           <div key={monthLabel}>
@@ -430,18 +430,12 @@ export function CalendarPage({
                   <Button aria-label="Next day" title="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
                 </div>
               </div>
-              <CardDescription className="tabular-nums">
-                {plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing planned"}
+              {plan.totalCount ? <CardDescription className="tabular-nums">
+                {`${plan.completedCount} of ${plan.totalCount} done`}
                 {plan.plannedMinutes ? ` · ${formatMinutes(plan.plannedMinutes)} to go` : ""}
                 {plan.completedMinutes ? ` · ${formatMinutes(plan.completedMinutes)} banked` : ""}
-              </CardDescription>
+              </CardDescription> : null}
               {plan.totalCount ? <Progress aria-label="Day completed" className="h-1" value={completion} /> : null}
-              {plan.dueMistakes ? (
-                <Button variant="ghost" size="xs" className="w-fit px-0 text-muted-foreground hover:bg-transparent" onClick={() => onNavigate("mistakes")}>
-                  <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK.mistakes)} />
-                  {plan.dueMistakes} mistake{plan.dueMistakes === 1 ? "" : "s"} due for review
-                </Button>
-              ) : null}
             </CardHeader>
             <CardContent className="grid shrink-0 gap-3" key={selected}>
               {classes.length ? (
@@ -469,7 +463,7 @@ export function CalendarPage({
                     {open.map((item) => <DayItemRow item={item} key={`${item.kind}-${item.id}`} {...rowActions} />)}
                   </ul>
                 </DaySection>
-              ) : (
+              ) : !classes.length && !overdue.length ? (
                 <Empty className="min-h-28 border">
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
@@ -477,7 +471,7 @@ export function CalendarPage({
                     <EmptyDescription>{banked.length ? "Everything for this day is wrapped up." : "Add an event above, or block out some study on the timeline below."}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
-              )}
+              ) : null}
               {overdue.length ? (
                 <DaySection title="Carried over" count={overdue.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -485,7 +479,7 @@ export function CalendarPage({
                       <li className="flex items-center gap-2 px-2 py-1.5" key={task.id}>
                         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK.task)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium" title={task.title}>{task.title}</p>
+                          <p className="text-sm font-medium">{task.title}</p>
                           <p className="text-xs text-muted-foreground tabular-nums">{formatDayTitle(task.plannedFor)} · {task.durationMinutes} min</p>
                         </div>
                         <Button onClick={() => move(task.id, selected)} size="sm" variant="outline">Move here</Button>
@@ -579,11 +573,11 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
         {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums sm:inline">{formatMinutes(day.minutes)}</span> : null}
       </span>
 
-      {/* A phone cell is ~50px wide: titles there are smudges, so it gets one dot per piece of
-          open work and the day panel carries the words. */}
+      {/* Phone cells show markers and the day panel carries the words. */}
       {open.length ? (
-        <span aria-hidden className="flex flex-wrap gap-0.5 px-1 sm:hidden">
-          {open.slice(0, 4).map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
+        <span aria-hidden className="flex flex-wrap items-center gap-0.5 px-1 sm:hidden">
+          {visible.map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
+          {overflow > 0 ? <span className="text-[0.625rem] leading-none text-muted-foreground tabular-nums">+{overflow}</span> : null}
         </span>
       ) : null}
 
@@ -735,8 +729,8 @@ function DayItemRow({
       <div className="flex items-center gap-2">
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground")} title={item.title}>{item.title}</p>
-          {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
+          <p className={cn("text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
+          {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (
             item.live ? <Badge className="shrink-0" variant="outline">{item.paused ? "Paused" : "Studying"}</Badge>
@@ -747,9 +741,7 @@ function DayItemRow({
             ) : item.status === "skipped" ? (
               <Badge className="shrink-0" variant="outline">Skipped</Badge>
             ) : null
-          ) : item.kind === "mistakes" ? null : (
-            // No badge on the review row: its title already says what it is, and a "Review"
-            // badge beside a "Review" button read as two different controls.
+          ) : item.kind === "mistakes" || item.kind === "event" ? null : (
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
         <span className="flex shrink-0 items-center gap-0.5">

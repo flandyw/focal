@@ -165,13 +165,6 @@ export function mergeLearningWorkspace(local: LearningWorkspace, remote: Learnin
   }
 }
 
-export function localDate(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 export function materialiseTask(draft: TaskDraft, now = new Date()): StudyTask {
   const timestamp = now.toISOString()
   return { ...draft, id: crypto.randomUUID(), status: "planned", createdAt: timestamp, updatedAt: timestamp }
@@ -207,4 +200,3 @@ export function getGoalProgress(goal: StudyGoal, data: AppData, references: Asse
   const gap = current === null ? null : Math.max(0, goal.target - current)
   return { current, target: goal.target, progress: current === null ? 0 : Math.max(0, Math.min(100, current / goal.target * 100)), gap, label, evidence }
 }
-

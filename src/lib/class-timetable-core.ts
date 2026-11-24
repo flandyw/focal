@@ -1,3 +1,4 @@
+import { localDate } from "./local-date.js"
 import type { SchoolHoliday, Subject, TimetableConfig, TimetableDayLabel, TimetableEntry, TimetablePeriod } from "./types"
 
 // --- Types ---
@@ -183,13 +184,6 @@ function comparePeriodsByStart(a: TimetablePeriod, b: TimetablePeriod): number {
   return timeStringToMinutes(a.startTime) - timeStringToMinutes(b.startTime)
 }
 
-function toLocalDateStr(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
-}
-
 export function isTimetableBreakLabel(label: string): boolean {
   return TIMETABLE_BREAK_LABELS.has(label.trim().toLowerCase())
 }
@@ -264,7 +258,7 @@ export function getTimetablePeriodsForDate(
 }
 
 function isDateInHoliday(date: Date, holidays: SchoolHoliday[]): boolean {
-  const dateStr = toLocalDateStr(date)
+  const dateStr = localDate(date)
   return holidays.some((h) => dateStr >= h.startDate && dateStr <= h.endDate)
 }
 

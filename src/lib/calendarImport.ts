@@ -1,4 +1,6 @@
 // Pure (no React/Tauri) so desktop and web share one chatbot-import contract.
+import { localDate } from "./local-date.js"
+
 type ImportEventType = "sac" | "exam" | "assignment" | "event" | "homework" | "other" | "practice-sac"
 export interface ImportSubject { id: string; name: string; shortCode: string }
 export interface ImportProject { id: string; name: string }
@@ -248,14 +250,9 @@ export function parseTextEventResponse(content: string, subjects: ImportSubject[
   return { drafts: uniqueDrafts, rejectedCount: items.length - drafts.length }
 }
 
-/** Local YYYY-MM-DD for a Date. */
-function localDateValue(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-}
-
 /** Prompt the user pastes into any chatbot; the reply is read back by parseTextEventResponse. */
 export function buildChatbotImportPrompt(subjects: ImportSubject[], projects: ImportProject[], now = new Date()): string {
-  const today = localDateValue(now)
+  const today = localDate(now)
   const weekday = now.toLocaleDateString("en-AU", { weekday: "long" })
   const subjectLines = subjects.map((subject) => `- ${subject.id}: ${subject.name}`).join("\n") || "- (none)"
   const projectLines = projects.map((project) => `- ${project.id}: ${project.name}`).join("\n") || "- (none)"

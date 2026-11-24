@@ -36,7 +36,7 @@ import { hasPerformanceContext, type PerformanceContext } from "../lib/performan
 import { cn, count } from "../lib/utils"
 import type { VcaaStudyResources } from "../lib/vcaa-resources"
 import { pauseExamSession, resumeExamSession, skipExamReading, type ExamTimerSession } from "../lib/ongoing-timers"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 
 export type ExamTimerPreset = Pick<ExamTimerSession, "subject" | "provider" | "examYear" | "paper" | "marks"> & Partial<Pick<ExamTimerSession, "readingMinutes" | "writingMinutes">>
 

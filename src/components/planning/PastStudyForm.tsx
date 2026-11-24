@@ -72,9 +72,9 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
             <FieldLabel htmlFor={`${id}-minutes-${index}`}>Minutes studied</FieldLabel>
             <Input id={`${id}-minutes-${index}`} type="number" inputMode="numeric" min="1" max="1440" step="1" required value={row.minutes} onChange={(event) => setRows(rows.map((item, i) => i === index ? { ...item, minutes: event.target.value } : item))} />
           </Field>
-          {rows.length > 1 && <Button type="button" variant="link" className="h-auto justify-self-start p-0" onClick={() => setRows(rows.filter((_, i) => i !== index))}>Remove block {index + 1}</Button>}
+          {rows.length > 1 && <Button type="button" variant="link" className="h-auto justify-self-start p-0" onClick={() => { setRows(rows.filter((_, i) => i !== index)); setError("") }}>Remove block {index + 1}</Button>}
         </div>)}
-        <Button type="button" variant="link" className="h-auto justify-self-start p-0" disabled={rows.length >= 100} onClick={() => setRows([...rows, { start: "", minutes: "30" }])}>Took a break? Add another study block</Button>
+        <Button type="button" variant="link" className="h-auto justify-self-start p-0" disabled={rows.length >= 100} onClick={() => { setRows([...rows, { start: "", minutes: "30" }]); setError("") }}>Took a break? Add another study block</Button>
       </div>
       <Collapsible className="rounded-lg border p-3">
         <CollapsibleTrigger className="group/trigger flex w-full items-center justify-between text-left text-sm font-medium">Title and notes (optional)<ChevronDown className="size-4 transition-transform group-data-[panel-open]/trigger:rotate-180" /></CollapsibleTrigger>

@@ -1,6 +1,6 @@
 import { toast } from "sonner"
 import { downloadExamFile } from "./host"
-import { localDate } from "./learning-workspace"
+import { localDate } from "./local-date"
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "./exam-data"
 
 // ponytail: this `examtrack` prefix is load-bearing. Renaming it would orphan every

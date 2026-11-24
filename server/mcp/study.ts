@@ -4,7 +4,8 @@ import { currentSubjectWork, isCurrentSubject } from "../../src/lib/subject-comp
 import { z } from "zod"
 import { classPeriodsOn, subjectIdFor, subjectNameFor } from "../../src/lib/class-timetable.js"
 import { addTask, archiveTask, buildDayPlan, moveTask, sessionBlocks, setTaskStatus } from "../../src/lib/day-plan.js"
-import { getGoalProgress, localDate, type StudyGoal } from "../../src/lib/learning-workspace.js"
+import { getGoalProgress, type StudyGoal } from "../../src/lib/learning-workspace.js"
+import { localDate } from "../../src/lib/local-date.js"
 import {
   applyItemLinks, buildItemEvidence, isRecheckDue, itemGroup, mergeStoplightItems, setRatings,
 } from "../../src/lib/stoplight.js"

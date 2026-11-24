@@ -1,3 +1,4 @@
+import { localDate } from "./local-date.js"
 import { getMistakeSchedule, localDayDifference, type ExamAttempt, type Mistake, type QuestionResult } from "./exam-data.js"
 import { getAttemptPerformance, type ExamDifficultySettings } from "./exam-difficulty.js"
 import type { CurriculumArea } from "./learning-workspace"
@@ -780,20 +781,13 @@ function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 export function buildReviewForecast(mistakes: Mistake[], now = new Date(), days = 14): ReviewForecastDay[] {
   const start = startOfLocalDay(now)
   const result = Array.from({ length: days }, (_, index) => {
     // Calendar days from the month/day, so a daylight-saving 23- or 25-hour day stays one bucket.
     const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
     return {
-      date: formatLocalDate(date),
+      date: localDate(date),
       label: index === 0 ? "Today" : date.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
       due: 0,
     }

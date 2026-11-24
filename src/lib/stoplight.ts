@@ -4,8 +4,9 @@ import { buildMistakePatterns } from "./mistake-review.js"
 import { sameStudySubject } from "./studySubjects.js"
 import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data.js"
 import {
-  localDate, materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
+  materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
 } from "./learning-workspace.js"
+import { localDate } from "./local-date.js"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const RECHECK_DAYS = { green: 21, amber: 14 }

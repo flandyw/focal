@@ -46,14 +46,14 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
       setBusy(true)
       await onSave({ subjectId, title: title.trim() || `${subject.name} study`, notes: notes.trim() || undefined, blocks })
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Could not save. Your entries are still here; try again.")
+      setError(failure instanceof Error ? failure.message : "Couldn’t save just now. Your details are still here, so give it another try.")
     } finally {
       saving.current = false
       setBusy(false)
     }
   }}>
     <fieldset disabled={busy} className="grid min-w-0 gap-5">
-      {!subjects.length ? <p role="status" className="text-sm text-muted-foreground">Add a subject in Settings before logging study.</p> : null}
+      {!subjects.length ? <p role="status" className="text-sm text-muted-foreground">Add a subject in Settings first so you can log study.</p> : null}
       <Field>
         <FieldLabel htmlFor={`${id}-subject`}>Subject</FieldLabel>
         <NativeSelect autoFocus id={`${id}-subject`} className="w-full" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} required>
@@ -62,7 +62,7 @@ export function PastStudyForm({ subjects, onSave, onCancel, onStatusChange }: {
         </NativeSelect>
       </Field>
       <div className="grid gap-3">
-        <p className="text-sm text-muted-foreground">Enter actual study time, not breaks. Studied across midnight? The finish date is calculated for you.</p>
+        <p className="text-sm text-muted-foreground">Count just your actual study time (skip breaks). Studied past midnight? We’ll work out the finish date for you.</p>
         {rows.map((row, index) => <div key={index} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_8rem]">
           <Field>
             <FieldLabel htmlFor={`${id}-start-${index}`}>{rows.length > 1 ? `Block ${index + 1} started` : "Started"}</FieldLabel>

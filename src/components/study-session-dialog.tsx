@@ -90,17 +90,17 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
   }
 
   function patch(): StudySessionEdit {
-    if (!title.trim() || title.trim().length > 512) throw new Error("Enter a title of 1–512 characters.")
-    if (!blocks.length || blocks.length > 100) throw new Error("Enter 1–100 time blocks.")
+    if (!title.trim() || title.trim().length > 512) throw new Error("Add a title (up to 512 characters).")
+    if (!blocks.length || blocks.length > 100) throw new Error("Add between 1 and 100 time blocks.")
     const sorted = blocks.map((block) => {
       const start = new Date(block.start), end = new Date(block.end)
       if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start || end.getTime() - start.getTime() > 86_400_000) {
-        throw new Error("Each block must have a valid start and end, last up to 24 hours, and end after it starts.")
+        throw new Error("Each block needs a valid start and end, must end after it starts, and can be up to 24 hours long.")
       }
       return { start: start.toISOString(), end: end.toISOString(), subject: block.subject }
     }).toSorted((a, b) => Date.parse(a.start) - Date.parse(b.start))
-    if (sorted.some((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))) throw new Error("Time blocks must not overlap.")
-    if (sorted.some((block) => !block.subject) && sorted.some((block) => block.subject)) throw new Error("Give every block a subject, or none of them.")
+    if (sorted.some((block, index) => index > 0 && Date.parse(block.start) < Date.parse(sorted[index - 1].end))) throw new Error("Time blocks can’t overlap.")
+    if (sorted.some((block) => !block.subject) && sorted.some((block) => block.subject)) throw new Error("Give every block a subject, or leave them all blank.")
     const subjectIds = [...new Set(sorted.flatMap((block) => block.subject ? [block.subject] : []))]
     const subjectSwitches = subjectIds.length > 1
       ? sorted.reduce<SubjectSwitch[]>((list, block) => list.at(-1)?.subjectId === block.subject ? list : [...list, { at: block.start, subjectId: block.subject }], [])
@@ -122,9 +122,9 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
     setBusy(true)
     setError(null)
     try {
-      if (!creating && session.revision !== openedRevision) throw new Error("This session changed while you were editing. Close and reopen it before saving.")
-      if (isDeleted(session) || isRunning(session) || isPaused(session)) throw new Error("This session has changed. Close the editor and stop its timer before editing.")
-      if (action === "convert" && (session.completed || session.started_at !== null)) throw new Error("Only planned study can be converted to an event.")
+      if (!creating && session.revision !== openedRevision) throw new Error("This session was updated while you were editing. Close and reopen it before saving.")
+      if (isDeleted(session) || isRunning(session) || isPaused(session)) throw new Error("This session is active or changed. Close the editor and stop its timer before editing.")
+      if (action === "convert" && (session.completed || session.started_at !== null)) throw new Error("Only planned study sessions can be turned into calendar events.")
       if (action === "delete") await onRemove(session)
       else {
         const changes = patch()
@@ -157,7 +157,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
       toast({ save: creating ? "Study session planned" : "Study session updated", duplicate: "Study session duplicated", delete: "Study session deleted", convert: "Study session converted to event" }[action])
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save that change.")
+      setError(e instanceof Error ? e.message : "Couldn’t save that change.")
     } finally { busyRef.current = false; setBusy(false) }
   }
 
@@ -166,7 +166,7 @@ export function StudySessionDialog({ session, subjects, onClose, onEdit, onDupli
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{converting ? "Convert study to event" : creating ? "Plan study session" : "Edit study session"}</DialogTitle>
-          <DialogDescription>{converting ? "Save these details as calendar events and remove the planned study session. Each time block becomes a separate event." : creating ? "Schedule one or more study blocks with breaks. You can start the same plan here or in Folio." : "Change the details, reschedule study, or split it into blocks with breaks."}</DialogDescription>
+          <DialogDescription>{converting ? "Turn these details into calendar events and remove the planned study session. Each time block becomes its own event." : creating ? "Schedule one or more study blocks with breaks. You can start the same plan here or in Folio." : "Update the details, move your study to another time, or split it into blocks with breaks."}</DialogDescription>
         </DialogHeader>
         <fieldset disabled={busy} className="min-w-0">
           <FieldGroup>

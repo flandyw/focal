@@ -1,46 +1,31 @@
 # Focal MCP server
 
-Recurring mistakes: `get_mistake_patterns` returns ranked patterns and source card ids (optional
-`subject`, `limit`). `schedule_pattern_revision` previews follow-up tasks by default; pass
-`dryRun: false` to save, with optional `subject` and `maxPatterns` (default 3). Existing planned
-follow-ups are skipped. The `mistake_followup` prompt guides evidence-based insights, alternative
-cards and a follow-up preview, requiring confirmation before scheduling.
+Connect an MCP client (like Claude Code or Claude Desktop) to read and update a Focal account: exams, mistakes and reviews, SACs, calendar, study timer and sessions, skills, goals, tasks, timetable, settings, analytics, predictions, and VCAA/VTAC reference data. Tools are grouped in `server/mcp/records.ts`, `study.ts`, `insights.ts`, `app.ts`, `attachments.ts`, and `friends.ts`. A good way to start any conversation is with `get_overview`.
 
-Lets an MCP client (Claude Code, Claude Desktop, ...) read and change a Focal account: exams,
-mistakes and reviews, SACs, calendar, study timer and sessions, stoplight, goals, tasks, timetable,
-settings, analytics, predictions, and the VCAA/VTAC reference data. Tools are grouped in
-`server/mcp/records.ts`, `study.ts`, `insights.ts`, `app.ts`, `attachments.ts` and `friends.ts`. Start a conversation with `get_overview`.
+For recurring mistakes, `get_mistake_patterns` returns ranked patterns and their source card IDs (with optional `subject` and `limit`). `schedule_pattern_revision` previews follow-up tasks by default; pass `dryRun: false` to save them, with optional `subject` and `maxPatterns` (default 3); existing planned follow-ups are skipped. The `mistake_followup` prompt walks through evidence-based insights, alternative practice cards, and a follow-up preview, asking for confirmation before scheduling anything.
 
-It reuses the app's own logic from `src/lib` and writes through the same sync RPCs
-(`sync_apply_changes`, `study_session_mutate`), so edits show up in the web and desktop apps and
-every row passes the apps' own validators first. Reads and writes use `expected_seq` / `expected_revision`;
-a row changed in an app mid-write is re-read and the edit re-applied, never overwritten.
+The server reuses the app's own domain logic in `src/lib` and writes through the same sync RPCs (`sync_apply_changes`, `study_session_mutate`), so changes show up in the web and desktop apps and pass the exact same validators. Reads and writes carry `expected_seq` / `expected_revision`, so if a record changes in an app mid-write, the server re-reads and reapplies the edit instead of overwriting it.
 
 ## Configuration
 
-Multi-user. Each user creates personal access tokens in Settings > MCP access (`mcp_tokens`, migration 0026;
-only SHA-256 hashes are stored). A request's bearer token resolves to its owner, and the server acts as that
-user: with the service role it mints a magic-link token (no email is sent) and redeems it, so every RPC runs
-with the user's own JWT and RLS stays the authority (`server/mcp/store.ts`). Revoking a token stops new requests
-at once.
+The server supports multiple users. Each student creates personal access tokens in **Settings → Account** (`mcp_tokens`, migration 0026; only SHA-256 hashes are stored). A request's bearer token resolves to its owner, and the server acts as that student: using the service role, it mints a magic-link token (no email is sent) and redeems it, so every RPC runs with the user's own JWT and RLS stays in charge (`server/mcp/store.ts`). Revoking a token blocks new requests right away.
 
-| Variable | |
+| Variable | Notes |
 | --- | --- |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | same as the app |
-| `SUPABASE_SERVICE_ROLE_KEY` | server only: token lookup and minting user sessions. Keep it out of the frontend. |
-| `FOCAL_MCP_TOKEN` | stdio only: an access token; the process acts as its owner |
-| `TZ` | set to `Australia/Melbourne`: day plans, timetable cycles and "today" use the server's local time |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Same values used by the app. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only: used for token lookup and minting user sessions. Never expose in the frontend. |
+| `FOCAL_MCP_TOKEN` | Stdio only: a personal access token; the process acts as its owner. |
+| `TZ` | Set to `Australia/Melbourne` so day plans, timetable cycles, and "today" match Melbourne time. |
 
-## Run
+## Running the server
 
 ```sh
-bun run mcp        # stdio, requires FOCAL_MCP_TOKEN
-bun run mcp:http   # HTTP on 127.0.0.1:4174/mcp (HOST and PORT override)
-bun run start      # the built app; also serves /api/mcp
+bun run mcp        # stdio (needs FOCAL_MCP_TOKEN)
+bun run mcp:http   # HTTP on 127.0.0.1:4174/mcp (override with HOST and PORT)
+bun run start      # built app, which also serves /api/mcp
 ```
 
-Hosting: run it on a VPS, not on Vercel. The Vercel Node runtime transpiles files one by one, and
-`src/lib` uses extensionless imports that native Node ESM cannot resolve. Bun runs it as is.
+Run it on a VPS rather than Vercel. Vercel's Node runtime transpiles files one by one, and `src/lib` uses extensionless imports that native Node ESM can't resolve, whereas Bun runs it directly.
 
 ```ini
 # /etc/systemd/system/focal-mcp.service
@@ -52,119 +37,66 @@ ExecStart=/root/.bun/bin/bun server/mcp/http.ts
 Restart=always
 ```
 
-Put TLS in front, e.g. Caddy: `mcp.example.com { reverse_proxy 127.0.0.1:4174 }`. Anyone holding a token has full access to its account.
+Put TLS in front (for example Caddy: `mcp.example.com { reverse_proxy 127.0.0.1:4174 }`). Anyone with a token has full access to that account.
 
-## Connect
+## Connecting a client
 
 ```sh
 claude mcp add --transport http focal https://mcp.example.com/mcp --header "Authorization: Bearer <token>"
 ```
 
-Claude Desktop stdio is for the operator's own machine only. The stdio transport needs
-`SUPABASE_SERVICE_ROLE_KEY`, which belongs only on the server that runs the MCP service,
-never in an end user's MCP client config. End users should connect to the hosted HTTP service
-with the Authorization bearer header shown above.
+Claude Desktop stdio is only for your own machine as the server operator, since it requires `SUPABASE_SERVICE_ROLE_KEY`, which should never go into an end user's MCP client config. End users should connect to the hosted HTTP server with the `Authorization` bearer header above.
 
-For connectors that cannot send headers, `/mcp/<token>` is also supported. A token in the URL
-path is written to proxy and access logs; prefer the Authorization header, and configure the
-reverse proxy not to log request paths for `/mcp/` if the path form is used.
+For connectors that don't support custom headers, `/mcp/<token>` works too. Keep in mind that tokens in the URL path can land in proxy and access logs, so prefer the `Authorization` header (or configure your reverse proxy not to log `/mcp/` paths).
 
-The claude.ai web "custom connector" needs OAuth, which this does not implement (a static bearer token is not enough there).
+The claude.ai web custom connector requires OAuth, which this server doesn't implement (a static bearer token isn't enough there).
 
 ## Topics and the Exam 1 vs Exam 2 matrix
 
-`areaOfStudy` is free text (a student can have 80 different labels), so the matrix in `get_exam_analytics`
-(with `subject`) groups by a canonical `topic` instead. `mistake.topic` and `questionResult.topic` come from a
-per-subject list in `src/lib/topics.ts` (`TOPIC_CONFIGS`; Methods is defined, other subjects add an entry with
-their topics and keyword rules, and until then keep free-text topics and the old per-label grouping). Methods:
-Functions/domains/transformations; Inverse functions & intersections; Differentiation & applications;
-Integration & area; Probability (discrete, conditional, binomial); Continuous distributions, normal, sampling & CIs;
-Circular functions; Other. A card with no stored topic is filed by inference on the fly, so the matrix works
-before any backfill.
+Because `areaOfStudy` is free text (a student can easily end up with 80 slightly different labels), the matrix in `get_exam_analytics` (with `subject`) groups by a canonical `topic` instead. `mistake.topic` and `questionResult.topic` draw from a per-subject list in `src/lib/topics.ts` (`TOPIC_CONFIGS`; Methods is built in, and other subjects can add their own topic list and keyword rules, keeping free-text topics and per-label grouping until then). Methods covers: Functions/domains/transformations; Inverse functions & intersections; Differentiation & applications; Integration & area; Probability (discrete, conditional, binomial); Continuous distributions, normal, sampling & CIs; Circular functions; Other. Any card without a saved topic gets classified on the fly, so the matrix works even before a backfill.
 
-- `get_exam_analytics { subject, groupBy?, paper? }`: `paperWeakness` rows have an Exam 1 and an Exam 2 cell with
-  `mistakeCount`, `repeatMistakes`, `marksLost`, `cardsWithoutMarks`, `dominantCategory` and `lostByCategory`.
-  Rows built from marked questions (`basis: "results"`) add mastery and trend; otherwise `basis: "mistakes"`.
-  `weakPrerequisites` lists transitive prerequisite topics with diagnoses other than `secure`, `stable`, `no evidence` or `mistake-only evidence`, nearest first, on rows that are weak themselves; empty outside topic grouping or without a prerequisite map.
-  Diagnoses and their thresholds (`WEAKNESS_THRESHOLDS` in `performance-insights.ts`): `no evidence`,
-  `mistake-only evidence` (under 3 cards, or under 2 marks lost on each paper), `exam-1-only gap`,
-  `exam-2-only gap` (a paper alone loses 2+ marks, or both do and one loses 3x the rate per 100 paper marks),
-  `shared weakness`; marked-question rows keep `tech-free fragile`, `tech-active fragile`, `general weakness`,
-  `secure`, `stable`. `dataQuality` says what is missing (read `dataQuality.warnings` first).
-  `groupBy: "areaOfStudy"` gives the old one-row-per-label matrix. `paper` limits to Exam 1 or Exam 2.
-- `save_exam` checks `rawMax` against the paper (`src/lib/paper-types.ts`: Methods and Specialist Exam 1 = 40,
-  Exam 2 = 80, combined = 120 or 160). A mismatch still saves and comes back in `warnings`. `paperType`
-  (`exam1`/`exam2`/`combined`) is optional and stored; a combined paper counts in neither matrix column. With an
-  `id`, every omitted field is kept, so `{ id, questionResults }` replaces just the question results.
-- `list_mistakes` is compact by default (no `questionText`/`correction`/SVG), takes `fields`, `topic`
-  (`"none"` = no stored topic) and a `cursor` (`nextCursor` from the previous page). Pass `compact: false` for full text.
-- `update_mistakes { updates: [{ id, topic?, areaOfStudy?, category? }], dryRun?, revert? }` edits many cards.
-  Always preview with `dryRun: true` first. Applying stores each card's previous values in `Mistake.previous`;
-  `revert: true` with the ids restores them (one level).
-- `backfill_topics { subject?, dryRun? }` is **dry-run by default**. It maps cards without a topic by keyword
-  (`areaOfStudy` first, then the start of the question text), lists the cards it could not place in `unmatched`
-  (they get `Other`), flags tied guesses as `ambiguous`, never overrides a topic already set, and is safe to
-  re-run (cards left in `Other` are retried, so improving the rules and re-running picks them up). It does not
-  touch `areaOfStudy`. Writes and reverts are logged as one JSON line each on stderr (journald under systemd).
+- `get_exam_analytics { subject, groupBy?, paper? }`: `paperWeakness` rows include Exam 1 and Exam 2 cells with `mistakeCount`, `repeatMistakes`, `marksLost`, `cardsWithoutMarks`, `dominantCategory`, and `lostByCategory`. Rows built from marked questions (`basis: "results"`) add mastery and trend; otherwise `basis: "mistakes"`. `weakPrerequisites` lists transitive prerequisite topics whose diagnosis isn't `secure`, `stable`, `no evidence`, or `mistake-only evidence` (nearest first) on weak rows (empty outside topic grouping or without a prerequisite map). Diagnoses and thresholds live in `WEAKNESS_THRESHOLDS` (`performance-insights.ts`): `no evidence`, `mistake-only evidence` (under 3 cards, or under 2 marks lost on each paper), `exam-1-only gap`, `exam-2-only gap` (one paper alone loses 2+ marks, or both do and one loses 3× the rate per 100 paper marks), `shared weakness`; marked-question rows also keep `tech-free fragile`, `tech-active fragile`, `general weakness`, `secure`, and `stable`. Check `dataQuality.warnings` first to see what's missing. Pass `groupBy: "areaOfStudy"` for the older one-row-per-label matrix, or `paper` to filter to Exam 1 or Exam 2.
+- `save_exam` checks `rawMax` against the paper (`src/lib/paper-types.ts`: Methods and Specialist Exam 1 = 40, Exam 2 = 80, combined = 120 or 160). Mismatches still save and come back in `warnings`. `paperType` (`exam1`/`exam2`/`combined`) is optional and stored; combined papers don't count in either matrix column. When you pass an `id`, any omitted field stays untouched, so `{ id, questionResults }` updates only the question breakdown.
+- `list_mistakes` is compact by default (omitting `questionText`, `correction`, and SVG), and accepts `fields`, `topic` (`"none"` finds cards without a saved topic), and `cursor` (`nextCursor` from the previous page). Pass `compact: false` for the full text.
+- `update_mistakes { updates: [{ id, topic?, areaOfStudy?, category? }], dryRun?, revert? }` updates cards in bulk. Preview with `dryRun: true` first. Applying saves each card's old values in `Mistake.previous`, and `revert: true` with those IDs rolls them back one level.
+- `backfill_topics { subject?, dryRun? }` runs as a **dry run by default**. It classifies cards without a topic by keyword (`areaOfStudy` first, then the start of the question text), puts anything it couldn't place in `unmatched` (filed under `Other`), flags ties as `ambiguous`, never overwrites an existing topic, and is safe to re-run (cards in `Other` are retried after you improve the rules). It never changes `areaOfStudy`. Writes and reverts log one JSON line each to stderr (`journald` under systemd).
 
-Verify changes with `bun run check`, `bun run build`, and `bun run build:desktop`.
+Check changes with `bun run check`, `bun run build`, and `bun run build:desktop`.
 
-## Coverage
+## What the tools cover
 
-`get_capabilities` lists the registered tools and their access hints. The shared registry now has
-105 tools, used by HTTP MCP, stdio MCP and in-app AI chat. No new database migration is needed.
+`get_capabilities` lists all registered tools and their access hints. The shared registry currently has 105 tools used across HTTP MCP, stdio MCP, and in-app AI chat, with no extra database migration required.
 
-| App area | Access |
+| App area | What's supported |
 | --- | --- |
 | Today, subjects, progress | Overview, full subject workspace, day plan, weekly review, analytics |
-| Practice papers and mistakes | Existing logging, marking, reviews, insights and alternative-card tools; full records through advanced row access |
-| School assessments and calendar | Existing SAC/event CRUD, class timetable import/read/clear |
-| Subject lifecycle | Read completion years in settings; finish or resume with `set_subject_completion` |
-| Skills, tasks and goals | Existing creation/rating/planning/archive tools; `update_stoplight_item`, `edit_task` (including restore) |
-| Exam progression | Read the full plan, import additions, or replace/reorder/remove papers |
-| Predictions and ATAR | Existing prediction/scaling/estimate tools plus editing saved scenarios |
-| Study sessions and timers | Full canonical session reads, planning/logging/editing/deletion, focus and assessment timers, revision-checked metadata edits, atomic merges |
-| Mistake images | Private signed URLs, base64 uploads with the app's image limits, removal from cards |
-| Worksheets | LaTeX text or compiled PDF as base64 bytes |
-| Friends | Profile/privacy, requests, blocks, nicknames, shared activity/countdowns, cheers, groups and shared study sessions/invitations |
-| Review settings | Spacing, practice days/time/target, snooze, effects, sound and finish |
+| Practice papers and mistakes | Logging, marking, reviews, insights, and alternative-card tools; full records via advanced row access |
+| School assessments and calendar | SAC and event CRUD, class timetable import, read, and clear |
+| Subject lifecycle | Read completion years in settings; finish or resume a subject with `set_subject_completion` |
+| Skills, tasks, and goals | Creating, rating, planning, and archiving tools; `update_stoplight_item`, `edit_task` (including restore) |
+| Exam progression | Read the full plan, import additions, or replace, reorder, and remove papers |
+| Predictions and ATAR | Prediction, scaling, and estimate tools plus editing saved scenarios |
+| Study sessions and timers | Full canonical session reads, planning, logging, editing, deletion, focus and assessment timers, revision-checked metadata edits, and atomic merges |
+| Mistake images | Private signed URLs, base64 uploads following the app's image limits, and removing attachments |
+| Worksheets | LaTeX source or compiled PDF as base64 bytes |
+| Friends | Profile and privacy, requests, blocks, nicknames, shared activity and countdowns, cheers, groups, and shared study sessions/invitations |
+| Review settings | Spacing, practice days/time/target, snooze, effects, sound, and finish |
 | Every synced app row | `list_app_records` and `edit_app_record`, including historical and archived records |
 
 ### Advanced record access
 
-Prefer the named tools for routine work. `export_app_data` returns the complete projected AppData
-backup and canonical sessions; `list_app_records` returns raw app rows with their sequence numbers.
-To edit a field without a convenience tool, copy its row payload, update its values and timestamps,
-and call `edit_app_record` with its entity, rowId, expectedSeq and JSON payload. It previews by default.
-Inspect that preview, then pass `dryRun: false` to apply. Use expectedSeq 0 for a new row. A put
-must round-trip through the app's canonical row validators; unknown settings and malformed payloads
-are rejected. A concurrent edit rejects the write instead of overwriting it.
+Stick to the named tools for everyday tasks. `export_app_data` returns a full projected `AppData` backup plus canonical sessions, and `list_app_records` returns raw app rows with their sequence numbers. If you need to edit a field that doesn't have a dedicated tool, copy its row payload, update the values and timestamps, and call `edit_app_record` with its `entity`, `rowId`, `expectedSeq`, and JSON payload. It previews by default: check the preview, then pass `dryRun: false` to apply (use `expectedSeq: 0` for a new row). Writes must pass the app's canonical row validators; unknown settings and malformed payloads are rejected, and concurrent edits are rejected instead of overwritten.
 
-This advanced tool writes exactly one row at a time. A collection-valued setting (for example
-`learning`, `sacRecords` or `atarEstimates`) replaces that collection. Multi-row workflows are not
-atomic; use the named tools for cascading exam deletion and transactional session merging.
+This tool writes one row at a time. Collection-valued settings (like `learning`, `sacRecords`, or `atarEstimates`) replace the whole collection. Multi-row workflows aren't atomic, so use the named tools for cascading exam deletions and transactional session merges.
 
 ### Files and external effects
 
-Attachment download URLs are private bearer URLs valid for an hour. Removing an attachment unlinks
-it from the card but retains its stored bytes, avoiding file loss for concurrent readers. An upload
-whose subsequent sync write fails can leave an unlinked stored object; it is deliberately retained
-because a write may have reached the server even if its response was lost.
+Attachment download URLs are private bearer links valid for one hour. Removing an attachment unlinks it from the card while leaving the stored bytes in place so concurrent readers don't lose a file. If an upload succeeds but the follow-up sync write fails, the stored object stays behind intentionally in case the write actually reached the server before the response dropped.
 
-`export_mistake_worksheet` defaults to LaTeX. PDF compilation sends the selected question text to
-texlive.net, just like the app's export, and returns base64 PDF bytes for the MCP client to save.
-Friend requests, cheers and shared-session invitations should be sent only at the user's request.
-All Friends tools call the same user-scoped RPCs as the UI; database sharing and membership rules
-remain authoritative.
+`export_mistake_worksheet` returns LaTeX by default. Requesting a PDF sends the selected question text to `texlive.net` (just like the app's export) and returns base64 PDF bytes for the MCP client to save. Only send friend requests, cheers, or shared-session invites when the student explicitly asks. All Friends tools call the same user-scoped RPCs as the UI, so database sharing and membership rules stay authoritative.
 
-### Device boundary
+### What stays on the device
 
-This covers synced account records, not literally every device operation. The hosted server cannot
-read a device's IndexedDB chat history, local appearance/layout/AI preferences, unsynced guest data,
-or historical desktop-only SQLite sessions. It cannot open native dialogs, grant notification
-permissions, navigate an open app, install updates or drive a desktop ChatGPT login. Account
-sign-in and MCP-token creation/revocation stay in the app. Full device control would require a
-separate authenticated device bridge; these tools do not pretend to provide one.
+The MCP server covers synced account data, not local device operations. It can't read a device's IndexedDB chat history, local appearance/layout/AI preferences, unsynced guest data, or historical desktop-only SQLite sessions. It also can't open native dialogs, grant notification permissions, navigate an open app, install updates, or drive a desktop ChatGPT login. Signing in and creating or revoking MCP tokens stay in the app. Full device control would need a separate authenticated device bridge, which these tools don't try to fake.
 
-Validation: `bun run check`, `bun run test`, `bun run build`, `bun run build:desktop`. Live Supabase,
-storage, Friends and third-party PDF requests require an authenticated deployment to verify end to end.
+Verify changes with `bun run check`, `bun run test`, `bun run build`, and `bun run build:desktop`. Live Supabase, storage, Friends, and third-party PDF calls need an authenticated deployment to test end to end.

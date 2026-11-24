@@ -143,7 +143,7 @@ export function ExamPicker({
           <DialogTitle>Track VCE exams I'm doing</DialogTitle>
           <DialogDescription>
             {trackedCount === 0
-              ? "Pick the exams you're enrolled in — they'll appear on your Exams page with a countdown."
+              ? "Pick the exams you’re enrolled in and they’ll show up on your Exams page with a countdown."
               : `${trackedCount} exam${trackedCount === 1 ? "" : "s"} tracked. Toggle to update.`}
           </DialogDescription>
         </DialogHeader>

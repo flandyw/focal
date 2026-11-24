@@ -1,55 +1,31 @@
 # Focal macOS widgets
 
-Five native SwiftUI widgets for macOS 14+: **Up Next** and **ATAR** (small, medium, large),
-**Exam Countdown**, **Study Today**, and **Review Queue** (small, medium).
-Click a widget to open the corresponding Focal screen.
+Five native SwiftUI widgets for macOS 14+: **Up Next** and **ATAR** (small, medium, large), plus **Exam Countdown**, **Study Today**, and **Review Queue** (small, medium). Clicking any widget jumps straight to that screen in Focal.
 
-Focal publishes a small snapshot from its existing Supabase-synced account data:
-classes and calendar events, tracked exams and SACs, actual study minutes with
-overlapping sessions merged, daily goals, due spaced-repetition cards, and an ATAR projection recomputed live
-(with the active ATAR goal as its target). The **Desktop widget** card on the ATAR page
-previews exactly what was sent and chooses the source (newest saved scenario, live Focal
-estimate, or a pinned scenario), which parts to show, the target, and a forced refresh.
-Those choices are stored on this Mac only. Clicking the ATAR widget opens that card.
-The extension never receives a Supabase token or database credentials.
-Signing out clears the snapshot. Gallery previews use sample data only.
+Focal writes a small snapshot from your synced account data: classes and calendar events, tracked exams and SACs, actual study minutes (with overlapping sessions merged), daily targets, due mistake cards, and a live ATAR estimate (paired with your active ATAR goal). On the ATAR page, the **Desktop widget** card shows exactly what was sent and lets you pick the source (latest saved scenario, live Focal estimate, or a pinned scenario), choose what's displayed, set the target, or trigger a refresh. Those preferences stay on this Mac only, and clicking the ATAR widget opens that card. The widget extension never sees Supabase tokens or credentials, signing out clears the snapshot, and gallery previews only use sample data.
 
-While Focal is open and synced, it publishes changes after a short debounce and
-refreshes study minutes every minute. WidgetKit controls when those changes render.
-While Focal is closed, widgets use cached data and schedule event transitions,
-review due dates, and midnight changes. They do not independently sync Supabase;
-open Focal to fetch fresh data. Old snapshots show an update reminder.
+While Focal is open and synced, it updates the snapshot shortly after changes and refreshes study minutes every minute (WidgetKit decides exactly when to redraw). When Focal is closed, widgets read the cached snapshot and still handle upcoming event transitions, review due dates, and midnight rollovers. They don't sync with Supabase on their own, so open Focal to pull fresh data. Stale snapshots display a gentle reminder to open the app.
 
 ## Building and installing
 
-`bun run tauri build` compiles and packages both the WidgetKit extension and a
-small Swift publisher during macOS bundling, including both existing macOS CI jobs.
-Architecture and version match the app. No paid developer account, provisioning
-profile, new dependency, or CI secret is required. Windows and Linux are unaffected.
+`bun run tauri build` compiles and bundles both the WidgetKit extension and the small Swift publisher during macOS builds (including both macOS CI jobs). Architecture and version match the main app, and you don't need a paid Apple developer account, provisioning profile, extra dependencies, or CI secrets. Windows and Linux builds are untouched.
 
-To compile the native components independently on a Mac with Xcode installed:
+To compile the native widget pieces on their own on a Mac with Xcode installed:
 
 ```sh
 bun scripts/build-macos-widget.ts
 ```
 
-Outputs in `src-tauri/target/widget/`:
+Outputs land in `src-tauri/target/widget/`:
 
-- `FocalWidget.appex`, packaged into `Focal.app/Contents/PlugIns/`.
-- `focal-widget-publisher`, packaged into `Focal.app/Contents/MacOS/`.
+- `FocalWidget.appex` (bundled into `Focal.app/Contents/PlugIns/`)
+- `focal-widget-publisher` (bundled into `Focal.app/Contents/MacOS/`)
 
-The publisher atomically writes a private (0600) JSON file at
-`~/Library/Application Support/com.andy.focal/widgets.json` and tells WidgetKit
-to reload. The sandboxed extension has a read-only exception for that exact file.
-This supports the existing ad-hoc signing setup; migrate the file to an App Group
-when distributing with a team identity. Neither executable stores account secrets.
-Ad-hoc signatures provide no Developer ID trust or notarization.
+The publisher atomically writes a private (`0600`) JSON file at `~/Library/Application Support/com.andy.focal/widgets.json` and asks WidgetKit to reload. The sandboxed extension has a read-only exception for that exact file so it works with ad-hoc signing (switch to an App Group if you ever distribute with a team signing identity). Neither binary stores account secrets; ad-hoc signatures don't provide Developer ID trust or notarisation.
 
-Install the app into Applications, open it and let the account sync, then choose
-**Edit Widgets** from the desktop and search **Focal**. The old preview widget kind
-is preserved and becomes Up Next. Add the other widgets from the gallery.
+Copy Focal into Applications, open it, and let your account sync. Then open **Edit Widgets** on your Mac desktop and search for **Focal**. The older preview widget kind is preserved and becomes **Up Next**, and you can add the others from the gallery.
 
-If discovery fails, inspect registration and signing:
+If the widgets don't show up, check registration and code signing:
 
 ```sh
 pluginkit -m -A -D -v -i com.andy.focal.widget
@@ -57,5 +33,4 @@ codesign --verify --deep --strict --verbose=2 /Applications/Focal.app
 codesign -d --entitlements :- /Applications/Focal.app/Contents/PlugIns/FocalWidget.appex
 ```
 
-Rendering and clicking the installed widgets are separate checks from compilation.
-Intel execution and CI download/update behavior require verification on those installs.
+Double-check widget rendering and clicks on a real install separately from compilation, and test Intel execution and CI updates on matching hardware.

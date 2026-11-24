@@ -1,37 +1,37 @@
 # Desktop scrolling
 
-The desktop entry marks `html[data-desktop]`. Its document, body and app root are height-bounded and cannot scroll; the flex shell passes the available height to `#main-content`. Sidebar content keeps its existing independent overflow. Shared page headers and Calendar's custom header stick inside the main pane. Chat instead passes the available height through to its existing message scroller, keeping its header and composer outside scrolling.
+The desktop entry adds `html[data-desktop]` so the document, body, and app root stay fixed to the window height and don't scroll on their own. Instead, the flex shell hands the available height to `#main-content`. The sidebar keeps its own independent scroll area, shared page headers and Calendar's header stick cleanly inside the main pane, and Chat passes the height straight through to its message list so the header and composer stay pinned.
 
-All desktop descendants (including portaled dialogs, sheets, popovers, menus, command results, textareas and horizontal tables) use `overscroll-behavior: none`. Unlike `contain`, this suppresses local elasticity as well as scroll chaining. No wheel/touch/key events are cancelled, so momentum, native keyboard navigation, focus scrolling, anchors and `scrollIntoView` still use the browser's scrolling machinery. Route restoration and active mobile-tab taps target the main pane on desktop; browser and embedded navigation retain window scrolling.
+Every descendant on desktop (including portaled dialogs, sheets, popovers, menus, command results, textareas, and wide tables) uses `overscroll-behavior: none`. Unlike `contain`, this stops both local rubber-band bounce and scroll chaining. We don't cancel wheel, touch, or keyboard events, so trackpad momentum, keyboard navigation, focus scrolling, anchors, and `scrollIntoView` keep working natively. Route scroll restoration and tapping the active mobile tab target `#main-content` on desktop, while browser and embedded views keep ordinary window scrolling.
 
-No native override or dependency is added: modern WKWebView supports CSS overscroll control, and the root document has no scroll range. Tauri's window `preventOverflow` setting controls window size, not scroll elasticity. Older WebKit without CSS overscroll support requires separate macOS hardware validation before claiming bounce suppression. See [WebKit's Safari 16 release notes](https://webkit.org/blog/13152/webkit-features-in-safari-16-0/) for overscroll support.
+This needs no native overrides or extra packages: modern WKWebView supports CSS overscroll control and the root document has no scroll range. Tauri's `preventOverflow` window setting only affects window sizing, not scroll bounce. Older WebKit versions without CSS overscroll support would need testing on macOS hardware before assuming bounce is gone (see [WebKit's Safari 16 release notes](https://webkit.org/blog/13152/webkit-features-in-safari-16-0/)).
 
-## Source audit
+## Scroll regions by page
 
-| Pages | Scroll owner / nested regions |
+| Pages | Scroll owner and nested regions |
 | --- | --- |
-| Today, Subjects | Main pane; shared sticky page header |
-| Calendar | Main pane; custom sticky month header; bounded split day panel remains independently scrollable |
-| Timetable | Main pane; horizontal timetable overflow remains available |
-| Practice, Papers | Main pane; tables, paper details and editors retain their bounded overflow |
-| Mistakes | Main pane; review history, import previews, bulk editors and dialogs retain independent overflow |
-| Study timer | Main pane; workspace and marking dialogs retain independent overflow |
-| Progress | Main pane; analytics tables/charts retain horizontal overflow |
-| ATAR, Benchmarks (VCAA data / predictor) | Main pane; shared sticky headers and existing tables |
-| Friends | Main pane; member pickers and detail sheets retain independent overflow |
+| Today, Subjects | Main pane with shared sticky page header |
+| Calendar | Main pane with sticky month header; split day panel scrolls on its own |
+| Timetable | Main pane; wide timetable keeps horizontal scroll |
+| Practice, Papers | Main pane; tables, paper details, and editors keep their own scroll areas |
+| Mistakes | Main pane; review history, import previews, bulk editors, and dialogs scroll independently |
+| Study timer | Main pane; workspace and marking dialogs scroll independently |
+| Progress | Main pane; analytics tables and charts keep horizontal scroll |
+| ATAR, Benchmarks (VCAA data / predictor) | Main pane with sticky headers and tables |
+| Friends | Main pane; member pickers and detail sheets scroll independently |
 | Chat | Message list and chat-history list; no outer main-pane scrollbar |
-| Settings | Main pane; previews and dialogs retain their existing overflow |
-| Onboarding | Existing height-bounded dialog; root stays locked underneath |
+| Settings | Main pane; previews and dialogs keep their own scroll areas |
+| Onboarding | Height-bounded dialog; root stays locked behind it |
 
-## Verify on macOS
+## Checking on macOS
 
-Run `bun run tauri dev` on a Mac. Test at the minimum window size and maximized, in light and dark themes.
+Run `bun run tauri dev` on a Mac and test at both minimum window size and maximised, in light and dark themes:
 
-1. Visit every row above with enough records to overflow. Fling vertically and horizontally at both edges. The document/background must never move or reveal blank space. Sidebar and page header stay visible; content scrolls with trackpad momentum.
-2. Overflow the sidebar and a modal/list/popover. Scroll to each boundary and keep scrolling: neither that pane nor its parent should bounce or chain. Check wide tables and Calendar's split day panel too.
-3. In Chat, overflow history and messages independently; the composer and conversation header must stay visible and there must be no second outer scrollbar.
-4. Focus the main region using the skip link, then test arrows, Space, Page Up/Down, Home/End. Tab into fields near the bottom of dialogs and use in-page links: focused targets should remain reachable. Confirm returning to a page restores its main-pane position.
-5. Reopen onboarding from Settings and complete it in a short window. All actions must remain reachable.
-6. Run `bun run dev` to check ordinary browser scrolling, mobile tabs and the embedded exam view still behave as before.
+1. Open each page above with enough items to scroll. Fling vertically and horizontally past both edges. The window background should stay put with no blank rubber-band gap, while the sidebar and page header stay visible and content scrolls smoothly.
+2. Scroll the sidebar and an open modal, list, or popover to its edges and keep scrolling; neither the inner pane nor the page behind it should bounce or chain. Check wide tables and Calendar's split day panel too.
+3. In Chat, scroll history and messages independently. The composer and conversation header should stay fixed with no second outer scrollbar.
+4. Jump to the main region with the skip link, then try arrow keys, Space, Page Up/Down, and Home/End. Tab down to fields near the bottom of dialogs and follow in-page links to confirm focused elements stay visible. Switch pages and come back to confirm scroll position is restored.
+5. Reopen onboarding from Settings in a short window and make sure every button stays reachable.
+6. Run `bun run dev` to confirm normal browser scrolling, mobile tabs, and the embedded exam view still feel right.
 
-Hardware checks above are manual; Linux checks/builds do not validate WKWebView or physical trackpad behavior.
+These checks have to be done manually on a Mac, since Linux builds can't verify WKWebView or real trackpad scrolling.

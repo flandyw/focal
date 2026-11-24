@@ -52,7 +52,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
 
   return (
     <WorkspacePage>
-      <PageHeader icon={BookOpen} title={subject === "all" ? "Subjects" : subject} description="Marks, skills and reviews for your next study session.">
+      <PageHeader icon={BookOpen} title={subject === "all" ? "Subjects" : subject} description="Your marks, skill ratings, and due reviews in one place.">
         <Button variant="outline" onClick={() => onNavigate("sacs")}><GraduationCap data-icon="inline-start" />Assessments</Button>
         <Button variant="outline" onClick={() => onNavigate("goals")}><Target data-icon="inline-start" />Goals</Button>
         <Button onClick={() => onNavigate("exams")}><FileText data-icon="inline-start" />Practice</Button>
@@ -83,7 +83,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
                 <Area type="monotone" dataKey="score" stroke="var(--color-score)" strokeWidth={2} fill="var(--color-score)" fillOpacity={0.08} dot={{ r: 3, fill: "var(--color-score)" }} activeDot={{ r: 5 }} animationDuration={500} />
               </AreaChart>
             </ChartContainer>
-          ) : <EmptyState icon={ChartLine} title="Not enough papers to chart" description="Mark two papers and the trend appears here." action={<Button size="sm" onClick={() => onNavigate("exams")}>Log a paper<ArrowRight data-icon="inline-end" /></Button>} />}
+          ) : <EmptyState icon={ChartLine} title="Not enough papers to chart yet" description="Log two marked papers and your score trend will show up here." action={<Button size="sm" onClick={() => onNavigate("exams")}>Log a paper<ArrowRight data-icon="inline-end" /></Button>} />}
         </Panel>
 
         <Panel flush icon={FileText} title="Recent attempts" action={<Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All<ArrowRight data-icon="inline-end" /></Button>}>
@@ -98,7 +98,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
                 <span className="w-10 shrink-0 text-right font-semibold tabular-nums">{percent(attempt)}%</span>
               </button>
             </li>
-          ))}</ul> : <EmptyState icon={FileText} title="No attempts yet" description="Your latest papers and marks show here." />}
+          ))}</ul> : <EmptyState icon={FileText} title="No attempts yet" description="Your recent papers and marks will show up here." />}
         </Panel>
       </div>
 
@@ -125,7 +125,7 @@ export function SubjectOverview({ subject, attempts, learning, now, dueMistakes,
               </li>
             ))}
           </ul>
-        ) : <EmptyState icon={ListChecks} title="No skill checklist yet" description="Add a skill or import a checklist, then rate each item red, amber or green." action={<Button size="sm" onClick={() => onOpenSkills(subject)}>Open Skills<ArrowRight data-icon="inline-end" /></Button>} />}
+        ) : <EmptyState icon={ListChecks} title="No skill checklist yet" description="Add a skill or import a checklist, then rate each one red, amber, or green." action={<Button size="sm" onClick={() => onOpenSkills(subject)}>Open Skills<ArrowRight data-icon="inline-end" /></Button>} />}
       </Panel>
     </WorkspacePage>
   )

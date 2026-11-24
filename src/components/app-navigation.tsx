@@ -143,7 +143,7 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Discard this session?</AlertDialogTitle>
-              <AlertDialogDescription>Its recorded study time will be removed on every device. Choose Finish instead to keep it.</AlertDialogDescription>
+              <AlertDialogDescription>This removes the session’s recorded time across all your devices. Pick Finish instead if you want to keep it.</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Keep session</AlertDialogCancel>
@@ -159,13 +159,13 @@ function SharedSessions({ sessions, onControl }: { sessions: SessionSync["sessio
 const SYNC_LABELS: Record<SyncStatus, string> = {
   synced: "Synced with your account",
   syncing: "Syncing…",
-  pending: "Changes queued to sync",
-  error: "Sync failed. Retry from the account menu",
+  pending: "Waiting to sync",
+  error: "Sync ran into a problem. Retry from the account menu",
   restoring: "Restoring your account…",
-  reconnecting: "Reconnecting. Changes stay on this device",
-  "sign-in-required": "Session ended. Sign in again to sync",
-  "signed-out": "Not signed in. Stored on this device",
-  unconfigured: "Cloud sync is not configured. Stored on this device",
+  reconnecting: "Reconnecting. Your changes are safe on this device",
+  "sign-in-required": "Your session expired. Sign in again to keep syncing",
+  "signed-out": "Not signed in (saved on this device)",
+  unconfigured: "Cloud sync isn’t set up (saved on this device)",
 }
 
 function SyncIndicator({ status }: { status: SyncStatus }) {

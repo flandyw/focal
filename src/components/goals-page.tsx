@@ -81,7 +81,7 @@ function GoalEditSheet({ goal, data, subjects, scopedSubject, onClose, onSave }:
       <SheetContent resizable className="w-full">
         <SheetHeader>
           <SheetTitle>Edit goal</SheetTitle>
-          <SheetDescription>Update the score target or deadline while keeping its existing progress history.</SheetDescription>
+          <SheetDescription>Adjust your target or deadline while keeping your progress history intact.</SheetDescription>
         </SheetHeader>
         <form id="edit-goal-form" className="grid gap-5 px-4 pb-4" onSubmit={submit}>
           <Field>
@@ -176,14 +176,14 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
 
   return (
     <WorkspacePage>
-      <PageHeader icon={Target} title="Score goals" description="Targets with a deadline, measured against what you have logged." />
+      <PageHeader icon={Target} title="Score goals" description="Set targets with a deadline and track them against what you’ve logged." />
       {progress.length ? <StatGrid>
         <StatTile icon={Flag} label="Active goals" value={progress.length} hint={archivedGoals.length ? `${archivedGoals.length} archived` : "Each tracks one measure"} />
         <StatTile icon={CircleCheck} tone="success" label="Reached" value={`${reached} / ${progress.length}`} hint={reached === progress.length ? "All targets met" : `${progress.length - reached} still open`} />
         <StatTile icon={Gauge} label="Average progress" value={`${Math.round(progress.reduce((sum, { progress: item }) => sum + item.progress, 0) / progress.length)}%`} hint="Towards each target" />
         <StatTile icon={CalendarClock} tone={nextDeadline != null && nextDeadline <= 14 ? "warning" : "default"} label="Next deadline" value={nextDeadline == null ? "—" : `${nextDeadline}d`} hint={nextDeadline == null ? "No open deadlines" : "Until the closest open goal"} />
       </StatGrid> : null}
-      <Panel icon={Plus} title="Set a goal" description="Predictions are estimates. Goals show direction and evidence, not guaranteed outcomes.">
+      <Panel icon={Plus} title="Set a goal" description="Predictions are estimates, not guarantees. Use goals to see where you’re headed and how much ground is left.">
         <form className="grid gap-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end" onSubmit={(event) => { event.preventDefault(); addGoal() }}>
           <Field className="xl:col-span-2"><FieldLabel htmlFor="goal-kind">Measure</FieldLabel><Select value={kind} onValueChange={(value) => { const next = (value ?? "exam-percentage") as StudyGoalKind; setKind(next); setTarget(next === "study-score" ? 40 : next === "atar" ? 90 : 80); setError(null) }}><SelectTrigger id="goal-kind" className="w-full"><SelectValue>{kindLabel(kind)}</SelectValue></SelectTrigger><SelectContent><SelectItem value="exam-percentage">Exam average</SelectItem><SelectItem value="study-score">Raw study score</SelectItem>{!scopedSubject ? <SelectItem value="atar">ATAR</SelectItem> : null}</SelectContent></Select></Field>
           {kind !== "atar" ? <Field className="xl:col-span-4" data-invalid={error?.field === "subject" || undefined}>
@@ -231,7 +231,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
             </div>
           </CardContent>
         </Card>
-      })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see your current baseline and the gap to close.</EmptyDescription></EmptyHeader></Empty>}
+      })}</div> : <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><Flag /></EmptyMedia><EmptyTitle>No score goals yet</EmptyTitle><EmptyDescription>Add a target above to see where you stand now and how far you’ve got to go.</EmptyDescription></EmptyHeader></Empty>}
       {archivedGoals.length ? <ArchivedItems label="Archived goals" count={archivedGoals.length}>{archivedGoals.map((goal) => <div key={goal.id} className="flex items-center justify-between gap-3 px-4 py-2"><p className="min-w-0 truncate text-sm">{goal.subject ? `${goal.subject} · ` : ""}{kindLabel(goal.kind)} · Target {goal.target} by {formatDeadline(goal.deadline)}</p><Button size="sm" variant="ghost" aria-label={`Restore ${goalName(goal)}`} onClick={() => restoreGoal(goal.id)}>Restore</Button></div>)}</ArchivedItems> : null}
       {editingGoal ? <GoalEditSheet key={editingGoal.id} goal={editingGoal} data={data} subjects={subjects} scopedSubject={scopedSubject} onClose={() => setEditingGoal(null)} onSave={saveEditedGoal} /> : null}
     </WorkspacePage>

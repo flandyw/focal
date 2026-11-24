@@ -162,14 +162,14 @@ export function StudyScorePredictor({
 
   return (
     <div className="grid gap-8">
-      <PageHeader icon={TrendingUp} title="Study score" description="A predicted raw and scaled score from your practice papers and SAC results." />
+      <PageHeader icon={TrendingUp} title="Study score" description="An estimated raw and scaled score based on your practice papers and SACs." />
 
       {subjects.length === 0 ? (
         <Empty className="min-h-80 border">
           <EmptyHeader>
             <EmptyMedia variant="icon"><Calculator /></EmptyMedia>
             <EmptyTitle>Log a practice exam first</EmptyTitle>
-            <EmptyDescription>The study-score predictor needs at least one recorded result. You can still enter raw study scores manually on the ATAR page.</EmptyDescription>
+            <EmptyDescription>The predictor needs at least one logged result to work with. You can still type raw study scores straight into the ATAR page.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="flex flex-wrap justify-center gap-2"><Button onClick={onLogExam}>Log exam</Button><Button variant="outline" onClick={onOpenAtar}>Open ATAR</Button></EmptyContent>
         </Empty>
@@ -501,7 +501,7 @@ export function StudyScorePredictor({
                 <EmptyHeader>
                   <EmptyMedia variant="icon"><Link2 /></EmptyMedia>
                   <EmptyTitle>No official comparison available</EmptyTitle>
-                  <EmptyDescription>Log a paper that matches a VCAA examination in the reference data to predict this subject.</EmptyDescription>
+                  <EmptyDescription>Log a paper that matches a VCAA exam in the reference data to get an estimate for this subject.</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent><Button onClick={onLogExam}>Log exam</Button></EmptyContent>
               </Empty>
@@ -514,7 +514,7 @@ export function StudyScorePredictor({
         <Info />
         <AlertTitle>Estimate only</AlertTitle>
         <AlertDescription>
-          Practice percentiles are converted to normal scores before weighting. This approximates VCAA standardisation; the final cohort ranking and moderation are unknown. Ranges are indicative, with extra uncertainty for projected SACs, missing papers and other-year distributions. The scaled estimate interpolates between VTAC&apos;s published raw scores of 20–50; the official process uses unrounded values and changes each year.
+          Practice percentiles are converted to normal scores before weighting to approximate VCAA standardisation, though your final cohort ranking and moderation can’t be known in advance. Ranges are indicative, with wider uncertainty for projected SACs, missing papers, and other-year distributions. The scaled estimate interpolates between VTAC&apos;s published raw scores of 20–50, while the official process uses unrounded values and shifts slightly each year.
         </AlertDescription>
       </Alert>
 

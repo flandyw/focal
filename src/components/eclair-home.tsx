@@ -413,7 +413,7 @@ export function EclairHome(props: EclairHomeProps) {
                 <div className="ecl-timer-info">
                   <p className="ecl-timer-mode">{props.mode} · {props.status}</p>
                   <p aria-label={`${props.mode}, ${props.display}`} className="ecl-readout" role="timer">{props.display}</p>
-                  <p className="ecl-timer-subject">{props.subject ? [props.subject, props.intent].filter(Boolean).join(" — ") : "Choose a subject to begin"}</p>
+                  <p className="ecl-timer-subject">{props.subject ? [props.subject, props.intent].filter(Boolean).join(" · ") : "Choose a subject to begin"}</p>
                   {progress === null ? null : <Bar label="Block progress" value={progress} />}
                   {props.onContinue && props.continueLabel ? <button className="ecl-continue" onClick={props.onContinue} type="button"><SkipForward />{props.continueLabel}</button> : null}
                   <div className="ecl-transport">
@@ -515,7 +515,7 @@ export function EclairHome(props: EclairHomeProps) {
               <>
                 <h4>Ongoing</h4>
                 <button className="ecl-note" onClick={home} type="button">
-                  <Timer aria-hidden /><span><b>{props.mode} · {props.display}</b><small>{props.subject || "No subject"} — {props.status}</small></span>
+                  <Timer aria-hidden /><span><b>{props.mode} · {props.display}</b><small>{props.subject || "No subject"} · {props.status}</small></span>
                 </button>
               </>
             ) : null}

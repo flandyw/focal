@@ -22,7 +22,7 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
       this.setState({ backupError: null })
     } catch (exportError) {
       console.error(exportError)
-      this.setState({ backupError: "Could not export your backup. Try again before reloading." })
+      this.setState({ backupError: "Couldn’t export your backup. Try again before reloading." })
     }
   }
 
@@ -36,11 +36,11 @@ export class AppErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundar
     return (
       <div role="alert" className="grid min-h-dvh place-content-center gap-4 p-6 text-center">
         <div className="grid gap-2">
-          <h1 className="text-lg font-semibold">{loadError ? "This page couldn't load" : "Something went wrong"}</h1>
+          <h1 className="text-lg font-semibold">{loadError ? "Couldn’t load this page" : "Something went wrong"}</h1>
           <p className="max-w-md text-sm text-muted-foreground">
             {loadError
-              ? "Focal may have been updated, or your connection was interrupted. Check your connection, then reload to get the latest version. You can export your saved data below."
-              : "Focal hit an unexpected error. Your data is stored locally and is safe — you can export a backup before reloading."}
+              ? "Focal might have just updated, or your connection dropped out. Check your internet and hit Reload to grab the latest version. You can also export a backup below."
+              : "Focal ran into an unexpected snag. Your study data is stored safely on this device, and you can export a backup before reloading."}
           </p>
           {!loadError ? <pre className="max-w-md overflow-auto rounded-md bg-muted p-3 text-left text-xs text-muted-foreground">{this.state.error.message}</pre> : null}
         </div>

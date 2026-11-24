@@ -90,7 +90,7 @@ export function StudyPlanCard({
       <CardHeader>
         <CardTitle>Plan a session</CardTitle>
         <CardDescription className="max-w-[68ch]">
-          Say what you want to do and when. ChatGPT turns it into blocks and breaks you can review before anything changes.
+          Tell ChatGPT what you want to work on and when, and it’ll sketch out focus blocks and breaks for you to review before changing anything.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -105,7 +105,7 @@ export function StudyPlanCard({
             placeholder="An hour of chemistry organic reactions before dinner, starting now"
             value={request}
           />
-          <FieldDescription>Current time, your subjects, and today's progress are sent so the plan fits your actual evening.</FieldDescription>
+          <FieldDescription>We share the current time, your subjects, and today’s progress so the plan fits your actual day.</FieldDescription>
         </Field>
 
         <div className="flex flex-wrap items-end gap-2 max-sm:[&>button]:w-full">
@@ -135,7 +135,7 @@ export function StudyPlanCard({
         </div>
 
         {!auth.isAuthenticated ? (
-          <p className="text-sm text-muted-foreground">Connect ChatGPT in Settings to plan sessions.</p>
+          <p className="text-sm text-muted-foreground">Connect ChatGPT in Settings to use session planning.</p>
         ) : null}
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
 

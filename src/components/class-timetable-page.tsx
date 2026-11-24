@@ -145,7 +145,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           <EmptyHeader>
             <EmptyMedia variant="icon"><CalendarClock /></EmptyMedia>
             <EmptyTitle>No timetable yet</EmptyTitle>
-            <EmptyDescription>Use Import to turn a screenshot into timetable data with a chatbot, or add periods one at a time. Your classes then appear on the calendar, ready to plan study around.</EmptyDescription>
+            <EmptyDescription>Use Import to turn a screenshot into a timetable with a chatbot, or add periods one by one. Your classes will show up on the calendar so you can plan study around them.</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -202,7 +202,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                       <EmptyHeader>
                         <EmptyMedia variant="icon"><CalendarClock /></EmptyMedia>
                         <EmptyTitle>Nothing scheduled</EmptyTitle>
-                        <EmptyDescription>Add a period above to give Day {day} its classes and breaks.</EmptyDescription>
+                        <EmptyDescription>Add a period above to fill in Day {day} with your classes and breaks.</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   )}
@@ -345,7 +345,7 @@ function PeriodDialog({ editor, periods, subjects, onClose, onSave, onDelete }: 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><p className="focal-eyebrow text-primary">Day {editor.day}</p><DialogTitle>{editor.original ? "Edit a period" : "Add a period"}</DialogTitle><DialogDescription>Give this part of your day a time and a place.</DialogDescription></DialogHeader>
+        <DialogHeader><p className="focal-eyebrow text-primary">Day {editor.day}</p><DialogTitle>{editor.original ? "Edit period" : "Add a period"}</DialogTitle><DialogDescription>Set the time and room for this part of your day.</DialogDescription></DialogHeader>
         <form className="contents" onSubmit={(event) => {
           event.preventDefault()
           const next = { ...draft, period: draft.period.trim(), subject: draft.subject.trim(), location: draft.location?.trim() }
@@ -388,13 +388,13 @@ function SettingsDialog({ config, onClose, onSave }: { config: TimetableConfig; 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) requestClose() }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Set your rhythm</DialogTitle><DialogDescription>Your cycle repeats on school days. Holidays pause it until school resumes.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Timetable cycle</DialogTitle><DialogDescription>Your cycle repeats on school days, and pauses over holidays until school is back.</DialogDescription></DialogHeader>
         <form className="contents" onSubmit={(event) => { event.preventDefault(); if (valid) onSave({ ...config, day1Starts: start, cycleLength: cycle, weekendTimetables: weekends, dayToWeekday: undefined, entries: config.entries.filter((entry) => entry.dayLabel <= cycle) }) }}>
           <FieldGroup>
             <Field><FieldLabel htmlFor="tt-day1">Day 1 starts</FieldLabel><Input id="tt-day1" required type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
             <Field><FieldLabel htmlFor="tt-cycle">Days in the cycle</FieldLabel><Input id="tt-cycle" required max={60} min={1} type="number" inputMode="numeric" value={length} onChange={(e) => setLength(e.target.value)} /><FieldDescription>Choose between 1 and 60 school days.</FieldDescription></Field>
             <Label className="flex items-center gap-3 text-sm"><Checkbox checked={weekends} onCheckedChange={(checked) => setWeekends(checked)} />Include weekends as school days</Label>
-            {valid && removed > 0 ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving this shorter cycle will remove {removed} {removed === 1 ? "period" : "periods"} from days after Day {cycle}.</p> : null}
+            {valid && removed > 0 ? <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">Saving a shorter cycle removes {removed} {removed === 1 ? "period" : "periods"} after Day {cycle}.</p> : null}
           </FieldGroup>
           <DialogFooter><Button onClick={requestClose} type="button" variant="outline">Cancel</Button><Button disabled={!valid} type="submit">{removed > 0 && valid ? "Save & remove periods" : "Save cycle"}</Button></DialogFooter>
         </form>
@@ -411,7 +411,7 @@ function Holidays({ config, onChange }: { config: TimetableConfig; onChange: (co
     <Card size="sm" className="data-[size=sm]:[--card-spacing:--spacing(3)]">
       <CardHeader className="gap-1">
         <CardTitle>Holidays</CardTitle>
-        <CardDescription className="tabular-nums">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}The cycle pauses on these dates and picks up where it left off.</CardDescription>
+        <CardDescription className="tabular-nums">{config.holidays.length ? `${config.holidays.length} holiday ${config.holidays.length === 1 ? "range" : "ranges"} · ` : ""}Your cycle pauses on these dates and picks back up when term starts.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         {config.holidays.length ? <ul className="min-w-0 divide-y rounded-md border">{config.holidays.map((holiday, index) => <li className="flex items-center gap-2 px-2 py-1.5" key={`${holiday.name}-${index}`}><span aria-hidden className="size-1.5 shrink-0 rounded-full bg-chart-5" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{holiday.name}</p><p className="truncate text-xs text-muted-foreground tabular-nums">{dateLabel(holiday.startDate)} – {dateLabel(holiday.endDate)}</p></div><Button aria-label={`Remove ${holiday.name}`} onClick={() => { onChange({ ...config, holidays: config.holidays.filter((_, i) => i !== index) }); toast("Holiday removed", { duration: 8000, action: { label: "Undo", onClick: () => onChange(config) } }) }} size="icon-sm" variant="ghost"><Trash2 /></Button></li>)}</ul> : null}

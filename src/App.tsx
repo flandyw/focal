@@ -552,14 +552,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function startFocus(subject: string | undefined, intent: string, sessionId?: string) {
-    if (!activeSubject(subject)) { toast.error("Resume this subject in Settings before starting new study."); return }
+    if (!activeSubject(subject)) { toast.error("Resume this subject in Settings first to start a study session."); return }
     if (!sessionId) { setFocusPreset({ subject, intent }); setTimerMode("focus"); setView("focus"); return }
     const session = studySessionSync.sessions.find((row) => row.id === sessionId)
-    if (!session || session.kind !== "focus") { toast.error("This study session is unavailable."); return }
+    if (!session || session.kind !== "focus") { toast.error("That study session isn’t available anymore."); return }
     const open = () => { setFocusPreset(undefined); setTimerMode("focus"); setView("focus") }
     if (isRunning(session)) open()
     else void studySessionSync.control(session, isPaused(session) || continuableToday(session) ? "resume" : "start").then(open)
-      .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Could not start this session."))
+      .catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn’t start this session."))
   }
 
   function openFriendsTimer(subject?: string, intent = "", sessionId?: string) {
@@ -633,7 +633,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
       if (again && deletedIds(again.data).some((id) => !saved.has(id))) throw new Error("Your data changed while the recovery copy was being saved. Try deleting again.")
       setData(update)
       return true
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save a recovery copy. Nothing was deleted."); return false }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Couldn’t save a recovery copy, so nothing was deleted."); return false }
   }
 
   async function removeStudySession(session: Parameters<typeof studySessionSync.remove>[0]) {
@@ -644,7 +644,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
   }
 
   function planGoal(goal: StudyGoal) {
-    if (!activeSubject(goal.subject)) { toast.error("Resume this subject in Settings before planning study."); return }
+    if (!activeSubject(goal.subject)) { toast.error("Resume this subject in Settings first to plan study for it."); return }
     const sourceId = `goal:${goal.id}`
     if (data.learning.tasks.some((task) => !task.archivedAt && task.status === "planned" && task.sourceId === sourceId)) {
       setView("calendar")
@@ -658,7 +658,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         kind: goal.kind === "exam-percentage" ? "practice-exam" : "topic-practice",
         title: `Work toward ${goal.subject ? `${goal.subject} ` : ""}${label}`,
         subject: goal.subject,
-        detail: `Complete a focused evidence-building session before the ${goal.deadline} target date.`,
+        detail: `Put in a focused study session toward your ${goal.deadline} target.`,
         durationMinutes: Math.min(60, current.learning.preferences.dailyMinutes),
         plannedFor: localDate(new Date()),
         sourceId,
@@ -1008,14 +1008,14 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
         <main id="main-content" data-view={view} aria-busy={navView !== view} tabIndex={-1} className={`w-full min-w-0 outline-none ${view === "chat" ? "flex h-[calc(100dvh-2.75rem-env(safe-area-inset-top)-var(--mobile-tabbar)-var(--keyboard-inset))] flex-col lg:h-dvh" : "px-4 pt-1 pb-[max(calc(1.5rem+var(--mobile-tabbar)),env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-6"}`}>
           {showSubjectMenu && <div className="-ml-2.5 mb-1 compact:hidden">{subjectMenu}</div>}
           {sync.status === "sign-in-required" && view !== "settings" ? <div role="status" className="mb-6 flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
-            <p className="min-w-0 flex-1">Your Focal session ended. Saved work stays on this device until you sign in again.</p>
+            <p className="min-w-0 flex-1">Your Focal session expired. Don’t worry, your work stays safe on this device until you sign back in.</p>
             <Button size="sm" onClick={() => setView("settings", "account")}>Sign in again</Button>
           </div> : null}
           <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open && !importing) setPendingImport(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Replace current data?</AlertDialogTitle>
-                <AlertDialogDescription>{pendingImport && `This replaces your app data with ${count(pendingImport.attempts.length, "exam")}, ${count(pendingImport.sacRecords.length, "SAC")}, and ${count(pendingImport.mistakes.length, "mistake")}. A dated safety backup is saved first. Study sessions are separate, and timers will not be restarted.`}</AlertDialogDescription>
+                <AlertDialogTitle>Replace your current data?</AlertDialogTitle>
+                <AlertDialogDescription>{pendingImport && `This will replace your app data with ${count(pendingImport.attempts.length, "exam")}, ${count(pendingImport.sacRecords.length, "SAC")}, and ${count(pendingImport.mistakes.length, "mistake")}. We’ll save a dated safety backup first. Study sessions stay separate, and live timers won’t be restarted.`}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
@@ -1029,7 +1029,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
                     setData((current) => replacementData(pendingImport, current))
                     setPendingImport(null)
                     toast.success("Focal data imported", { duration: 8000, action: { label: "Undo", onClick: () => { if (pendingImportOwner.current === recoveryOwnerRef.current) setData((current) => replacementData(previous, current)) } } })
-                  } catch (error) { toast.error(error instanceof Error ? error.message : "Could not save the safety backup. Your data has not been replaced.") }
+                  } catch (error) { toast.error(error instanceof Error ? error.message : "Couldn’t save a safety backup, so your data hasn’t been replaced.") }
                   finally { setImporting(false) }
                 }}>{importing ? "Saving backup…" : "Back up and replace"}</Button>
               </AlertDialogFooter>
@@ -1037,7 +1037,7 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
           </AlertDialog>
           <Dialog open={pastStudyId !== null} onOpenChange={(open) => { if (!open) requestClosePastStudy() }}>
             <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-              <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Record study you’ve already done. It counts toward your shared study history." : "Saved in this browser only. Sign in before logging to share study with desktop."}</DialogDescription></DialogHeader>
+              <DialogHeader><DialogTitle>Log past study</DialogTitle><DialogDescription>{sync.user ? "Add study you’ve already done so it counts toward your shared study history." : "Saved in this browser only. Sign in first if you want this synced across your devices."}</DialogDescription></DialogHeader>
               {pastStudyId && <Suspense fallback={PAGE_LOADING}><PastStudyForm key={pastStudyId} subjects={studySubjectOptions(selectedSubject === "all" ? [...data.subjects, ...references.map((reference) => reference.studyName)] : [selectedSubject])} onCancel={requestClosePastStudy} onStatusChange={reportPastStudyStatus} onSave={async (entry) => {
                 await studySessionSync.log(entry, pastStudyId)
                 closePastStudy()

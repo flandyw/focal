@@ -681,7 +681,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
   return (
     <div className="grid min-w-0 gap-5 lg:gap-6">
       {skillId ? <div className="flex flex-wrap items-center gap-2 text-sm"><span>Related mistakes · {data.learning.curriculumAreas.find((item) => item.id === skillId)?.name ?? "Selected skill"}</span><Button variant="ghost" size="sm" onClick={() => onSubjectChange(activeSubject)}>Clear skill filter</Button></div> : null}
-      <PageHeader icon={Layers} title="Mistakes" description="Every error you have logged, spaced for review until it sticks.">
+      <PageHeader icon={Layers} title="Mistakes" description="Every tricky question you’ve logged, scheduled to come back right before you forget it.">
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import from chatbot</Button>
         <Button onClick={onLog}><Plus />Add mistake</Button>
         <DropdownMenu>
@@ -726,7 +726,7 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
                 <h2 className="text-lg font-semibold">Review schedule</h2>
                 <p className="max-w-[68ch] text-sm text-muted-foreground">{dueThisWeekCount
                   ? `${dueThisWeekCount} card${dueThisWeekCount === 1 ? "" : "s"} to review in the next 7 days.`
-                  : "Nothing scheduled for the next week — log mistakes after your next timed paper."}</p>
+                  : "Nothing scheduled for the next week. Log mistakes after your next timed paper."}</p>
               </div>
               <div className="grid min-w-0 gap-6 lg:gap-8">
                 {scheduleGroups.map((group) => (
@@ -868,11 +868,11 @@ export function MistakesPage({ onSaveLearning, initialStatus, skillId, workspace
               </section>
               } secondary={isWorkspace ? <div className="min-w-0 lg:sticky lg:top-4">{activeMistake
                 ? <MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} />
-                : <div className="grid min-h-80 place-content-center gap-3 rounded-xl border border-dashed p-8 text-center"><NotebookPen className="mx-auto size-7 text-muted-foreground" /><h2 className="font-medium">Choose a mistake</h2><p className="max-w-xs text-sm text-muted-foreground">Read the question, understand what went wrong, and practise the corrected method.</p></div>}</div> : null}
+                : <div className="grid min-h-80 place-content-center gap-3 rounded-xl border border-dashed p-8 text-center"><NotebookPen className="mx-auto size-7 text-muted-foreground" /><h2 className="font-medium">Pick a mistake</h2><p className="max-w-xs text-sm text-muted-foreground">Read through the question, see what tripped you up, and practise the better approach.</p></div>}</div> : null}
             />
-            {!isWorkspace && activeMistake ? <Dialog open onOpenChange={(open) => { if (!open) setActiveId(null) }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Mistake details</DialogTitle><DialogDescription>Review the question and your corrected approach.</DialogDescription></DialogHeader><MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} /></DialogContent></Dialog> : null}
+            {!isWorkspace && activeMistake ? <Dialog open onOpenChange={(open) => { if (!open) setActiveId(null) }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"><DialogHeader><DialogTitle>Mistake details</DialogTitle><DialogDescription>Look over the question and how you’ll tackle it next time.</DialogDescription></DialogHeader><MistakeDetail mistake={activeMistake} attempt={attemptMap.get(activeMistake.attemptId)} studies={studies} onEdit={onEdit} onReimport={reimportMistake} onToggleSuspend={onToggleSuspend} onDelete={onDelete} onPractice={(target) => setPractice([target])} /></DialogContent></Dialog> : null}
 
-            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try another search or clear your filters." : "Save a missed question here to review it later, with or without an exam."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={clearAllFilters}>Clear filters</Button> : <Button onClick={onLog}><Plus />Add mistake</Button>}</Empty>}
+            </> : <Empty className="min-h-64 rounded-xl border border-dashed"><EmptyHeader><EmptyMedia variant="icon"><NotebookPen /></EmptyMedia><EmptyTitle>{data.mistakes.length ? "No matching mistakes" : "No mistakes yet"}</EmptyTitle><EmptyDescription>{data.mistakes.length ? "Try a different search or clear your filters." : "Save a missed question here so you can come back to it later, with or without an exam."}</EmptyDescription></EmptyHeader>{data.mistakes.length ? <Button variant="outline" onClick={clearAllFilters}>Clear filters</Button> : <Button onClick={onLog}><Plus />Add mistake</Button>}</Empty>}
           </div>
         </TabsContent>
       </Tabs>

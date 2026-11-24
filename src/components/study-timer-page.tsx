@@ -596,7 +596,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
                 <EmptyMedia className="mb-0" variant="icon"><TimerIcon /></EmptyMedia>
                 <div className="grid gap-1">
                   <EmptyTitle>No study logged today</EmptyTitle>
-                  <EmptyDescription>Finish a study session and it will appear here with its subject and intent.</EmptyDescription>
+                  <EmptyDescription>Wrap up a study session and it’ll show up here with your subject and focus note.</EmptyDescription>
                 </div>
               </EmptyHeader>
             </Empty>
@@ -621,7 +621,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{undoBlocks ? "Discard the continued time?" : sharedSession ? "Discard this session?" : "Reset the timer?"}</AlertDialogTitle>
-            <AlertDialogDescription>{undoBlocks ? `Only the time since you pressed Continue is removed. The ${Math.round(undoBlocks.reduce((total, block) => total + Date.parse(block.end) - Date.parse(block.start), 0) / 60_000)} min you logged before stays.` : sharedSession ? "Its recorded study time will be removed on every device. Choose Finish instead to keep it." : finishLabel ? `This study has not been logged yet and will be lost. Choose ${finishLabel} instead to keep it.` : "The time on this block has not been logged yet and will be lost."}</AlertDialogDescription>
+            <AlertDialogDescription>{undoBlocks ? `Only the time since you hit Continue will be removed. The ${Math.round(undoBlocks.reduce((total, block) => total + Date.parse(block.end) - Date.parse(block.start), 0) / 60_000)} min you logged earlier stays safe.` : sharedSession ? "This removes the session’s recorded time across all your devices. Pick Finish instead if you want to keep it." : finishLabel ? `This study hasn’t been logged yet and will be lost. Pick ${finishLabel} instead to keep it.` : "The time on this block hasn’t been logged yet and will be lost."}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{sharedSession ? "Keep session" : "Keep going"}</AlertDialogCancel>
@@ -661,7 +661,7 @@ function FocusBlocks({ subjects, preferredSubjects, onSessionChange, preset, ses
         <SheetContent className="gap-0">
           <SheetHeader>
             <SheetTitle>Timer settings</SheetTitle>
-            <SheetDescription>Choose a preset or adjust your own rhythm.</SheetDescription>
+            <SheetDescription>Pick a preset or dial in your own focus and break lengths.</SheetDescription>
           </SheetHeader>
           {renderSettings()}
         </SheetContent>

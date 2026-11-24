@@ -628,7 +628,7 @@ export function ExamsPage(props: ExamsPageProps) {
   if (data.attempts.length === 0) {
     return (
       <WorkspacePage>
-        <PageHeader icon={BookOpenCheck} title="Practice" description="Log papers, see where marks move and what to revise next.">
+        <PageHeader icon={BookOpenCheck} title="Practice" description="Log your papers, track how your marks are moving, and spot what to revise next.">
           {generator}
           <Button onClick={onLogExam}>
             <Plus />
@@ -643,10 +643,10 @@ export function ExamsPage(props: ExamsPageProps) {
             <EmptyMedia variant="icon">
               <BookOpenCheck />
             </EmptyMedia>
-            <EmptyTitle>{scopedSubject ? `No ${scopedSubject} exams yet` : "Log a practice exam to begin"}</EmptyTitle>
+            <EmptyTitle>{scopedSubject ? `No ${scopedSubject} exams yet` : "Log your first practice exam"}</EmptyTitle>
             <EmptyDescription>
-              Record a raw mark, link an official grade distribution when one exists, and capture mistakes
-              worth revisiting before your next paper.
+              Add a raw score, match it to an official VCAA grade distribution when one exists, and save any
+              mistakes you want to revisit before your next paper.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
@@ -662,7 +662,7 @@ export function ExamsPage(props: ExamsPageProps) {
 
   return (
     <WorkspacePage>
-      <PageHeader icon={BookOpenCheck} title="Practice" description="Log papers, see where marks move and what to revise next.">
+      <PageHeader icon={BookOpenCheck} title="Practice" description="Log your papers, track how your marks are moving, and spot what to revise next.">
         {generator}
         <Button variant="outline" onClick={exportReport}>
           <FileDown />

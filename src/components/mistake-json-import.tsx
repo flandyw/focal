@@ -99,7 +99,7 @@ export function MistakeJsonImportDialog({ open, attempts, initialAttemptId, onOp
         <DialogHeader>
           <DialogTitle>Import mistakes from any chatbot</DialogTitle>
           <DialogDescription>
-            Copy the prompt below into your favourite AI chatbot together with your marked exam or notes, then paste the returned JSON here to log the mistakes, and the exam itself when the chatbot can see your total mark.
+            Copy this prompt into any AI chatbot along with your marked paper or notes, then paste its JSON reply here. Focal will log your mistakes, and the exam itself if the chatbot could see your total mark.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>

@@ -64,7 +64,7 @@ FIELD DETAILS
 - "category" (required string): EXACTLY one of:
   ${MISTAKE_CATEGORIES.join(" | ")}
   Pick the single best match for the root cause of the error; use "Other" when nothing fits.
-- "explanation" (required string): what went wrong — the specific misunderstanding, omission, unsupported claim, unclear wording, wrong process, or careless slip — written diagnostically so I can recognise the same error next time.
+- "explanation" (required string): what went wrong (the specific misunderstanding, omission, unsupported claim, unclear wording, wrong process, or careless slip), written diagnostically so I can recognise the same error next time.
 - "correction" (required string): the improved response, model answer, correct method, structure, evidence, or working that I should reproduce next time.
 - "totalMarks" (required number > 0): total marks available for the whole item; infer from mark schemes, bracketed marks, or question wording.
 - "marksLost" (required number >= 0): marks I lost on the item; never greater than totalMarks; infer from cross marks, annotations, subtotals, or my description. Use 0 if I received full marks but still want the habit logged.

@@ -2,22 +2,22 @@
 
 ## Supabase
 
-Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for the frontend. Apply the migrations in `supabase/migrations/` in order to the intended project. Never expose `SUPABASE_SERVICE_ROLE_KEY` in a `VITE_` variable or commit credentials. The service-role key is needed only by server-side features such as AI chat and MCP.
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for the frontend, and apply the migrations in `supabase/migrations/` in order to your project. Never put `SUPABASE_SERVICE_ROLE_KEY` in a `VITE_` variable or commit credentials. The service-role key is strictly for server-side features like AI chat and MCP.
 
-For password recovery, set Supabase Authentication's Site URL to the hosted frontend and allow each deployment's `/?reset-password=1` redirect, including `http://localhost:5173/?reset-password=1` for local development. Retain the Supabase confirmation link in the reset email template.
+For password resets to work, point Supabase Authentication's Site URL at your hosted frontend and allow each deployment's `/?reset-password=1` redirect (including `http://localhost:5173/?reset-password=1` for local dev). Keep Supabase's confirmation link in the reset email template.
 
-Friends features require the relevant migrations, including `0031_friends_competition.sql`, `0037_friend_usernames.sql` and `0043_friend_study_sessions.sql` for shared desks, focus rounds and scheduled invitations. `0044_friend_blocks.sql` adds blocking and defaults new profiles to friend requests. Existing friendships and sharing preferences are preserved. See [sync protocol](sync-protocol.md) before changing shared records or lifecycle behavior.
+Friends features rely on their migrations, including `0031_friends_competition.sql`, `0037_friend_usernames.sql`, and `0043_friend_study_sessions.sql` for open desks, focus rounds, and scheduled sessions. `0044_friend_blocks.sql` adds blocking and turns on friend requests by default for new profiles while keeping existing friendships and sharing settings intact. Read [sync protocol](sync-protocol.md) before changing shared records or session lifecycles.
 
 ## Web
 
-Deploy from the repository root. `vercel.json` builds with `bun run build`, serves `dist/`, and configures the API functions and cache headers. Set frontend and any needed server environment variables in the hosting project. See [AI chat](ai-chat.md) and [notifications](notifications.md) for their additional configuration; neither is required for the basic frontend.
+Deploy from the repository root. `vercel.json` builds with `bun run build`, serves `dist/`, and sets up the API functions and cache headers. Add your frontend and server environment variables in your hosting project. [AI chat](ai-chat.md) and [notifications](notifications.md) have extra setup if you want them, though the core app works fine without either.
 
-For a Bun host, build first and run `bun run start`. Use HTTPS for public deployments. Review the API and secrets configuration before exposing the server.
+On a Bun server, build first and run `bun run start`. Always put public deployments behind HTTPS and double-check your API and secret settings before opening the server up.
 
-Worksheet PDF export sends the worksheet's LaTeX (including mistake text) to the public compiler at texlive.net through `/api/mistakes-pdf`. The endpoint is rate-limited per address. Operators who need to keep content in-house must point `COMPILER_URL` in `server/mistakes-pdf.ts` at their own compiler.
+Worksheet PDF exports send the worksheet's LaTeX (including mistake text) to the public compiler at texlive.net via `/api/mistakes-pdf`, which is rate-limited per IP. If you need worksheet content to stay in-house, point `COMPILER_URL` in `server/mistakes-pdf.ts` at your own LaTeX compiler.
 
 ## Desktop
 
-`bun run tauri build` packages the shared frontend with the native shell and sidecar. Set the frontend Supabase variables at build time. Packaged desktop Gateway chat also needs `VITE_CHAT_API_URL` pointing to the hosted `/api/chat` endpoint. The release workflow in `.github/workflows/release.yml` builds platform artifacts and publishes them to GitHub Releases.
+`bun run tauri build` bundles the shared frontend together with the native shell and sidecar. Make sure your frontend Supabase variables are set at build time. Packaged desktop builds that use Gateway chat also need `VITE_CHAT_API_URL` pointing to your hosted `/api/chat` endpoint. The release workflow in `.github/workflows/release.yml` builds installers for each platform and uploads them to GitHub Releases.
 
-Desktop Supabase sessions are encrypted in SQLite with a key protected by the OS credential store. The sidecar and an accessible credential store are needed to save or restore a login. Old database copies or backups may still contain plaintext sessions from before migration; protect them accordingly.
+Desktop Supabase sessions are encrypted in SQLite with a key stored in the OS credential store, so both the sidecar and an accessible credential store are needed to save or restore a login. Older database copies or backups from before migration may still hold plaintext sessions, so handle them with care.

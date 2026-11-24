@@ -12,8 +12,8 @@ export function DiscardChangesDialog({ open, onKeep, onDiscard }: DiscardChanges
     <Dialog open={open} onOpenChange={(next) => { if (!next) onKeep() }}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Discard unsaved changes?</DialogTitle>
-          <DialogDescription>Closing now loses everything typed into this form.</DialogDescription>
+          <DialogTitle>Discard your unsaved changes?</DialogTitle>
+          <DialogDescription>If you close this now, you’ll lose what you’ve typed so far.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={onKeep} autoFocus>Keep editing</Button>

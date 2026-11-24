@@ -1,14 +1,19 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { parseISO } from "date-fns"
-import { ArrowRight, CalendarClock, CalendarPlus, CalendarRange, ChartColumn, Check, CircleCheck, Clock, FileText, Flame, Hourglass, Layers, ListChecks, Play, Sun } from "lucide-react"
+import { ArrowRight, CalendarClock, CalendarPlus, CalendarRange, ChartColumn, Check, CircleCheck, Clock, FileText, Flame, Hourglass, Layers, ListChecks, Play, Sun, Target } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "./ui/popover"
+import { ToggleGroup, ToggleGroupItem } from "./ui/toggle-group"
 import { PageHeader } from "./page-header"
 import { AIOverview } from "./ai-overview"
 import { Delta, EmptyState, Meter, Panel, StatGrid, StatTile } from "./workspace-layout"
 import { buildDayPlan, continuableToday, isDayItemDone, type DayPlanSource } from "../lib/day-plan"
 import { isCompletedSac } from "../lib/sac"
 import { isPaused, isRunning, type CanonicalStudySession } from "../lib/sync/sessionContract"
+import type { LearningWorkspace } from "../lib/learning-workspace"
 import { localDate } from "../lib/local-date"
 import { formatExamLabel, getExamStart, type Timetable } from "../lib/timetable"
 import type { AppView } from "../lib/app-view"
@@ -17,10 +22,49 @@ import { cn, count } from "../lib/utils"
 const DAY = 86_400_000
 const hours = (raw: number) => { const minutes = Math.round(raw); return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}` }
 const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) - Date.parse(today)) / DAY)
+type StudyPreferences = LearningWorkspace["preferences"]
+// Monday first; values are Date#getDay() so they match the planner's studyDays.
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0].map((day) => ({ day, date: new Date(2024, 0, day || 7) }))
 const greeting = (hour: number) => hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"
 
 /** The personal starting page over the same day plan the calendar uses, with one way into each kind of work. */
-export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt, onOpenSac }: {
+/** Edits the daily study target the adaptive planner already schedules to. */
+function StudyTargetPopover({ preferences, onChange }: { preferences: StudyPreferences; onChange: (preferences: StudyPreferences) => void }) {
+  const [open, setOpen] = useState(false)
+  const [minutes, setMinutes] = useState(preferences.dailyMinutes)
+  const [days, setDays] = useState(preferences.studyDays)
+  const valid = Number.isInteger(minutes) && minutes >= 5 && minutes <= 1440
+  return (
+    <Popover open={open} onOpenChange={(next) => { if (next) { setMinutes(preferences.dailyMinutes); setDays(preferences.studyDays) } setOpen(next) }}>
+      <PopoverTrigger render={<Button variant="ghost" size="sm" />} aria-label="Set daily study target" title="Set daily study target"><Target data-icon="inline-start" /><span>Target</span></PopoverTrigger>
+      <PopoverContent align="end" className="w-80">
+        <PopoverTitle>Daily study target</PopoverTitle>
+        <PopoverDescription className="text-xs">Auto-plan fills each study day up to this amount.</PopoverDescription>
+        <form className="flex flex-col gap-3" onSubmit={(event) => {
+          event.preventDefault()
+          if (!valid) return
+          onChange({ dailyMinutes: minutes, studyDays: WEEKDAYS.map(({ day }) => day).filter((day) => days.includes(day)) })
+          setOpen(false)
+        }}>
+          <div className="grid gap-1.5">
+            <Label htmlFor="today-target-minutes">Minutes a day</Label>
+            <Input id="today-target-minutes" type="number" inputMode="numeric" min={5} max={1440} required value={Number.isFinite(minutes) ? minutes : ""} aria-invalid={!valid || undefined} onChange={(event) => setMinutes(event.target.valueAsNumber)} />
+            {!valid ? <p className="text-xs text-destructive">Enter whole minutes from 5 to 1440.</p> : null}
+          </div>
+          <div className="grid gap-1.5">
+            <span id="today-target-days" className="text-sm font-medium">Study days</span>
+            <ToggleGroup multiple size="sm" variant="outline" spacing={0} aria-labelledby="today-target-days" value={days.map(String)} onValueChange={(value) => setDays(value.map(Number))}>
+              {WEEKDAYS.map(({ day, date }) => <ToggleGroupItem key={day} value={String(day)} aria-label={date.toLocaleDateString(undefined, { weekday: "long" })} className="w-9 aria-pressed:bg-primary aria-pressed:text-primary-foreground hover:aria-pressed:bg-primary/90">{date.toLocaleDateString(undefined, { weekday: "narrow" })}</ToggleGroupItem>)}
+            </ToggleGroup>
+          </div>
+          <Button type="submit" size="sm" className="self-end" disabled={!valid}>Save target</Button>
+        </form>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavigate, onStartFocus, onOpenAttempt, onOpenSac, onPreferencesChange }: {
   now: number
   data: DayPlanSource
   sessions: CanonicalStudySession[]
@@ -30,6 +74,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
   onStartFocus: (subject: string | undefined, intent: string, sessionId?: string) => void
   onOpenAttempt: (id: string) => void
   onOpenSac: (id: string) => void
+  onPreferencesChange: (preferences: StudyPreferences) => void
 }) {
   const today = localDate(new Date(now))
   // Exam and SAC time already has its own rows; include focus sessions without counting assessments twice.
@@ -61,7 +106,12 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
   const todayMinutes = plan.completedMinutes
   const days = week.map((day, index) => index === 6 ? { ...day, minutes: todayMinutes } : day)
   const weekMinutes = days.reduce((sum, day) => sum + day.minutes, 0)
-  const peak = Math.max(30, ...days.map((day) => day.minutes))
+  const { preferences } = data.learning
+  const targetFor = (date: Date) => preferences.studyDays.includes(date.getDay()) ? preferences.dailyMinutes : 0
+  const todayTarget = targetFor(new Date(now))
+  const targetDays = days.filter((day) => targetFor(day.date))
+  const onTarget = targetDays.filter((day) => day.minutes >= targetFor(day.date)).length
+  const peak = Math.max(30, ...days.map((day) => Math.max(day.minutes, targetFor(day.date))))
   const totalStreak = streak + (todayMinutes > 0 ? 1 : 0)
 
   const tracked = new Set(data.trackedExamIds)
@@ -90,7 +140,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
       </PageHeader>
 
       <StatGrid>
-        <StatTile icon={Clock} label="Studied today" value={hours(todayMinutes)} hint={plan.plannedMinutes ? `${hours(plan.plannedMinutes)} still planned` : "Nothing else planned"} />
+        <StatTile icon={Clock} tone={todayTarget && todayMinutes >= todayTarget ? "success" : "default"} label="Studied today" value={hours(todayMinutes)} hint={todayTarget ? `${todayMinutes >= todayTarget ? "Target met" : `${hours(todayTarget - todayMinutes)} to go`} · ${hours(todayTarget)} target` : plan.plannedMinutes ? `Rest day · ${hours(plan.plannedMinutes)} planned` : "Rest day"} />
         <StatTile icon={CalendarRange} label="This week" value={hours(weekMinutes)} hint={`${days.filter((day) => day.minutes > 0).length} of 7 days active`} spark={days.map((day) => day.minutes)} onClick={() => onNavigate("progress")} />
         <StatTile icon={Flame} tone={totalStreak ? "warning" : "default"} label="Streak" value={count(totalStreak, "day")} hint={totalStreak ? (todayMinutes ? "Kept alive today" : "Study today to keep it") : "Start one today"} />
         <StatTile icon={Hourglass} tone={next && daysUntil(next.date, today) <= 3 ? "danger" : "default"} label="Next up" value={next ? `${daysUntil(next.date, today)}d` : "—"} hint={next ? next.label : "No exams or SACs tracked"} onClick={next ? () => next.kind === "SAC" ? onOpenSac(next.id) : onNavigate("exams") : undefined} />
@@ -160,16 +210,26 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
             </div>
           </Panel>
 
-          <Panel id="today-week" icon={ChartColumn} title="Last 7 days" description={`${hours(weekMinutes)} total`} action={<Button variant="ghost" size="sm" onClick={() => onNavigate("progress")}>Progress<ArrowRight data-icon="inline-end" /></Button>}>
+          <Panel id="today-week" icon={ChartColumn} title="Last 7 days" description={`${hours(weekMinutes)} total${targetDays.length ? ` · ${onTarget} of ${targetDays.length} on target` : ""}`} action={<>
+            <StudyTargetPopover preferences={preferences} onChange={onPreferencesChange} />
+            <Button variant="ghost" size="sm" onClick={() => onNavigate("progress")}>Progress<ArrowRight data-icon="inline-end" /></Button>
+          </>}>
             <ol className="flex h-32 items-end gap-2">
-              {days.map((day, index) => (
-                <li key={index} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5" title={`${day.date.toLocaleDateString(undefined, { weekday: "long" })}: ${hours(day.minutes)}`}>
-                  <span className="sr-only">{day.date.toLocaleDateString(undefined, { weekday: "long" })}: {hours(day.minutes)}</span>
-                  {day.minutes ? <span aria-hidden className="text-[10px] tabular-nums text-muted-foreground">{hours(day.minutes)}</span> : null}
-                  <div className={cn("focal-bar w-full rounded-sm", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 80)}%`, animationDelay: `${index * 30}ms` }} />
-                  <span aria-hidden className={cn("text-[11px] text-muted-foreground", index === 6 && "font-semibold text-foreground")}>{day.date.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
-                </li>
-              ))}
+              {days.map((day, index) => {
+                const target = targetFor(day.date)
+                const label = `${day.date.toLocaleDateString(undefined, { weekday: "long" })}: ${hours(day.minutes)}${target ? ` of ${hours(target)} target` : ""}`
+                return (
+                  <li key={index} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5" title={label}>
+                    <span className="sr-only">{label}</span>
+                    <div className="relative flex w-full flex-1 flex-col items-center justify-end gap-1.5">
+                      {day.minutes ? <span aria-hidden className="text-[10px] tabular-nums text-muted-foreground">{hours(day.minutes)}</span> : null}
+                      <div className={cn("focal-bar w-full rounded-sm", index === 6 ? "bg-primary" : day.minutes ? "bg-primary/40" : "bg-muted")} style={{ height: `${Math.max(4, (day.minutes / peak) * 80)}%`, animationDelay: `${index * 30}ms` }} />
+                      {target ? <span aria-hidden className="absolute -inset-x-0.5 border-t border-dashed border-foreground/50" style={{ bottom: `${(target / peak) * 80}%` }} /> : null}
+                    </div>
+                    <span aria-hidden className={cn("text-[11px] text-muted-foreground", index === 6 && "font-semibold text-foreground")}>{day.date.toLocaleDateString(undefined, { weekday: "narrow" })}</span>
+                  </li>
+                )
+              })}
             </ol>
           </Panel>
 

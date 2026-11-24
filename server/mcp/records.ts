@@ -9,7 +9,7 @@ import {
 } from "../../src/lib/exam-data.js"
 import { isExamDifficultySettings, resolveDifficultySettings } from "../../src/lib/exam-difficulty.js"
 import { parseExamProgression, previewProgressionImport, progressionBySubject } from "../../src/lib/exam-progression.js"
-import { localDate } from "../../src/lib/learning-workspace.js"
+import { localDate } from "../../src/lib/local-date.js"
 import { examWarnings, PAPER_TYPES, type PaperType } from "../../src/lib/paper-types.js"
 import { getPracticeProgress, practiceFeedback, practiceMissionCards } from "../../src/lib/mistake-practice.js"
 import { demoteGreens, planPatternRevision } from "../../src/lib/stoplight.js"

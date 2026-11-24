@@ -36,7 +36,8 @@ import {
   type DayPlanSource,
 } from "../lib/day-plan"
 import { classPeriodsOn, getTimetablePeriodError, periodSubjectName, subjectIdFor } from "../lib/class-timetable"
-import { localDate, type LearningWorkspace, type LearningWorkspaceUpdate } from "../lib/learning-workspace"
+import type { LearningWorkspace, LearningWorkspaceUpdate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import type { Timetable } from "../lib/timetable"
 import { downloadExamFile } from "../lib/host"
 import { cn } from "../lib/utils"

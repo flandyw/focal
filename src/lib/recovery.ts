@@ -1,5 +1,5 @@
 import { EMPTY_APP_DATA, migrateAppData, type AppData } from "./exam-data"
-import { localDate } from "./learning-workspace"
+import { localDate } from "./local-date"
 import { openIndexedDb, requestResult, transactionDone } from "./outbox"
 import { isDeleted, parseCanonicalStudySession, type CanonicalStudySession } from "./sync/sessionContract"
 import { downloadExamFile } from "./host"

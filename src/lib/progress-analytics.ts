@@ -1,3 +1,4 @@
+import { localDate } from "./local-date.js"
 import type { Project, StudySession } from "./types"
 import { getSessionSubjectIds, getSessionEffectiveMinutes } from "./progress-utils.js"
 
@@ -89,14 +90,6 @@ function getSessionAnalyticsStart(session: StudySession): number {
   return Date.parse(session.schedule.blocks[0]?.start ?? "")
 }
 
-function toDateString(timestamp: number): string {
-  const d = new Date(timestamp)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${year}-${month}-${day}`
-}
-
 function getRangeCutoff(range: AnalyticsRange, periodEnd = Date.now()): number {
   if (range === 0) return 0
   const start = new Date(periodEnd)
@@ -166,7 +159,7 @@ function getTimeTrends(completed: SessionAnalytics[]): StudyTimePoint[] {
   const dayMap = new Map<string, Map<string, number>>()
 
   completed.forEach(({ start, minutes, subjectIds, shares }) => {
-    const dateStr = toDateString(start)
+    const dateStr = localDate(new Date(start))
     if (minutes <= 0) return
 
     const subjectMap = dayMap.get(dateStr) ?? new Map<string, number>()
@@ -229,7 +222,7 @@ function getConsistencyData(
   const minutesByDay = new Map<string, number>()
 
   completed.forEach(({ start, minutes }) => {
-    const dateStr = toDateString(start)
+    const dateStr = localDate(new Date(start))
     if (minutes > 0) {
       minutesByDay.set(dateStr, (minutesByDay.get(dateStr) ?? 0) + minutes)
     }
@@ -247,7 +240,7 @@ function getConsistencyData(
   const days: ConsistencyDay[] = []
   const current = new Date(startDate)
   while (current <= endDate) {
-    const dateStr = toDateString(current.getTime())
+    const dateStr = localDate(current)
     const minutes = minutesByDay.get(dateStr) ?? 0
     days.push({ date: dateStr, minutes, level: getHeatLevel(minutes) })
     current.setDate(current.getDate() + 1)
@@ -297,7 +290,7 @@ function computeStreaks(days: ConsistencyDay[]): ConsistencyStats {
     }
   }
 
-  const todayStr = toDateString(Date.now())
+  const todayStr = localDate(new Date())
   let currentIndex = days.length - 1
   if (days[currentIndex]?.date === todayStr && days[currentIndex].minutes === 0) {
     currentIndex--

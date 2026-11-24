@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart"
 import type { Mistake } from "../lib/exam-data"
 import { buildReviewForecast } from "../lib/performance-insights"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 import { useTickingNow } from "../hooks/use-ticking-now"
 
 const chartConfig = {

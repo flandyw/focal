@@ -11,7 +11,7 @@ import { PerformanceContextFields } from "./performance-context-fields"
 import { prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { SAC_UNITS, validateSac, type SacRecord, type SacUnit } from "../lib/sac"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 
 type SacSheetProps = {
   open: boolean

@@ -19,7 +19,7 @@ import { getSacTimerState, SAC_UNITS, validateSac, type SacRecord, type SacUnit 
 import { prioritiseSubjects } from "../lib/subjects"
 import { hasPerformanceContext, type PerformanceContext } from "../lib/performance-context"
 import { isSacTimerSession, type SacTimerSession } from "../lib/ongoing-timers"
-import { localDate } from "../lib/learning-workspace"
+import { localDate } from "../lib/local-date"
 
 type SacTimerProps = {
   records: SacRecord[]

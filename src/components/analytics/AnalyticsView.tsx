@@ -1,3 +1,4 @@
+import { localDate } from "../../lib/local-date"
 import { toast } from "sonner"
 import { sameStudySubject, studySubjectId } from "../../lib/studySubjects"
 import { useState, useMemo, useCallback, memo } from"react"
@@ -120,11 +121,6 @@ function stepPeriod(range: AnalyticsRange, end: number, direction: -1 | 1) {
  return getPickedPeriod(range, day)
 }
 
-function toDateInput(time: number) {
- const d = new Date(time)
- return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-
 function formatPeriod(range: AnalyticsRange, periodEnd: number) {
  if (range === 0) return "All time"
  const start = new Date(periodEnd)
@@ -179,7 +175,7 @@ function exportAnalyticsCsv(points: StudyTimePoint[], range: AnalyticsRange) {
  ].join(","))
  }
  const blob = new Blob(["\uFEFF", rows.join("\n")], { type:"text/csv;charset=utf-8" })
- return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${toDateInput(Date.now())}.csv`)
+ return downloadExamFile(blob, `focal-analytics-${range === 0 ?"all" : `${range}d`}-${localDate(new Date())}.csv`)
 }
 
 const AnalyticsViewInner = memo(function AnalyticsViewInner({
@@ -369,8 +365,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  type="date"
  aria-label={range === 7 ? "Pick a week" : range === 30 ? "Pick a month" : "Pick an end date"}
  className="absolute inset-0 size-full cursor-pointer border-0 p-0 opacity-0"
- max={toDateInput(tickingNow.getTime())}
- value={toDateInput(periodEnd)}
+ max={localDate(tickingNow)}
+ value={localDate(new Date(periodEnd))}
  onClick={(event) => event.currentTarget.showPicker?.()}
  onChange={(event) => { if (event.target.value) setPicked(getPickedPeriod(range, new Date(`${event.target.value}T00:00`))) }}
  />

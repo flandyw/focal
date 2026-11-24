@@ -1,6 +1,7 @@
 import type { AppData } from "./exam-data.js"
 import { buildDayPlan } from "./day-plan.js"
-import { localDate, type TaskDraft } from "./learning-workspace.js"
+import type { TaskDraft } from "./learning-workspace.js"
+import { localDate } from "./local-date.js"
 import { subjectWorkspace } from "./subject-workspace.js"
 import { sameStudySubject } from "./studySubjects.js"
 import { isCurrentSubject } from "./subject-completion.js"

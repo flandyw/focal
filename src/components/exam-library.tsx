@@ -159,7 +159,7 @@ export function ExamLibrary({
 
   return (
     <div className="grid gap-5">
-      <PageHeader icon={Library} title="VCAA exam library" description="Official past papers with timers, reports and grade distributions.">
+      <PageHeader icon={Library} title="VCAA exam library" description="Official past papers with built-in timers, examiner reports, and grade distributions.">
         {nextExam && nextPreset && !selectedPaperId ? <Button onClick={() => onStart(nextPreset)}><Play />Start next paper</Button> : null}
       </PageHeader>
       {!selectedPaperId ? <StatGrid>
@@ -172,8 +172,8 @@ export function ExamLibrary({
       {selectedPaperId && !filtered.length ? <p role="status">Paper not found in the current library.</p> : null}
       <Alert>
         <Search />
-        <AlertTitle>Confirm the current study design before using an older paper</AlertTitle>
-        <AlertDescription>VCAA publishes examination specifications, sample papers, assessment guides and external assessment reports on each study page. <a className="font-medium underline underline-offset-4" href={getVcaaExamResourcesUrl()} target="_blank" rel="noreferrer">Browse official study resources</a>.</AlertDescription>
+        <AlertTitle>Double-check the current study design before sitting an older paper</AlertTitle>
+        <AlertDescription>VCAA publishes exam specifications, sample papers, assessment guides, and external assessment reports on each study page. <a className="font-medium underline underline-offset-4" href={getVcaaExamResourcesUrl()} target="_blank" rel="noreferrer">Browse official study resources</a>.</AlertDescription>
       </Alert>
 
       {!selectedPaperId && focusStudy && recentExams.length ? (
@@ -279,7 +279,7 @@ export function ExamLibrary({
       </div>
       {pending.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(pending.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
       {completed.length ? completion === "completed" ? <div className="divide-y rounded-lg border bg-card">{completedRows}</div> : <ArchivedItems label="Completed papers" count={completed.length} open={selectedPaperId && completed.some((exam) => exam.url === selectedPaperId) ? true : undefined}>{completedRows}</ArchivedItems> : null}
-      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matches “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try another subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
+      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matched “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try a different subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
     </div>
   )
 }

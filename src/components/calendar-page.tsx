@@ -474,7 +474,7 @@ export function CalendarPage({
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
                     <EmptyTitle>{banked.length ? "All done" : "Nothing planned"}</EmptyTitle>
-                    <EmptyDescription>{banked.length ? "Everything on this day is finished." : "Add an event above, or plan study in the timeline below."}</EmptyDescription>
+                    <EmptyDescription>{banked.length ? "Everything for this day is wrapped up." : "Add an event above, or block out some study on the timeline below."}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}

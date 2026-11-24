@@ -88,7 +88,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import a checklist</DialogTitle>
-          <DialogDescription>Give any chatbot your study design or course outline with this prompt, then paste its reply to build a red, amber and green checklist.</DialogDescription>
+          <DialogDescription>Drop your study design or course outline into any chatbot with this prompt, then paste its reply here to build your red, amber, and green checklist.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
@@ -117,7 +117,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
               aria-invalid={error?.target === "json" || undefined}
               aria-describedby={error?.target === "json" ? "stoplight-import-json-error" : undefined}
             />
-            {error && error.target !== "subject" ? <FieldError id="stoplight-import-json-error">{error.message}</FieldError> : <FieldDescription>Existing items keep their ratings and links. Nothing is added until you confirm.</FieldDescription>}
+            {error && error.target !== "subject" ? <FieldError id="stoplight-import-json-error">{error.message}</FieldError> : <FieldDescription>Any existing items keep their ratings and links. Nothing gets added until you confirm.</FieldDescription>}
           </Field>
           {groups ? (
             <ul className="divide-y rounded-lg border" aria-label="Groups to import">

@@ -320,7 +320,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  return (
  <div className="h-full">
  <div className="space-y-8">
- <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Study time, consistency and exam results over time." />
+ <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Your study time, streaks, and exam results over time." />
  {weeklyReview}
  <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
  </div>
@@ -344,7 +344,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  >
  {/* Header row */}
  <motion.div variants={staggerItem}>
- <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Study time, consistency and exam results over time.">
+ <PageHeader icon={ChartNoAxesCombined} title="Progress" description="Your study time, streaks, and exam results over time.">
 <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
  <Button
  type="button"

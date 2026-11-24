@@ -104,22 +104,22 @@ export function VcaaExplorer({ references, attempts, preferredSubjects, studies 
   if (!references.length) {
     return (
       <div className="grid gap-5">
-        <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and scaling for every study." />
-        <Card><CardContent className="grid justify-items-center gap-3 py-10 text-center text-sm text-muted-foreground"><p>VCAA reference data is unavailable. Check your connection, then reload.</p><Button variant="outline" onClick={() => window.location.reload()}>Reload</Button></CardContent></Card>
+        <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and VTAC scaling for every VCE study." />
+        <Card><CardContent className="grid justify-items-center gap-3 py-10 text-center text-sm text-muted-foreground"><p>Couldn’t load the VCAA reference data. Check your connection and try reloading.</p><Button variant="outline" onClick={() => window.location.reload()}>Reload</Button></CardContent></Card>
       </div>
     )
   }
 
   return (
     <div className="grid gap-5">
-      <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and scaling for every study.">
+      <PageHeader icon={ChartColumn} title="VCAA data" description="Official grade distributions and VTAC scaling for every VCE study.">
         {onOpenLibrary ? <Button variant="outline" onClick={onOpenLibrary}>Open VCAA library</Button> : null}
       </PageHeader>
 
       <Card>
         <CardHeader>
           <CardTitle>Distribution explorer</CardTitle>
-          <CardDescription>Official grade bands and cohort counts. Means, medians, and percentiles are estimates from grouped bands.</CardDescription>
+          <CardDescription>Official grade bands and cohort counts. Means, medians, and percentiles are estimated from the grouped bands.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">

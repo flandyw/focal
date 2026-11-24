@@ -412,8 +412,8 @@ export function MistakeSheet({
           </SheetTitle>
           <SheetDescription>
             {isBatchReview
-              ? "ChatGPT created one draft per image. Review each card, edit anything that needs correcting, then save the whole batch."
-              : "Capture any knowledge, reasoning, evidence, expression, process, or accuracy issue. Markdown and optional LaTeX are supported."}
+              ? "ChatGPT made one draft per image. Look over each card, tweak anything that looks off, then save the batch."
+              : "Jot down any slip-up, gap in knowledge, or method fix you want to remember. Markdown and LaTeX are supported."}
           </SheetDescription>
         </SheetHeader>
 

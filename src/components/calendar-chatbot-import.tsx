@@ -49,7 +49,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
       copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
       setShowPrompt(true)
-      toast.error("Could not copy. Select the prompt below and copy it manually.")
+      toast.error("Couldn’t copy automatically. Select the prompt below and copy it manually.")
     }
   }
 
@@ -64,7 +64,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
       setError(null)
     } catch {
       setDrafts(null)
-      setError("Couldn't find any valid items. Paste the chatbot's full JSON reply; each item needs a title, a YYYY-MM-DD date and an HH:mm start time.")
+      setError("Couldn’t find any valid items in that reply. Paste the chatbot’s full JSON. Each item needs a title, a YYYY-MM-DD date, and an HH:mm start time.")
     }
   }
 
@@ -84,7 +84,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
       setImported(new Set())
       onOpenChange(false)
     } catch (error) {
-      setError(`${error instanceof Error ? error.message : "Could not save an item."} Items marked Added won't be added again.`)
+      setError(`${error instanceof Error ? error.message : "Couldn’t save one of the items."} Anything already marked Added won’t be duplicated.`)
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -96,7 +96,7 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import from chatbot</DialogTitle>
-          <DialogDescription>Send the prompt to any chatbot with your timetable or notice, then paste its reply to add the items to your calendar.</DialogDescription>
+          <DialogDescription>Copy this prompt into any chatbot along with your timetable or school notice, then paste its reply here to add everything to your calendar.</DialogDescription>
         </DialogHeader>
         <FieldGroup>
           <Field>
@@ -121,9 +121,9 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
               aria-invalid={error && !drafts ? true : undefined}
               aria-describedby={error ? "calendar-import-json-error" : undefined}
             />
-            {error ? <FieldError id="calendar-import-json-error">{error}</FieldError> : <FieldDescription>Nothing is added until you confirm the list below.</FieldDescription>}
+            {error ? <FieldError id="calendar-import-json-error">{error}</FieldError> : <FieldDescription>Nothing gets added until you check the preview below and confirm.</FieldDescription>}
           </Field>
-          {drafts && rejectedCount > 0 ? <p role="status" className="text-sm text-destructive">{rejectedCount} invalid item{rejectedCount === 1 ? " was" : "s were"} left out of the preview. Check the reply for missing titles, invalid dates or times, or study sessions without a matching subject before importing.</p> : null}
+          {drafts && rejectedCount > 0 ? <p role="status" className="text-sm text-destructive">We skipped {rejectedCount} invalid item{rejectedCount === 1 ? "" : "s"}. Check the reply for missing titles, bad dates or times, or study sessions without a matching subject.</p> : null}
           {drafts ? (
             <ul className="divide-y rounded-lg border" aria-label="Items to import">
               {drafts.map((draft, index) => (

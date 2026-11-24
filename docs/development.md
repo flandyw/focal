@@ -1,10 +1,10 @@
 # Development
 
-Focal has one React frontend for web and desktop. Run commands from the repository root; there is no separate `web/` package.
+Focal uses one React frontend for both web and desktop. Run all commands from the repository root (there's no separate `web/` package).
 
 ## Prerequisites
 
-Install Node.js (the version in `.node-version` satisfies Vite+), [Bun](https://bun.sh/) (the repository specifies `bun@1.4.2`) and Git. Native desktop development also needs Rust and the platform prerequisites in the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/). On Linux, desktop session restoration also needs an available Secret Service and `secret-tool`.
+Install Node.js (the version in `.node-version` matches Vite+), [Bun](https://bun.sh/) (`bun@1.4.2`), and Git. If you're working on the native desktop app, you'll also need Rust and the platform tools listed in the [Tauri setup guide](https://v2.tauri.app/start/prerequisites/). On Linux, restoring a saved desktop login also needs a running Secret Service and `secret-tool`.
 
 ```sh
 git clone https://github.com/flandyw/focal.git
@@ -14,40 +14,40 @@ cp .env.example .env.local
 bun run dev
 ```
 
-The browser app runs at `http://localhost:5173`. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to `.env.local` to use account features. The app can be used locally without an account; sync and other account-backed features need a configured Supabase project. See [deployment](deployment.md) for migrations and server-only settings.
+Open `http://localhost:5173` in your browser. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` to `.env.local` if you want to test account features. Focal works locally without an account; sync and other account-backed features just need a Supabase project. Check [deployment](deployment.md) for migrations and server-only settings.
 
-The frontend toolchain is [Vite+](https://viteplus.dev/): Vite, Vitest, Oxlint, Oxfmt, and type checks share `vite.config.ts`. Bun remains the package manager and the server/sidecar runtime. With the optional global `vp` CLI, use `vp install`, `vp dev`, `vp run check`, `vp test`, and `vp run build:desktop`; otherwise use the scripts below. `vp run check` checks both TypeScript projects. `vp build` alone bundles the frontend; `bun run build` also runs the typecheck gate.
+The frontend toolchain runs on [Vite+](https://viteplus.dev/), so Vite, Vitest, Oxlint, Oxfmt, and type checks all share `vite.config.ts`. Bun handles package management and runs the server and sidecar. If you have the global `vp` CLI installed, you can run `vp install`, `vp dev`, `vp run check`, `vp test`, and `vp run build:desktop`; otherwise use the Bun scripts below. `vp run check` checks both TypeScript projects, and `bun run build` runs the typecheck gate before bundling (while `vp build` only bundles).
 
-Formatting is available with `bun run fmt` or `bun run fmt:check`. It is not a CI gate yet, to preserve the existing source style.
+You can format code with `bun run fmt` or check formatting with `bun run fmt:check`. It isn't a CI gate yet so existing source style stays untouched.
 
 ## Commands
 
-| Command | Purpose |
+| Command | What it does |
 | --- | --- |
-| `bun run dev` | Web development server on port 5173. |
-| `bun run dev:desktop` | Desktop-mode frontend on port 1420; does not launch the native shell. |
-| `bun run tauri dev` | Native shell and desktop frontend; builds the local ChatGPT sidecar first. |
-| `bun run check` | Typecheck and lint the frontend, server, API, and scripts. |
-| `bun run test` | Run the seven existing test files with Vite+/Vitest; do not add new tests. |
-| `bun run build` | Typecheck and build the web frontend. |
-| `bun run build:desktop` | Typecheck and build the desktop frontend; does not package the native app. |
-| `bun run tauri build` | Build a native bundle; requires the Tauri toolchain. |
-| `bun run build:chatgpt-sidecar` | Build the desktop sidecar. |
-| `bun run start` | Serve the built app and API using Bun. |
+| `bun run dev` | Starts the web dev server on port 5173. |
+| `bun run dev:desktop` | Starts the desktop-mode frontend on port 1420 (without launching the native shell). |
+| `bun run tauri dev` | Launches the native shell and desktop frontend, building the local ChatGPT sidecar first. |
+| `bun run check` | Typechecks and lints the frontend, server, API, and scripts. |
+| `bun run test` | Runs the seven existing test files with Vite+/Vitest (don't add new tests). |
+| `bun run build` | Typechecks and builds the web frontend. |
+| `bun run build:desktop` | Typechecks and builds the desktop frontend (without packaging a native installer). |
+| `bun run tauri build` | Builds a native bundle (requires the Tauri toolchain). |
+| `bun run build:chatgpt-sidecar` | Compiles the desktop ChatGPT sidecar. |
+| `bun run start` | Serves the built app and API using Bun. |
 
-Verify changes with `bun run check`, `bun run test`, `bun run build`, and `bun run build:desktop`. The small existing test suite (seven files) must keep passing; do not add new tests. Exercise affected behavior in the app when appropriate.
+Before wrapping up a change, run `bun run check`, `bun run test`, `bun run build`, and `bun run build:desktop`. The seven existing test files must keep passing, and don't add new tests. When it makes sense, try out the changed flow in the running app too.
 
 ## Repository map
 
-| Path | Purpose |
+| Path | What lives here |
 | --- | --- |
 | `src/` | Shared React UI, domain logic, local storage, and sync. |
 | `src-tauri/` | Tauri shell, native integration, and sidecar lifecycle. |
 | `server/`, `vendor/siwc/` | API handlers, MCP server, and local ChatGPT service. |
 | `api/` | Hosted API entry points. |
 | `supabase/migrations/` | Account, sync, and feature schema migrations. |
-| `public/` | Browser assets and reference datasets. |
-| `vcaa/`, `vtac/` | Reference-data import tools. |
-| `docs/` | Guides and technical references. |
+| `public/` | Browser assets and VCAA/VTAC reference datasets. |
+| `vcaa/`, `vtac/` | Reference-data import scripts. |
+| `docs/` | Guides and technical notes. |
 
-`src/lib/class-timetable-core.ts` implements school timetable cycles; `src/lib/timetable.ts` handles exam scheduling. Preserve historical `examtrack` storage keys and sync identifiers. Existing SQLite data and coursework files are not cleanup targets. Local SQLite migrations are immutable after release: add a new version and register it in `src-tauri/src/lib.rs`.
+A couple of handy things to keep in mind: `src/lib/class-timetable-core.ts` handles school timetable cycles, while `src/lib/timetable.ts` handles exam schedules. Keep historical `examtrack` storage keys and sync identifiers as they are, and don't remove existing SQLite data or coursework files as cleanup. Local SQLite migrations are immutable once shipped, so always add a new numbered file and register it in `src-tauri/src/lib.rs`.

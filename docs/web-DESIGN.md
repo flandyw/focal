@@ -1,7 +1,7 @@
 # Interface design
 
-Focal uses the same React interface on web and desktop. Its theme tokens, light and dark palettes, fonts, and surface variants live in `src/index.css`; users can customize appearance in Settings. Reuse components in `src/components/ui/` and follow the surrounding page's layout and interaction patterns.
+Focal shares one React interface across web and desktop. Its theme tokens, light and dark palettes, fonts, and surface styles live in `src/index.css`, and students can tweak the look in Settings. Reuse the components in `src/components/ui/` and match the layout and feel of the surrounding page.
 
-Favor clear study actions, readable data, and responsive layouts. Keep keyboard focus visible, provide text alongside color-coded status, respect reduced motion, and give charts useful labels or summaries. Test dense tables and calendars at narrow widths as well as on desktop.
+Keep study actions clear, data easy to scan, and layouts comfortable at every screen width. Make sure keyboard focus stays visible, pair colour-coded status with text, respect reduced-motion preferences, and give charts clear labels or summaries. Check dense tables and calendars on narrow phone screens as well as desktop.
 
 See [typography](TYPOGRAPHY.md) and [product context](web-PRODUCT.md).

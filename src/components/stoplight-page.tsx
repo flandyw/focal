@@ -149,7 +149,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
 
   return (
     <WorkspacePage>
-      <PageHeader icon={ListChecks} title="Skills" description="Rate your checklist and revisit skills that need practice.">
+      <PageHeader icon={ListChecks} title="Skills" description="Rate how confident you feel on each topic and revisit the ones that still need work.">
         <Button variant={subject ? "secondary" : "default"} onClick={() => setAddOpen(true)}><Plus />Add skill</Button>
         <Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button>
         {AI_ENABLED ? <Button variant="outline" disabled={!unlinked.length || linking} onClick={() => void linkMistakes()}><Sparkles />{linking ? "Linking…" : "Link mistakes"}{!linking && unlinked.length ? ` (${unlinked.length})` : ""}</Button> : null}
@@ -249,7 +249,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
           )) : <Empty className="min-h-40 border"><EmptyHeader><EmptyTitle>No items match these filters</EmptyTitle><EmptyDescription>{needle ? `Nothing in ${subject} matches “${query.trim()}”` : `No ${FILTERS[filter].toLowerCase()} items in ${subject}`}.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setQuery(""); onFilterChange("all") }}>Clear filters</Button></Empty>}
         </>
       ) : (
-        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Add the skills you want to practise one at a time, or import a checklist from your study design.</EmptyDescription></EmptyHeader><div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setAddOpen(true)}><Plus />Add skill</Button><Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button></div></Empty>
+        <Empty className="min-h-56 border"><EmptyHeader><EmptyMedia variant="icon"><TrafficCone /></EmptyMedia><EmptyTitle>Build your first checklist</EmptyTitle><EmptyDescription>Add skills one by one, or import a full checklist straight from your study design.</EmptyDescription></EmptyHeader><div className="flex flex-wrap justify-center gap-2"><Button onClick={() => setAddOpen(true)}><Plus />Add skill</Button><Button variant="outline" onClick={() => setImportOpen(true)}><FileJson />Import checklist</Button></div></Empty>
       )}
 
       {addOpen ? <StoplightAddDialog subjects={[...subjects, ...itemSubjects, ...data.subjects]} preferredSubjects={data.subjects} defaultSubject={scopedSubject || subject || data.subjects[0] || ""} scopedSubject={scopedSubject} onClose={() => setAddOpen(false)} onSave={addSkill} /> : null}

@@ -14,7 +14,7 @@ export function OfflineChip({ status }: { status: string }) {
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update) }
   }, [])
   if (online && status !== "reconnecting" && status !== "error") return null
-  return <span role="status" title="Changes stay on this device and sync when you reconnect" className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><CloudOff aria-hidden className="size-3.5" />{online && status === "error" ? "Not synced" : "Offline"}</span>
+  return <span role="status" title="Your changes stay saved here and will sync as soon as you’re back online" className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><CloudOff aria-hidden className="size-3.5" />{online && status === "error" ? "Not synced" : "Offline"}</span>
 }
 
 const INSTALL_NUDGE_KEY = "focal:install-nudge:v1"
@@ -35,7 +35,7 @@ export function InstallNudge() {
   const dismiss = () => { setHidden(true); try { localStorage.setItem(INSTALL_NUDGE_KEY, "-1") } catch { /* Shows again next launch. */ } }
   return (
     <div className="mb-3 flex items-center gap-3 rounded-md border bg-card p-3 text-sm">
-      <p className="min-w-0 flex-1 text-muted-foreground">{canPromptInstall() ? "Install Focal for reminders and a full-screen app." : "Add Focal to your Home Screen from the Share menu for reminders and a full-screen app."}</p>
+      <p className="min-w-0 flex-1 text-muted-foreground">{canPromptInstall() ? "Install Focal on your Home Screen for reminders and a full-screen view." : "Add Focal to your Home Screen from the Share menu for reminders and a full-screen view."}</p>
       {canPromptInstall() ? <Button size="sm" onClick={() => void promptInstall().then(dismiss)}>Install</Button> : null}
       <Button size="icon-sm" variant="ghost" aria-label="Dismiss install suggestion" onClick={dismiss}><X aria-hidden /></Button>
     </div>

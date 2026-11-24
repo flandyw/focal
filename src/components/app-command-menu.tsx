@@ -88,7 +88,7 @@ export function AppCommandMenu({
           className="fixed z-50 rounded-sm border border-sidebar-border bg-popover p-1.5 shadow-lg"
         >
           <CommandList className="overflow-y-auto overscroll-contain outline-none" style={{ maxHeight: `min(24rem, 60dvh, ${Math.max(44, window.innerHeight - rect.bottom - 24)}px)` }}>
-            <CommandEmpty className="px-3 py-3 text-[13px] text-muted-foreground">No matches. Try a page name or “log”.</CommandEmpty>
+            <CommandEmpty className="px-3 py-3 text-[13px] text-muted-foreground">Nothing matched. Try a page name or “log”.</CommandEmpty>
             <CommandGroup heading={<div className={headingClass}>Quick actions</div>} className="p-0">
               <CommandItem value="log practice exam add result" onSelect={() => run(onLogExam)} className={itemClass}>
                 Log practice exam
@@ -197,7 +197,7 @@ export function MobileSearch({
               <DialogPrimitive.Close render={<Button variant="ghost" className="h-11 px-2 text-[15px] text-primary" />}>Cancel</DialogPrimitive.Close>
             </div>
             <CommandList className="max-h-none flex-1 overscroll-contain px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <CommandEmpty className="px-6 py-12 text-center text-[15px] wrap-anywhere text-muted-foreground">No results for “{query}”.<br />Try a page name or “log”.</CommandEmpty>
+              <CommandEmpty className="px-6 py-12 text-center text-[15px] wrap-anywhere text-muted-foreground">Nothing matched “{query}”.<br />Try a page name or “log”.</CommandEmpty>
               <CommandGroup heading={<div className={mobileHeadingClass}>Quick actions</div>} className="p-0">
                 {actions.map(({ label, value, keywords, Icon, action }) => (
                   <CommandItem key={label} value={value} keywords={keywords} onSelect={() => run(action)} className={mobileItemClass}>

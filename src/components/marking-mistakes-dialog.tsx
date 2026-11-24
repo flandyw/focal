@@ -18,7 +18,7 @@ export function MarkingMistakesDialog({ attempt, results, onClose, onSave }: { a
   function close() { if (JSON.stringify(cards) !== JSON.stringify(initial)) setConfirmingClose(true); else onClose() }
   return <Dialog open onOpenChange={(open) => { if (!open) close() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
-      <DialogHeader><DialogTitle>Turn lost marks into revision</DialogTitle><DialogDescription>Your exam is saved. Choose questions and add what went wrong and how to fix it. Existing mistake cards are excluded.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>Turn lost marks into revision</DialogTitle><DialogDescription>Your exam is saved. Pick the questions you want to revisit, jot down what went wrong, and add how to fix it next time. Questions you’ve already turned into cards are skipped.</DialogDescription></DialogHeader>
       <form id="marked-mistakes" className="grid gap-5" onSubmit={(event) => {
         event.preventDefault()
         const timestamp = new Date().toISOString()
@@ -30,7 +30,7 @@ export function MarkingMistakesDialog({ attempt, results, onClose, onSave }: { a
           areaOfStudy: result.areaOfStudy, topic: result.topic, itemIds: result.itemIds, itemsBy: result.itemsBy,
           resolved: false, createdAt: timestamp, updatedAt: timestamp,
         }))) } catch (failure) {
-          setError(failure instanceof Error ? failure.message : "Could not save. Your notes are still here; try again.")
+          setError(failure instanceof Error ? failure.message : "Couldn’t save just now. Your notes are still here, so give it another try.")
         }
       }}>
         {cards.map((card, index) => <div key={card.result.id} className="grid gap-3 border-b pb-5 last:border-0">

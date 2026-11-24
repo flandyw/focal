@@ -239,7 +239,7 @@ export function buildRevisionPrompt(subject: string, items: CurriculumArea[], ev
   const lines = items.map((item, index) => {
     const entry = evidence.get(item.id)
     const notes = [item.rating ?? "unrated", entry?.open ? `${entry.open} open mistakes` : "", entry?.available ? `${entry.awarded}/${entry.available} marks` : ""].filter(Boolean).join(", ")
-    return `${index + 1}. [${itemGroup(item)}] ${item.name}${item.check ? ` — check: ${item.check}` : ""} (${notes})`
+    return `${index + 1}. [${itemGroup(item)}] ${item.name}${item.check ? ` (check: ${item.check})` : ""} (${notes})`
   })
   const ratings = `Ratings: ${RATINGS.map(({ id, meaning }) => `${id} = ${meaning.toLowerCase()}`).join("; ")}.`
   const reply = `ONLY one JSON code block in exactly this shape, using the item numbers below (marks and feedback are optional, feedback is one sentence):
@@ -260,13 +260,13 @@ ${checklist}`
 
 ${ratings}
 
-Step 1 — the worksheet:
+Step 1: the worksheet:
 - Write a timed, exam-style worksheet in XeLaTeX and compile it with xelatex (run it twice), then give me the PDF to download. Do not mark anything yet.
 - Reuse the template at the end of this message: keep its preamble, macros, page layout, question numbering, marks and ruled answer lines. Replace the cover, questions and formula sheet with content for ${subject}; drop parts that don't apply. If a font is missing, substitute an installed one.
 - Cover red, then amber, unrated, and items with open mistakes or low marks. Write 1–3 questions per item, each testing the item's check unaided, and keep an internal answer key with each question's item number. Don't print item numbers or answers on the worksheet.
 - Pitch the length at about 30–45 minutes.
 
-Step 2 — marking:
+Step 2: marking:
 - I'll upload my completed worksheet (photo, scan or PDF). Mark it against your answer key, then rate each item I was tested on from my working, not my final answers alone. Rate only items I was tested on.
 - Reply with ${reply}
 

@@ -83,7 +83,7 @@ export function AtarEstimator({
 
   return (
     <div className="grid gap-5">
-      <PageHeader icon={Calculator} title="ATAR" description="Your Unit 3/4 study scores combined into an ATAR under VTAC rules.">
+      <PageHeader icon={Calculator} title="ATAR" description="Combine your Unit 3/4 study scores into an estimated ATAR using VTAC rules.">
         <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
           <SelectTrigger className="w-32" aria-label="VTAC report year"><SelectValue>{year} VTAC</SelectValue></SelectTrigger>
           <SelectContent>{years.map((item) => <SelectItem key={item} value={String(item)}>{item} VTAC</SelectItem>)}</SelectContent>

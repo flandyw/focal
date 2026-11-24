@@ -10,11 +10,11 @@ import { NativeSelect, NativeSelectOption } from "./ui/native-select"
 import { Switch } from "./ui/switch"
 
 const reminderTypes = [
-  { key: "planned", label: "Planned study", description: "A reminder before a scheduled study block." },
-  { key: "deadlines", label: "Exams, SACs and deadlines", description: "Upcoming calendar deadlines and unmarked SACs." },
-  { key: "daily", label: "Daily study reminder", description: "A daily nudge to make time for study." },
+  { key: "planned", label: "Planned study", description: "A heads-up before a scheduled study block starts." },
+  { key: "deadlines", label: "Exams, SACs, and deadlines", description: "Upcoming calendar deadlines and SACs still waiting for a mark." },
+  { key: "daily", label: "Daily study reminder", description: "A gentle daily nudge to fit in some study." },
   { key: "friends", label: "Friends studying", description: "When a friend starts a study session." },
-  { key: "cheers", label: "Cheers", description: "When a friend sends you encouragement." },
+  { key: "cheers", label: "Cheers", description: "When a friend sends you a cheer." },
 ] as const
 
 export function PushSettings({ userId }: { userId?: string }) {

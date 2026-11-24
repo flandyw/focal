@@ -543,13 +543,13 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
 
       <Dialog open={dialog === "add"} onOpenChange={(open) => { if (!pending && !open) { setDialog(null); setManualCopy(null) } }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add a friend</DialogTitle><DialogDescription>Connect by @username. Study activity is shared only once you are friends.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Add a friend</DialogTitle><DialogDescription>Add someone by @username. Your study activity stays private until you’re both friends.</DialogDescription></DialogHeader>
           <form className="grid gap-2" onSubmit={(event) => {
             event.preventDefault()
             const username = friendUsername.trim().replace(/^@/, "").toLowerCase()
-            if (!/^[a-z0-9_]{3,24}$/.test(username)) { toast.error("Enter a username with 3–24 letters, numbers or underscores."); return }
-            if (username === profile?.username) { toast.error("That is your username. Share it with a friend instead."); return }
-            void call("friends_add", { p_username: username }, "Could not add that friend.").then((ok) => { if (ok) { setFriendUsername(""); setDialog(null); setManualCopy(null); toast.success(cache.people.some((person) => person.username === username && person.status === "outgoing") ? "Friend request sent" : "Friend added") } })
+            if (!/^[a-z0-9_]{3,24}$/.test(username)) { toast.error("Use 3 to 24 letters, numbers, or underscores."); return }
+            if (username === profile?.username) { toast.error("That’s your own username. Share it with a friend instead."); return }
+            void call("friends_add", { p_username: username }, "Couldn’t add that friend.").then((ok) => { if (ok) { setFriendUsername(""); setDialog(null); setManualCopy(null); toast.success(cache.people.some((person) => person.username === username && person.status === "outgoing") ? "Friend request sent" : "Friend added") } })
           }}>
             <Label htmlFor="friend-username" className="text-sm font-medium">Their username</Label>
             <div className="flex gap-2">
@@ -570,7 +570,7 @@ export function FriendsPage({ signedIn, userId, sessions, onSignIn, onJoin }: {
 
       <Dialog open={dialog === "profile"} onOpenChange={(open) => { if (!pending && !open) setDialog(null) }}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Profile & sharing</DialogTitle><DialogDescription>Friends see your name, status, live study, study time and consistency. Requests see nothing, and your email is never shown.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Profile & sharing</DialogTitle><DialogDescription>Accepted friends can see your name, status, live sessions, study time, and streak. Pending requests see nothing, and your email is never shared.</DialogDescription></DialogHeader>
           {profileError ? <div role="alert" className="grid justify-items-start gap-2 text-sm"><p>Could not load your profile.</p><Button variant="outline" size="sm" onClick={() => void loadProfile()}>Try again</Button></div> : null}
           <fieldset disabled={!profile || !!pending} className="grid min-w-0 gap-4">
             <form className="grid gap-3" onSubmit={(event) => {

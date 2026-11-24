@@ -120,7 +120,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
       <SheetContent resizable className="w-full">
         <SheetHeader>
           <SheetTitle>{initialRecord ? "Edit SAC" : "Plan or log SAC"}</SheetTitle>
-          <SheetDescription>Add an upcoming SAC now, then enter the result when it is marked.</SheetDescription>
+          <SheetDescription>Add an upcoming SAC now, then pop in your mark once it’s back.</SheetDescription>
         </SheetHeader>
         <form id="sac-form" className="px-4 pb-4" onChange={() => setError(null)} onSubmit={submit}>
           <FieldGroup>
@@ -151,7 +151,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
                   <SelectTrigger id="sac-unit" className="w-full" {...errorProps("unit")}><SelectValue placeholder="Select unit" /></SelectTrigger>
                   <SelectContent>{SAC_UNITS.map((option) => <SelectItem key={option} value={String(option)}>Unit {option}</SelectItem>)}</SelectContent>
                 </Select>
-                <FieldDescription>Set this per subject so accelerated students can mix Units 1/2 and 3/4.</FieldDescription>
+                <FieldDescription>Set this per subject so you can mix Units 1/2 and 3/4 if you’re accelerating.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="sac-aos">Area of Study <span className="text-muted-foreground">(optional)</span></FieldLabel>

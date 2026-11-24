@@ -13,19 +13,19 @@ export function buildPracticePaperPrompt(subject: string, kind: "exam" | "sac", 
   const importPrompt = buildMistakeImportPrompt()
   const fieldRules = importPrompt.slice(importPrompt.indexOf("Each object must use"), importPrompt.indexOf("EXAM LOG (optional)"))
   return `You are my VCE ${subject} practice-paper setter and marker.
-Assessment: ${kind.toUpperCase()} — ${paper}
+Assessment: ${kind.toUpperCase()} (${paper})
 Writing time: ${minutes} minutes
 Area of study: ${areaOfStudy || "Full examinable course"}
 Weak areas: ${[...new Set(weakAreas)].join("; ") || "None recorded; balance coverage across the course."}
 
-Step 1 — generate the paper:
+Step 1: generate the paper:
 - Read the linked past exams, specifications and examiner/external assessment reports below. Model the format, mark allocation and command terms on them, but write original questions. If links cannot be accessed, ask me to upload the documents; do not claim to have read them.
 - Write a full practice paper in XeLaTeX. Reuse the supplied template's preamble, macros, cover, page layout and ruled answer lines. Adapt subject details, instructions and formula sheets; substitute installed fonts if needed. Label it Focal practice, not an official VCAA paper.
 - Compile with xelatex twice and give me the downloadable PDF. Do not print answers or the marking scheme.
 - Weight questions toward the weak areas while preserving the paper's overall coverage. For a SAC, use a school-assessed task style for the chosen area of study, with the same typesetting.
 - Privately build a per-question marking scheme using the linked examiner reports' criteria: what earns each mark, acceptable working and common errors examiners penalise. Keep it for Step 2.
 
-Step 2 — after I upload my completed paper:
+Step 2: after I upload my completed paper:
 - Mark strictly against that private rubric, considering working as well as answers. Ask for clearer uploads if needed; never invent unreadable responses.
 - Reply with ONLY one fenced JSON block containing {"exam":{"subject":${JSON.stringify(subject)},"provider":"Focal practice","examYear":${new Date().getFullYear()},"paper":${JSON.stringify(paper)},"completedAt":"YYYY-MM-DD","rawScore":0,"rawMax":1,"comment":"Overall feedback","questions":[{"label":"Question 1","marksAwarded":0,"maxMarks":1,"areaOfStudy":"Topic","examinerNote":"Criterion-based feedback"}]},"mistakes":[]}.
 - Replace example scores with actual marks. Include every question exactly once, with unique labels, positive maxMarks and marksAwarded between 0 and maxMarks. Question totals must sum to rawScore/rawMax. Use the actual completion date (ask if unknown).

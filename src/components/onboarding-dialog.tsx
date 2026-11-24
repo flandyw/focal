@@ -12,11 +12,11 @@ import { validCompletionYear } from "../lib/subject-completion"
 import { Progress } from "./ui/progress"
 
 const FEATURES = [
-  { icon: ClipboardList, title: "Practice exams", text: "Log marks and compare with VCAA grade distributions." },
-  { icon: RotateCcw, title: "Mistakes", text: "Turn errors into cards you review on a spaced schedule." },
-  { icon: CalendarDays, title: "Calendar", text: "Plan study around SACs, classes, and the exam timetable." },
-  { icon: Timer, title: "Study timer", text: "Focus blocks and timed papers under exam conditions." },
-  { icon: LineChart, title: "Progress and predictions", text: "See study trends, rate skills, and estimate study scores and ATAR." },
+  { icon: ClipboardList, title: "Practice exams", text: "Log your marks and see how they stack up against VCAA grade distributions." },
+  { icon: RotateCcw, title: "Mistakes", text: "Turn tricky questions into revision cards that come back right before you forget them." },
+  { icon: CalendarDays, title: "Calendar", text: "Map out study around your classes, SACs, and exam timetable." },
+  { icon: Timer, title: "Study timer", text: "Run focus blocks or sit practice papers under real exam timing." },
+  { icon: LineChart, title: "Progress and predictions", text: "Watch your habits build, check off skills, and estimate your study scores and ATAR." },
 ]
 
 export type OnboardingFinish = "exam" | "focus" | "calendar" | "sign-in" | "tour" | null
@@ -40,7 +40,7 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
   const steps = [
     {
       title: "Welcome to Focal",
-      description: "Everything for VCE revision in one place. Here’s what you can do.",
+      description: "Your VCE study space, all in one spot. Here’s a quick look at what’s inside.",
       body: (
         <ul className="grid gap-3">
           {FEATURES.map(({ icon: Icon, title, text }) => (
@@ -53,8 +53,8 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
       ),
     },
     {
-      title: "Choose your subjects",
-      description: "Choose what you’re studying now and anything you’ve already finished, including subjects completed in Year 11. Change these later in Settings → Subjects.",
+      title: "Pick your subjects",
+      description: "Add the subjects you’re taking this year, plus any you finished early (like a Year 11 3/4). You can always change these later in Settings → Subjects.",
       body: (
         <div className="grid gap-4">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Add subject as">
@@ -115,17 +115,17 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
                     </div>
                   </li>
                 ))}
-              </ul> : <p className="text-sm text-muted-foreground">{completed ? "Finished a subject early? Add it above." : "Add your current subjects above. You can also do this later."}</p>}
+              </ul> : <p className="text-sm text-muted-foreground">{completed ? "Finished a subject early? Add it above so it counts toward your ATAR." : "Add your current subjects above, or skip this and add them later."}</p>}
             </section>
           ))}
-          <p className="text-xs text-muted-foreground">Your first current subject is the default. Reorder subjects or resume a completed subject in Settings → Subjects.</p>
-          {finishedSubjects.length > 0 ? <p className="text-xs text-muted-foreground">Completed subjects start with {year} as their completion year. Change the year beside each subject if you finished earlier.</p> : null}
+          <p className="text-xs text-muted-foreground">Your first current subject is picked by default when you log work. You can reorder or resume subjects anytime in Settings → Subjects.</p>
+          {finishedSubjects.length > 0 ? <p className="text-xs text-muted-foreground">Completed subjects default to {year}. Change the year next to any subject you finished earlier.</p> : null}
         </div>
       ),
     },
     {
-      title: "Find your way around",
-      description: "Everything lives in the sidebar. Hide or reorder links later in Settings → Appearance.",
+      title: "Finding your way around",
+      description: "Everything lives in the sidebar. You can hide or reorder pages anytime in Settings → Appearance.",
       body: (
         <div className="grid gap-4">
           {NAVIGATION_GROUPS.map((group) => (
@@ -138,13 +138,13 @@ export function OnboardingDialog({ subjects, selectedSubjects, completedSubjects
               </ul>
             </section>
           ))}
-          <p className="text-sm text-muted-foreground pointer-coarse:hidden">Press <kbd className="rounded-xs border px-1.5 font-sans text-xs">{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd> anywhere to search and jump to any page.</p>
+          <p className="text-sm text-muted-foreground pointer-coarse:hidden">Hit <kbd className="rounded-xs border px-1.5 font-sans text-xs">{/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"}</kbd> from anywhere to jump to a page or log something fast.</p>
         </div>
       ),
     },
     {
-      title: "Where to start",
-      description: signedIn ? "Your data syncs to your account automatically." : "Your data is saved in this browser. Sign in to sync it across devices and with Folio.",
+      title: "Where would you like to start?",
+      description: signedIn ? "You’re signed in, so your study data syncs automatically across your devices." : "Everything stays saved right here on this device. Sign in whenever you want to sync across devices or with Folio.",
       body: (
         <div className="grid gap-2">
           {!signedIn ? <Button variant="outline" className="justify-start" onClick={() => onFinish("sign-in")}><Cloud />Sign in or create an account</Button> : null}

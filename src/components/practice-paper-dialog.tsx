@@ -69,7 +69,7 @@ export function PracticePaperDialog({ data, studies, initialSubject, onOpenChang
       setManualPrompt(null)
     } catch {
       setManualPrompt(prompt)
-      toast.error("Could not copy. Select the prompt below and copy it manually.")
+      toast.error("Couldn’t copy automatically. Select the prompt below and copy it manually.")
     } finally {
       copyingRef.current = false
       setCopying(false)
@@ -82,12 +82,12 @@ export function PracticePaperDialog({ data, studies, initialSubject, onOpenChang
       if (!parsed.exam) throw new Error("Include the exam object with your total mark and question results.")
       onSave(createMistakesFromImport(parsed.drafts, parsed.exam.id), parsed.exam)
       onOpenChange(false)
-    } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not save. Your JSON is still here; try again.") }
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Couldn’t save just now. Your JSON is still here, so give it another try.") }
   }
   return <>
     <Dialog open onOpenChange={(open) => { if (!open) close() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">
-        <DialogHeader><DialogTitle>Generate practice paper</DialogTitle><DialogDescription>Make a VCAA-style paper with any chatbot that can compile XeLaTeX, then upload your completed work there for rubric-based marking. AI marking can be wrong; check it against the reports.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Generate practice paper</DialogTitle><DialogDescription>Build a VCAA-style paper with any chatbot that can compile XeLaTeX, then upload your completed work there for rubric-based marking. AI marking can make mistakes, so double-check it against the official reports.</DialogDescription></DialogHeader>
         <FieldGroup>
           <fieldset disabled={copying} className="contents">
           <Field><FieldLabel htmlFor="practice-subject">1. Choose your assessment</FieldLabel><SubjectCombobox id="practice-subject" subjects={subjects} preferredSubjects={data.subjects} value={subject} onValueChange={(value) => { setSubject(value); invalidatePrompt() }} {...invalid("subject")} /><FieldError id="practice-subject-error">{problems.subject}</FieldError></Field>
@@ -98,7 +98,7 @@ export function PracticePaperDialog({ data, studies, initialSubject, onOpenChang
           </div>
           <Field><FieldLabel htmlFor="practice-area">Area of study {kind === "sac" ? "(required)" : "(optional)"}</FieldLabel><Input id="practice-area" value={area} onChange={(event) => { setArea(event.target.value); invalidatePrompt() }} {...invalid("area")} /><FieldError id="practice-area-error">{problems.area}</FieldError></Field>
           </fieldset>
-          <Field><FieldLabel>2. Generate, complete, then upload your paper</FieldLabel><Button variant="outline" disabled={!valid || copying} onClick={() => void copyPrompt()}>{copying ? "Copying…" : copied ? "Copied — copy again" : "Copy prompt"}</Button><FieldDescription>Includes official VCAA links, your open mistake topics, red/amber checklist items and the typesetting template. Keep the same chat for marking.</FieldDescription>{manualPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 font-mono text-xs" value={manualPrompt} /> : null}</Field>
+          <Field><FieldLabel>2. Generate, complete, then upload your paper</FieldLabel><Button variant="outline" disabled={!valid || copying} onClick={() => void copyPrompt()}>{copying ? "Copying…" : copied ? "Copied (copy again)" : "Copy prompt"}</Button><FieldDescription>Packs in official VCAA links, your open mistake topics, red/amber checklist items, and the typesetting template. Stay in the same chat when you come back for marking.</FieldDescription>{manualPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 font-mono text-xs" value={manualPrompt} /> : null}</Field>
           <Field><FieldLabel htmlFor="practice-json">3. Paste the marking JSON</FieldLabel><Textarea id="practice-json" rows={5} className="font-mono text-xs" value={text} onChange={(event) => { setText(event.target.value); setError(null) }} aria-invalid={!!error} aria-describedby={error ? "practice-json-error" : undefined} placeholder='{"exam":{...},"mistakes":[]}' /><FieldError id="practice-json-error">{error}</FieldError></Field>
         </FieldGroup>
         <DialogFooter><Button variant="outline" disabled={copying} onClick={close}>Cancel</Button><Button disabled={copying || !text.trim()} onClick={save}>Save exam and mistakes</Button></DialogFooter>

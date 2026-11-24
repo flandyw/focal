@@ -46,14 +46,14 @@ export function AIOverviewSettings({ userId }: { userId: string }) {
       <label className="flex items-center justify-between gap-6 border-b py-4">
         <span className="min-w-0">
           <span className="block text-sm font-medium">Show AI overviews</span>
-          <span className="block text-sm text-muted-foreground">On Today, Mistakes, Practice, Progress and subject pages. Each one is written at most about once a day, using your Gateway key.</span>
+          <span className="block text-sm text-muted-foreground">Shown on Today, Mistakes, Practice, Progress, and subject pages. Each overview refreshes about once a day using your Gateway key.</span>
         </span>
         <Switch checked={settings.enabled} onCheckedChange={(enabled) => update({ enabled })} />
       </label>
       <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-medium">Overview model</h3>
-          <p className="text-sm text-muted-foreground">{catalog && !catalog.hasKey ? "Save a Gateway key above to turn overviews on." : "A small, cheap model is plenty. New overviews use it."}</p>
+          <p className="text-sm text-muted-foreground">{catalog && !catalog.hasKey ? "Save a Gateway key above to turn overviews on." : "A small, inexpensive model is plenty. New overviews will use it."}</p>
           {error ? <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p className="text-destructive">{error}</p><Button size="sm" variant="outline" onClick={() => { setError(""); setAttempt((value) => value + 1) }}><RefreshCw />Retry</Button></div> : null}
         </div>
         {catalog ? <ModelSelector catalog={catalog} value={model} onValueChange={(value) => update({ model: value })} favourites={chat?.favourites ?? []} onToggleFavourite={toggleFavourite} disabled={!settings.enabled} /> : error ? null : <Skeleton className="h-8 w-40" />}

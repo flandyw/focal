@@ -39,7 +39,7 @@ function StudyTargetPopover({ preferences, onChange }: { preferences: StudyPrefe
       <PopoverTrigger render={<Button variant="ghost" size="sm" />} aria-label="Set daily study target" title="Set daily study target"><Target data-icon="inline-start" /><span>Target</span></PopoverTrigger>
       <PopoverContent align="end" className="w-80">
         <PopoverTitle>Daily study target</PopoverTitle>
-        <PopoverDescription className="text-xs">Auto-plan fills each study day up to this amount.</PopoverDescription>
+        <PopoverDescription className="text-xs">Auto-plan aims to fill each study day up to this target.</PopoverDescription>
         <form className="flex flex-col gap-3" onSubmit={(event) => {
           event.preventDefault()
           if (!valid) return
@@ -49,7 +49,7 @@ function StudyTargetPopover({ preferences, onChange }: { preferences: StudyPrefe
           <div className="grid gap-1.5">
             <Label htmlFor="today-target-minutes">Minutes a day</Label>
             <Input id="today-target-minutes" type="number" inputMode="numeric" min={5} max={1440} required value={Number.isFinite(minutes) ? minutes : ""} aria-invalid={!valid || undefined} onChange={(event) => setMinutes(event.target.valueAsNumber)} />
-            {!valid ? <p className="text-xs text-destructive">Enter whole minutes from 5 to 1440.</p> : null}
+            {!valid ? <p className="text-xs text-destructive">Pick a whole number of minutes between 5 and 1440.</p> : null}
           </div>
           <div className="grid gap-1.5">
             <span id="today-target-days" className="text-sm font-medium">Study days</span>
@@ -142,8 +142,8 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
       <StatGrid>
         <StatTile icon={Clock} tone={todayTarget && todayMinutes >= todayTarget ? "success" : "default"} label="Studied today" value={hours(todayMinutes)} hint={todayTarget ? `${todayMinutes >= todayTarget ? "Target met" : `${hours(todayTarget - todayMinutes)} to go`} · ${hours(todayTarget)} target` : plan.plannedMinutes ? `Rest day · ${hours(plan.plannedMinutes)} planned` : "Rest day"} />
         <StatTile icon={CalendarRange} label="This week" value={hours(weekMinutes)} hint={`${days.filter((day) => day.minutes > 0).length} of 7 days active`} spark={days.map((day) => day.minutes)} onClick={() => onNavigate("progress")} />
-        <StatTile icon={Flame} tone={totalStreak ? "warning" : "default"} label="Streak" value={count(totalStreak, "day")} hint={totalStreak ? (todayMinutes ? "Kept alive today" : "Study today to keep it") : "Start one today"} />
-        <StatTile icon={Hourglass} tone={next && daysUntil(next.date, today) <= 3 ? "danger" : "default"} label="Next up" value={next ? `${daysUntil(next.date, today)}d` : "—"} hint={next ? next.label : "No exams or SACs tracked"} onClick={next ? () => next.kind === "SAC" ? onOpenSac(next.id) : onNavigate("exams") : undefined} />
+        <StatTile icon={Flame} tone={totalStreak ? "warning" : "default"} label="Streak" value={count(totalStreak, "day")} hint={totalStreak ? (todayMinutes ? "Kept going today" : "Log a bit of study to keep it going") : "Start your streak today"} />
+        <StatTile icon={Hourglass} tone={next && daysUntil(next.date, today) <= 3 ? "danger" : "default"} label="Next up" value={next ? `${daysUntil(next.date, today)}d` : "—"} hint={next ? next.label : "No exams or SACs tracked yet"} onClick={next ? () => next.kind === "SAC" ? onOpenSac(next.id) : onNavigate("exams") : undefined} />
       </StatGrid>
 
       <AIOverview area="today" fingerprint={`${dueMistakes}:${items.length}:${done}:${next?.id ?? ""}`} />
@@ -175,14 +175,14 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
                 })}</ul>
               </>
             ) : (
-              <EmptyState icon={ListChecks} title="Nothing planned yet" description="Block out study on the calendar, or start a session now and it is logged here." action={<>
+              <EmptyState icon={ListChecks} title="Nothing planned yet" description="Map out a few blocks on your calendar, or jump straight into a session and we’ll log it here." action={<>
                 <Button size="sm" onClick={() => onNavigate("calendar")}><CalendarPlus data-icon="inline-start" />Plan the day</Button>
                 <Button variant="outline" size="sm" onClick={() => onStartFocus(undefined, "")}><Play data-icon="inline-start" />Just start</Button>
               </>} />
             )}
           </Panel>
 
-          <Panel flush id="today-papers" icon={FileText} title="Recent papers" description="Change is against your last paper in that subject" action={<Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All papers<ArrowRight data-icon="inline-end" /></Button>}>
+          <Panel flush id="today-papers" icon={FileText} title="Recent papers" description="Compared with your previous paper in the same subject" action={<Button variant="ghost" size="sm" onClick={() => onNavigate("exams")}>All papers<ArrowRight data-icon="inline-end" /></Button>}>
             {papers.length ? <ul>{papers.map(({ attempt, score, delta }) => (
               <li key={attempt.id} className="border-b border-border last:border-b-0">
                 <button type="button" className="focal-row-action flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:px-5" onClick={() => onOpenAttempt(attempt.id)}>
@@ -195,7 +195,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
                   <span className="flex w-12 shrink-0 justify-end">{delta == null ? <Badge variant="outline">new</Badge> : <Delta value={delta} />}</span>
                 </button>
               </li>
-            ))}</ul> : <EmptyState icon={FileText} title="No marked papers yet" description="Log a practice exam to see your marks and how they move." action={<Button size="sm" onClick={() => onNavigate("exams")}>Go to Practice<ArrowRight data-icon="inline-end" /></Button>} />}
+            ))}</ul> : <EmptyState icon={FileText} title="No marked papers yet" description="Log a practice exam to start seeing your marks and how they’re trending." action={<Button size="sm" onClick={() => onNavigate("exams")}>Go to Practice<ArrowRight data-icon="inline-end" /></Button>} />}
           </Panel>
         </div>
 
@@ -204,7 +204,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-baseline gap-2">
                 <span className="focal-stat-value">{dueMistakes}</span>
-                <span className="truncate text-sm text-muted-foreground">{dueMistakes ? `${dueMistakes === 1 ? "mistake" : "mistakes"} ready to review` : "Nothing due. Nice work."}</span>
+                <span className="truncate text-sm text-muted-foreground">{dueMistakes ? `${dueMistakes === 1 ? "mistake" : "mistakes"} ready to review` : "All caught up. Nice work."}</span>
               </div>
               {dueMistakes ? <Button onClick={() => onNavigate("mistakes")}>Review<ArrowRight data-icon="inline-end" /></Button> : <CircleCheck aria-hidden className="size-5 text-success" />}
             </div>
@@ -247,7 +247,7 @@ export function TodayPage({ now, data, sessions, timetable, dueMistakes, onNavig
                   </button>
                 </li>
               )
-            })}</ul> : <EmptyState icon={CalendarClock} title="Nothing coming up" description="Track an exam or add a SAC to see a countdown here." action={<Button variant="outline" size="sm" onClick={() => onNavigate("sacs")}>Add a SAC</Button>} />}
+            })}</ul> : <EmptyState icon={CalendarClock} title="Nothing coming up yet" description="Track an exam or add a SAC to see your countdowns here." action={<Button variant="outline" size="sm" onClick={() => onNavigate("sacs")}>Add a SAC</Button>} />}
           </Panel>
         </div>
       </div>

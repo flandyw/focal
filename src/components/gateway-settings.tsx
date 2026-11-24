@@ -18,7 +18,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
       const result = await withSupabaseSession(userId, () => supabase!.rpc("ai_gateway_key_status", { p_expected_user_id: userId }))
       if (result.error || typeof result.data !== "boolean") throw new Error()
       setHasKey(result.data)
-    } catch { setError("Could not load your saved key. Try again.") }
+    } catch { setError("Couldn’t load your saved key. Give it another try.") }
   }, [userId])
   // Loading state follows the account-scoped status request.
   // oxlint-disable-next-line react/set-state-in-effect
@@ -43,7 +43,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
       setKey("")
       setHasKey(!remove)
       setMessage(remove ? "Gateway key removed." : "Gateway key saved securely.")
-    } catch { setError(remove ? "Could not remove your key. Try again." : "Could not save your key. Try again.") }
+    } catch { setError(remove ? "Couldn’t remove your key. Give it another try." : "Couldn’t save your key. Give it another try.") }
     finally { setBusy(false); setRemoving(false) }
   }
 
@@ -52,7 +52,7 @@ export function GatewaySettings({ userId }: { userId: string }) {
     <Field>
       <FieldLabel htmlFor="gateway-api-key">{hasKey ? "Replace Gateway API key" : "Gateway API key"}</FieldLabel>
       <Input id="gateway-api-key" type="password" autoComplete="off" spellCheck={false} value={key} onChange={(event) => setKey(event.target.value)} maxLength={4096} disabled={busy || hasKey === null} placeholder={hasKey ? "Paste a replacement key" : "Paste your Vercel AI Gateway API key"} aria-describedby="gateway-key-help" />
-      <FieldDescription id="gateway-key-help">Encrypted in Supabase Vault and used by the chat server. Your saved key is never displayed. Usage is billed to your Gateway account.</FieldDescription>
+      <FieldDescription id="gateway-key-help">Stored encrypted in Supabase Vault for the chat server. Your key is never shown back in the app, and usage is billed to your Gateway account.</FieldDescription>
     </Field>
     <div className="flex flex-wrap gap-2">
       <Button type="submit" disabled={busy || hasKey === null || !key.trim()}>{busy && !removing ? "Saving…" : hasKey ? "Replace key" : "Save key"}</Button>

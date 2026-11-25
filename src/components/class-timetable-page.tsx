@@ -138,11 +138,13 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           </p>
           </div>
         </div>
-        <div data-tour="page-actions" className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
-          {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><span className="inline-flex items-center gap-2"><RotateCcw />Today</span></Button> : null}
-          <Button onClick={() => setImportOpen(true)} variant="outline"><span className="inline-flex items-center gap-2 text-sm"><ClipboardPaste />Import</span></Button>
-          {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><span className="inline-flex items-center gap-2"><Settings2 />Cycle settings</span></Button> : null}
-          <Button onClick={addPeriod}><Plus />Add period</Button>
+        <div data-tour="page-actions">
+          <div className="grid grid-cols-2 gap-2 max-sm:[&>button]:h-auto max-sm:[&>button]:min-h-9 max-sm:[&>button]:gap-1 max-sm:[&>button]:px-1.5 max-sm:[&>button]:py-1.5 max-sm:[&>button]:whitespace-normal sm:flex sm:flex-wrap">
+            {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><RotateCcw />Today</Button> : null}
+            <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
+            {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><Settings2 />Cycle settings</Button> : null}
+            <Button onClick={addPeriod}><Plus />Add period</Button>
+          </div>
         </div>
       </header>
 

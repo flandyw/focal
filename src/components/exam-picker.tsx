@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { ListFilter, Search } from "lucide-react"
 import { Button } from "./ui/button"
 import { Checkbox } from "./ui/checkbox"
@@ -49,15 +49,9 @@ function sortPast(first: TimetableEntry, second: TimetableEntry, now: Date): num
 }
 
 function buildSections(entries: TimetableEntry[], now: Date, query: string): { upcoming: Section; past: Section } {
-  const needle = query.trim().toLowerCase()
-  const matches = (entry: TimetableEntry) => {
-    if (!needle) return true
-    return (
-      entry.subject.toLowerCase().includes(needle) ||
-      (entry.paper?.toLowerCase().includes(needle) ?? false) ||
-      entry.id.toLowerCase().includes(needle)
-    )
-  }
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const matches = (entry: TimetableEntry) =>
+    terms.every((term) => `${entry.subject} ${entry.paper ?? ""} ${entry.id}`.toLowerCase().includes(term))
   const upcomingEntries = entries
     .filter((entry) => isUpcoming(entry, now) && matches(entry))
     .toSorted((first, second) => sortUpcoming(first, second, now))
@@ -124,6 +118,7 @@ export function ExamPicker({
   trackedCount: number
 }) {
   const [query, setQuery] = useState("")
+  const searchRef = useRef<HTMLInputElement>(null)
   const now = useTickingNow()
 
   const handleOpenChange = (next: boolean) => {
@@ -148,16 +143,20 @@ export function ExamPicker({
           </DialogDescription>
         </DialogHeader>
         <div className="shrink-0 border-b bg-muted/30 px-6 py-3">
-          <div className="relative">
-            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              type="search"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by subject or paper…"
-              className="w-full pl-9"
-              aria-label="Filter exams"
-            />
+          <div className="flex gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={searchRef}
+                value={query}
+                type="search"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter by subject or paper…"
+                className="w-full pl-9"
+                aria-label="Filter exams"
+              />
+            </div>
+            {query ? <Button variant="ghost" onClick={() => { setQuery(""); searchRef.current?.focus() }}>Clear search</Button> : null}
           </div>
         </div>
         <div className="min-h-0 max-h-[55dvh] flex-1 overflow-y-auto overscroll-contain">

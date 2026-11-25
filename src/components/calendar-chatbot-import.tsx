@@ -27,7 +27,9 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   const copiedTimer = useRef<number | null>(null)
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
-  const [showPrompt, setShowPrompt] = useState(false)
+  const [manualPrompt, setManualPrompt] = useState<string | null>(null)
+  const copyingRef = useRef(false)
+  const [copying, setCopying] = useState(false)
   const [confirmingClose, setConfirmingClose] = useState(false)
   const [imported, setImported] = useState<Set<number>>(new Set())
   useEffect(() => () => { if (copiedTimer.current) window.clearTimeout(copiedTimer.current) }, [])
@@ -42,16 +44,25 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
   }
 
   async function copyPrompt() {
+    if (copyingRef.current) return
+    copyingRef.current = true
+    setCopying(true)
+    if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+    setCopied(false)
     try {
       await navigator.clipboard.writeText(prompt)
       setCopied(true)
-      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
+      setManualPrompt(null)
       copiedTimer.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      setShowPrompt(true)
+      setManualPrompt(prompt)
       toast.error("Couldn’t copy automatically. Select the prompt below and copy it manually.")
+    } finally {
+      copyingRef.current = false
+      setCopying(false)
     }
   }
+  const day = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
 
   function review() {
     try {
@@ -102,12 +113,12 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
           <Field>
             <div className="flex items-center justify-between gap-3">
               <FieldLabel>1. Copy the prompt</FieldLabel>
-              <Button type="button" size="sm" variant="outline" onClick={() => void copyPrompt()}>
-                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copied ? "Copied" : "Copy prompt"}
+              <Button type="button" size="sm" variant="outline" disabled={copying} onClick={() => void copyPrompt()}>
+                {copied ? <ClipboardCheck /> : <ClipboardCopy />}{copying ? "Copying…" : copied ? "Copied" : "Copy prompt"}
               </Button>
             </div>
           </Field>
-          {showPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={prompt} /> : null}
+          {manualPrompt ? <Textarea readOnly aria-label="Prompt to copy manually" className="max-h-64 overflow-y-auto font-mono text-xs" value={manualPrompt} /> : null}
           <Field data-invalid={error && !drafts ? true : undefined}>
             <FieldLabel htmlFor="calendar-import-json">2. Paste the chatbot's reply</FieldLabel>
             <Textarea
@@ -134,8 +145,8 @@ export function CalendarChatbotImportDialog({ open, subjects, onOpenChange, onIm
                       disabled={saving || imported.has(index)}
                       onCheckedChange={() => setSkipped((current) => { const next = new Set(current); if (!next.delete(index)) next.add(index); return next })}
                     />
-                    <span className="min-w-0 flex-1 basis-32 break-words font-medium">{draft.title}{draft.subjectId ? <span className="block text-xs font-normal text-muted-foreground">{draft.subjectId}</span> : null}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{imported.has(index) ? "Added" : `${new Date(`${draft.date}T00:00:00`).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })} · ${draft.startTime} · ${draft.durationMinutes}m`}</span>
+                    <span className="min-w-0 flex-1 basis-32 break-words font-medium">{draft.title}<span className="block text-xs font-normal text-muted-foreground">{[draft.kind === "session" ? "Study session" : "Event", ...draft.subjectIds].join(" · ")}</span></span>
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{imported.has(index) ? "Added" : draft.endDate ? `${day(draft.date)} ${draft.startTime} – ${day(draft.endDate)} ${draft.startTime}` : `${day(draft.date)} · ${draft.startTime} · ${draft.durationMinutes}m`}</span>
                   </Label>
                 </li>
               ))}

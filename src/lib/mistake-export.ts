@@ -60,7 +60,7 @@ export async function exportMistakes(format: ExportFormat, mistakes: Mistake[], 
     })].join("\n")
     : rows.map((row) => [
       `## ${row.question}${row.exam ? ` — ${row.exam}` : ""}`,
-      `*${[row.category, row.areaOfStudy, row.difficulty !== "" ? `Difficulty ${row.difficulty}/5` : "", row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,
+      `*${[row.subject, row.category, row.areaOfStudy, row.difficulty !== "" ? `Difficulty ${row.difficulty}/5` : "", row.marksLost !== "" ? `${row.marksLost}/${row.totalMarks || "?"} marks lost` : ""].filter(Boolean).join(" · ")}*`,
       row.questionText && `**Question**\n\n${row.questionText}`,
       row.explanation && `**What went wrong**\n\n${row.explanation}`,
       row.correction && `**Correction**\n\n${row.correction}`,

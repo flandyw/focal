@@ -22,6 +22,7 @@ const REPEATS = [
   { value: "monthly", label: "Every month" },
 ]
 const DURATIONS = [30, 45, 60, 90, 120, 180]
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const NO_SUBJECT = "__none"
 const MAX_OCCURRENCES = 52
 
@@ -41,7 +42,7 @@ function shift(date: string, repeat: string, step: number) {
     const target = new Date(year, month - 1 + step, 1)
     return localDate(new Date(target.getFullYear(), target.getMonth(), Math.min(day, new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate())))
   }
-  return shiftDays(date, step * (repeat === "weekly" ? 7 : 14))
+  return shiftDays(date, step * (repeat === "weekly" ? 1 : 14))
 }
 
 export function EventDialog({ open, event, defaultDate, subjects, classTimetable, onOpenChange, onSave, onDelete }: {
@@ -68,10 +69,12 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
   const [finished, setFinished] = useState(Boolean(event?.isFinished))
   const [repeat, setRepeat] = useState("none")
   const [repeatUntil, setRepeatUntil] = useState("")
+  const [extraWeekdays, setExtraWeekdays] = useState<number[]>([])
+  const startWeekday = new Date(`${date}T00:00:00`).getDay()
   const [error, setError] = useState<{ message: string; fields: string[] } | null>(null)
   const errorProps = (field: string) => error?.fields.includes(field) ? { "aria-invalid": true, "aria-describedby": "event-error" } : {}
   const [confirmingClose, setConfirmingClose] = useState(false)
-  const snapshot = JSON.stringify({ title, type, subject, date, endDate, startTime, endTime, location, description, finished, repeat, repeatUntil })
+  const snapshot = JSON.stringify({ title, type, subject, date, endDate, startTime, endTime, location, description, finished, repeat, repeatUntil, extraWeekdays })
   const [initialSnapshot] = useState(snapshot)
   function requestClose(next: boolean) {
     if (!next && snapshot !== initialSnapshot) setConfirmingClose(true)
@@ -148,9 +151,12 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
     if (event) return onSave([copy ? { ...make(date, crypto.randomUUID(), now), isFinished: false, finishedAt: undefined } : make(date, event.id, event.created_at)], copy)
     const days = [date]
     if (repeat !== "none") {
-      for (let step = 1; days.length < MAX_OCCURRENCES; step++) {
+      for (let step = 1; ; step++) {
         const next = shift(date, repeat, step)
         if (next > repeatUntil) break
+        const weekday = (startWeekday + step) % 7
+        if (repeat === "weekly" && weekday !== startWeekday && !extraWeekdays.includes(weekday)) continue
+        if (days.length === MAX_OCCURRENCES) return setError({ message: `Choose an earlier end date to add no more than ${MAX_OCCURRENCES} occurrences.`, fields: ["repeat-until"] })
         days.push(next)
       }
     }
@@ -275,6 +281,23 @@ export function EventDialog({ open, event, defaultDate, subjects, classTimetable
                   <Input id="event-repeat-until" {...errorProps("repeat-until")} type="date" min={date} value={repeatUntil} onChange={(e) => { setRepeatUntil(e.target.value); setError(null) }} />
                   <FieldDescription>Up to {MAX_OCCURRENCES} occurrences.</FieldDescription>
                 </Field>
+              ) : null}
+              {repeat === "weekly" && date ? (
+                <fieldset className="grid gap-2 sm:col-span-2" aria-describedby="event-repeat-days-help">
+                  <legend className="mb-2 text-sm font-medium">Repeat on</legend>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+                      const selected = day === startWeekday || extraWeekdays.includes(day)
+                      return (
+                        <Button aria-label={WEEKDAYS[day]} aria-pressed={selected} disabled={day === startWeekday} key={day} onClick={() => {
+                          setExtraWeekdays((current) => selected ? current.filter((value) => value !== day) : [...current, day])
+                          setError(null)
+                        }} size="sm" type="button" variant={selected ? "secondary" : "outline"}>{WEEKDAYS[day].slice(0, 3)}</Button>
+                      )
+                    })}
+                  </div>
+                  <FieldDescription id="event-repeat-days-help">The start day repeats each week. Select any other days to include.</FieldDescription>
+                </fieldset>
               ) : null}
             </div>
           )}

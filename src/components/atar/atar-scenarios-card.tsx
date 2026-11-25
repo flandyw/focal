@@ -16,7 +16,7 @@ function scenarioDelta(item: SavedAtarEstimate, current: AtarEstimate | null) {
   }
   if (item.aggregate !== null) {
     const diff = Math.round((item.aggregate - current.aggregate) * 100) / 100
-    if (Math.abs(diff) < 0.005) return { label: "Matches now", tone: "neutral" as const }
+    if (Math.abs(diff) < 0.005) return { label: item.atarLabel === current.atarLabel ? "Matches now" : "Same agg", tone: "neutral" as const }
     return { label: `${diff > 0 ? "+" : "−"}${Math.abs(diff).toFixed(2)} agg`, tone: diff > 0 ? "positive" as const : "negative" as const }
   }
   return null

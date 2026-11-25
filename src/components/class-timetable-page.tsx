@@ -93,6 +93,12 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
   const breaks = periods.length - classes.length
   const finished = day === today ? classes.filter((period) => minutes(period.endTime) <= now).length : 0
   const totalPeriods = config?.entries.reduce((sum, entry) => sum + entry.periods.length, 0) ?? 0
+  const dayDetails = [
+    periods.length ? day === today && classes.length ? `${finished} of ${classCount(classes.length)} done` : classCount(classes.length) : "",
+    breaks ? `${breaks} ${breaks === 1 ? "break" : "breaks"}` : "",
+    periods.length ? `${timeLabel(periods[0].startTime)} – ${timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}` : "",
+    day === today ? "" : upcoming.has(day) ? `next ${upcoming.get(day)}` : "not coming up",
+  ].filter(Boolean).join(" · ")
 
   function addPeriod() {
     const last = periods.at(-1)
@@ -132,10 +138,10 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
           </p>
           </div>
         </div>
-        <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
-          {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><RotateCcw />Today</Button> : null}
+        <div data-tour="page-actions" className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+          {config ? <Button disabled={!today || day === today} onClick={() => today && setSelectedDay(today)} variant="outline"><span className="inline-flex items-center gap-2"><RotateCcw />Today</span></Button> : null}
           <Button onClick={() => setImportOpen(true)} variant="outline"><span className="inline-flex items-center gap-2 text-sm"><ClipboardPaste />Import</span></Button>
-          {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><Settings2 />Cycle settings</Button> : null}
+          {config ? <Button onClick={() => setSettingsOpen(true)} variant="outline"><span className="inline-flex items-center gap-2"><Settings2 />Cycle settings</span></Button> : null}
           <Button onClick={addPeriod}><Plus />Add period</Button>
         </div>
       </header>
@@ -163,14 +169,7 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                       <Button aria-label="Next day" disabled={day === cycleLength} onClick={() => step(1)} size="icon-sm" variant="ghost"><ChevronRight /></Button>
                     </div>
                   </div>
-                  <CardDescription className="tabular-nums">
-                    {[
-                      !periods.length ? "Nothing scheduled" : day === today && classes.length ? `${finished} of ${classCount(classes.length)} done` : classCount(classes.length),
-                      breaks ? `${breaks} ${breaks === 1 ? "break" : "breaks"}` : "",
-                      periods.length ? `${timeLabel(periods[0].startTime)} – ${timeLabel(periods.reduce((end, period) => period.endTime > end ? period.endTime : end, periods[0].endTime))}` : "",
-                      day === today ? "" : upcoming.has(day) ? `next ${upcoming.get(day)}` : "not coming up",
-                    ].filter(Boolean).join(" · ")}
-                  </CardDescription>
+                  {dayDetails ? <CardDescription className="tabular-nums">{dayDetails}</CardDescription> : null}
                   {day === today && classes.length ? <Progress aria-label="Classes finished today" className="h-1" value={finished / classes.length * 100} /> : null}
                 </CardHeader>
                 <CardContent className="grid shrink-0 gap-3" key={day}>
@@ -186,8 +185,8 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                           <li className="flex animate-in items-center gap-2 px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0" key={index}>
                             <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", periodTint(period).className)} style={periodTint(period).style} />
                             <div className="min-w-0 flex-1">
-                              <p className={cn("truncate text-sm font-medium", (past || isBreak(period)) && "text-muted-foreground")} title={name}>{name}</p>
-                              <p className="truncate text-xs text-muted-foreground tabular-nums">{[period.subject ? period.period : isBreak(period) ? "" : "Subject not set", `${timeLabel(period.startTime)} – ${timeLabel(period.endTime)}`, period.location].filter(Boolean).join(" · ")}</p>
+                              <p className={cn("text-sm font-medium wrap-anywhere", (past || isBreak(period)) && "text-muted-foreground")}>{name}</p>
+                              <p className="text-xs wrap-anywhere text-muted-foreground tabular-nums">{[period.subject ? period.period : isBreak(period) ? "" : "Subject not set", `${timeLabel(period.startTime)} – ${timeLabel(period.endTime)}`, period.location].filter(Boolean).join(" · ")}</p>
                               {invalid ? <p className="text-xs text-destructive">{invalid}</p> : null}
                               {overlap ? <p className="flex items-start gap-1 text-xs text-destructive"><TriangleAlert aria-hidden className="mt-0.5 size-3 shrink-0" />{overlap}</p> : null}
                             </div>
@@ -198,12 +197,13 @@ export function ClassTimetablePage({ config, subjects, onChange }: {
                       })}
                     </ul>
                   ) : (
-                    <Empty className="min-h-28 border">
+                    <Empty className="min-h-28 gap-3 border p-4">
                       <EmptyHeader>
                         <EmptyMedia variant="icon"><CalendarClock /></EmptyMedia>
                         <EmptyTitle>Nothing scheduled</EmptyTitle>
-                        <EmptyDescription>Add a period above to fill in Day {day} with your classes and breaks.</EmptyDescription>
+                        <EmptyDescription>Add a class or break to Day {day}.</EmptyDescription>
                       </EmptyHeader>
+                      <Button onClick={addPeriod} size="sm" variant="outline"><Plus />Add period</Button>
                     </Empty>
                   )}
                 </CardContent>
@@ -287,14 +287,14 @@ function CycleBoard({ config, cycleLength, days, selected, today, now, upcoming,
                 requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-tt-day="${next}"]`)?.focus())
               }}
               className={cn(
-                "relative h-auto min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-b border-l border-border bg-muted/40 p-2 text-left font-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset max-md:first:border-l-0",
+                "relative h-auto min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-b border-l border-border bg-muted/40 px-1 py-2 text-left font-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset max-md:first:border-l-0 md:px-2",
                 selected === day && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
               )}
             >
               <span className="flex items-center justify-between gap-1">
                 <span className="flex items-center gap-1 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase">
                   Day
-                  <span className={cn("grid size-6 place-items-center rounded-full text-xs text-foreground tabular-nums", today === day && "bg-primary text-primary-foreground")}>{day}</span>
+                  <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-xs text-foreground tabular-nums md:size-6", today === day && "bg-primary text-primary-foreground")}>{day}</span>
                 </span>
                 <span className="hidden truncate text-[0.6875rem] text-muted-foreground tabular-nums lg:inline">{classCount(periods.filter((period) => !isBreak(period)).length)}</span>
               </span>

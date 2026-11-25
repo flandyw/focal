@@ -19,7 +19,8 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
   const today = localDate(useTickingNow())
   const forecast = useMemo(() => buildReviewForecast(mistakes, new Date(`${today}T00:00:00`)), [mistakes, today])
   const [selection, setSelection] = useState<string | null>(null)
-  const selected = selection ?? (forecast[0].due ? today : "")
+  // A picked day can fall out of the 14-day window after midnight; fall back to the default.
+  const selected = selection !== null && (selection === "" || forecast.some((day) => day.date === selection)) ? selection : forecast[0].due ? today : ""
   const listId = useId()
   const selectedDay = forecast.find((day) => day.date === selected)
   const cards = mistakes.filter((mistake) => {
@@ -27,6 +28,13 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
     const difference = localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), new Date(`${selected}T00:00:00`))
     return difference === 0 || (selected === today && difference < 0)
   })
+  const cardItem = (mistake: Mistake) => <li key={mistake.id} className="min-w-0 break-words">
+    <MarkdownPreview inline>{mistake.question}</MarkdownPreview>
+    <p className="text-xs text-muted-foreground">
+      {attempts.find((attempt) => attempt.id === mistake.attemptId)?.subject ?? mistake.subject ?? "Uncategorised"}
+      {localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), new Date(`${today}T00:00:00`)) < 0 ? " · Overdue" : ""}
+    </p>
+  </li>
   const total = forecast.reduce((sum, day) => sum + day.due, 0)
   const busiest = forecast.reduce((current, day) => day.due > current.due ? day : current, forecast[0])
   const summary = total
@@ -71,16 +79,11 @@ export function ReviewForecastChart({ mistakes, attempts }: { mistakes: Mistake[
         <div id={listId} aria-live="polite" className="mt-3 text-sm">
           {selectedDay ? <>
             <h3 className="font-medium">{selectedDay.label} · {cards.length} card{cards.length === 1 ? "" : "s"}</h3>
-            {cards.length ? <ul className="mt-2 grid gap-3">
-              {cards.slice(0, 8).map((mistake) => <li key={mistake.id} className="min-w-0 break-words">
-                <MarkdownPreview inline>{mistake.question}</MarkdownPreview>
-                <p className="text-xs text-muted-foreground">
-                  {attempts.find((attempt) => attempt.id === mistake.attemptId)?.subject ?? mistake.subject ?? "Uncategorised"}
-                  {localDayDifference(new Date(getMistakeSchedule(mistake).dueAt), new Date(`${today}T00:00:00`)) < 0 ? " · Overdue" : ""}
-                </p>
-              </li>)}
-            </ul> : <p className="mt-2 text-muted-foreground">No cards due this day.</p>}
-            {cards.length > 8 ? <p className="mt-2 text-muted-foreground">+{cards.length - 8} more</p> : null}
+            {cards.length ? <ul className="mt-2 grid gap-3">{cards.slice(0, 8).map(cardItem)}</ul> : <p className="mt-2 text-muted-foreground">No cards due this day.</p>}
+            {cards.length > 8 ? <details key={selected} className="mt-2">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">+{cards.length - 8} more</summary>
+              <ul className="mt-2 grid gap-3">{cards.slice(8).map(cardItem)}</ul>
+            </details> : null}
           </> : <p className="text-muted-foreground">Choose a day to see its cards.</p>}
         </div>
       </CardContent>

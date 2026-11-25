@@ -1,6 +1,7 @@
-import { useDeferredValue, useMemo, useState } from "react"
+import { useDeferredValue, useMemo, useRef, useState } from "react"
 import { count } from "../lib/utils"
-import { BarChart3, Check, CircleCheck, ExternalLink, FileCheck2, Library, ListFilter, Play, Search, Target } from "lucide-react"
+import { BarChart3, Bookmark, Check, CircleCheck, ExternalLink, FileCheck2, Library, ListFilter, Play, Search, Target } from "lucide-react"
+import { toast } from "sonner"
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -69,6 +70,7 @@ export function ExamLibrary({
   onToggleCompleted,
   onStart,
   onCompare,
+  storageUserId,
   selectedPaperId,
   onSelectPaper,
   onClosePaper,
@@ -85,7 +87,21 @@ export function ExamLibrary({
   onToggleCompleted: (id: string) => void
   onStart: (preset: ExamTimerPreset) => void
   onCompare: (attempt: ExamAttempt) => void
+  storageUserId?: string
 }) {
+  const savedPapersKey = `examtrack:saved-papers:${storageUserId ?? "guest"}`
+  // ponytail: this shortlist stays on this device; use app sync if it needs to follow the account.
+  const [savedPapers, setSavedPapers] = useState(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(savedPapersKey) ?? "[]")
+      if (Array.isArray(stored)) return new Set(stored.filter((id): id is string => typeof id === "string"))
+    } catch {
+      return new Set<string>()
+    }
+    return new Set<string>()
+  })
+  const [savedOnly, setSavedOnly] = useState(false)
+  const savedFilterRef = useRef<HTMLButtonElement>(null)
   const exams = useMemo(() => getCachedVcaaExams(studies), [studies])
   const subjects = useMemo(() => prioritiseSubjects(exams.map((exam) => exam.studyName), preferredSubjects), [exams, preferredSubjects])
   const [subject, setSubject] = useState(() => firstPreferredSubject(subjects, preferredSubjects) || subjects[0] || "all")
@@ -104,7 +120,8 @@ export function ExamLibrary({
     return exams.filter((exam) => {
       if (selectedPaperId) return exam.url === selectedPaperId
       const done = completedUrls.has(exam.url)
-      return (subject === "all" || exam.studyName === subject) &&
+      return (!savedOnly || savedPapers.has(exam.url)) &&
+        (subject === "all" || exam.studyName === subject) &&
         (session === "all" || getVcaaExamProvider(exam) === session) &&
         (completion === "all" || (completion === "completed" ? done : !done)) &&
         terms.every((term) => `${exam.studyName} ${exam.year ?? ""} ${exam.label} ${getVcaaExamPaper(exam)} ${getVcaaExamProvider(exam)}`.toLowerCase().includes(term))
@@ -113,9 +130,29 @@ export function ExamLibrary({
       Number(first.year === null) - Number(second.year === null) ||
       (sort === "oldest" ? (first.year ?? 0) - (second.year ?? 0) : (second.year ?? 0) - (first.year ?? 0)) ||
       paperOrder(first) - paperOrder(second) || first.label.localeCompare(second.label))
-  }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject, sort, session])
+  }, [selectedPaperId, completedUrls, completion, exams, preferredSubjects, deferredQuery, subject, sort, session, savedOnly, savedPapers])
 
   const clearFilters = () => { setQuery(""); setSubject("all"); setCompletion("all"); setSession("all"); setVisibleCount(40) }
+  const hasSavedPapers = exams.some((exam) => savedPapers.has(exam.url))
+  const bookmarkButton = (exam: VcaaExamResource) => {
+    const saved = savedPapers.has(exam.url)
+    return <Button size="icon" variant={saved ? "secondary" : "ghost"} aria-pressed={saved}
+      aria-label={`Save paper: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)} (${getVcaaExamProvider(exam)})`}
+      title={saved ? "Remove from saved papers" : "Save paper"}
+      onClick={() => {
+        const next = new Set(savedPapers)
+        if (saved) next.delete(exam.url)
+        else next.add(exam.url)
+        try {
+          localStorage.setItem(savedPapersKey, JSON.stringify([...next]))
+        } catch {
+          toast.error("Could not update saved papers on this device.")
+          return
+        }
+        setSavedPapers(next)
+        if (saved && savedOnly && !selectedPaperId) savedFilterRef.current?.focus()
+      }}><Bookmark className={saved ? "fill-current" : undefined} /></Button>
+  }
   const pending = filtered.filter((exam) => !isCompleted(exam))
   const completed = filtered.filter(isCompleted)
   const completedRows = completed.map((exam) => {
@@ -129,6 +166,7 @@ export function ExamLibrary({
       <Button variant="link" className="h-auto min-w-0 flex-1 basis-full justify-start p-0 text-sm text-inherit sm:basis-auto" onClick={() => onSelectPaper(exam.url)}><span className="truncate">{exam.year ?? "Unknown year"} · {getVcaaExamPaper(exam)} · {exam.studyName}{getVcaaExamProvider(exam) === "VCAA NHT" ? " · NHT" : ""}</span></Button>
       <Badge variant={attempt ? "success" : "secondary"}>{analysis ? `Logged ${analysis.percentage.toFixed(1)}%` : "Done"}</Badge>
       <div className="flex flex-wrap items-center gap-1">
+        {bookmarkButton(exam)}
         {preset ? <Button size="sm" variant="ghost" onClick={() => onStart(preset)}>{attempt ? "Sit again" : "Start timed"}</Button> : null}
         <Button size="sm" nativeButton={false} variant="ghost" render={<a href={exam.url} target="_blank" rel="noreferrer" />}>Open paper</Button>
         {attempt && reference ? <Button size="sm" variant="ghost" onClick={() => onCompare(attempt)}>Compare</Button> : null}
@@ -160,15 +198,20 @@ export function ExamLibrary({
   return (
     <div className="grid gap-5">
       <PageHeader icon={Library} title="VCAA exam library" description="Official past papers with built-in timers, examiner reports, and grade distributions.">
-        {nextExam && nextPreset && !selectedPaperId ? <Button onClick={() => onStart(nextPreset)}><Play />Start next paper</Button> : null}
+        {!selectedPaperId ? <Button ref={savedFilterRef} variant={savedOnly ? "secondary" : "outline"} aria-pressed={savedOnly} onClick={() => {
+          if (!savedOnly) clearFilters()
+          setSavedOnly(!savedOnly)
+          setVisibleCount(40)
+        }}><span className="inline-flex items-center gap-2"><Bookmark />Saved papers</span></Button> : null}
+        {nextExam && nextPreset && !selectedPaperId && !savedOnly ? <Button onClick={() => onStart(nextPreset)}><Play />Start next paper</Button> : null}
       </PageHeader>
-      {!selectedPaperId ? <StatGrid>
+      {!selectedPaperId && !savedOnly ? <StatGrid>
         <StatTile icon={Library} label="Official papers" value={exams.length} hint={`${count(subjects.length, "subject")} in the library`} />
         <StatTile icon={CircleCheck} tone="success" label="Completed" value={completedUrls.size} hint={<span className="flex items-center gap-2"><Meter value={completedUrls.size} max={exams.length} className="min-w-8 flex-1" barClassName="bg-success" /><span className="shrink-0 tabular-nums">{exams.length ? Math.round(completedUrls.size / exams.length * 100) : 0}%</span></span>} />
         <StatTile icon={Target} label="Latest five years" value={recentExams.length ? `${recentCompleted} / ${recentExams.length}` : "—"} hint={focusSubject ? `${focusSubject} papers done` : "Choose a subject"} />
         <StatTile icon={ListFilter} label="Showing" value={filtered.length} hint={filtered.length === exams.length ? "No filters applied" : "Matching your filters"} />
       </StatGrid> : null}
-      {selectedPaperId ? <Button variant="outline" className="justify-self-start" onClick={onClosePaper}>Back to all papers</Button> : null}
+      {selectedPaperId ? <Button variant="outline" className="justify-self-start" onClick={onClosePaper}>{savedOnly ? "Back to saved papers" : "Back to all papers"}</Button> : null}
       {selectedPaperId && !filtered.length ? <p role="status">Paper not found in the current library.</p> : null}
       <Alert>
         <Search />
@@ -176,7 +219,7 @@ export function ExamLibrary({
         <AlertDescription>VCAA publishes exam specifications, sample papers, assessment guides, and external assessment reports on each study page. <a className="font-medium underline underline-offset-4" href={getVcaaExamResourcesUrl()} target="_blank" rel="noreferrer">Browse official study resources</a>.</AlertDescription>
       </Alert>
 
-      {!selectedPaperId && focusStudy && recentExams.length ? (
+      {!selectedPaperId && !savedOnly && focusStudy && recentExams.length ? (
         <Card className="bg-muted/20">
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -211,6 +254,7 @@ export function ExamLibrary({
         </Card>
       ) : null}
 
+      {savedOnly && !selectedPaperId ? <p className="text-sm text-muted-foreground">Saved on this device</p> : null}
       <div className="flex flex-wrap gap-3">
         <SubjectCombobox subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value || "all"); setVisibleCount(40) }} includeAll className="w-full sm:w-72" placeholder="Search subjects" />
         <Input type="search" className="w-full sm:max-w-sm" value={query} onChange={(event) => { setQuery(event.target.value); setVisibleCount(40) }} placeholder="Search subject, year or paper" aria-label="Search exam library" />
@@ -250,6 +294,7 @@ export function ExamLibrary({
                   <CardDescription className="truncate">{exam.studyName}</CardDescription>
                 </div>
                 {completed ? <Badge className="shrink-0" variant={loggedAttempt ? "success" : "secondary"}><Check />{loggedAttempt ? "Logged" : "Done"}</Badge> : null}
+                {bookmarkButton(exam)}
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -278,8 +323,10 @@ export function ExamLibrary({
         )})}
       </div>
       {pending.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(pending.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
-      {completed.length ? completion === "completed" ? <div className="divide-y rounded-lg border bg-card">{completedRows}</div> : <ArchivedItems label="Completed papers" count={completed.length} open={selectedPaperId && completed.some((exam) => exam.url === selectedPaperId) ? true : undefined}>{completedRows}</ArchivedItems> : null}
-      {!filtered.length ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matched “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try a different subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
+      {completed.length ? completion === "completed" || (savedOnly && !selectedPaperId) ? <div className="divide-y rounded-lg border bg-card">{completedRows}</div> : <ArchivedItems label="Completed papers" count={completed.length} open={selectedPaperId && completed.some((exam) => exam.url === selectedPaperId) ? true : undefined}>{completedRows}</ArchivedItems> : null}
+      {!filtered.length ? savedOnly && !selectedPaperId && !hasSavedPapers
+        ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Bookmark /></EmptyMedia><EmptyTitle>No saved papers yet</EmptyTitle><EmptyDescription>Use the bookmark on any paper to keep it here for later.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setSavedOnly(false); savedFilterRef.current?.focus() }}>Browse all papers</Button></Empty>
+        : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matched “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try a different subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
     </div>
   )
 }

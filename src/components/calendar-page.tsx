@@ -95,8 +95,8 @@ const KIND_LABEL: Record<DayItem["kind"], string> = {
 /** The three open lines a day cell can afford before it starts lying about what is there. */
 const CELL_LINES = 3
 
-/** Seven days plus the week's total; a phone drops the total and keeps the days. */
-const WEEK_GRID = "grid grid-cols-7 sm:grid-cols-[repeat(7,minmax(0,1fr))_4.5rem]"
+/** Seven days plus the week's total when the month pane has room. */
+const WEEK_GRID = "grid grid-cols-7 @xl:grid-cols-[repeat(7,minmax(0,1fr))_4.5rem]"
 
 function shiftDay(date: string, amount: number) {
   const [year, month, day] = date.split("-").map(Number)
@@ -334,13 +334,13 @@ export function CalendarPage({
             {summary.assessments ? ` · ${summary.assessments} assessment${summary.assessments === 1 ? "" : "s"}` : ""}
           </p>
         </div>
-        <div data-tour="page-actions" className="flex flex-wrap items-center gap-2 [&>*]:max-sm:flex-1">
-          <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</Button>
-          <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><CalendarPlus />Auto-plan</Button>
-          <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><RotateCcw />Today</Button>
-          <Button onClick={() => setImportOpen(true)} variant="outline"><ClipboardPaste />Import</Button>
-          <Button onClick={exportCalendar} title="Download upcoming tasks, study, SACs, events and tracked exams as an .ics file for your phone or school calendar" variant="outline"><Download />Export</Button>
-          <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><Plus />Add event</Button>
+        <div data-tour="page-actions" className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap [&>button]:max-sm:h-11 [&>button]:max-sm:px-1 [&>button]:max-sm:text-xs [&>button>span]:flex [&>button>span]:items-center [&>button>span]:gap-1.5">
+          <Button aria-pressed={arranging} onClick={() => setArranging(!arranging)} variant={arranging ? "default" : "outline"}><span>{arranging ? <><Check />Done</> : <><LayoutGrid />Arrange</>}</span></Button>
+          <Button onClick={onAutoPlan} title="Schedule prep before upcoming assessments and revision for red, amber and re-check items across your study days and free periods" variant="outline"><span><CalendarPlus />Auto-plan</span></Button>
+          <Button disabled={selected === localDate(now)} onClick={() => selectDay(today())} variant="outline"><span><RotateCcw />Today</span></Button>
+          <Button onClick={() => setImportOpen(true)} variant="outline"><span><ClipboardPaste />Import</span></Button>
+          <Button onClick={exportCalendar} title="Download upcoming tasks, study, SACs, events and tracked exams as an .ics file for your phone or school calendar" variant="outline"><span><Download />Export</span></Button>
+          <Button onClick={() => setEventDialog({ event: null, key: Date.now() })}><span><Plus />Add event</span></Button>
         </div>
         <CalendarChatbotImportDialog open={importOpen} subjects={subjects} onOpenChange={setImportOpen} onImport={importDrafts} />
       </header>
@@ -387,10 +387,10 @@ export function CalendarPage({
       /> : null}
 
       <CalendarModules arranging={arranging} modules={{ month: (
-        <section aria-label={monthLabel} className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+        <section aria-label={monthLabel} className="@container min-w-0 overflow-hidden rounded-lg border border-border bg-card">
           <div className={cn(WEEK_GRID, "border-b border-border bg-muted/40 text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase")}>
-            {weekdayLabels().map((label) => <div className="truncate px-2 py-2" key={label}>{label}</div>)}
-            <div className="hidden px-2 py-2 text-right sm:block">Week</div>
+            {weekdayLabels().map((label) => <div className="py-2 text-center @xl:px-2 @xl:text-left" key={label}>{label}</div>)}
+            <div className="hidden px-2 py-2 text-right @xl:block">Week</div>
           </div>
           <div key={monthLabel}>
           {weeks.map((week) => (
@@ -406,7 +406,7 @@ export function CalendarPage({
               ))}
               {/* The week's total sits where the eye lands at the end of the row, which is what
                   the separate six-bar chart under the grid used to make you scroll for. */}
-              <div className="hidden flex-col items-end gap-1.5 border-l border-border px-2 py-2.5 sm:flex">
+              <div className="hidden flex-col items-end gap-1.5 border-l border-border px-2 py-2.5 @xl:flex">
                 <span className={cn("text-xs tabular-nums", week.minutes ? "font-medium" : "text-muted-foreground")}>{week.minutes ? formatMinutes(week.minutes) : "–"}</span>
                 {week.minutes ? (
                   <span aria-hidden className="h-1 w-full overflow-hidden rounded-full bg-muted">
@@ -430,18 +430,12 @@ export function CalendarPage({
                   <Button aria-label="Next day" title="Next day" onClick={() => selectDay(shiftDay(selected, 1))} size="icon-sm" variant="ghost"><ChevronRight /></Button>
                 </div>
               </div>
-              <CardDescription className="tabular-nums">
-                {plan.totalCount ? `${plan.completedCount} of ${plan.totalCount} done` : "Nothing planned"}
+              {plan.totalCount ? <CardDescription className="tabular-nums">
+                {`${plan.completedCount} of ${plan.totalCount} done`}
                 {plan.plannedMinutes ? ` · ${formatMinutes(plan.plannedMinutes)} to go` : ""}
                 {plan.completedMinutes ? ` · ${formatMinutes(plan.completedMinutes)} banked` : ""}
-              </CardDescription>
+              </CardDescription> : null}
               {plan.totalCount ? <Progress aria-label="Day completed" className="h-1" value={completion} /> : null}
-              {plan.dueMistakes ? (
-                <Button variant="ghost" size="xs" className="w-fit px-0 text-muted-foreground hover:bg-transparent" onClick={() => onNavigate("mistakes")}>
-                  <span aria-hidden className={cn("size-1.5 rounded-full", KIND_MARK.mistakes)} />
-                  {plan.dueMistakes} mistake{plan.dueMistakes === 1 ? "" : "s"} due for review
-                </Button>
-              ) : null}
             </CardHeader>
             <CardContent className="grid shrink-0 gap-3" key={selected}>
               {classes.length ? (
@@ -469,7 +463,7 @@ export function CalendarPage({
                     {open.map((item) => <DayItemRow item={item} key={`${item.kind}-${item.id}`} {...rowActions} />)}
                   </ul>
                 </DaySection>
-              ) : (
+              ) : !classes.length && !overdue.length ? (
                 <Empty className="min-h-28 border">
                   <EmptyHeader>
                     <EmptyMedia variant="icon"><CalendarDays /></EmptyMedia>
@@ -477,7 +471,7 @@ export function CalendarPage({
                     <EmptyDescription>{banked.length ? "Everything for this day is wrapped up." : "Add an event above, or block out some study on the timeline below."}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
-              )}
+              ) : null}
               {overdue.length ? (
                 <DaySection title="Carried over" count={overdue.length}>
                   <ul className="min-w-0 divide-y rounded-md border">
@@ -485,7 +479,7 @@ export function CalendarPage({
                       <li className="flex items-center gap-2 px-2 py-1.5" key={task.id}>
                         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK.task)} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium" title={task.title}>{task.title}</p>
+                          <p className="text-sm font-medium">{task.title}</p>
                           <p className="text-xs text-muted-foreground tabular-nums">{formatDayTitle(task.plannedFor)} · {task.durationMinutes} min</p>
                         </div>
                         <Button onClick={() => move(task.id, selected)} size="sm" variant="outline">Move here</Button>
@@ -564,7 +558,7 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
         requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-calendar-date="${next}"]`)?.focus())
       }}
       className={cn(
-        "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset sm:min-h-32 sm:p-1",
+        "relative h-auto min-h-18 min-w-0 flex-col items-stretch justify-start gap-1 rounded-none border-0 border-l border-border p-1 text-left font-normal whitespace-normal transition-[background-color,box-shadow] duration-300 ease-[var(--ease-spring)] first:border-l-0 hover:bg-accent/50 focus-visible:z-10 focus-visible:ring-inset @xl:min-h-32",
         weekend && "bg-muted/25",
         !day.inMonth && "bg-muted/50 text-muted-foreground",
         active && "z-10 bg-primary/[0.06] ring-2 ring-primary ring-inset hover:bg-primary/[0.09]",
@@ -576,18 +570,18 @@ const DayCell = memo(function DayCell({ day, active, weekend, onSelect }: {
           "grid size-6 place-items-center rounded-full text-xs font-medium tabular-nums",
           day.isToday && "bg-primary text-primary-foreground",
         )}>{day.day}</span>
-        {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums sm:inline">{formatMinutes(day.minutes)}</span> : null}
+        {day.minutes > 0 ? <span className="hidden truncate pr-0.5 text-[0.6875rem] text-muted-foreground tabular-nums @xl:inline">{formatMinutes(day.minutes)}</span> : null}
       </span>
 
-      {/* A phone cell is ~50px wide: titles there are smudges, so it gets one dot per piece of
-          open work and the day panel carries the words. */}
+      {/* Narrow cells show markers and the day panel carries the words. */}
       {open.length ? (
-        <span aria-hidden className="flex flex-wrap gap-0.5 px-1 sm:hidden">
-          {open.slice(0, 4).map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
+        <span aria-hidden className="flex flex-wrap items-center gap-0.5 px-1 @xl:hidden">
+          {visible.map((item) => <span className={cn("size-1.5 rounded-full", KIND_MARK[item.kind])} key={`${item.kind}-${item.id}`} />)}
+          {overflow > 0 ? <span className="text-[0.625rem] leading-none text-muted-foreground tabular-nums">+{overflow}</span> : null}
         </span>
       ) : null}
 
-      <span className="hidden min-w-0 flex-col gap-0.5 sm:flex">
+      <span className="hidden min-w-0 flex-col gap-0.5 @xl:flex">
         {visible.map((item) => {
           const fixed = item.kind === "exam" || item.kind === "sac"
           return (
@@ -695,9 +689,7 @@ function DaySection({ title, count, muted, children }: { title: string; count: n
  * borders and six padding boxes saying "these are separate", which is what `divide-y` and a
  * kind mark say in the space of one hairline.
  *
- * ponytail: the row is one line wide, so only the two things you do while scanning stay on
- * it (start, finish) and the rare ones -- reschedule, archive, skip -- hide behind "more".
- * Upgrade path if it is still tight at 2xl: a right-hand actions column on `xl` and up.
+ * Keep start and finish visible; reschedule, archive and skip stay behind "more".
  */
 function DayItemRow({
   item,
@@ -724,6 +716,7 @@ function DayItemRow({
   const [moveTo, setMoveTo] = useState("")
   const done = isDayItemDone(item)
   const isTask = item.kind === "task"
+  const isPlannedTask = isTask && item.status === "planned"
   const meta = [
     ...(item.kind === "task" ? [item.subject, item.detail] : [item.detail]),
     item.minutes ? `${Math.round(item.minutes)} min` : undefined,
@@ -731,33 +724,27 @@ function DayItemRow({
   ].filter(Boolean).join(" · ")
 
   return (
-    <li className="animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
-      <div className="flex items-center gap-2">
+    <li className="@container animate-in px-2 py-1.5 duration-400 ease-[var(--ease-spring)] fade-in-0">
+      <div className={cn("flex items-center gap-2", isTask && "@max-xs:grid @max-xs:grid-cols-[auto_minmax(0,1fr)] @max-xs:gap-y-1")}>
         <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", KIND_MARK[item.kind])} />
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm font-medium", done && "text-muted-foreground")} title={item.title}>{item.title}</p>
-          {meta ? <p className="truncate text-xs text-muted-foreground">{meta}</p> : null}
+          <p className={cn("text-sm font-medium", done && "text-muted-foreground")}>{item.title}</p>
+          {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
         </div>
           {item.kind === "session" ? (
             item.live ? <Badge className="shrink-0" variant="outline">{item.paused ? "Paused" : "Studying"}</Badge>
               : done ? <Badge className="shrink-0" variant="secondary">Done</Badge> : null
-          ) : item.kind === "task" ? (
-            done ? (
-              <Badge className="shrink-0" variant="secondary">Done</Badge>
-            ) : item.status === "skipped" ? (
-              <Badge className="shrink-0" variant="outline">Skipped</Badge>
-            ) : null
-          ) : item.kind === "mistakes" ? null : (
-            // No badge on the review row: its title already says what it is, and a "Review"
-            // badge beside a "Review" button read as two different controls.
+          ) : item.kind === "task" || item.kind === "mistakes" || item.kind === "event" ? null : (
             <Badge className="shrink-0" variant="outline">{KIND_LABEL[item.kind]}</Badge>
           )}
-        <span className="flex shrink-0 items-center gap-0.5">
+        <span className={cn("flex shrink-0 items-center gap-0.5", isTask && "@max-xs:col-start-2")}>
+          {isTask && (done ? <Badge className="mr-1.5 shrink-0" variant="secondary">Done</Badge>
+            : item.status === "skipped" ? <Badge className="mr-1.5 shrink-0" variant="outline">Skipped</Badge> : null)}
           {item.kind === "session" && (!done || item.live) ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" variant="outline"><Timer />{item.live ? "Open timer" : "Start"}</Button> : null}
           {item.kind === "session" && done && !item.live && item.continuable ? <Button onClick={() => onStartFocus(undefined, item.title, item.id)} size="sm" title="Keep going in this session; its time so far is kept" variant="outline"><Play />Continue</Button> : null}
           {item.kind === "session" && !item.live ? <Button onClick={() => onEditSession(item.id)} size="sm" variant="ghost">Edit</Button> : null}
           {isTask ? (
-            item.status === "planned" ? (
+            isPlannedTask ? (
               <>
                 <Button onClick={() => onStartFocus(item.subject, item.title)} size="sm" variant="outline"><Timer />Focus</Button>
                 <Button aria-label={`Mark ${item.title} done`} onClick={() => onStatus(item.id, "completed")} size="icon-sm" variant="ghost"><Check /></Button>
@@ -791,7 +778,7 @@ function DayItemRow({
       </div>
       {more ? (
         <div className="mt-1 flex animate-in flex-wrap items-center gap-1.5 pl-3.5 duration-400 ease-[var(--ease-spring)] fade-in-0 slide-in-from-top-2">
-          {isTask && item.status === "planned" ? (
+          {isPlannedTask ? (
             <Button aria-label={`Skip ${item.title}`} onClick={() => onStatus(item.id, "skipped")} size="sm" variant="outline"><SkipForward />Skip</Button>
           ) : null}
           <Input

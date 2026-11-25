@@ -516,12 +516,15 @@ export default function App({ embedded = false }: { embedded?: boolean } = {}) {
 
   function saveAtarEstimate(estimate: SavedAtarEstimate) {
     const updatedAt = new Date().toISOString()
+    const isUpdate = data.atarEstimates.some((item) => item.id === estimate.id)
     setData((current) => ({
       ...current,
-      atarEstimates: [estimate, ...current.atarEstimates],
+      atarEstimates: current.atarEstimates.some((item) => item.id === estimate.id)
+        ? current.atarEstimates.map((item) => item.id === estimate.id ? estimate : item)
+        : [estimate, ...current.atarEstimates],
       atarEstimatesUpdatedAt: updatedAt,
     }))
-    toast.success("ATAR estimate saved")
+    toast.success(isUpdate ? "Scenario updated" : "ATAR scenario saved")
   }
 
   // The ATAR page target is the account's ATAR goal, so Goals, widgets and MCP share it.

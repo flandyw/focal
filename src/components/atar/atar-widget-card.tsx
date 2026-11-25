@@ -23,7 +23,7 @@ export function AtarWidgetCard({ saved, onLoad }: {
   const scenario = saved.find((item) => item.id === atar?.scenarioId)
   const pinMissing = !["latest", "live"].includes(settings.source) && !saved.some((item) => item.id === settings.source)
   const sourceLabel = (value: string) => value === "latest" ? "Newest saved scenario" : value === "live" ? "Live Focal estimate"
-    : ((item) => item ? `Pinned: ATAR ${item.atarLabel} · ${new Date(item.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}` : "Pinned scenario (deleted)")(saved.find((item) => item.id === value))
+    : ((item) => item ? `Pinned: ${item.name ? `${item.name} · ` : ""}ATAR ${item.atarLabel} · ${new Date(item.savedAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}` : "Pinned scenario (deleted)")(saved.find((item) => item.id === value))
   const toggles: { key: keyof Omit<WidgetAtarSettings, "source">; label: string }[] = [
     { key: "target", label: "Target and gap" },
     { key: "change", label: "Change since last estimate" },

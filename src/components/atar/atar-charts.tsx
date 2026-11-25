@@ -42,7 +42,7 @@ export function AtarTrendCard({ history, target }: { history: AtarHistoryPoint[]
               {target !== null ? <ReferenceLine y={target} stroke="var(--border)" strokeDasharray="4 4" label={{ value: `Target ${target.toFixed(2)}`, position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }} /> : null}
               <ChartTooltip content={({ active, payload }) => {
                 const point = active ? payload?.[0]?.payload as (typeof data)[number] | undefined : undefined
-                return point ? <Tip title={`ATAR ${point.label}`} lines={[`${new Date(point.timestamp).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · ${point.kind === "saved" ? "saved scenario" : "after practice"}`, `Aggregate ${point.aggregate.toFixed(2)}`]} /> : null
+                return point ? <Tip title={point.name ? `${point.name} · ATAR ${point.label}` : `ATAR ${point.label}`} lines={[`${new Date(point.timestamp).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · ${point.kind === "saved" ? "saved scenario" : "after practice"}`, `Aggregate ${point.aggregate.toFixed(2)}`]} /> : null
               }} />
               <Line dataKey="practice" stroke="var(--color-practice)" strokeWidth={2} connectNulls dot={{ r: 3, fill: "var(--color-practice)" }} isAnimationActive={false} />
               <Line dataKey="saved" stroke="none" dot={{ r: 4, fill: "var(--card)", stroke: "var(--color-saved)", strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={false} />

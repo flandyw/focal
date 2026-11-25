@@ -44,7 +44,7 @@ export type AtarModel = {
   range: { low: string; high: string; lowAtar: number | null; highAtar: number | null } | null
 }
 
-export type AtarHistoryPoint = { timestamp: number; atar: number | null; aggregate: number; kind: "saved" | "practice"; label: string }
+export type AtarHistoryPoint = { timestamp: number; atar: number | null; aggregate: number; kind: "saved" | "practice"; label: string; name?: string }
 
 export function atarYears(scaling: ScalingReference[]) {
   return ATAR_AGGREGATE_REFERENCES.map((item) => item.year).filter((year) => scaling.some((reference) => reference.year === year)).toSorted((a, b) => b - a)
@@ -177,7 +177,7 @@ export function buildAtarHistory(input: Omit<Parameters<typeof buildAtarModel>[0
   const saved = input.data.atarEstimates.flatMap((item): AtarHistoryPoint[] => {
     const timestamp = Date.parse(item.savedAt)
     const atar = item.atarLabel.trim() ? Number(item.atarLabel) : NaN
-    return Number.isFinite(timestamp) && item.aggregate !== null ? [{ timestamp, atar: Number.isFinite(atar) ? atar : null, aggregate: item.aggregate, kind: "saved", label: item.atarLabel }] : []
+    return Number.isFinite(timestamp) && item.aggregate !== null ? [{ timestamp, atar: Number.isFinite(atar) ? atar : null, aggregate: item.aggregate, kind: "saved", label: item.atarLabel, name: item.name }] : []
   })
   const current = buildAtarModel(input)
   const subjects = new Set(current.rows.flatMap((item) => item.source === "focal" && item.prediction ? item.prediction.evidence.map((evidence) => evidence.attempt.subject) : []))

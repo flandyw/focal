@@ -78,7 +78,7 @@ function atar(data: AppData, references: AssessmentReference[], scaling: Scaling
     subjects: settings.subjects ? [...estimate.primaryFour, ...estimate.increments].map((item) => ({
       name: item.studyName.slice(0, 200), scaled: item.scaledScore, contribution: item.contribution, increment: item.role === "Increment",
     })) : [],
-    source: saved ? `${pinned ? "Pinned" : "Newest"} scenario, saved ${savedOn}` : "Live Focal estimate",
+    source: saved ? `${saved.name ? `${saved.name} · ` : `${pinned ? "Pinned" : "Newest"} scenario, `}saved ${savedOn}` : "Live Focal estimate",
     scenarioId: saved?.id ?? null,
   }
 }

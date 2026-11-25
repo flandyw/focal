@@ -71,7 +71,7 @@ export function AtarScenariosCard({ saved, currentEstimate, onLoad, onRename, on
                         placeholder="Scenario name (optional)"
                         value={draft}
                         onChange={(event) => setDraft(event.target.value)}
-                        onKeyDown={(event) => { if (event.key === "Escape") setEditingId(null) }}
+                        onKeyDown={(event) => { if (event.key === "Escape" && !event.nativeEvent.isComposing) setEditingId(null) }}
                       />
                       <Button type="submit" variant="secondary" size="icon-sm" aria-label="Save scenario name"><Check /></Button>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label="Cancel rename" onClick={() => setEditingId(null)}><X /></Button>

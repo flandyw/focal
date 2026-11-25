@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useRef, useState } from "react"
+import { useDeferredValue, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { count } from "../lib/utils"
 import { BarChart3, Bookmark, Check, CircleCheck, ExternalLink, FileCheck2, Library, ListFilter, Play, Search, Target } from "lucide-react"
 import { toast } from "sonner"
@@ -102,6 +102,17 @@ export function ExamLibrary({
   })
   const [savedOnly, setSavedOnly] = useState(false)
   const savedFilterRef = useRef<HTMLButtonElement>(null)
+  const libraryRef = useRef<HTMLDivElement>(null)
+  const emptyActionRef = useRef<HTMLButtonElement>(null)
+  const removedBookmarkIndex = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const index = removedBookmarkIndex.current
+    if (index === null) return
+    removedBookmarkIndex.current = null
+    const buttons = libraryRef.current?.querySelectorAll<HTMLButtonElement>("[data-paper-bookmark]")
+    const next = buttons?.[Math.min(index, buttons.length - 1)] ?? emptyActionRef.current
+    next?.focus({ preventScroll: true })
+  }, [savedPapers])
   const exams = useMemo(() => getCachedVcaaExams(studies), [studies])
   const subjects = useMemo(() => prioritiseSubjects(exams.map((exam) => exam.studyName), preferredSubjects), [exams, preferredSubjects])
   const [subject, setSubject] = useState(() => firstPreferredSubject(subjects, preferredSubjects) || subjects[0] || "all")
@@ -136,10 +147,10 @@ export function ExamLibrary({
   const hasSavedPapers = exams.some((exam) => savedPapers.has(exam.url))
   const bookmarkButton = (exam: VcaaExamResource) => {
     const saved = savedPapers.has(exam.url)
-    return <Button size="icon" variant={saved ? "secondary" : "ghost"} aria-pressed={saved}
+    return <Button size="icon" variant={saved ? "secondary" : "ghost"} aria-pressed={saved} data-paper-bookmark
       aria-label={`Save paper: ${exam.studyName} ${exam.year ?? ""} ${getVcaaExamPaper(exam)} (${getVcaaExamProvider(exam)})`}
       title={saved ? "Remove from saved papers" : "Save paper"}
-      onClick={() => {
+      onClick={(event) => {
         const next = new Set(savedPapers)
         if (saved) next.delete(exam.url)
         else next.add(exam.url)
@@ -149,8 +160,11 @@ export function ExamLibrary({
           toast.error("Could not update saved papers on this device.")
           return
         }
+        if (saved && savedOnly && !selectedPaperId && libraryRef.current) {
+          const buttons = libraryRef.current.querySelectorAll("[data-paper-bookmark]")
+          removedBookmarkIndex.current = Array.from(buttons).indexOf(event.currentTarget)
+        }
         setSavedPapers(next)
-        if (saved && savedOnly && !selectedPaperId) savedFilterRef.current?.focus()
       }}><Bookmark className={saved ? "fill-current" : undefined} /></Button>
   }
   const pending = filtered.filter((exam) => !isCompleted(exam))
@@ -196,7 +210,7 @@ export function ExamLibrary({
     .toSorted((first, second) => (second.year ?? 0) - (first.year ?? 0)).slice(0, 2) ?? []
 
   return (
-    <div className="grid gap-5">
+    <div ref={libraryRef} className="grid gap-5">
       <PageHeader icon={Library} title="VCAA exam library" description="Official past papers with built-in timers, examiner reports, and grade distributions.">
         {!selectedPaperId ? <Button ref={savedFilterRef} variant={savedOnly ? "secondary" : "outline"} aria-pressed={savedOnly} onClick={() => {
           if (!savedOnly) clearFilters()
@@ -325,8 +339,8 @@ export function ExamLibrary({
       {pending.length > visibleCount ? <div className="flex flex-wrap items-center justify-center gap-3"><p role="status" className="text-xs tabular-nums text-muted-foreground">Showing {visibleCount} of {count(pending.length, "exam")}</p><Button variant="outline" onClick={() => setVisibleCount(visibleCount + 40)}>Show more papers</Button></div> : null}
       {completed.length ? completion === "completed" || (savedOnly && !selectedPaperId) ? <div className="divide-y rounded-lg border bg-card">{completedRows}</div> : <ArchivedItems label="Completed papers" count={completed.length} open={selectedPaperId && completed.some((exam) => exam.url === selectedPaperId) ? true : undefined}>{completedRows}</ArchivedItems> : null}
       {!filtered.length ? savedOnly && !selectedPaperId && !hasSavedPapers
-        ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Bookmark /></EmptyMedia><EmptyTitle>No saved papers yet</EmptyTitle><EmptyDescription>Use the bookmark on any paper to keep it here for later.</EmptyDescription></EmptyHeader><Button variant="outline" onClick={() => { setSavedOnly(false); savedFilterRef.current?.focus() }}>Browse all papers</Button></Empty>
-        : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matched “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try a different subject or completion filter."}</EmptyDescription></EmptyHeader><Button variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
+        ? <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Bookmark /></EmptyMedia><EmptyTitle>No saved papers yet</EmptyTitle><EmptyDescription>Use the bookmark on any paper to keep it here for later.</EmptyDescription></EmptyHeader><Button ref={emptyActionRef} variant="outline" onClick={() => { setSavedOnly(false); savedFilterRef.current?.focus() }}>Browse all papers</Button></Empty>
+        : <Empty className="min-h-48 border"><EmptyHeader><EmptyMedia variant="icon"><Search /></EmptyMedia><EmptyTitle>No matching VCAA exams</EmptyTitle><EmptyDescription>{deferredQuery.trim() ? `Nothing matched “${deferredQuery.trim()}”${subject === "all" ? "" : ` in ${subject}`}.` : "Try a different subject or completion filter."}</EmptyDescription></EmptyHeader><Button ref={emptyActionRef} variant="outline" onClick={clearFilters}>Clear filters</Button></Empty> : null}
     </div>
   )
 }

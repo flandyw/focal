@@ -74,9 +74,10 @@ export function AtarEstimator({
 
   function saveEstimate() {
     if (!estimate) return
+    const name = scenarioName.trim()
     onSaveEstimate({
       id: crypto.randomUUID(),
-      name: scenarioName.trim() || undefined,
+      ...(name ? { name } : {}),
       year,
       rows: rows.map((row) => ({ ...row })),
       atarLabel: estimate.atarLabel,
@@ -88,7 +89,9 @@ export function AtarEstimator({
   }
 
   function renameEstimate(saved: SavedAtarEstimate, name: string) {
-    onSaveEstimate({ ...saved, name: name.trim() || undefined })
+    const trimmed = name.trim()
+    const { name: _, ...rest } = saved
+    onSaveEstimate(trimmed ? { ...rest, name: trimmed } : rest)
   }
 
   function deleteEstimate(saved: SavedAtarEstimate) {

@@ -91,10 +91,13 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
   const rechecks = subjectItems.filter((item) => isRecheckDue(item, now)).length
   const ambers = subjectItems.filter((item) => item.rating === "amber").length
   const unrated = subjectItems.filter((item) => !item.rating).length
+  const subjectUnlinked = unlinked.filter((record) => sameStudySubject(record.subject, subject)).length
 
   function importItems(importSubject: string, imported: Parameters<typeof mergeStoplightItems>[2]) {
     onChange((current) => mergeStoplightItems(current, importSubject, imported).learning)
     setChosen(importSubject)
+    setQuery("")
+    if (filter !== "all") onFilterChange("all")
     toast.success(`Checklist updated for ${importSubject}`)
   }
 
@@ -184,7 +187,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
             <StatGrid className="md:grid-cols-3">
               <StatTile icon={CircleAlert} tone={reds ? "danger" : "default"} label="Red" value={reds} hint={reds ? "Start here" : "Nothing red right now"} onClick={reds ? () => onFilterChange("red") : undefined} />
               <StatTile icon={RotateCcw} tone={rechecks ? "warning" : "default"} label="Re-check due" value={rechecks} hint="Green after 21 days, amber after 14" onClick={rechecks ? () => onFilterChange("recheck") : undefined} />
-              <StatTile icon={Link2Off} label="Unlinked" value={unlinked.length} hint="Mistakes and questions without an item" className="max-md:col-span-2" />
+              <StatTile icon={Link2Off} label="Unlinked" value={subjectUnlinked} hint="Mistakes and questions without an item" className="max-md:col-span-2" />
             </StatGrid>
           </div>
           <div className="grid grid-cols-1 gap-3">
@@ -253,7 +256,7 @@ export function StoplightPage({ data, subjects, scopedSubject, now, filterQuery,
       )}
 
       {addOpen ? <StoplightAddDialog subjects={[...subjects, ...itemSubjects, ...data.subjects]} preferredSubjects={data.subjects} defaultSubject={scopedSubject || subject || data.subjects[0] || ""} scopedSubject={scopedSubject} onClose={() => setAddOpen(false)} onSave={addSkill} /> : null}
-      <StoplightImportDialog key={String(importOpen)} open={importOpen} subjects={subjects} preferredSubjects={data.subjects} defaultSubject={subject || data.subjects[0] || ""} onOpenChange={setImportOpen} onImport={importItems} />
+      <StoplightImportDialog key={String(importOpen)} open={importOpen} subjects={subjects} preferredSubjects={data.subjects} defaultSubject={scopedSubject || subject || data.subjects[0] || ""} scopedSubject={scopedSubject} onOpenChange={setImportOpen} onImport={importItems} />
       <StoplightReviseDialog key={`${revising}${subject}`} open={revising} subject={subject} items={subjectItems} evidence={evidence} onOpenChange={setRevising} onApply={applyRatings} />
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => { if (!open) setViewing(null) }}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg lg:max-w-2xl">

@@ -574,7 +574,7 @@ export async function classifyToStoplight(
   const size = 8
 
   for (const subject of subjects) {
-    const subjectItems = items.filter((item) => item.group && item.subject.toLowerCase() === subject)
+    const subjectItems = items.filter((item) => item.subject.toLowerCase() === subject)
     const subjectRecords = records.filter((record) => record.subject.toLowerCase() === subject)
       .toSorted((a, b) => (a.areaOfStudy ?? "").localeCompare(b.areaOfStudy ?? ""))
     for (let start = 0; start < subjectRecords.length; start += size) {

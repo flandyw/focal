@@ -1,7 +1,7 @@
 // Pure (no React/Tauri): the stoplight checklist, its chatbot import contract, and evidence from mistakes.
 import { parseJsonPayload } from "./calendarImport.js"
 import { buildMistakePatterns } from "./mistake-review.js"
-import { sameStudySubject } from "./studySubjects.js"
+import { sameStudySubject, subjectKey } from "./studySubjects.js"
 import { getMistakeSchedule, normalizeReviewRating, type AppData, type Mistake } from "./exam-data.js"
 import {
   materialiseTask, type CurriculumArea, type LearningWorkspace, type StoplightRating, type StoplightType,
@@ -19,7 +19,8 @@ export const RATINGS: Array<{ id: StoplightRating; label: string; meaning: strin
   { id: "green", label: "Green", meaning: "Can pass the check cold and timed" },
 ]
 
-const key = (subject: string, group: string, name: string) => `${subject}|${group}|${name}`.toLowerCase().replace(/\s+/g, " ")
+// A JSON tuple so pipes in a group or name cannot collide; subjects match by canonical identity (Methods = Mathematical Methods).
+const key = (subject: string, group: string, name: string) => JSON.stringify([subjectKey(subject), ...[group, name].map((value) => value.trim().replace(/\s+/g, " ").toLowerCase())])
 const label = (value: string | undefined) => (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
 
 export function groupBy<T>(list: T[], keyOf: (item: T) => string) {
@@ -283,7 +284,9 @@ export function parseRatingsResponse(content: string, items: CurriculumArea[]) {
   const list = Array.isArray(parsed) ? parsed : Array.isArray(parsed.ratings) ? parsed.ratings : []
   const ratings = new Map<string, StoplightRating>()
   for (const entry of list as Array<{ n?: unknown; rating?: unknown }>) {
-    const item = items[Number(entry?.n) - 1]
+    // Only whole numbers (or digit strings) pick an item; Number(true) or Number([1]) would select item 1.
+    const n = typeof entry?.n === "number" || typeof entry?.n === "string" && /^\s*\d+\s*$/.test(entry.n) ? Number(entry.n) : NaN
+    const item = Number.isInteger(n) && n >= 1 ? items[n - 1] : undefined
     const rating = RATINGS.find(({ id }) => id === String(entry?.rating).toLowerCase())?.id
     if (item && rating) ratings.set(item.id, rating)
   }
@@ -359,7 +362,7 @@ export type ItemLink = { id: string; itemIds: string[] }
 
 /** Unlinked mistakes and marked questions in subjects that have a checklist. `only` limits to given ids. */
 export function collectLinkRecords(data: Pick<AppData, "attempts" | "mistakes" | "learning">, only?: Set<string>): LinkRecord[] {
-  const subjects = new Set(activeItems(data.learning).filter((item) => item.group).map((item) => item.subject.toLowerCase()))
+  const subjects = new Set(activeItems(data.learning).map((item) => item.subject.toLowerCase()))
   const attempts = new Map(data.attempts.map((attempt) => [attempt.id, attempt]))
   const records: LinkRecord[] = []
   for (const mistake of data.mistakes) {
@@ -382,7 +385,8 @@ export function candidateItems(items: CurriculumArea[], records: LinkRecord[]) {
   if (!records.length) return []
   if (records.some((record) => !record.areaOfStudy)) return items
   const byGroup = groupBy(items, (item) => label(item.group))
-  const matched = new Set<CurriculumArea>()
+  // Ungrouped items can't match an Area of Study, so they stay candidates.
+  const matched = new Set<CurriculumArea>(byGroup.get("") ?? [])
   for (const record of records) {
     const group = label(record.areaOfStudy)
     const candidates = byGroup.get(group)

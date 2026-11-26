@@ -101,7 +101,7 @@ export function QuestionResultsEditor({ value, onChange, attempts = [], paper, o
               </Collapsible>
             </div>
           ))}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm tabular-nums"><span>Items total {formatSum(earned)} / {formatSum(maximum)}{value.some((result) => !Number.isFinite(result.marksAwarded)) ? ` · ${value.filter((result) => !Number.isFinite(result.marksAwarded)).length} unmarked` : ""}</span>{onUseTotal ? <Button type="button" size="sm" variant="outline" disabled={!!validateQuestionResults(value)} onClick={() => onUseTotal(earned, maximum)}>Use as overall mark</Button> : null}<span className="w-full text-xs text-muted-foreground">Enter moves to the next earned mark. Shift+Enter moves back.</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm tabular-nums"><span>Items total {formatSum(earned)} / {formatSum(maximum)}{value.some((result) => !Number.isFinite(result.marksAwarded)) ? ` · ${value.filter((result) => !Number.isFinite(result.marksAwarded)).length} unmarked` : ""}</span>{onUseTotal ? <Button type="button" size="sm" variant="outline" disabled={!!validateQuestionResults(value)} onClick={() => onUseTotal(formatSum(earned), formatSum(maximum))}>Use as overall mark</Button> : null}<span className="w-full text-xs text-muted-foreground">Enter moves to the next earned mark. Shift+Enter moves back.</span></div>
         </div>
       ) : null}
     </Field>

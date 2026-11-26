@@ -19,6 +19,7 @@ import { canonicalNow } from "../lib/study-session-sync"
 import type { AppData, AssessmentReference } from "../lib/exam-data"
 import { getGoalProgress, type LearningWorkspace, type LearningWorkspaceUpdate, type StudyGoal, type StudyGoalKind } from "../lib/learning-workspace"
 import { localDate } from "../lib/local-date"
+import { sameStudySubject } from "../lib/studySubjects"
 
 function defaultDeadline() {
   const date = new Date()
@@ -128,7 +129,7 @@ export function GoalsPage({ data, references, subjects, scopedSubject, onChange,
     const createdAt = new Date(goal.createdAt)
     const baselineAttempts = data.attempts.filter((attempt) => new Date(attempt.createdAt || attempt.completedAt).getTime() <= createdAt.getTime())
     const baseline = getGoalProgress(goal, { ...data, attempts: baselineAttempts }, references, scalingReferences).current
-    const newPapers = data.attempts.filter((attempt) => (!goal.subject || (goal.kind === "study-score" ? normaliseScalingStudyName(attempt.subject) === normaliseScalingStudyName(goal.subject) : attempt.subject.toLowerCase() === goal.subject.toLowerCase())) && new Date(attempt.createdAt || attempt.completedAt).getTime() > createdAt.getTime()).length
+    const newPapers = data.attempts.filter((attempt) => (!goal.subject || (goal.kind === "study-score" ? normaliseScalingStudyName(attempt.subject) === normaliseScalingStudyName(goal.subject) : sameStudySubject(attempt.subject, goal.subject))) && new Date(attempt.createdAt || attempt.completedAt).getTime() > createdAt.getTime()).length
     const setOn = createdAt.toLocaleDateString("en-AU", { day: "numeric", month: "short" })
     const change = baseline === null ? 0 : Number((progress.current - baseline).toFixed(1))
     const movement = !newPapers ? `No new papers since you set this on ${setOn}.`

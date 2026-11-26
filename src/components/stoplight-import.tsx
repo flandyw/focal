@@ -5,21 +5,23 @@ import { toast } from "sonner"
 import { Button } from "./ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field"
+import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
 import { SubjectCombobox } from "./subject-combobox"
 import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { buildStoplightPrompt, groupBy, parseStoplightResponse, type ImportedItem } from "../lib/stoplight"
 
 /** Chatbot round trip: copy a prompt, attach the study design, paste the JSON reply back. Re-import to add the rest of a long reply. */
-export function StoplightImportDialog({ open, subjects, preferredSubjects, defaultSubject, onOpenChange, onImport }: {
+export function StoplightImportDialog({ open, subjects, preferredSubjects, defaultSubject, scopedSubject, onOpenChange, onImport }: {
   open: boolean
   subjects: string[]
   preferredSubjects: string[]
   defaultSubject: string
+  scopedSubject?: string
   onOpenChange: (open: boolean) => void
   onImport: (subject: string, items: ImportedItem[]) => void
 }) {
-  const [subject, setSubject] = useState(defaultSubject)
+  const [subject, setSubject] = useState(scopedSubject ?? defaultSubject)
   const [text, setText] = useState("")
   const [items, setItems] = useState<ImportedItem[] | null>(null)
   const [error, setError] = useState<{ message: string; target?: "subject" | "json" } | null>(null)
@@ -93,7 +95,7 @@ export function StoplightImportDialog({ open, subjects, preferredSubjects, defau
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="stoplight-import-subject">1. Subject</FieldLabel>
-            <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required disabled={copying} aria-invalid={error?.target === "subject" || undefined} aria-describedby={error?.target === "subject" ? "stoplight-import-subject-error" : undefined} />
+            {scopedSubject ? <Input id="stoplight-import-subject" value={scopedSubject} readOnly /> : <SubjectCombobox id="stoplight-import-subject" subjects={subjects} preferredSubjects={preferredSubjects} value={subject} onValueChange={(value) => { setSubject(value); setCopied(false); setShowPrompt(false); setItems(null); setError(null) }} allowCustom required disabled={copying} aria-invalid={error?.target === "subject" || undefined} aria-describedby={error?.target === "subject" ? "stoplight-import-subject-error" : undefined} />}
             {error?.target === "subject" ? <FieldError id="stoplight-import-subject-error">{error.message}</FieldError> : null}
           </Field>
           <Field>

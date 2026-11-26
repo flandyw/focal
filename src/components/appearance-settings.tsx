@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useId, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { useTheme } from "next-themes"
 import { ArrowDown, ArrowUp, Check, Monitor, Moon, RotateCcw, Sun } from "lucide-react"
@@ -42,18 +42,19 @@ function ChoiceSetting<K extends keyof Appearance>({ title, description, field, 
 
 function ColourSetting({ title, description, value, fallback, onChange }: { title: string; description: string; value: string | null; fallback: string; onChange: (colour: string | null) => void }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const errorId = useId()
   const invalid = draft !== null && draft !== "" && !/^#[0-9a-f]{6}$/i.test(draft)
   return <Setting title={title} description={description}>
     <Input type="color" aria-label={`${title} picker`} className="h-9 w-12 shrink-0 cursor-pointer p-1" value={value ?? fallback} onChange={(event) => { setDraft(null); onChange(event.target.value) }} />
-    <Input aria-label={`${title} hex code`} aria-invalid={invalid || undefined} placeholder={fallback} className="w-28 font-mono text-sm" maxLength={7} value={draft ?? value ?? ""} onChange={(event) => {
+    <Input aria-label={`${title} hex code`} aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined} placeholder={fallback} className="w-28 font-mono text-sm" maxLength={7} value={draft ?? value ?? ""} onChange={(event) => {
       const next = event.target.value
       const valid = /^#[0-9a-f]{6}$/i.test(next)
       setDraft(valid || next === "" ? null : next)
       if (valid) onChange(next)
       else if (next === "") onChange(null)
     }} />
-    <Button variant="ghost" size="sm" disabled={!value && !draft} onClick={() => { setDraft(null); onChange(null) }}>Clear</Button>
-    {invalid ? <p role="alert" className="w-full text-sm text-destructive">Enter a hex colour such as #1a2b3c.</p> : null}
+    <Button variant="ghost" size="sm" aria-label={`Clear ${title.toLowerCase()}`} disabled={!value && !draft} onClick={() => { setDraft(null); onChange(null) }}>Clear</Button>
+    {invalid ? <p id={errorId} role="alert" className="w-full text-sm text-destructive">Enter a hex colour such as #1a2b3c.</p> : null}
   </Setting>
 }
 

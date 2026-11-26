@@ -15,7 +15,7 @@ export function StoplightItemPicker({ id, items, subject, value, onChange }: {
   value: string[]
   onChange: (value: string[]) => void
 }) {
-  const options = items.filter((item) => item.group && (!subject || sameStudySubject(item.subject, subject)) && !value.includes(item.id))
+  const options = items.filter((item) => (!subject || sameStudySubject(item.subject, subject)) && !value.includes(item.id))
   const groups = groupBy(options, (item) => `${subject ? "" : `${item.subject} · `}${itemGroup(item)}`)
   // Links to archived or deleted items still count toward the cap, so keep them visible and removable.
   const missing = value.filter((itemId) => !items.some((item) => item.id === itemId))

@@ -1,5 +1,6 @@
 import type { AppData, AssessmentReference } from "./exam-data"
 import { predictStudyScore } from "./study-score.js"
+import { sameStudySubject } from "./studySubjects.js"
 import { latestSavedEstimate, liveSavedAtarModel } from "./atar-model.js"
 import type { ScalingReference } from "./scaling.js"
 
@@ -175,8 +176,8 @@ export function getGoalProgress(goal: StudyGoal, data: AppData, references: Asse
   let label = "Current"
   let evidence = "No compatible evidence yet."
   if (goal.kind === "exam-percentage") {
-    const subject = goal.subject?.toLowerCase()
-    const attempts = subject ? data.attempts.filter((attempt) => attempt.subject.toLowerCase() === subject) : data.attempts
+    const subject = goal.subject
+    const attempts = subject ? data.attempts.filter((attempt) => sameStudySubject(attempt.subject, subject)) : data.attempts
     current = attempts.length ? attempts.reduce((total, attempt) => total + attempt.rawScore / attempt.rawMax * 100, 0) / attempts.length : null
     label = "Average exam result"
     evidence = current === null ? evidence : `Based on ${attempts.length} recorded paper(s).`

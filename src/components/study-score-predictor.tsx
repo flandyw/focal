@@ -90,9 +90,9 @@ export function StudyScorePredictor({
   const selectedDistributionYear = distributionYear === "automatic" ? null : Number(distributionYear)
 
   const schoolMedianInvalid = schoolMedian.trim() !== "" && !(Number(schoolMedian) >= 20 && Number(schoolMedian) <= 45)
-  const sacRankInvalid = sacMode === "rank" && sacRank.trim() !== "" && sacCohort.trim() !== "" && !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort))
+  const sacRankInvalid = sacMode === "rank" && sacRank.trim() !== "" && sacCohort.trim() !== "" && (!Number.isInteger(Number(sacRank)) || !Number.isInteger(Number(sacCohort)) || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)))
   const parsedSac = sacMode === "rank"
-    ? schoolMedianInvalid || sacRank.trim() === "" || sacCohort.trim() === "" || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)) ? null : sacPercentileFromRank(
+    ? schoolMedianInvalid || sacRank.trim() === "" || sacCohort.trim() === "" || sacRankInvalid ? null : sacPercentileFromRank(
       Number(sacRank),
       Number(sacCohort),
       schoolMedian.trim() === "" ? undefined : Number(schoolMedian),
@@ -245,7 +245,7 @@ export function StudyScorePredictor({
                         {schoolMedianInvalid ? "School median must be between 20 and 45. Leave blank to assume 30."
                           : parsedSac !== null
                           ? `About the ${formatOrdinal(parsedSac)} percentile statewide after moderation.`
-                          : sacRankInvalid ? "Rank must be between 1 and the number of students."
+                          : sacRankInvalid ? "Enter whole numbers with rank between 1 and the number of students."
                           : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}
                       </FieldDescription>
                     </>

@@ -90,6 +90,7 @@ export function StudyScorePredictor({
   const selectedDistributionYear = distributionYear === "automatic" ? null : Number(distributionYear)
 
   const schoolMedianInvalid = schoolMedian.trim() !== "" && !(Number(schoolMedian) >= 20 && Number(schoolMedian) <= 45)
+  const sacRankInvalid = sacMode === "rank" && sacRank.trim() !== "" && sacCohort.trim() !== "" && !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort))
   const parsedSac = sacMode === "rank"
     ? schoolMedianInvalid || sacRank.trim() === "" || sacCohort.trim() === "" || !(Number(sacRank) >= 1 && Number(sacRank) <= Number(sacCohort)) ? null : sacPercentileFromRank(
       Number(sacRank),
@@ -97,6 +98,7 @@ export function StudyScorePredictor({
       schoolMedian.trim() === "" ? undefined : Number(schoolMedian),
     )
     : sacPercentile.trim() === "" || !(Number(sacPercentile) > 0 && Number(sacPercentile) < 100) ? null : Number(sacPercentile)
+  const sacPercentileInvalid = sacMode === "percentile" && sacPercentile.trim() !== "" && parsedSac === null
   const prediction = useMemo(
     () => predictStudyScore({
       subject,
@@ -209,6 +211,8 @@ export function StudyScorePredictor({
                           inputMode="numeric"
                           placeholder="Rank"
                           value={sacRank}
+                          aria-invalid={sacRankInvalid || undefined}
+                          aria-describedby="sac-rank-description"
                           onChange={(event) => saveSac({ sacRank: event.target.value })}
                         />
                         <Input
@@ -219,6 +223,8 @@ export function StudyScorePredictor({
                           inputMode="numeric"
                           placeholder="Out of"
                           value={sacCohort}
+                          aria-invalid={sacRankInvalid || undefined}
+                          aria-describedby="sac-rank-description"
                           onChange={(event) => saveSac({ sacCohort: event.target.value })}
                         />
                       </div>
@@ -235,11 +241,11 @@ export function StudyScorePredictor({
                         aria-describedby="sac-rank-description"
                         onChange={(event) => saveSac({ schoolMedian: event.target.value })}
                       />
-                      <FieldDescription id="sac-rank-description">
+                      <FieldDescription id="sac-rank-description" className={schoolMedianInvalid || sacRankInvalid ? "text-destructive" : undefined}>
                         {schoolMedianInvalid ? "School median must be between 20 and 45. Leave blank to assume 30."
                           : parsedSac !== null
                           ? `About the ${formatOrdinal(parsedSac)} percentile statewide after moderation.`
-                          : sacRank.trim() && sacCohort.trim() ? "Rank must be between 1 and the number of students."
+                          : sacRankInvalid ? "Rank must be between 1 and the number of students."
                           : "Your SAC rank in this subject at your school, e.g. 3 out of 40. Schools usually publish their median study score. Leave blank to assume SACs match your exam percentile."}
                       </FieldDescription>
                     </>
@@ -255,10 +261,12 @@ export function StudyScorePredictor({
                         inputMode="decimal"
                         placeholder="Optional"
                         value={sacPercentile}
+                        aria-invalid={sacPercentileInvalid || undefined}
+                        aria-describedby="sac-percentile-description"
                         onChange={(event) => saveSac({ sacPercentile: event.target.value })}
                       />
-                      <FieldDescription>
-                        {sacPercentile.trim() && parsedSac === null ? "Enter a percentile between 0 and 100." : "Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile."}
+                      <FieldDescription id="sac-percentile-description" className={sacPercentileInvalid ? "text-destructive" : undefined}>
+                        {sacPercentileInvalid ? "Enter a percentile between 0 and 100." : "Your estimated statewide percentile after moderation. Leave blank to assume it matches your predicted exam percentile."}
                       </FieldDescription>
                     </>
                   )}
@@ -481,7 +489,7 @@ export function StudyScorePredictor({
                     <ul className="divide-y rounded-lg border">
                       {[...prediction.evidence].reverse().map(({ attempt, percentile, weight, referenceYear, exactReferenceYear }) => (
                         <li key={attempt.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 basis-48">
                             <p className="truncate text-sm font-medium" title={`${attempt.title} · ${attempt.paper}`}>{attempt.title} · {attempt.paper}</p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(`${attempt.completedAt}T00:00:00`).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })} · {(attempt.rawScore / attempt.rawMax * 100).toFixed(1)}%

@@ -18,8 +18,11 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
   function go(next: number) { setIndex(next); setRevealed(false) }
   return <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
     <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl" onKeyDown={(event) => {
-      if (finished || !card || (event.target as HTMLElement).closest("button, a, input, textarea")) return
-      if (event.key === " ") { event.preventDefault(); setRevealed(!revealed) }
+      if (finished || !card || (event.target as HTMLElement).closest("input, textarea, select")) return
+      if (event.key === " ") {
+        if ((event.target as HTMLElement).closest("button, a")) return
+        event.preventDefault(); setRevealed(!revealed)
+      }
       else if (event.key === "ArrowLeft") { event.preventDefault(); if (index > 0) go(index - 1) }
       else if (event.key === "ArrowRight") { event.preventDefault(); if (index < cards.length - 1) go(index + 1) }
     }}>
@@ -32,15 +35,20 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         <p className="text-muted-foreground">Come back to these whenever you need a refresher.</p>
         <div className="flex gap-2"><Button variant="outline" onClick={() => { go(0); setFinished(false) }}><RotateCcw />Start again</Button><Button onClick={onClose}>Back to library</Button></div>
       </div> : card ? <div className="grid gap-5">
-        <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground" aria-live="polite">Card {index + 1} of {cards.length}</span><Button variant="ghost" size="sm" onClick={() => {
+        <div className="flex items-center justify-between"><span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">Card {index + 1} of {cards.length}</span>{cards.length > 1 ? <Button variant="ghost" size="sm" onClick={() => {
           const shuffled = [...cards]
           for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]] }
           setCards(shuffled); go(0)
-        }}><Shuffle />Shuffle & restart</Button></div>
+        }}><Shuffle />Shuffle & restart</Button> : null}</div>
         <Progress value={(index + 1) / cards.length * 100} aria-label="Practice progress" />
         <div className="flex flex-wrap gap-2"><Badge variant="secondary">{card.category}</Badge>{card.areaOfStudy ? <Badge variant="outline">{card.areaOfStudy}</Badge> : null}</div>
         <h3 className="focal-section-title"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
-        <div className="min-h-32"><MarkdownPreview>{card.questionText || card.question}</MarkdownPreview><MistakeAttachments attachments={card.attachments} /></div>
+        {(card.questionText?.trim() && card.questionText.trim() !== card.question.trim()) || card.attachments?.length ? (
+          <div className="min-h-20">
+            {card.questionText?.trim() && card.questionText.trim() !== card.question.trim() ? <MarkdownPreview>{card.questionText}</MarkdownPreview> : null}
+            <MistakeAttachments attachments={card.attachments} />
+          </div>
+        ) : null}
         <Button variant="secondary" aria-expanded={revealed} onClick={() => setRevealed(!revealed)}>{revealed ? "Hide answer" : "Reveal answer"}</Button>
         {revealed ? <div className="grid gap-5 rounded-xl border bg-muted/30 p-5">
           <section><h4 className="mb-2 font-semibold">What went wrong</h4><MarkdownPreview>{card.explanation}</MarkdownPreview></section>

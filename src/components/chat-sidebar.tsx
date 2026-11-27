@@ -25,10 +25,8 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
   const [error, setError] = useState("")
   const [confirmingClose, setConfirmingClose] = useState(false)
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const matching = chats.filter((chat) => {
-    const text = [chat.title, chat.draft, ...chat.messages.flatMap((message) => message.parts.map((part) => part.type === "text" ? part.text : ""))].join("\n").toLowerCase()
-    return terms.every((term) => text.includes(term))
-  })
+  const matching = chats.filter((chat) => terms.every((term) => chat.title.toLowerCase().includes(term) || chat.draft.toLowerCase().includes(term)
+    || chat.messages.some((message) => message.parts.some((part) => part.type === "text" && part.text.toLowerCase().includes(term)))))
   function closeRename() {
     if (saving) return
     if (editing && title.trim() !== editing.title.trim()) setConfirmingClose(true)

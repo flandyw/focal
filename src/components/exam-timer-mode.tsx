@@ -488,16 +488,16 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
           </DialogHeader>
           <form id="timer-marking-form" onSubmit={saveMark}>
             <FieldGroup>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-score">Mark</FieldLabel>
-                  <Input id="timer-score" type="number" min="0" step="any" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => setRawScore(event.target.valueAsNumber)} autoFocus required />
+                  <Input id="timer-score" type="number" min="0" step="any" value={Number.isFinite(rawScore) ? rawScore : ""} onChange={(event) => { setRawScore(event.target.valueAsNumber); setMarkingError(null) }} aria-invalid={markingError ? true : undefined} aria-describedby={markingError ? "timer-marking-error" : undefined} autoFocus required />
                 </Field>
                 <Field data-invalid={markingError ? true : undefined}>
                   <FieldLabel htmlFor="timer-maximum">Out of</FieldLabel>
-                  <Input id="timer-maximum" type="number" min="0.5" step="any" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => setRawMax(event.target.valueAsNumber)} required />
+                  <Input id="timer-maximum" type="number" min="0.5" step="any" value={Number.isFinite(rawMax) ? rawMax : ""} onChange={(event) => { setRawMax(event.target.valueAsNumber); setMarkingError(null) }} aria-invalid={markingError ? true : undefined} aria-describedby={markingError ? "timer-marking-error" : undefined} required />
                 </Field>
-                <Field>
+                <Field className="col-span-2 sm:col-span-1">
                   <FieldLabel htmlFor="timer-completed">Completed</FieldLabel>
                   <Input id="timer-completed" type="date" max={today()} value={completedAt} onChange={(event) => setCompletedAt(event.target.value)} required />
                 </Field>
@@ -513,7 +513,7 @@ export function ExamTimerMode({ progression, onProgressionChange, attempts, refe
                 <FieldLabel htmlFor="timer-comment">Comment <span className="text-muted-foreground">(optional)</span></FieldLabel>
                 <Textarea id="timer-comment" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="What went well, and what to change next time?" />
               </Field>
-              <FieldError>{markingError}</FieldError>
+              <FieldError id="timer-marking-error">{markingError}</FieldError>
             </FieldGroup>
           </form>
           <DialogFooter>

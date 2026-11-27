@@ -129,7 +129,7 @@ function AwaitingSacRow({ record, onSave, onEdit }: { record: SacRecord; onSave:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{record.title}</p>
-          <p className="text-xs text-muted-foreground">{record.subject} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p>
+          <p className="text-xs text-muted-foreground">{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p>
         </div>
         <form className="flex flex-wrap items-center gap-2" onSubmit={submit} onChange={() => setError(null)} aria-label={`Result for ${record.title}`}>
           <Input className="w-20 tabular-nums" inputMode="decimal" type="number" min={0} step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="Mark" aria-label={`Mark for ${record.title}`} {...invalid} />

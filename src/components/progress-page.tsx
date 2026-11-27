@@ -29,5 +29,6 @@ export function ProgressPage({ sessions, data, subject, onPlan, onNewSession, on
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<><AIOverview area="progress" fingerprint={`${studySessions.length}:${data.attempts.length}`} /><WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} /></>} />
+  const activeSubjects = data.subjects.filter((name) => !data.completedSubjects.some((completed) => sameStudySubject(completed, name)))
+  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} activeSubjects={activeSubjects} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<><AIOverview area="progress" fingerprint={`${studySessions.length}:${data.attempts.length}`} /><WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} /></>} />
 }

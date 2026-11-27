@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { CalendarClock, CircleCheck, Clock3, GraduationCap, MoreHorizontal, Pencil, Percent, Play, Plus, Trash2, Trophy } from "lucide-react"
 import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from "recharts"
 import { SacSheet } from "./sac-sheet"
@@ -11,11 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { ChartContainer, ChartTooltip } from "./ui/chart"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty"
+import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
-import { buildSacSubjectStats, computeSacStats, getUpcomingSacs, isCompletedSac, sacPercentage, type SacRecord } from "../lib/sac"
+import { buildSacSubjectStats, computeSacStats, getUpcomingSacs, isCompletedSac, sacPercentage, validateSac, type SacRecord } from "../lib/sac"
 import type { SacTimerSession } from "../lib/ongoing-timers"
 import { useTickingNow } from "../hooks/use-ticking-now"
 import { localDate } from "../lib/local-date"
@@ -108,6 +109,41 @@ function SacTrend({ records }: { records: SacRecord[] }) {
   )
 }
 
+function AwaitingSacRow({ record, onSave, onEdit }: { record: SacRecord; onSave: (record: SacRecord) => void; onEdit: () => void }) {
+  const [score, setScore] = useState("")
+  const [maxScore, setMaxScore] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const errorId = `sac-result-error-${record.id}`
+  const invalid = error ? { "aria-invalid": true, "aria-describedby": errorId } : {}
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const result = { ...record, score: score.trim() === "" ? undefined : Number(score), maxScore: maxScore.trim() === "" ? undefined : Number(maxScore) }
+    const validationError = result.score === undefined && result.maxScore === undefined ? "Enter your mark and the maximum." : validateSac(result)
+    if (validationError) return setError(validationError)
+    onSave({ ...result, completedAt: record.scheduledAt, updatedAt: new Date().toISOString() })
+  }
+
+  return (
+    <li className="grid gap-2 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{record.title}</p>
+          <p className="text-xs text-muted-foreground">{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p>
+        </div>
+        <form className="flex flex-wrap items-center gap-2" onSubmit={submit} onChange={() => setError(null)} aria-label={`Result for ${record.title}`}>
+          <Input className="w-20 tabular-nums" inputMode="decimal" type="number" min={0} step="any" value={score} onChange={(event) => setScore(event.target.value)} placeholder="Mark" aria-label={`Mark for ${record.title}`} {...invalid} />
+          <span className="text-sm text-muted-foreground" aria-hidden="true">/</span>
+          <Input className="w-20 tabular-nums" inputMode="decimal" type="number" min={0} step="any" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} placeholder="Max" aria-label={`Maximum mark for ${record.title}`} {...invalid} />
+          <Button size="sm" type="submit"><CircleCheck />Save</Button>
+          <Button size="sm" variant="ghost" type="button" onClick={onEdit}><Pencil />Details</Button>
+        </form>
+      </div>
+      {error ? <p id={errorId} role="alert" className="text-xs text-destructive sm:text-right">{error}</p> : null}
+    </li>
+  )
+}
+
 export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects, preferredSubjects, activeTimer, onTimerChange, onSave, onDelete }: SacPageProps) {
   const [tab, setTab] = useState<"overview" | "timer">(() =>
     activeTimer || openTimerRequest || typeof sessionStorage !== "undefined" && sessionStorage.getItem("examtrack.sac-timer") ? "timer" : "overview"
@@ -149,7 +185,7 @@ export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects
         <TabsContent value="overview" className="mt-4 grid gap-5">
           {records.length ? <>
             <SacStatsRow records={records} today={today} />
-            {awaiting.length ? <Card><CardHeader><CardTitle>Awaiting results <span className="text-muted-foreground tabular-nums">{awaiting.length}</span></CardTitle><CardDescription>These dates have passed. Pop your mark in once you get it back.</CardDescription></CardHeader><CardContent><ul className="divide-y rounded-lg border">{awaiting.map((record) => <li key={record.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium">{record.title}</p><p className="text-xs text-muted-foreground">{record.subject} · {formatDate(record.scheduledAt)} · {-daysUntil(record.scheduledAt)}d ago</p></div><Button size="sm" variant="outline" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Enter result</Button></li>)}</ul></CardContent></Card> : null}
+            {awaiting.length ? <Card><CardHeader><CardTitle>Awaiting results <span className="text-muted-foreground tabular-nums">{awaiting.length}</span></CardTitle><CardDescription>These dates have passed. Pop your mark in here once you get it back, or open Details to add the weighting and notes.</CardDescription></CardHeader><CardContent><ul className="divide-y rounded-lg border">{awaiting.map((record) => <AwaitingSacRow key={record.id} record={record} onSave={onSave} onEdit={() => { setEditing(record); setSheetOpen(true) }} />)}</ul></CardContent></Card> : null}
             {upcoming.length ? <Card><CardHeader><CardTitle>Upcoming SACs</CardTitle>{upcoming.length > 6 ? <CardDescription>Next 6 of {upcoming.length}. The rest are listed under All SACs.</CardDescription> : null}</CardHeader><CardContent><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{upcoming.slice(0, 6).map((record) => { const remaining = daysUntil(record.scheduledAt); return <div key={record.id} className="focal-tile grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-lg border p-4 hover:border-primary/40"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{record.title}</p><p className="truncate text-sm text-muted-foreground" title={`${record.subject} · ${record.provider}`}>{record.subject} · {record.provider}{record.sacNumber ? ` · SAC ${record.sacNumber}` : ""} · Unit {record.unit}</p></div><Badge className="shrink-0 tabular-nums" variant={remaining <= 7 ? "secondary" : "outline"}>{remaining === 0 ? "Today" : remaining === 1 ? "Tomorrow" : `${remaining} days`}</Badge></div><p className="text-xs text-muted-foreground tabular-nums">{formatDate(record.scheduledAt)} · {record.durationMinutes} min{record.areaOfStudy ? ` · ${record.areaOfStudy}` : ""}</p><div className="flex gap-2 [&>*]:flex-1"><Button variant="outline" size="sm" onClick={() => startTimer(record)}><Play />Start timer</Button><Button variant="ghost" size="sm" onClick={() => { setEditing(record); setSheetOpen(true) }}><Pencil />Edit</Button></div></div> })}</div></CardContent></Card> : null}
             <div className="grid gap-5 lg:grid-cols-3"><div className="min-w-0 lg:col-span-2"><SacTrend records={records} /></div><Card><CardHeader><CardTitle>Subjects</CardTitle></CardHeader><CardContent><ul className="grid gap-4">{subjectStats.map((entry) => <li key={entry.subject} className="grid gap-1.5"><div className="flex items-baseline justify-between gap-3"><p className="truncate text-sm font-medium">{entry.subject}</p><span className="text-sm font-semibold tabular-nums">{entry.average === null ? "—" : `${entry.average.toFixed(1)}%`}</span></div><Meter value={entry.average ?? 0} /><p className="text-xs text-muted-foreground">{entry.completed} completed · {entry.upcoming} upcoming</p></li>)}</ul></CardContent></Card></div>
             <section aria-labelledby="all-sacs-title" className="grid gap-4">

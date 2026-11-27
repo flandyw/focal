@@ -14,7 +14,7 @@ import { studySessionSubjects } from "../lib/sync/sessionContract"
 
 const NO_PROJECTS: import("../lib/types").Project[] = []
 
-export function ProgressPage({ sessions, data, subject, onPlan, onNewSession, onLogExam }: { sessions: CanonicalStudySession[]; data: AppData; subject?: string; onPlan: (tasks: TaskDraft[]) => void; onNewSession: () => void; onLogExam: () => void }) {
+export function ProgressPage({ sessions, data, activeSubjects, subject, onPlan, onNewSession, onLogExam }: { sessions: CanonicalStudySession[]; data: AppData; activeSubjects: string[]; subject?: string; onPlan: (tasks: TaskDraft[]) => void; onNewSession: () => void; onLogExam: () => void }) {
   const [localSessions, setLocalSessions] = useState<StudySession[]>([])
   useEffect(() => {
     let active = true
@@ -29,5 +29,5 @@ export function ProgressPage({ sessions, data, subject, onPlan, onNewSession, on
   for (const session of studySessions) history.set(session.id, session)
   // A cancelled canonical session also supersedes its old local snapshot.
   for (const session of sessions) if (isDeleted(session)) history.delete(session.id)
-  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<><AIOverview area="progress" fingerprint={`${studySessions.length}:${data.attempts.length}`} /><WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} /></>} />
+  return <AnalyticsView sessions={[...history.values()]} attempts={data.attempts} activeSubjects={subject ? activeSubjects.filter((name) => sameStudySubject(name, subject)) : activeSubjects} subject={subject} projects={NO_PROJECTS} onNewSession={onNewSession} onLogExam={onLogExam} weeklyReview={<><AIOverview area="progress" fingerprint={`${studySessions.length}:${data.attempts.length}`} /><WeeklyReview data={data} sessions={subject ? sessions.filter((session) => studySessionSubjects(session).some((id) => sameStudySubject(id, subject))) : sessions} onPlan={onPlan} /></>} />
 }

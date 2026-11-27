@@ -1,12 +1,12 @@
 import { localDate } from "../../lib/local-date"
 import { toast } from "sonner"
-import { sameStudySubject, studySubjectId } from "../../lib/studySubjects"
+import { sameStudySubject, studySubjectId, studySubjectOptions } from "../../lib/studySubjects"
 import { useState, useMemo, useCallback, memo } from"react"
 import type { ReactNode } from"react"
 import { motion, AnimatePresence, useReducedMotion } from"framer-motion"
 import { Button } from "../ui/button"
 import { PageHeader } from "../page-header"
-import { Meter, StatGrid, StatTile } from "../workspace-layout"
+import { Meter, Panel, StatGrid, StatTile } from "../workspace-layout"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 import {
@@ -51,6 +51,7 @@ interface AnalyticsViewProps {
  subject?: string
  sessions: StudySession[]
  attempts: ExamAttempt[]
+ activeSubjects: string[]
  projects: Project[]
  onNewSession: () => void
  onLogExam: () => void
@@ -185,6 +186,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  subject,
  sessions,
  attempts,
+ activeSubjects,
  projects,
  onNewSession,
  onLogExam,
@@ -204,8 +206,9 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [sessions, projects, periodDays, periodEnd],
  )
 
+ const coverageSubjects = useMemo(() => studySubjectOptions(activeSubjects), [activeSubjects])
  const allSubjectIds = useMemo(() => {
- const ids = new Set(attempts.map((attempt) => studySubjectId(attempt.subject)))
+ const ids = new Set([...coverageSubjects.map(({ id }) => id), ...attempts.map((attempt) => studySubjectId(attempt.subject))])
  const projectsById = new Map(projects.map((project) => [project.id, project]))
  for (const session of sessions) {
  const subjects = getSessionSubjectIds(session, session.projectId ? projectsById.get(session.projectId) : undefined)
@@ -213,7 +216,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  if (subjects.length === 0 && session.execution.state === "completed" && getSessionEffectiveMinutes(session) > 0) ids.add("_unassigned")
  }
  return [...ids].sort((a, b) => (getSubjectById(a)?.name ?? "Unassigned").localeCompare(getSubjectById(b)?.name ?? "Unassigned"))
- }, [attempts, projects, sessions])
+ }, [attempts, coverageSubjects, projects, sessions])
 
  const isFilterActive = !!subject || selectedSubjects !== null
  const activeSet = useMemo(
@@ -300,6 +303,12 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  () => getHighlights(filteredBreakdown, filteredConsistency.days, filteredTimeOfDay),
  [filteredBreakdown, filteredConsistency.days, filteredTimeOfDay],
  )
+ const coverage = useMemo(() => {
+ const minutesBySubject = new Map(filteredBreakdown.map(({ subjectId, minutes }) => [subjectId, minutes]))
+ return coverageSubjects.filter(({ id }) => activeSet.has(id))
+ .map(({ id, name }) => ({ id, name, minutes: minutesBySubject.get(id) ?? 0 }))
+ .sort((a, b) => a.minutes - b.minutes || a.name.localeCompare(b.name))
+ }, [activeSet, coverageSubjects, filteredBreakdown])
 
  const handleExport = useCallback(() => {
  void exportAnalyticsCsv(filteredTimeTrends, periodDays, periodEnd).then((saved) => { if (saved) toast.success("Study CSV downloaded") })
@@ -319,7 +328,8 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  [allSubjectIds],
  )
 
- if (!data.hasData && attempts.length === 0) {
+ const noHistory = !data.hasData && attempts.length === 0
+ if (noHistory && coverageSubjects.length === 0) {
  return (
  <div className="h-full">
  <div className="space-y-8">
@@ -412,7 +422,26 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </motion.div>
  )}
 
+ {coverage.length > 0 && (
+ <Panel title="Study coverage" id="study-coverage" flush>
+   <p className="px-4 py-3 text-sm text-muted-foreground sm:px-5">
+     <span className="font-medium text-foreground">{coverage.filter(({ minutes }) => minutes > 0).length} of {coverage.length}</span> subjects studied in this period.
+   </p>
+   <ul className="divide-y border-t">
+     {coverage.map(({ id, name, minutes }) => (
+       <li key={id} className="flex items-baseline justify-between gap-3 px-4 py-2 text-sm sm:px-5">
+         <span className="min-w-0 break-words">{name}</span>
+         <span className="shrink-0 tabular-nums text-muted-foreground">{minutes > 0 ? formatMinutesLong(minutes) : "No study logged"}</span>
+       </li>
+     ))}
+   </ul>
+ </Panel>
+ )}
+
  {/* Chart grid: crossfade on range change, cards stagger on mount */}
+ {noHistory ? (
+ <div className="h-72 rounded-lg border"><EmptyAnalytics onNewSession={onNewSession} onLogExam={onLogExam} /></div>
+ ) : (
  <motion.div variants={staggerItem} className="relative">
  <AnimatePresence mode="wait">
  <motion.div
@@ -480,6 +509,7 @@ const AnalyticsViewInner = memo(function AnalyticsViewInner({
  </motion.div>
  </AnimatePresence>
  </motion.div>
+ )}
  </motion.div>
  </motion.div>
  </div>

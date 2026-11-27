@@ -2,7 +2,10 @@ import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Calculator, Save } from "lucide-react"
 import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 import { PageHeader } from "./page-header"
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { AtarStudiesCard } from "./atar/atar-studies-card"
 import { AtarSummary } from "./atar/atar-summary"
@@ -62,13 +65,33 @@ export function AtarEstimator({
   const history = useMemo(() => buildAtarHistory({ data, references, scaling: scalingReferences, rows, year }), [data, references, scalingReferences, rows, year])
   const estimate = model.estimate
 
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [scenarioName, setScenarioName] = useState("")
+
   function updateRow(id: string, patch: Partial<Row>) {
     setRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row))
   }
 
   function saveEstimate() {
     if (!estimate) return
-    onSaveEstimate({ id: crypto.randomUUID(), year, rows: rows.map((row) => ({ ...row })), atarLabel: estimate.atarLabel, aggregate: estimate.aggregate, savedAt: new Date().toISOString() })
+    const name = scenarioName.trim()
+    onSaveEstimate({
+      id: crypto.randomUUID(),
+      ...(name ? { name } : {}),
+      year,
+      rows: rows.map((row) => ({ ...row })),
+      atarLabel: estimate.atarLabel,
+      aggregate: estimate.aggregate,
+      savedAt: new Date().toISOString(),
+    })
+    setSaveOpen(false)
+    setScenarioName("")
+  }
+
+  function renameEstimate(saved: SavedAtarEstimate, name: string) {
+    const trimmed = name.trim()
+    const { name: _, ...rest } = saved
+    onSaveEstimate(trimmed ? { ...rest, name: trimmed } : rest)
   }
 
   function deleteEstimate(saved: SavedAtarEstimate) {
@@ -88,7 +111,21 @@ export function AtarEstimator({
           <SelectTrigger className="w-32" aria-label="VTAC report year"><SelectValue>{year} VTAC</SelectValue></SelectTrigger>
           <SelectContent>{years.map((item) => <SelectItem key={item} value={String(item)}>{item} VTAC</SelectItem>)}</SelectContent>
         </Select>
-        <Button onClick={saveEstimate} disabled={!estimate}><Save />Save scenario</Button>
+        <Popover open={saveOpen} onOpenChange={(open) => { setSaveOpen(open); if (!open) setScenarioName("") }}>
+          <PopoverTrigger render={<Button disabled={!estimate} />}><Save />Save scenario</PopoverTrigger>
+          <PopoverContent align="end" className="w-72">
+            <form className="grid gap-3" onSubmit={(event) => { event.preventDefault(); saveEstimate() }}>
+              <div className="grid gap-1.5">
+                <Label htmlFor="atar-scenario-name">Scenario name <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input id="atar-scenario-name" autoFocus maxLength={60} placeholder="e.g. Conservative, Target scores" value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSaveOpen(false); setScenarioName("") }}>Cancel</Button>
+                <Button type="submit" size="sm" disabled={!estimate}><Save />Save</Button>
+              </div>
+            </form>
+          </PopoverContent>
+        </Popover>
       </PageHeader>
 
       <AtarSummary model={model} onTargetChange={onTargetChange} />
@@ -104,7 +141,7 @@ export function AtarEstimator({
       />
       <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <AtarTrendCard history={history} target={model.target} />
-        <AtarScenariosCard saved={savedEstimates} onLoad={loadEstimate} onDelete={deleteEstimate} />
+        <AtarScenariosCard saved={savedEstimates} currentEstimate={estimate} onLoad={loadEstimate} onRename={renameEstimate} onDelete={deleteEstimate} />
       </div>
       {macDesktop() ? <AtarWidgetCard saved={savedEstimates} onLoad={loadEstimate} /> : null}
 

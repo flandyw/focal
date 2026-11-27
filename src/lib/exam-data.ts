@@ -206,6 +206,7 @@ export type AtarEstimatorRow = {
 
 export type SavedAtarEstimate = {
   id: string
+  name?: string
   year: number
   rows: AtarEstimatorRow[]
   atarLabel: string
@@ -1128,6 +1129,7 @@ function isAtarEstimatorRow(value: unknown): value is AtarEstimatorRow {
 function isSavedAtarEstimate(value: unknown): value is SavedAtarEstimate {
   if (!isRecord(value)) return false
   return typeof value.id === "string" &&
+    (value.name === undefined || typeof value.name === "string") &&
     typeof value.year === "number" && Number.isInteger(value.year) &&
     Array.isArray(value.rows) && value.rows.every(isAtarEstimatorRow) &&
     typeof value.atarLabel === "string" &&

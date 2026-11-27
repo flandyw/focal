@@ -866,7 +866,9 @@ export function StudyTimerPage({
   /** The desktop app owns the study timer, so only timed papers are offered. */
   embedded?: boolean
 }) {
-  const [eclair, setEclairState] = useState(() => typeof localStorage !== "undefined" && localStorage.getItem(ECLAIR_KEY) === "1")
+  const [eclair, setEclairState] = useState(() => {
+    try { return localStorage.getItem(ECLAIR_KEY) === "1" } catch { return false }
+  })
   function setEclair(on: boolean) {
     setEclairState(on)
     try { localStorage.setItem(ECLAIR_KEY, on ? "1" : "0") } catch { /* the launcher still works without storage */ }

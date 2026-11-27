@@ -94,7 +94,7 @@ export function SacSheet({ open, subjects, preferredSubjects, scopedSubject, ini
         "Maximum mark must be greater than zero.": ["maximum"],
         "Mark must be zero or greater.": ["score"],
         "Mark cannot exceed the maximum.": ["score"],
-        "Weighting must be between 0 and 100%.": ["weighting"],
+        "Weighting must be greater than 0 and at most 100%.": ["weighting"],
       } as Record<string, string[]>)[validationError]
       setError({ message: validationError, fields })
       return

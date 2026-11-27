@@ -56,7 +56,9 @@ export function StudyPlanCard({
     return () => { cancelled = true }
   }, [auth.isAuthenticated])
 
+  // A preview only answers the request and model it was made from.
   function chooseModel(next: string) {
+    setPlan(null)
     setModel(next)
     savePlannerModel(next)
   }
@@ -99,7 +101,8 @@ export function StudyPlanCard({
           <Textarea
             id="study-plan-request"
             maxLength={400}
-            onChange={(event) => setRequest(event.target.value)}
+            onChange={(event) => { setRequest(event.target.value); setPlan(null) }}
+            readOnly={busy}
             onKeyDown={(event) => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void requestPlan() } }}
             aria-keyshortcuts="Meta+Enter Control+Enter"
             placeholder="An hour of chemistry organic reactions before dinner, starting now"
@@ -113,7 +116,7 @@ export function StudyPlanCard({
             <FieldLabel htmlFor="study-plan-model">Planning model</FieldLabel>
             <Select
               items={options.map((option) => ({ value: option, label: `${option}${isCheapestModel(option) ? " · cheapest" : ""}` }))}
-              disabled={!options.length}
+              disabled={busy || !options.length}
               onValueChange={(value) => value && chooseModel(value)}
               value={pickPlannerModel(options, model) ?? undefined}
             >

@@ -45,6 +45,14 @@ function loadSession(): SacTimerSession | null {
   }
 }
 
+// The historical sessionStorage mirror is best-effort; the session sink is the source of truth.
+function mirrorSession(session: SacTimerSession | undefined) {
+  try {
+    if (session) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+    else sessionStorage.removeItem(STORAGE_KEY)
+  } catch { /* storage unavailable */ }
+}
+
 export function SacTimer({ records, subjects, preferredSubjects, scopedSubject, initialRecord, activeSession, onSessionChange, onSave }: SacTimerProps) {
   const migratedLegacySession = useRef(false)
   const session = activeSession ?? null
@@ -61,7 +69,13 @@ export function SacTimer({ records, subjects, preferredSubjects, scopedSubject, 
   const [markingOpen, setMarkingOpen] = useState(false)
   const pausedBeforeMarking = useRef(false)
   const [score, setScore] = useState(0)
-  const [notes, setNotes] = useState(initialRecord?.notes ?? "")
+  const [notes, setNotes] = useState(activeSession?.notes ?? initialRecord?.notes ?? "")
+  // Notes drafts belong to one session: keep them across Keep timing, refill when a different session arrives.
+  const [notesSessionId, setNotesSessionId] = useState(activeSession?.id)
+  if (session && session.id !== notesSessionId) {
+    setNotesSessionId(session.id)
+    setNotes(session.notes ?? "")
+  }
   const [performanceContext, setPerformanceContext] = useState<PerformanceContext>(initialRecord?.performanceContext ?? {})
   const [error, setError] = useState<{ message: string; fields?: string[] } | null>(null)
   // Setup and marking never render together, so they share one error; "score" lives only in the marking dialog.
@@ -74,13 +88,11 @@ export function SacTimer({ records, subjects, preferredSubjects, scopedSubject, 
       const legacySession = loadSession()
       if (!activeSession && legacySession) onSessionChange(legacySession)
     }
-    if (activeSession) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(activeSession))
-    else sessionStorage.removeItem(STORAGE_KEY)
+    mirrorSession(activeSession)
   }, [activeSession, onSessionChange])
 
   function saveSession(next: SacTimerSession | undefined, action?: "cancel" | "complete") {
-    if (next) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    else sessionStorage.removeItem(STORAGE_KEY)
+    mirrorSession(next)
     onSessionChange(next, action)
   }
   const timer = useMemo(() => session
@@ -197,7 +209,7 @@ export function SacTimer({ records, subjects, preferredSubjects, scopedSubject, 
       maxScore: session.maxScore,
       weighting: session.weighting,
       completedAt: today(),
-      notes: notes.trim() || session.notes,
+      notes: notes.trim() || undefined,
       performanceContext: hasPerformanceContext(performanceContext) ? performanceContext : undefined,
       timing: {
         plannedSeconds: session.durationMinutes * 60,

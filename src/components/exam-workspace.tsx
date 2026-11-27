@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useId, useRef, useState } from "react"
 import { Circle, CircleCheck, CircleDot, Flag, Plus, Split, Trash2 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -32,7 +32,10 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
 }) {
   const [label, setLabel] = useState("")
   const [checkpointCount, setCheckpointCount] = useState(10)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setErrorState] = useState<{ message: string; field: "label" | "marks" | "checkpoints" } | null>(null)
+  const errorId = useId()
+  const setError = (message: string | null, field: "label" | "marks" | "checkpoints" = "label") => setErrorState(message ? { message, field } : null)
+  const errorProps = (field: "label" | "marks" | "checkpoints") => error?.field === field ? { "aria-invalid": true, "aria-describedby": errorId } : {}
   const labelInput = useRef<HTMLInputElement>(null)
   const doneMarks = items.filter((item) => item.status === "done").reduce((total, item) => total + item.marks, 0)
   const mappedMarks = items.reduce((total, item) => total + item.marks, 0)
@@ -43,11 +46,11 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   function add() {
     if (!label.trim()) return setError("Enter a question or section label.")
     if (items.some((item) => questionKey(item.label) === questionKey(label))) return setError("That question or section is already mapped.")
-    if (!Number.isFinite(marks) || marks < 0.5) return setError("Marks must be at least 0.5.")
-    if (marks > remainingMarks) return setError(`Only ${count(remainingMarks, "mark")} left to map.`)
+    if (!Number.isFinite(marks) || marks < 0.5) return setError("Marks must be at least 0.5.", "marks")
+    if (marks > remainingMarks) return setError(`Only ${count(remainingMarks, "mark")} left to map.`, "marks")
     const remainder = Math.max(0, totalMarks - (mappedMarks + marks))
     // Ignore floating-point dust at the zero and half-mark boundaries.
-    if (remainder > 1e-9 && remainder < 0.5 - 1e-9) return setError("Use all remaining marks, or leave at least 0.5 marks to map.")
+    if (remainder > 1e-9 && remainder < 0.5 - 1e-9) return setError("Use all remaining marks, or leave at least 0.5 marks to map.", "marks")
     onChange([...items, { id: crypto.randomUUID(), label: label.trim(), marks, status: "not-started", confidence: "medium" }])
     // Suggest the next label when the last one ended in a number: "Question 4" → "Question 5".
     setLabel(label.trim().replace(/\d+$/, (number) => String(Number(number) + 1)).replace(/^[^\d]*$/, ""))
@@ -57,10 +60,10 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
   }
 
   function createCheckpoints() {
-    if (!Number.isInteger(checkpointCount) || checkpointCount < 1 || checkpointCount > 30) return setError("Choose between 1 and 30 checkpoints.")
+    if (!Number.isInteger(checkpointCount) || checkpointCount < 1 || checkpointCount > 30) return setError("Choose between 1 and 30 checkpoints.", "checkpoints")
     const count = Math.max(1, Math.min(30, Math.round(checkpointCount)))
     const halfMarkUnits = Math.floor(totalMarks * 2)
-    if (halfMarkUnits < count) return setError("Use fewer checkpoints for this mark total.")
+    if (halfMarkUnits < count) return setError("Use fewer checkpoints for this mark total.", "checkpoints")
     let remainingUnits = halfMarkUnits
     let assigned = 0
     onChange(Array.from({ length: count }, (_, index): ExamWorkspaceItem => {
@@ -121,17 +124,17 @@ export function ExamWorkspace({ items, totalMarks, onChange }: {
 
         <div className="flex flex-wrap items-center gap-2">
           {remainingMarks > 0 ? <>
-            <Input ref={labelInput} className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
-            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" max={remainingMarks} step="any" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => setMarks(event.target.valueAsNumber)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input ref={labelInput} className="h-8 w-40 flex-1 sm:flex-none" aria-label="Question or section" value={label} onChange={(event) => { setLabel(event.target.value); setError(null) }} placeholder="e.g. Question 1" {...errorProps("label")} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
+            <Input className="h-8 w-20" aria-label="Marks" type="number" min="0.5" max={remainingMarks} step="any" value={Number.isFinite(marks) ? marks : ""} onChange={(event) => { setMarks(event.target.valueAsNumber); setError(null) }} {...errorProps("marks")} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); add() } }} />
             <Button size="sm" variant="outline" onClick={add}><Plus />Add</Button>
           </> : null}
           {!items.length ? <>
             <span className="px-1 text-xs text-muted-foreground">or</span>
-            <Input className="h-8 w-16" aria-label="Number of equal checkpoints" type="number" min="1" max="30" value={Number.isFinite(checkpointCount) ? checkpointCount : ""} onChange={(event) => setCheckpointCount(event.target.valueAsNumber)} />
+            <Input className="h-8 w-16" aria-label="Number of equal checkpoints" type="number" min="1" max="30" value={Number.isFinite(checkpointCount) ? checkpointCount : ""} onChange={(event) => { setCheckpointCount(event.target.valueAsNumber); setError(null) }} {...errorProps("checkpoints")} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); createCheckpoints() } }} />
             <Button size="sm" variant="outline" onClick={createCheckpoints}><Split />Split into checkpoints</Button>
           </> : null}
         </div>
-        <FieldError>{error}</FieldError>
+        <FieldError id={errorId}>{error?.message}</FieldError>
       </CardContent>
     </Card>
   )

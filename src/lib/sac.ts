@@ -85,7 +85,7 @@ export function validateSac(record: Pick<SacRecord, "subject" | "provider" | "ti
     if (record.score! > record.maxScore!) return "Mark cannot exceed the maximum."
   }
   if (record.weighting !== undefined && (!Number.isFinite(record.weighting) || record.weighting <= 0 || record.weighting > 100)) {
-    return "Weighting must be between 0 and 100%."
+    return "Weighting must be greater than 0 and at most 100%."
   }
   return null
 }

@@ -109,9 +109,10 @@ function SacTrend({ records }: { records: SacRecord[] }) {
 }
 
 export function SacPage({ openTimerRequest = 0, scopedSubject, records, subjects, preferredSubjects, activeTimer, onTimerChange, onSave, onDelete }: SacPageProps) {
-  const [tab, setTab] = useState<"overview" | "timer">(() =>
-    activeTimer || openTimerRequest || typeof sessionStorage !== "undefined" && sessionStorage.getItem("examtrack.sac-timer") ? "timer" : "overview"
-  )
+  const [tab, setTab] = useState<"overview" | "timer">(() => {
+    if (activeTimer || openTimerRequest) return "timer"
+    try { return sessionStorage.getItem("examtrack.sac-timer") ? "timer" : "overview" } catch { return "overview" }
+  })
   useEffect(() => {
     // oxlint-disable-next-line react/set-state-in-effect -- an alert for the running timer was tapped while this page was open
     if (openTimerRequest) setTab("timer")

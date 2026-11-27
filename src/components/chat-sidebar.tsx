@@ -5,6 +5,7 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog"
+import { DiscardChangesDialog } from "./discard-changes-dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog"
 
 export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRename, onDelete }: {
@@ -22,9 +23,15 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
   const [title, setTitle] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
-  const terms = search.trim().toLowerCase()
-  const matching = chats.filter((chat) => chat.title.toLowerCase().includes(terms) || chat.draft.toLowerCase().includes(terms)
-    || chat.messages.some((message) => message.parts.some((part) => part.type === "text" && part.text.toLowerCase().includes(terms))))
+  const [confirmingClose, setConfirmingClose] = useState(false)
+  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const matching = chats.filter((chat) => terms.every((term) => chat.title.toLowerCase().includes(term) || chat.draft.toLowerCase().includes(term)
+    || chat.messages.some((message) => message.parts.some((part) => part.type === "text" && part.text.toLowerCase().includes(term)))))
+  function closeRename() {
+    if (saving) return
+    if (editing && title.trim() !== editing.title.trim()) setConfirmingClose(true)
+    else setEditing(null)
+  }
 
   async function change(remove: boolean) {
     const chat = remove ? deleting : editing
@@ -60,16 +67,17 @@ export function ChatSidebar({ chats, activeId, disabled, onNew, onSelect, onRena
       </nav>
       <p className="px-2 text-xs leading-relaxed text-muted-foreground">{disabled ? "Stop the response to switch chats." : "Saved on this device, for your account."}</p>
     </div>
-    <Dialog open={Boolean(editing)} onOpenChange={(open) => { if (!open && !saving) setEditing(null) }}>
+    <Dialog open={Boolean(editing)} onOpenChange={(open) => { if (!open) closeRename() }}>
       <DialogContent>
         <form onSubmit={(event) => { event.preventDefault(); void change(false) }} className="grid gap-4">
           <DialogHeader><DialogTitle>Rename chat</DialogTitle><DialogDescription>Give this conversation a name you can find later.</DialogDescription></DialogHeader>
           <label className="grid gap-2 text-sm">Chat name<Input autoFocus onFocus={(event) => event.target.select()} value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} disabled={saving} /></label>
           {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-          <DialogFooter><Button variant="outline" disabled={saving} onClick={() => setEditing(null)}>Cancel</Button><Button type="submit" disabled={saving || !title.trim()}>{saving ? "Saving…" : "Save name"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" disabled={saving} onClick={closeRename}>Cancel</Button><Button type="submit" disabled={saving || !title.trim()}>{saving ? "Saving…" : "Save name"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+    <DiscardChangesDialog open={confirmingClose} onKeep={() => setConfirmingClose(false)} onDiscard={() => { setConfirmingClose(false); setEditing(null) }} />
     <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !saving) setDeleting(null) }}>
       <AlertDialogContent>
         <AlertDialogHeader><AlertDialogTitle>Delete this chat?</AlertDialogTitle><AlertDialogDescription>“{deleting?.title}” will be removed from this device. Changes already made to your study data will stay.</AlertDialogDescription></AlertDialogHeader>

@@ -42,13 +42,14 @@ export function MistakePractice({ mistakes, onClose }: { mistakes: Mistake[]; on
         }}><Shuffle />Shuffle & restart</Button> : null}</div>
         <Progress value={(index + 1) / cards.length * 100} aria-label="Practice progress" />
         <div className="flex flex-wrap gap-2"><Badge variant="secondary">{card.category}</Badge>{card.areaOfStudy ? <Badge variant="outline">{card.areaOfStudy}</Badge> : null}</div>
-        <h3 className="focal-section-title"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
-        {(card.questionText?.trim() && card.questionText.trim() !== card.question.trim()) || card.attachments?.length ? (
-          <div className="min-h-20">
-            {card.questionText?.trim() && card.questionText.trim() !== card.question.trim() ? <MarkdownPreview>{card.questionText}</MarkdownPreview> : null}
-            <MistakeAttachments attachments={card.attachments} />
-          </div>
-        ) : null}
+        {card.questionText?.trim() && card.questionText.trim() !== card.question.trim() ? (
+          <>
+            <h3 className="focal-section-title"><MarkdownPreview inline>{card.question}</MarkdownPreview></h3>
+            <div className="min-h-20"><MarkdownPreview>{card.questionText}</MarkdownPreview><MistakeAttachments attachments={card.attachments} /></div>
+          </>
+        ) : (
+          <div className="min-h-20"><MarkdownPreview>{card.questionText?.trim() || card.question}</MarkdownPreview><MistakeAttachments attachments={card.attachments} /></div>
+        )}
         <Button variant="secondary" aria-expanded={revealed} onClick={() => setRevealed(!revealed)}>{revealed ? "Hide answer" : "Reveal answer"}</Button>
         {revealed ? <div className="grid gap-5 rounded-xl border bg-muted/30 p-5">
           <section><h4 className="mb-2 font-semibold">What went wrong</h4><MarkdownPreview>{card.explanation}</MarkdownPreview></section>
